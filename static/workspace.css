@@ -3,15 +3,6 @@
   display: none !important;
 }
 
-.agent-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #34423a;
-}
-
 .live-bar-label {
   align-items: center;
   gap: 8px;
@@ -21,28 +12,11 @@
     monospace;
   letter-spacing: 1px;
   flex-shrink: 0;
+  display: none;
 }
 
 .live-bar-label span {
   color: #c9e8d1;
-}
-
-.live-agent-bar {
-  display: flex;
-  overflow-x: auto;
-}
-
-.live-agent {
-  display: flex;
-  align-items: center;
-  text-align: left;
-  flex: 1 0 165px;
-  max-width: 310px;
-  min-width: 130px;
-  border: 1px solid #334038;
-  border-radius: 6px;
-  color: var(--text);
-  cursor: pointer;
 }
 
 .live-agent-words {
@@ -69,12 +43,6 @@
   white-space: nowrap;
 }
 
-.live-agent-state {
-  max-width: 70px;
-  line-height: 1.35;
-  flex-shrink: 0;
-}
-
 .agent-state-dot {
   height: 6px;
   width: 6px;
@@ -83,67 +51,49 @@
   flex-shrink: 0;
 }
 
-.live-bar-empty {
-  padding: 10px 0;
-}
-
-.skills-inbox {
-  position: relative;
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid #3b4b40;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.skills-inbox span {
-  position: absolute;
-  right: -5px;
-  top: -6px;
-  border-radius: 10px;
-  padding: 1px 3px;
-  font:
-    10px ui-monospace,
-    monospace;
-}
-
 .shell {
   grid-template-columns: 175px minmax(0, 1fr);
+  display: grid;
+  min-height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
 }
 
 .sidebar {
   width: 175px;
-  padding: 18px 12px;
+  padding: 12px 12px 18px;
   align-self: start;
   position: sticky;
+  top: var(--titlebar-height);
+  height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
 }
 
 .sidebar .brand {
   font-size: 16px;
+  margin-bottom: 14px;
 }
 
 .brand .private {
   display: none;
 }
 
-.sidebar .nav-label {
-  font-size: 9px;
-  padding: 5px 10px;
-}
-
 .sidebar .nav-item {
   height: 32px;
   font-size: 11px;
   padding: 5px 8px;
-}
-
-.sidebar .sidebar-bottom {
-  padding: 10px 0 0;
+  white-space: nowrap;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .sidebar .settings-button {
   font-size: 10px;
   padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  justify-content: flex-start;
 }
 
 .sidebar .nav-divider {
@@ -190,6 +140,8 @@
 
 .agent-workspace {
   display: grid;
+  grid-template-columns: minmax(300px, 1fr) 240px;
+  gap: 8px 14px;
 }
 
 .agent-heading {
@@ -198,11 +150,9 @@
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--line);
-}
-
-.agent-heading h2 {
-  font-weight: 550;
-  margin: 0;
+  min-height: 27px;
+  padding-bottom: 5px;
+  gap: 8px;
 }
 
 .agent-heading .form-hint {
@@ -214,27 +164,9 @@
   min-width: 0;
 }
 
-.agent-context-grid {
-  min-width: 0;
-  overflow: auto;
-}
-
-.agent-context-grid .section-heading h3 {
-  margin: 0;
-}
-
 .agent-results-section {
   border-top: 1px solid var(--line);
-}
-
-.terminal-gateway {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid #34473a;
-  border-radius: 7px;
-  padding: 22px 16px;
-  font-size: 12px;
+  padding-top: 9px;
 }
 
 .terminal-gateway .button {
@@ -242,29 +174,10 @@
   white-space: nowrap;
 }
 
-.terminal-gateway-mark {
-  font:
-    25px ui-monospace,
-    monospace;
-}
-
-.embedded-terminal {
-  min-height: 330px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .terminal-screen {
   flex: 1;
   min-height: 0;
   min-width: 0;
-}
-
-.terminal-status {
-  font-size: 10px;
-  padding: 4px 7px;
-  margin: 0 0 6px;
 }
 
 .xterm {
@@ -281,25 +194,11 @@
 
 .context-work-row {
   border-bottom: 1px solid #252f29;
-}
-
-.context-work-title {
-  line-height: 1.5;
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-decoration: none;
+  padding: 4px 0;
 }
 
 .context-work-title:hover {
   color: var(--green);
-}
-
-.context-work-meta {
-  display: flex;
-  align-items: center;
-  font-size: 9px;
 }
 
 .context-work-meta a {
@@ -310,6 +209,8 @@
 .context-work-meta .status-pill {
   font-size: 8px;
   padding: 1px 5px;
+  flex: none;
+  margin-left: 0;
 }
 
 .context-work-meta .icon-button {
@@ -319,23 +220,18 @@
 
 .agent-results-section .artifact-row {
   gap: 2px 5px;
-}
-
-.agent-results-section .artifact-title {
-  grid-column: 1;
-  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 0;
+  position: relative;
+  padding-right: 20px;
 }
 
 .agent-results-section .artifact-format {
   grid-column: 2;
   grid-row: 1;
   font-size: 8px;
-}
-
-.agent-results-section .artifact-time {
-  grid-column: 1;
-  grid-row: 2;
-  font-size: 9px;
 }
 
 .agent-results-section .artifact-sessions,
@@ -389,6 +285,7 @@
   gap: 18px;
   border-bottom: 1px solid var(--line);
   padding: 7px;
+  min-height: 44px;
 }
 
 .skill-name {
@@ -491,11 +388,6 @@
 
 #artifact-preview > .briefing-body > :first-child {
   margin-top: 0;
-}
-
-#artifact-preview .artifact-image {
-  object-fit: contain;
-  margin: 0 auto;
 }
 
 #artifact-preview .artifact-frame {
@@ -609,10 +501,6 @@
   }
 }
 
-.shell {
-  display: grid;
-}
-
 main {
   margin-left: 0;
 }
@@ -623,10 +511,6 @@ main {
 
 .agent-context-grid .row-bar {
   overflow: hidden;
-}
-
-.skill-row {
-  min-height: 44px;
 }
 
 .artifact-row {
@@ -730,6 +614,8 @@ main {
 }
 
 #artifact-preview .artifact-image {
+  object-fit: contain;
+  margin: 0 auto;
   display: block;
   width: auto;
   height: auto;
@@ -738,26 +624,6 @@ main {
 }
 
 /* Rosé Pine main — palette and ANSI reference: rosepinetheme.com / rose-pine/ghostty. */
-:root {
-  --bg: #191724;
-  --panel: #1f1d2e;
-  --sidebar: #1f1d2e;
-  --line: #393552;
-  --text: #e0def4;
-  --muted: #908caa;
-  --green: #9ccfd8;
-  --accent: #c4a7e7;
-  --review: #c4a7e7;
-  --progress: #f6c177;
-  --blocked: #eb6f92;
-  --overlay: #26233a;
-  --subtle: #908caa;
-  --rose: #ebbcba;
-  --foam: #9ccfd8;
-  --iris: #c4a7e7;
-  --love: #eb6f92;
-  --gold: #f6c177;
-}
 
 body {
   background: var(--bg);
@@ -987,11 +853,6 @@ dialog label select,
   background: var(--overlay);
 }
 
-#toast {
-  background: var(--iris);
-  color: var(--bg);
-}
-
 .result-table th,
 .briefing-body th {
   background: var(--overlay);
@@ -1000,15 +861,33 @@ dialog label select,
 
 /* One global launcher; its dropdown holds secondary options. */
 .agent-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #34423a;
   background: var(--panel);
   border-color: var(--line);
-}
-
-.live-bar-label {
-  display: none;
+  height: var(--titlebar-height);
+  min-height: var(--titlebar-height);
+  gap: 6px;
+  padding: 3px 8px;
+  user-select: none;
+  padding-block: 2px;
 }
 
 .live-agent {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  flex: 1 0 165px;
+  max-width: 310px;
+  min-width: 130px;
+  border: 1px solid #334038;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
   height: 34px;
   flex-basis: 250px;
   padding: 3px 8px;
@@ -1034,6 +913,9 @@ dialog label select,
 }
 
 .live-agent-state {
+  max-width: 70px;
+  line-height: 1.35;
+  flex-shrink: 0;
   font-size: 9px;
   color: var(--muted);
 }
@@ -1051,11 +933,18 @@ dialog label select,
 }
 
 .live-bar-empty {
+  padding: 10px 0;
   color: var(--muted);
   font-size: 10px;
 }
 
 .skills-inbox {
+  position: relative;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #3b4b40;
+  border-radius: 6px;
+  cursor: pointer;
   width: 28px;
   height: 28px;
   font-size: 17px;
@@ -1068,22 +957,24 @@ dialog label select,
 }
 
 .skills-inbox span {
+  position: absolute;
+  right: -5px;
+  top: -6px;
+  border-radius: 10px;
+  padding: 1px 3px;
+  font:
+    10px ui-monospace,
+    monospace;
   background: var(--iris);
   color: var(--bg);
   font-size: 8px;
   min-width: 13px;
 }
 
-.sidebar {
-  padding-top: 12px;
-}
-
 .sidebar .nav-label {
+  font-size: 9px;
+  padding: 5px 10px;
   display: none;
-}
-
-.sidebar .brand {
-  margin-bottom: 14px;
 }
 
 .compact-launcher {
@@ -1178,18 +1069,9 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-.agent-workspace {
-  grid-template-columns: minmax(300px, 1fr) 240px;
-  gap: 8px 14px;
-}
-
-.agent-heading {
-  min-height: 27px;
-  padding-bottom: 5px;
-  gap: 8px;
-}
-
 .agent-heading h2 {
+  font-weight: 550;
+  margin: 0;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1198,62 +1080,75 @@ summary::-webkit-details-marker {
 }
 
 .embedded-terminal {
+  min-height: 330px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--bg);
   height: calc(calc(100dvh / var(--ui-scale, 1)) - 111px);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
 }
 
 .agent-work-section {
   margin-bottom: 14px;
 }
 
-.agent-results-section {
-  padding-top: 9px;
-}
-
-.agent-context-grid .section-heading {
-  justify-content: space-between;
-}
-
 .agent-context-grid .section-heading h3 {
+  margin: 0;
   font-size: 10px;
   color: var(--muted);
   font-weight: 500;
 }
 
-.agent-results-section .artifact-row {
-  grid-template-columns: minmax(0, 1fr) 30px;
-  min-height: 28px;
-  height: 28px;
-  padding: 3px 0;
-}
-
 .agent-results-section .artifact-title {
+  grid-column: 1;
+  grid-row: 1;
   font-size: 10px;
 }
 
 .agent-results-section .artifact-time {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 9px;
   display: none;
 }
 
-.context-work-row {
-  padding: 4px 0;
-}
-
 .context-work-title {
+  line-height: 1.5;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
   font-size: 10px;
 }
 
 .context-work-meta {
+  display: flex;
+  align-items: center;
+  font-size: 9px;
   margin-top: 2px;
   gap: 5px;
 }
 
 .terminal-gateway {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #34473a;
+  border-radius: 7px;
+  padding: 22px 16px;
+  font-size: 12px;
   background: var(--panel);
   border-color: var(--line);
 }
 
 .terminal-gateway-mark {
+  font:
+    25px ui-monospace,
+    monospace;
   color: var(--iris);
 }
 
@@ -1379,10 +1274,6 @@ summary::-webkit-details-marker {
   color: var(--muted);
 }
 
-.terminal-focused .embedded-terminal {
-  min-height: 0;
-}
-
 @media (max-width: 1050px) {
   .agent-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -1416,15 +1307,13 @@ summary::-webkit-details-marker {
 }
 
 .terminal-status {
+  font-size: 10px;
+  padding: 4px 7px;
+  margin: 0 0 6px;
   color: var(--gold);
 }
 
 /* The app and PTY share one surface. */
-.embedded-terminal {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-}
 
 /* xterm’s vendor viewport defaults to black; fill partial-cell space with the app surface. */
 .xterm,
@@ -1573,10 +1462,6 @@ summary::-webkit-details-marker {
   color: var(--muted);
 }
 
-.sidebar .nav-item {
-  white-space: nowrap;
-}
-
 .sidebar .nav-item > span {
   flex: 0 0 17px;
   width: 17px;
@@ -1588,6 +1473,8 @@ summary::-webkit-details-marker {
 
 .sidebar .nav-shortcut {
   flex-shrink: 0;
+  grid-column: 4;
+  margin-left: auto;
 }
 
 .search input {
@@ -1606,18 +1493,10 @@ summary::-webkit-details-marker {
 }
 
 /* Noun-based shortcuts share the Find & act keycap style. */
-.sidebar .nav-item {
-  display: grid;
-  grid-template-columns: 17px minmax(0, 1fr) auto auto;
-}
 
 .sidebar .nav-item > b {
   grid-column: 3;
   margin-left: 0;
-}
-
-.sidebar .nav-shortcut {
-  grid-column: 4;
 }
 
 .sidebar .nav-shortcut,
@@ -1650,14 +1529,6 @@ summary::-webkit-details-marker {
 
 /* One compact title bar: native window controls, agent tabs, and a reserved +. */
 
-.agent-topbar {
-  height: var(--titlebar-height);
-  min-height: var(--titlebar-height);
-  gap: 6px;
-  padding: 3px 8px;
-  user-select: none;
-}
-
 .mac-titlebar .agent-topbar {
   padding-left: 90px;
 }
@@ -1672,6 +1543,8 @@ summary::-webkit-details-marker {
 }
 
 .live-agent-bar {
+  display: flex;
+  overflow-x: auto;
   align-self: stretch;
   align-items: center;
   gap: 3px;
@@ -1695,15 +1568,13 @@ summary::-webkit-details-marker {
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   border-radius: 6px;
   overflow: hidden;
-}
-
-.agent-tab:has(.selected) {
-  background: var(--overlay);
-  border-color: color-mix(in srgb, var(--muted) 45%, var(--line));
+  height: 26px;
 }
 
 /* Tabs share the bar evenly; the selected tab grows to fit its title and the others share the rest. */
 .agent-tab:has(.selected) {
+  background: var(--overlay);
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--line));
   min-width: max-content;
   flex-shrink: 0;
 }
@@ -1726,27 +1597,27 @@ summary::-webkit-details-marker {
   border: 0;
   border-radius: 0;
   background: transparent;
+  padding-right: 23px;
+  height: 24px;
+  padding-block: 2px;
 }
 
 .agent-tab .live-agent-words {
   flex: 1 1 50px;
   min-width: 0;
   gap: 0;
+  display: block;
 }
 
 .agent-tab .live-agent-words strong {
   font-size: 10px;
+  display: block;
+  line-height: 20px;
 }
 
 .agent-tab .live-agent-words small {
   font-size: 8px;
   line-height: 10px;
-}
-
-.agent-tab .live-agent-state {
-  font-size: 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .agent-tab .agent-shortcut {
@@ -1781,10 +1652,12 @@ summary::-webkit-details-marker {
 
 .agent-topbar .compact-launcher #new-note {
   font-size: 20px;
-}
-
-.agent-topbar .skills-inbox {
-  font-size: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  height: 26px;
+  min-height: 26px;
+  width: 28px;
 }
 
 .tabs-condensed .titlebar-app-title {
@@ -1799,15 +1672,6 @@ summary::-webkit-details-marker {
 
 .tabs-crowded .skills-inbox {
   display: none;
-}
-
-.sidebar {
-  top: var(--titlebar-height);
-  height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
-}
-
-.shell {
-  min-height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
 }
 
 .mac-titlebar .terminal-focused #agent-topbar {
@@ -1845,9 +1709,11 @@ summary::-webkit-details-marker {
   flex: 0 0 auto;
   border-top: 1px solid var(--line);
   padding-top: 6px;
+  margin-top: 0;
 }
 
 .sidebar .sidebar-bottom {
+  padding: 10px 0 0;
   margin-top: 0;
   flex: 0 0 auto;
 }
@@ -1947,20 +1813,6 @@ summary::-webkit-details-marker {
   font-size: 8px;
   line-height: 13px;
   text-align: center;
-}
-
-.sharing-popover {
-  box-sizing: border-box;
-  width: min(440px, calc(100vw / var(--ui-scale, 1) - 24px));
-  max-height: calc(100dvh / var(--ui-scale, 1) - 60px);
-  overflow: auto;
-  z-index: 100;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 12px;
-  box-shadow: 0 14px 40px #0005;
-  user-select: text;
 }
 
 .sharing-header {
@@ -2141,6 +1993,17 @@ summary::-webkit-details-marker {
 }
 
 .sharing-popover {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw / var(--ui-scale, 1) - 24px));
+  max-height: calc(100dvh / var(--ui-scale, 1) - 60px);
+  overflow: auto;
+  z-index: 100;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px;
+  box-shadow: 0 14px 40px #0005;
+  user-select: text;
   position: fixed;
   right: 12px;
   top: calc(var(--titlebar-height) + 3px);
@@ -2303,6 +2166,12 @@ summary::-webkit-details-marker {
   font: inherit;
   cursor: pointer;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0;
+  line-height: 1;
 }
 
 .agent-context-grid .work-section-toggle:hover {
@@ -2399,9 +2268,8 @@ summary::-webkit-details-marker {
   flex: 1;
   min-width: 0;
   border: 0;
-  padding: 8px 4px;
+  padding: 8px 4px 8px 8px;
   font-size: 10px;
-  gap: 7px;
   white-space: nowrap;
 }
 
@@ -2475,10 +2343,6 @@ summary::-webkit-details-marker {
 /* A dot means attention, never ordinary activity. Keep activity text on the right. */
 .agent-state-dot.attention {
   background: var(--gold);
-}
-
-.agent-tab .live-agent-state {
-  text-align: right;
 }
 
 .agent-title-input {
@@ -2630,10 +2494,6 @@ summary::-webkit-details-marker {
 }
 
 /* The agent sidebar uses spacing and hover feedback instead of separator rules. */
-.agent-context-grid > section {
-  border-top: 0;
-  border-bottom: 0;
-}
 
 .agent-context-grid
   :is(.resource-entry, .context-work-row, .worktree-entry, .artifact-row) {
@@ -2649,6 +2509,9 @@ summary::-webkit-details-marker {
   min-width: 0;
   font-size: inherit;
   line-height: inherit;
+  width: auto;
+  flex: 1;
+  justify-content: flex-start;
 }
 
 .sidebar .nav-item-label .github-review-dot {
@@ -2674,19 +2537,30 @@ summary::-webkit-details-marker {
 }
 
 .agent-context-grid {
+  min-width: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-self: start;
+  max-height: calc(
+    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 24px
+  );
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 6px 8px;
 }
 
 .agent-context-grid > section {
+  border-top: 0;
+  border-bottom: 0;
   margin: 0;
   padding: 0;
   flex: none;
 }
 
 .agent-context-grid .section-heading {
+  justify-content: space-between;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
@@ -2699,15 +2573,6 @@ summary::-webkit-details-marker {
 .agent-context-grid .section-heading > h3 {
   margin: 0;
   min-width: 0;
-}
-
-.agent-context-grid .work-section-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0;
-  line-height: 1;
 }
 
 .agent-context-grid .work-section-chevron {
@@ -2793,13 +2658,6 @@ summary::-webkit-details-marker {
   font-variant-numeric: tabular-nums;
 }
 
-.git-file-row {
-  display: grid;
-  align-items: center;
-  min-height: 24px;
-  font-size: 12px;
-}
-
 .git-file-row:hover {
   background: var(--overlay);
 }
@@ -2808,11 +2666,7 @@ summary::-webkit-details-marker {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.git-file-row .git-added,
-.git-file-row .git-deleted {
-  font-size: 11px;
+  color: var(--text);
 }
 
 .git-diff-note {
@@ -3011,11 +2865,6 @@ summary::-webkit-details-marker {
   background: var(--overlay);
 }
 
-.git-header-actions {
-  display: flex;
-  gap: 3px;
-}
-
 .git-header-actions > .text-button {
   font-size: 10px;
   padding: 3px 4px;
@@ -3057,11 +2906,6 @@ button.git-file-row {
   margin: 0;
 }
 
-#diff-review-subtitle {
-  font-size: 10px;
-  color: var(--muted);
-}
-
 .diff-review-layout {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
@@ -3076,12 +2920,6 @@ button.git-file-row {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-}
-
-#diff-review-files {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 3px;
 }
 
 .review-file {
@@ -3150,15 +2988,6 @@ button.git-file-row {
   overflow-wrap: anywhere;
 }
 
-.diff-review-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding-top: 10px;
-  flex-shrink: 0;
-}
-
 #diff-review-error {
   font-size: 11px;
   color: var(--love);
@@ -3183,10 +3012,6 @@ button.git-file-row {
   font: inherit;
   display: inline;
   white-space: nowrap;
-}
-
-.agent-tab .live-agent {
-  padding-right: 23px;
 }
 
 .agent-tab-snooze {
@@ -3399,32 +3224,32 @@ button.git-file-row {
 }
 
 :root {
+  --bg: #191724;
+  --panel: #1f1d2e;
+  --sidebar: #1f1d2e;
+  --line: #393552;
+  --text: #e0def4;
+  --muted: #908caa;
+  --green: #9ccfd8;
+  --accent: #c4a7e7;
+  --review: #c4a7e7;
+  --progress: #f6c177;
+  --blocked: #eb6f92;
+  --overlay: #26233a;
+  --subtle: #908caa;
+  --rose: #ebbcba;
+  --foam: #9ccfd8;
+  --iris: #c4a7e7;
+  --love: #eb6f92;
+  --gold: #f6c177;
   --titlebar-height: 32px;
 }
 
-.agent-topbar {
-  padding-block: 2px;
-}
-
-.agent-tab {
-  height: 26px;
-}
-
-.agent-tab .live-agent {
-  height: 24px;
-  padding-block: 2px;
-}
-
-.agent-tab .live-agent-words {
-  display: block;
-}
-
-.agent-tab .live-agent-words strong {
-  display: block;
-  line-height: 20px;
-}
-
 .agent-tab .live-agent-state {
+  font-size: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
   white-space: nowrap;
   max-width: 150px;
 }
@@ -3447,6 +3272,8 @@ button.git-file-row {
 }
 
 #diff-review-subtitle {
+  font-size: 10px;
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3470,6 +3297,8 @@ button.git-file-row {
 }
 
 #toast {
+  background: var(--iris);
+  color: var(--bg);
   z-index: 200;
 }
 
@@ -3569,16 +3398,6 @@ button.git-file-row {
   border-bottom: 1px solid var(--iris);
 }
 
-.git-tree-folder > summary {
-  cursor: pointer;
-  list-style: none;
-  font-size: 10px;
-  padding-block: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .git-tree-folder > summary:before {
   content: "⌄";
   display: inline-block;
@@ -3604,11 +3423,10 @@ button.git-file-row {
 }
 
 #diff-review-files {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
   display: block;
-}
-
-#diff-review-files .review-file {
-  width: 100%;
 }
 
 .artifact-row:hover .detach-link {
@@ -3619,11 +3437,6 @@ button.git-file-row {
   font-size: 9px;
   color: var(--gold);
   white-space: nowrap;
-}
-
-.agent-results-section .artifact-row {
-  position: relative;
-  padding-right: 20px;
 }
 
 .agent-results-section .artifact-row > .detach-link {
@@ -3643,12 +3456,6 @@ button.git-file-row {
 
 .agent-page .embedded-terminal {
   height: calc(
-    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 24px
-  );
-}
-
-.agent-context-grid {
-  max-height: calc(
     calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 24px
   );
 }
@@ -3695,6 +3502,7 @@ button.git-file-row {
 }
 
 .terminal-focused .embedded-terminal {
+  min-height: 0;
   height: calc(calc(100dvh / var(--ui-scale, 1)) - 8px);
 }
 
@@ -3721,28 +3529,6 @@ button.git-file-row {
   display: block;
   width: 16px;
   height: 16px;
-}
-
-.sidebar .nav-item {
-  gap: 10px;
-  align-items: center;
-}
-
-.sidebar .settings-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-left: 8px;
-}
-
-.sidebar .nav-item > .nav-item-label {
-  width: auto;
-  flex: 1;
-  justify-content: flex-start;
-}
-
-.sidebar .nav-shortcut {
-  margin-left: auto;
 }
 
 #action-palette {
@@ -3841,11 +3627,16 @@ button.git-file-row {
 }
 
 .git-file-row {
+  display: grid;
+  align-items: center;
+  min-height: 24px;
+  font-size: 12px;
   gap: 5px;
 }
 
 .git-file-row .git-added,
 .git-file-row .git-deleted {
+  font-size: 11px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -3861,16 +3652,13 @@ button.git-file-row {
 }
 
 .git-header-actions {
+  display: flex;
+  gap: 3px;
   align-items: center;
 }
 
 .sidebar .nav-item.active > .sidebar-icon {
   color: var(--text);
-}
-
-.sidebar .settings-button {
-  text-align: left;
-  justify-content: flex-start;
 }
 
 .sidebar #settings {
@@ -3884,18 +3672,6 @@ button.git-file-row {
   gap: 10px;
 }
 
-.agent-topbar .compact-launcher {
-  border: 0;
-  gap: 1px;
-  background: transparent;
-}
-
-.agent-topbar .compact-launcher #new-note {
-  display: grid;
-  place-items: center;
-  border-radius: 4px;
-}
-
 .agent-topbar .compact-launcher summary {
   display: grid;
   place-items: center;
@@ -3906,6 +3682,7 @@ button.git-file-row {
 }
 
 .agent-topbar .skills-inbox {
+  font-size: 16px;
   display: grid;
   place-items: center;
   width: 26px;
@@ -4076,11 +3853,13 @@ button.git-file-row {
   padding-bottom: 6px;
 }
 
-.utility-nav {
-  margin-top: 0;
-}
-
 .diff-review-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding-top: 10px;
+  flex-shrink: 0;
   position: relative;
 }
 
@@ -4232,12 +4011,6 @@ button.git-file-row {
   margin: 4px 0 0;
 }
 
-.agent-context-grid {
-  background: var(--panel);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
 .agent-context-grid > section + section {
   border-top: 1px solid var(--line);
   padding-top: 8px;
@@ -4353,13 +4126,6 @@ button.git-file-row {
   padding: 0 12px 10px;
 }
 
-#diff-review-dialog:not(.quick-file-review) > .dialog-heading {
-  height: var(--titlebar-height);
-  margin: 0 -4px 8px;
-  gap: 8px;
-  border-bottom: 1px solid var(--line);
-}
-
 .mac-titlebar #diff-review-dialog:not(.quick-file-review) > .dialog-heading {
   padding-left: 82px;
 }
@@ -4369,20 +4135,6 @@ button.git-file-row {
   gap: 10px;
   min-width: 0;
   flex: 1;
-}
-
-#diff-review-dialog:not(.quick-file-review) #diff-review-title {
-  font-size: 11px;
-  flex: none;
-}
-
-#diff-review-dialog:not(.quick-file-review) #diff-review-subtitle {
-  min-width: 0;
-  flex: 1;
-  gap: 6px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 #diff-review-dialog:not(.quick-file-review)
@@ -4401,11 +4153,6 @@ button.git-file-row {
   flex: none;
 }
 
-#diff-review-dialog:not(.quick-file-review) .diff-review-modes button {
-  padding: 3px 6px;
-  font-size: 10px;
-}
-
 #diff-review-dialog:not(.quick-file-review)
   .dialog-heading
   > .diff-review-heading-actions
@@ -4419,6 +4166,7 @@ button.git-file-row {
 }
 
 #diff-review-files .review-file {
+  width: 100%;
   display: grid;
   align-items: center;
   gap: 3px;
@@ -4443,11 +4191,14 @@ button.git-file-row {
 }
 
 .git-tree-folder > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 10px;
+  padding-block: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
-}
-
-.git-file-path {
-  color: var(--text);
 }
 
 .context-work-meta > a:first-child {
@@ -4456,11 +4207,6 @@ button.git-file-row {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.context-work-meta .status-pill {
-  flex: none;
-  margin-left: 0;
 }
 
 .context-work-heading {
@@ -4476,6 +4222,10 @@ button.git-file-row {
 }
 
 #diff-review-dialog:not(.quick-file-review) > .dialog-heading {
+  height: var(--titlebar-height);
+  margin: 0 -4px 8px;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
   box-sizing: border-box;
   align-items: center;
   padding-block: 0;
@@ -4489,6 +4239,12 @@ button.git-file-row {
 }
 
 #diff-review-dialog:not(.quick-file-review) #diff-review-subtitle {
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   height: 24px;
   line-height: 24px;
   margin: 0;
@@ -4496,6 +4252,8 @@ button.git-file-row {
 }
 
 #diff-review-dialog:not(.quick-file-review) #diff-review-title {
+  font-size: 11px;
+  flex: none;
   line-height: 24px;
   margin: 0;
   align-self: center;
@@ -4517,6 +4275,8 @@ button.git-file-row {
 }
 
 #diff-review-dialog:not(.quick-file-review) .diff-review-modes button {
+  padding: 3px 6px;
+  font-size: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4586,19 +4346,15 @@ button.git-file-row {
   white-space: nowrap;
 }
 
-.review-file-counts {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  min-width: 0;
-}
-
 .review-file-counts > .review-file-count {
   display: inline-flex;
   align-items: center;
   line-height: 1;
   margin: 0;
   white-space: nowrap;
+  font-size: 10px;
+  font-weight: 500;
+  gap: 3px;
 }
 
 .review-file-count.you {
@@ -4673,22 +4429,6 @@ button.git-file-row {
   padding: 1px 4px;
 }
 
-.review-comment-markdown pre {
-  margin: 8px 0;
-  padding: 10px;
-  overflow: auto;
-  background: var(--panel);
-  border: 1px solid #403d52;
-  border-radius: 4px;
-  white-space: pre;
-}
-
-.review-comment-markdown pre code {
-  padding: 0;
-  background: transparent;
-  color: var(--text);
-}
-
 .review-comment-markdown a {
   color: var(--foam);
 }
@@ -4697,11 +4437,6 @@ button.git-file-row {
 .review-comment-markdown ol {
   margin: 6px 0;
   padding-left: 20px;
-}
-
-.git-file-row,
-#diff-review-files .review-file {
-  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .git-change-counts {
@@ -4723,12 +4458,11 @@ button.git-file-row {
 }
 
 .review-file-counts {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  min-width: 0;
   gap: 5px;
-}
-
-.review-file-counts > .review-file-count {
-  font-size: 10px;
-  font-weight: 500;
 }
 
 .review-file-count.agent,
@@ -4743,11 +4477,8 @@ button.git-file-row {
 
 .git-file-row,
 #diff-review-files .review-file {
+  grid-template-columns: minmax(0, 1fr) auto auto;
   column-gap: 6px;
-}
-
-.review-file-counts > .review-file-count {
-  gap: 3px;
 }
 
 .review-file-count > svg {
@@ -4758,17 +4489,14 @@ button.git-file-row {
 }
 
 .agent-topbar .compact-launcher {
+  border: 0;
+  gap: 1px;
+  background: transparent;
   order: 100;
   flex: 0 0 auto;
   height: 26px;
   min-width: 43px;
   margin-left: 2px;
-}
-
-.agent-topbar .compact-launcher #new-note {
-  height: 26px;
-  min-height: 26px;
-  width: 28px;
 }
 
 .agent-topbar .compact-launcher #launch-options > summary {
@@ -4848,6 +4576,13 @@ button.git-file-row {
 }
 
 .review-comment-markdown pre {
+  margin: 8px 0;
+  padding: 10px;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid #403d52;
+  border-radius: 4px;
+  white-space: pre;
   max-width: 100%;
   max-height: 360px;
   overflow-wrap: normal;
@@ -4855,6 +4590,9 @@ button.git-file-row {
 }
 
 .review-comment-markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--text);
   white-space: pre;
   overflow-wrap: normal;
 }
