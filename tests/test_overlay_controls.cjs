@@ -1,46 +1,51 @@
 const {test}=require('node:test'),readCompactCss=require('./helpers/compact-css.cjs'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const app=fs.readFileSync('static/app.js','utf8'),views=fs.readFileSync('static/views.js','utf8');
-const helper=app.slice(app.indexOf('function requestDialogClose('),app.indexOf("for (const button of document.querySelectorAll('.close-dialog'))"));
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs'),{FakeDocument,browserHost}=require('./helpers/fake-dom.cjs');
 class Dialog extends EventTarget{
- constructor(){super();this.open=true;this.closed=0;this.children=[];}
+ constructor(){super();this.open=true;this.closed=0;this.children=[];this.isConnected=true;}
  close(){if(!this.open)return;this.closed++;this.open=false;}
  append(...nodes){this.children.push(...nodes);}
  getBoundingClientRect(){return {left:0,right:100,top:0,bottom:100};}
+ setAttribute(){}
+ showModal(){this.open=true;}
+ remove(){}
+ contains(){return false;}
+ querySelectorAll(){return [];}
 }
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+// Opens the real saved-view editor on a test dialog and holds a pending Reload views, so its saving guard is active.
 function fixture(){
- const dialog=new Dialog(),button={closest:()=>dialog};let cancels=0;
- const c=vm.createContext({Event,dialog,saving:true,document:{querySelectorAll:selector=>selector==='.close-dialog'?[button]:[dialog]},$:()=>({}),view:{name:'Mine'}});
- vm.runInContext(helper,c);vm.runInContext(views.split('\n').find(line=>line.includes("dialog.addEventListener('cancel'")),c);
+ const dialog=new Dialog(),button={closest:()=>dialog},document=new FakeDocument(),reload=deferred(),viewState={id:'',draft:{parent:'github',lifecycle:'active',filter:{op:'all',conditions:[]},query:'',groupBy:'status'}};let cancels=0;
+ const createElement=document.createElement.bind(document);document.createElement=tag=>tag==='dialog'?dialog:createElement(tag);
+ document.querySelectorAll=selector=>selector==='.close-dialog'?[button]:selector==='dialog'||selector==='dialog[open]'?[dialog]:[];
+ const c=browserContext({Event,Option:browserHost().Option,document,currentSavedViewState:()=>viewState,api:()=>reload.promise});
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/views.js'],{keepHost:['document']});
+ c.openSavedViewEditor();
  dialog.addEventListener('cancel',()=>cancels++);
- return {c,dialog,button,cancels:()=>cancels};
+ const footer=dialog.children.find(node=>String(node.className).includes('saved-view-editor-actions'));footer.children.find(node=>node.textContent==='Reload views').onclick();
+ return {c,dialog,button,cancels:()=>cancels,stopSaving:async()=>{reload.reject(Error('Reload failed'));await new Promise(resolve=>setImmediate(resolve));}};
 }
 const escape=dialog=>({key:'Escape',target:{closest:()=>dialog},preventDefault(){},stopImmediatePropagation(){}});
-test('Escape honors the actual saved-view saving cancel guard after dismissing a child layer',()=>{
+test('Escape honors the actual saved-view saving cancel guard after dismissing a child layer',async()=>{
  const f=fixture();let layers=1;f.dialog.dismissLayer=()=>layers-- >0;
- vm.runInContext(app.slice(app.indexOf('function dismissOpenDialog('),app.indexOf("document.addEventListener('keydown',dismissOpenDialog")),f.c);
  f.c.dismissOpenDialog(escape(f.dialog));assert.equal(f.cancels(),0);assert.equal(f.dialog.open,true);
  f.c.dismissOpenDialog(escape(f.dialog));assert.equal(f.cancels(),1);assert.equal(f.dialog.open,true);
- f.c.saving=false;f.c.dismissOpenDialog(escape(f.dialog));assert.equal(f.cancels(),2);assert.equal(f.dialog.closed,1);
+ await f.stopSaving();f.c.dismissOpenDialog(escape(f.dialog));assert.equal(f.cancels(),2);assert.equal(f.dialog.closed,1);
 });
-test('shared close buttons and backdrop dismissal honor feature-owned cancel guards',()=>{
+test('shared close buttons and backdrop dismissal honor feature-owned cancel guards',async()=>{
  for(const route of ['button','backdrop']){
   const f=fixture();let dismiss;
   if(route==='button'){
-   vm.runInContext(app.slice(app.indexOf("for (const button of document.querySelectorAll('.close-dialog'))"),app.indexOf('function dismissOpenDialog(')),f.c);dismiss=()=>f.button.onclick();
+   dismiss=()=>f.button.onclick();
   }else{
-   const line=app.split('\n').find(line=>line.startsWith("for (const dialog of document.querySelectorAll('dialog'))"));vm.runInContext(line,f.c);
    dismiss=()=>{const event=new Event('click');event.clientX=120;event.clientY=120;f.dialog.dispatchEvent(event);};
   }
-  dismiss();assert.equal(f.dialog.open,true,route);assert.equal(f.cancels(),1,route);f.c.saving=false;dismiss();assert.equal(f.dialog.closed,1,route);
+  dismiss();assert.equal(f.dialog.open,true,route);assert.equal(f.cancels(),1,route);await f.stopSaving();dismiss();assert.equal(f.dialog.closed,1,route);
  }
 });
-test('saved-view header Close uses the same cancellation policy as Escape',()=>{
- const f=fixture(),node=()=>({children:[],append(...nodes){this.children.push(...nodes);},setAttribute(){}});
- Object.assign(f.c,{el:node,savedViewButton:(_,onclick)=>({...node(),onclick})});
- const header=views.split('\n').find(line=>line.includes("header=el('div','saved-view-editor-heading')"));vm.runInContext(header,f.c);
- const close=f.dialog.children[0].children[1];close.onclick();assert.equal(f.dialog.open,true);assert.equal(f.cancels(),1);f.c.saving=false;close.onclick();assert.equal(f.dialog.closed,1);
+test('saved-view header Close uses the same cancellation policy as Escape',async()=>{
+ const f=fixture();
+ const close=f.dialog.children[0].children[1];close.onclick();assert.equal(f.dialog.open,true);assert.equal(f.cancels(),1);await f.stopSaving();close.onclick();assert.equal(f.dialog.closed,1);
 });
-const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 function themeFixture(){
  let document;const nodes=[],calls=[],notices=[],previews=[];
  class Node extends EventTarget{
@@ -60,18 +65,16 @@ function themeFixture(){
   showModal(){this.open=true;}
   close(){this.open=false;if(this.contains(document.activeElement))document.activeElement=body;this.dispatchEvent(new Event('close'));}
  }
- const body=new Node('body');document={body,activeElement:body,querySelectorAll:selector=>selector==='dialog[open]'?nodes.filter(node=>node.tag==='dialog'&&node.open&&node.isConnected):[]};
+ const body=new Node('body');document={body,activeElement:body,querySelector:selector=>({'#quick-action-picker':dialog,'#quick-action-picker-form':form,'#settings-dialog':settingsDialog,'#settings-error':settingsError})[selector],querySelectorAll:selector=>selector==='dialog[open]'?nodes.filter(node=>node.tag==='dialog'&&node.open&&node.isConnected):[]};
  const dialog=new Node('dialog'),form=new Node('form'),settingsDialog=new Node('dialog'),settingsError=new Node('p');dialog.id='quick-action-picker';form.id='quick-action-picker-form';dialog.append(form);body.append(dialog,settingsDialog,settingsError);
  const catalog={dark:{id:'dark',label:'Dark',type:'dark'},light:{id:'light',label:'Light',type:'light'}};
  let saved={revision:1,contentHash:'a',values:{theme:'dark',other:'latest'}};
  const {MutationObserver}=require(require('node:path').resolve('tests/helpers/dialog-mutations.cjs'))();
- const c=vm.createContext({Event,MutationObserver,source:'all',document,window:{truffleThemeCatalog:catalog},appSettings:saved,
-  $:selector=>({'#quick-action-picker':dialog,'#quick-action-picker-form':form,'#settings-dialog':settingsDialog,'#settings-error':settingsError})[selector],
+ const c=browserContext({Event,MutationObserver,source:'all',document,window:{truffleThemeCatalog:catalog},appSettings:saved,
   el:(...args)=>new Node(...args),featureButton:(label,onclick,cls)=>Object.assign(new Node('button',cls,label),{onclick,type:'button'}),
   setting:key=>c.appSettings.values[key],toast:text=>notices.push(text),applyAppSettings(){},previewTheme:id=>previews.push(id),
   api:async(path,payload)=>{calls.push({path,payload});if(payload){saved={revision:2,contentHash:'b',values:{...saved.values,...payload.patch}};return saved;}return path==='/api/themes'?{themes:catalog}:saved;}});
- const settings=fs.readFileSync('static/settings.js','utf8'),features=fs.readFileSync('static/features.js','utf8'),product=fs.readFileSync('static/product-tools.js','utf8');
- vm.runInContext(helper+app.slice(app.indexOf('function holdFormFocus('),app.indexOf('function projectCorrectionTarget('))+features.slice(features.indexOf('function freezeFeatureForm('),features.indexOf('function presentFeatureFormResult('))+settings.slice(settings.indexOf('function settingsButton('),settings.indexOf('function settingsReset('))+settings.slice(settings.indexOf('async function loadAppSettings('),settings.indexOf('function focusPageSearch('))+product.slice(product.indexOf('async function openThemeChooser('),product.indexOf('// Sharing has its own CAS document')),c);
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/settings.js','static/product-tools.js']);
  return {c,dialog,form,body,document,nodes,calls,notices,previews,Node,settingsDialog,settingsError,buttons:()=>form.querySelectorAll('button'),button:label=>form.querySelectorAll('button').find(node=>node.textContent===label),choices:()=>form.querySelectorAll('button').filter(node=>node.className==='theme-choice'),posts:()=>calls.filter(call=>call.payload)};
 }
 test('theme chooser exposes a shared secondary Close action without applying a theme',async()=>{
@@ -167,7 +170,7 @@ test('settings loader does not overwrite a newer document while awaiting themes 
  const failed=deferred();f.c.api=()=>failed.promise;f.settingsDialog.open=true;f.settingsError.textContent='current error';const failure=f.c.loadAppSettings();f.c.appSettings={...latest};failed.reject(Error('obsolete failure'));await failure;assert.equal(f.settingsError.textContent,'current error');
 });
 test('normal App chat width remains inside scaled viewport gutters according to its actual CSS constraint',()=>{
- const css=readCompactCss('static/app-chat.css'),block=css.slice(css.indexOf('.app-chat-panel{'),css.indexOf('}',css.indexOf('.app-chat-panel{'))),width=block.split(';').find(value=>value.startsWith('width:'));
+ const css=readCompactCss('static/app-chat.css'),block=css.match(/(?:^|\})\s*\.app-chat-panel\{([^}]*)\}/)[1],width=block.split(';').find(value=>value.startsWith('width:'));
  const [,cap,calc]=width.match(/width:min\(([\d.]+)px,calc\((.*)\)\)/),right=Number(block.match(/right:([\d.]+)px/)[1]);
  for(const viewport of [280,500,800])for(const scale of [1,1.25,1.5,2]){
   const expression=calc.replace('100vw',String(viewport)).replace('var(--ui-scale,1)',String(scale)).replace(/px/g,'');assert.match(expression,/^[\d.\s+\-*/()]+$/);
