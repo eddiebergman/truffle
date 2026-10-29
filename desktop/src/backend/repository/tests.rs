@@ -220,7 +220,11 @@ fn repository_drop_releases_lock_even_with_an_inherited_descriptor() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     // try_clone has the same shared open-file description as fork inheritance.
-    let inherited = repo._lock.0.try_clone().unwrap();
+    let Repository {
+        _lock: DataFileLock(lock_file),
+        ..
+    } = &*repo;
+    let inherited = lock_file.try_clone().unwrap();
     assert!(Repository::open(temp.path().into(), None, true).is_err());
     drop(repo);
     let reopened = Repository::open(temp.path().into(), None, true).unwrap();
@@ -237,6 +241,7 @@ fn data_lock_releases_on_constructor_error_with_a_duplicate_still_open() {
     let path = temp.path().join("state.lock");
     let file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(&path)

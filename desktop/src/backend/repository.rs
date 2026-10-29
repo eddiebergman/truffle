@@ -9,6 +9,7 @@ use std::{
     os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 // Closing a file descriptor alone does not release flock while a forked child
 // still holds a duplicate. Unlock explicitly when the owning repository ends.
@@ -95,6 +96,7 @@ impl Repository {
         std::fs::create_dir_all(data.parent().unwrap())?;
         let lock = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .mode(0o600)
@@ -319,6 +321,8 @@ impl Repository {
         if admitted {
             times.insert(key.into(), now() + seconds);
         }
+        drop(times);
+        drop(state);
         Ok(result)
     }
     pub fn invalidate_snapshot(&self) {
@@ -353,13 +357,13 @@ impl Repository {
     fn project_snapshot(&self, s: &Value, export: bool, revision: u64) -> (Value, f64) {
         let time = now();
         let mut expires = f64::INFINITY;
-        let mut expired = 0;
+        let mut expired_snoozes = 0;
         for snooze in s["snoozes"].as_object().unwrap().values() {
             if let Some(until) = snooze["until"].as_f64().filter(|n| *n > 0.0) {
                 if until > time {
                     expires = expires.min(until);
                 } else {
-                    expired += 1;
+                    expired_snoozes += 1;
                 }
             }
         }
@@ -413,7 +417,7 @@ impl Repository {
             .unwrap()
             .get("force-refresh")
             .unwrap_or(&0.0));
-        v["revision"] = json!(format!("{}:{revision}:{expired}", self.generation));
+        v["revision"] = json!(format!("{}:{revision}:{expired_snoozes}", self.generation));
         v["demo"] = json!(self.demo);
         v["agentHelper"] = json!(self.agent_helper);
         v["interval"] = json!(300);
@@ -428,6 +432,7 @@ impl Repository {
             return Err(Error::new("This action just started. Give it a moment."));
         }
         times.insert(key.into(), now() + seconds);
+        drop(times);
         Ok(())
     }
     pub fn edit(&self, p: &Value) -> Result<()> {
@@ -485,62 +490,20 @@ impl Repository {
     }
     pub fn sentry_environments_read(&self, args: &Value) -> Result<Value> {
         let requested = args["environment"].as_str();
-        let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+        let offset = usize::try_from(args["offset"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX);
         if requested.is_none() && args.get("offset").is_some() {
             return Err(Error::new(
                 "An environment is required for membership pagination.",
             ));
         }
         let observed_at = now();
-        let mut result = {
-            let state = self.state.lock().map_err(|_| Error::io())?;
-            let caches = state["sentryEnvironments"]
-                .as_object()
-                .ok_or_else(|| Error::new("Invalid stored environment caches."))?;
-            if caches.len() > 20 {
-                return Err(Error::new("Too many stored environment caches."));
-            }
-            let mut summaries = Vec::new();
-            let mut selected = requested.map(|name| json!({"environment":name,"cached":false,"membershipKnown":false,"itemIds":[],"total":null,"offset":offset,"nextOffset":null}));
-            for (name, cache) in caches {
-                if name.is_empty()
-                    || name.len() > 100
-                    || !name
-                        .bytes()
-                        .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
-                    || !cache.is_object()
-                {
-                    return Err(Error::new("Invalid stored environment cache."));
-                }
-                let ids = match cache.get("itemIds") {
-                    None => &[][..],
-                    Some(Value::Array(ids)) if ids.len() <= 2000 => ids.as_slice(),
-                    _ => return Err(Error::new("Invalid stored environment membership.")),
-                };
-                if ids.iter().any(|id| {
-                    !id.as_str().is_some_and(|id| {
-                        id.starts_with("sentry:")
-                            && id.len() <= 200
-                            && !id.chars().any(char::is_control)
-                    })
-                }) {
-                    return Err(Error::new("Invalid stored environment member ID."));
-                }
-                summaries.push(json!({"environment":name,"cached":true,"refreshing":cache["running"]==true,
-                    "lastSuccess":source_time(&cache["lastSuccess"]),"nextAttempt":source_time(&cache["nextAttempt"]),
-                    "failures":source_failures(cache),"hasError":cache["error"].is_string(),"membershipKnown":cache.get("itemIds").is_some(),"cachedMemberCount":cache.get("itemIds").map(|_| ids.len())}));
-                if requested == Some(name.as_str()) {
-                    selected = Some(
-                        json!({"environment":name,"cached":true,"membershipKnown":cache.get("itemIds").is_some(),"itemIds":ids.iter().skip(offset).take(100).collect::<Vec<_>>(),
-                        "total":cache.get("itemIds").map(|_| ids.len()),"offset":offset,"nextOffset":(offset+100 < ids.len()).then_some(offset+100)}),
-                    );
-                }
-            }
-            let source = &state["sources"]["sentry"];
-            json!({"version":1,"scope":"cached","observedAt":observed_at,"demo":self.demo,
-                "source":{"syncEnabled":source["disabled"]!=true,"hasError":source["error"].is_string(),"failures":source_failures(source),"lastSuccess":source_time(&source["lastSuccess"]),"nextAttempt":source_time(&source["nextAttempt"])},
-                "environmentRequestsAfter":source_time(&state["sentryEnvNextAttempt"]),"environments":summaries,"selection":selected})
-        };
+        let mut result = sentry_environment_summary(
+            &*self.state.lock().map_err(|_| Error::io())?,
+            requested,
+            offset,
+            observed_at,
+            self.demo,
+        )?;
         let original = result.clone();
         super::commands::redact(self, &mut result);
         if result != original {
@@ -603,6 +566,8 @@ impl Repository {
             if !started.is_empty() {
                 self.revision.fetch_add(1, Ordering::Relaxed);
             }
+            drop(running);
+            drop(state);
         }
         // Reservations are complete before workers start; never hold state locks across provider I/O.
         for source in started.iter().copied() {
@@ -757,8 +722,66 @@ impl Repository {
         value
     }
 }
+fn sentry_environment_summary(
+    state: &Value,
+    requested: Option<&str>,
+    offset: usize,
+    observed_at: f64,
+    demo: bool,
+) -> Result<Value> {
+    let caches = state["sentryEnvironments"]
+        .as_object()
+        .ok_or_else(|| Error::new("Invalid stored environment caches."))?;
+    if caches.len() > 20 {
+        return Err(Error::new("Too many stored environment caches."));
+    }
+    let mut summaries = Vec::new();
+    let mut selected = requested.map(|name| json!({"environment":name,"cached":false,"membershipKnown":false,"itemIds":[],"total":null,"offset":offset,"nextOffset":null}));
+    for (name, cache) in caches {
+        if name.is_empty()
+            || name.len() > 100
+            || !name
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+            || !cache.is_object()
+        {
+            return Err(Error::new("Invalid stored environment cache."));
+        }
+        let ids = match cache.get("itemIds") {
+            None => &[][..],
+            Some(Value::Array(ids)) if ids.len() <= 2000 => ids.as_slice(),
+            _ => return Err(Error::new("Invalid stored environment membership.")),
+        };
+        if ids.iter().any(|id| {
+            !id.as_str().is_some_and(|id| {
+                id.starts_with("sentry:") && id.len() <= 200 && !id.chars().any(char::is_control)
+            })
+        }) {
+            return Err(Error::new("Invalid stored environment member ID."));
+        }
+        summaries.push(json!({"environment":name,"cached":true,"refreshing":cache["running"]==true,
+            "lastSuccess":source_time(&cache["lastSuccess"]),"nextAttempt":source_time(&cache["nextAttempt"]),
+            "failures":source_failures(cache),"hasError":cache["error"].is_string(),"membershipKnown":cache.get("itemIds").is_some(),"cachedMemberCount":cache.get("itemIds").map(|_| ids.len())}));
+        if requested == Some(name.as_str()) {
+            selected = Some(
+                json!({"environment":name,"cached":true,"membershipKnown":cache.get("itemIds").is_some(),"itemIds":ids.iter().skip(offset).take(100).collect::<Vec<_>>(),
+                "total":cache.get("itemIds").map(|_| ids.len()),"offset":offset,"nextOffset":(offset+100 < ids.len()).then_some(offset+100)}),
+            );
+        }
+    }
+    let source = &state["sources"]["sentry"];
+    Ok(
+        json!({"version":1,"scope":"cached","observedAt":observed_at,"demo":demo,
+        "source":{"syncEnabled":source["disabled"]!=true,"hasError":source["error"].is_string(),"failures":source_failures(source),"lastSuccess":source_time(&source["lastSuccess"]),"nextAttempt":source_time(&source["nextAttempt"])},
+        "environmentRequestsAfter":source_time(&state["sentryEnvNextAttempt"]),"environments":summaries,"selection":selected}),
+    )
+}
 pub fn iso_time() -> String {
-    let secs = now() as i64;
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+        });
     let mut t: libc::tm = unsafe { std::mem::zeroed() };
     unsafe {
         libc::gmtime_r(&raw const secs, &raw mut t);
