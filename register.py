@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register this agent conversation with the local mydash server. No remote writes."""
+"""Register this agent conversation with the local truffle server. No remote writes."""
 import argparse
 import json
 import os
@@ -18,11 +18,11 @@ def main() -> None:
     register = sub.add_parser('register', help='Attach the current conversation to local work')
     register.add_argument('--agent', choices=['claude', 'codex'], required=True)
     register.add_argument('--session', help='Exact UUID; defaults to the current agent environment variable')
-    register.add_argument('--record', help='Existing mydash association ID from a launch context packet')
+    register.add_argument('--record', help='Existing truffle association ID from a launch context packet')
     register.add_argument('--title', help='Display name for this conversation')
     register.add_argument('--cwd', default=os.getcwd(), help='Existing repository or worktree path')
     register.add_argument('--url', action='append', default=[], help='GitHub issue/PR or Linear issue URL; repeatable')
-    register.add_argument('--item', action='append', default=[], help='Existing mydash item ID; repeatable')
+    register.add_argument('--item', action='append', default=[], help='Existing truffle item ID; repeatable')
     register.add_argument('--project', help='Create or reuse a local project by name')
     register.add_argument('--destination', choices=['embedded', 'cmux', 'desktop'], default=None)
     artifact = sub.add_parser('artifact',help='Register a local display file or an existing HTTPS artifact URL')
@@ -75,7 +75,7 @@ def main() -> None:
         parser.error('Review progress requires --request.')
     if args.action == 'review' and args.show and (args.state or args.review_pass):
         parser.error('Use --show separately from progress updates.')
-    home = Path(os.environ.get('MYDASH_HOME', str(Path.home() / 'code/mydash')))
+    home = Path(os.environ.get('TRUFFLE_HOME', str(Path.home() / 'code/mydash')))
     try:
         runtime = json.loads((home / 'data/runtime.json').read_text())
         parsed = urlsplit(runtime['url'])
@@ -163,10 +163,10 @@ def main() -> None:
         if args.action == 'context' and args.show:
             print(json.dumps(result['context'], indent=2))
             return
-        message = f"Registered {result['linkedItems']} linked items." if args.action=='register' else "Saved to mydash."
+        message = f"Registered {result['linkedItems']} linked items." if args.action=='register' else "Saved to truffle."
         print(f"{message} {runtime['url']}/#session={result['id']}")
     except FileNotFoundError:
-        parser.exit(1, 'mydash is not running, or MYDASH_HOME points to the wrong installation. Start it from a regular Terminal with ~/code/mydash/start.command.\n')
+        parser.exit(1, 'truffle is not running, or TRUFFLE_HOME points to the wrong installation. Start it from a regular Terminal with ~/code/mydash/start.command.\n')
     except HTTPError as exc:
         try:
             message = json.load(exc).get('error', 'Registration failed.')
@@ -176,7 +176,7 @@ def main() -> None:
     except ValueError as exc:
         parser.exit(1, str(exc) + '\n')
     except (URLError, OSError, KeyError):
-        parser.exit(1, 'Cannot reach mydash. Run ~/code/mydash/start.command from a regular Terminal and retry once.\n')
+        parser.exit(1, 'Cannot reach truffle. Run ~/code/mydash/start.command from a regular Terminal and retry once.\n')
 
 
 if __name__ == '__main__':

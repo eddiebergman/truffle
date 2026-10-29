@@ -1,4 +1,4 @@
-# Technical decisions behind mydash
+# Technical decisions behind truffle
 
 This is an implementation inventory for someone building a personal agent application. It describes the current Rust implementation, including the separately owned terminal daemon added on 2026-10-23. It excludes interface layout choices. Configuration, account names, and cloud identifiers should belong to each installation.
 
@@ -81,7 +81,7 @@ A task launched from a filtered work view receives an immutable JSON snapshot of
 
 Artifacts are separate from terminal text. A local file is copied into a private immutable snapshot with provenance and conversation associations. Existing HTTPS artifacts remain references. The registration layer checks allowed roots, size limits, and supported formats. Opaque artifact IDs prevent path traversal through native or HTTP routes.
 
-Markdown is rendered with source HTML escaped and unsafe links rejected. Tables use headered UTF-8 CSV or the small `mydash.table/v1` schema. Stored files retain the full table; the preview is bounded. Images, PDFs, and static HTML are supported. HTML previews are sandboxed without scripts or network requests. Unknown file types need an explicit fallback rather than executable rendering.
+Markdown is rendered with source HTML escaped and unsafe links rejected. Tables use headered UTF-8 CSV or the small `truffle.table/v1` schema. Stored files retain the full table; the preview is bounded. Images, PDFs, and static HTML are supported. HTML previews are sandboxed without scripts or network requests. Unknown file types need an explicit fallback rather than executable rendering.
 
 Ephemeral resources are agent-reported descriptors, not a cloud control plane. Required fields are `provider`, `kind`, and `id`; optional fields include `scope`, `name`, `state`, `purpose`, observation/expiry timestamps, cleanup responsibility, related work URLs, grouped `uris`, and arbitrary `data`. Unknown metadata is retained. Same-resource reports upsert; omitting a resource does not declare it stopped or deleted.
 
@@ -91,7 +91,7 @@ Clipboard operations are explicit viewer actions. Text files copy their source t
 
 ## Portable handoff protocol
 
-Context sharing is implemented in a separate Rust workspace, Context Kit. Its Context Bundle JSON format and handoff, pickup, and integration skills are application-independent. A recipient does not need mydash. Basic rendering metadata is explicit, while open items, resource descriptors, `uris` groups, and arbitrary extension data allow other applications and agents to make sense of the content.
+Context sharing is implemented in a separate Rust workspace, Context Kit. Its Context Bundle JSON format and handoff, pickup, and integration skills are application-independent. A recipient does not need truffle. Basic rendering metadata is explicit, while open items, resource descriptors, `uris` groups, and arbitrary extension data allow other applications and agents to make sense of the content.
 
 A bundle includes selected handover context, references, optional artifacts, and a bounded previous-conversation excerpt. It is not automatically the entire transcript. Tool calls, machine notifications, credentials, and irrelevant history are excluded from the natural-language excerpt. The source agent prepares the useful summary; pickup reports unavailable or unsupported entries instead of crashing the whole import. An independent preparation fork can avoid modifying the source conversation.
 

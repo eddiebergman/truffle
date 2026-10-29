@@ -15,7 +15,7 @@ test('artifact views work through either transport and reject paths',async()=>{
   const id='d82f1f3d3b8f1abc330d8205';
   const browser=createDashboardClient({fetch:async()=>({ok:true,text:async()=>'# Report'})});
   const native=createDashboardClient({native:async(command,args)=>{assert.equal(command,'read_artifact');assert.equal(args.id,id);return '# Report';}});
-  assert.equal(browser.artifactUrl(id),'/artifacts/'+id);assert.equal(native.artifactUrl(id),'mydash-artifact://localhost/'+id);
+  assert.equal(browser.artifactUrl(id),'/artifacts/'+id);assert.equal(native.artifactUrl(id),'truffle-artifact://localhost/'+id);
   assert.equal(await browser.readArtifact(id),'# Report');assert.equal(await native.readArtifact(id),'# Report');
   assert.throws(()=>native.artifactUrl('../../.env'));
 });
@@ -51,4 +51,12 @@ test('restart controls use fixed native commands and require a reviewed snapshot
 test('native transport preserves conflict status for explicit recovery controls',async()=>{
  const client=createDashboardClient({native:async()=>({status:409,data:{error:'Changed elsewhere'}})});
  await assert.rejects(client.request('/api/page-settings',{revision:1}),error=>error.status===409&&error.data.error==='Changed elsewhere');
+});
+test('browser storage keys from before the rename move to truffle keys without overwriting newer values',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
+  const values=new Map([['mydash-view','old-view'],['mydash-diff-layout','old-layout'],['truffle-diff-layout','new-layout'],['other','kept']]);
+  const localStorage={getItem:key=>values.has(key)?values.get(key):null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)};
+  const storage=new Proxy(localStorage,{ownKeys:()=>[...values.keys()],getOwnPropertyDescriptor:(_,key)=>values.has(key)?{enumerable:true,configurable:true,value:values.get(key)}:undefined});
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/client.js'),'utf8'),{localStorage:storage,module:{exports:{}}});
+  assert.deepEqual(Object.fromEntries(values),{'truffle-view':'old-view','truffle-diff-layout':'new-layout',other:'kept'});
 });

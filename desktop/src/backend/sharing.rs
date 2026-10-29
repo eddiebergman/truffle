@@ -1969,7 +1969,7 @@ fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
                 .find(|i| arr(&i["resources"]).contains(&resource["id"]))
                 .map(|i| text(i, "title").to_string())
                 .unwrap_or_else(|| text(&resource, "name").into());
-            // Generic JSON may not be mydash.table/v1, so retain it as a file in the bundle.
+            // Generic JSON may not be truffle.table/v1, so retain it as a file in the bundle.
             if ext == "json" {
                 continue;
             }
@@ -2173,7 +2173,7 @@ mod tests {
     }
     fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
         let t = tempfile::tempdir().unwrap();
-        let root = t.path().join("mydash");
+        let root = t.path().join("truffle");
         fs::create_dir(&root).unwrap();
         let repo = Repository::open(root, None, true).unwrap();
         change(&repo, |s| {

@@ -1,4 +1,0 @@
-interface:
-  display_name: "mydash performance"
-  short_description: "Profile dashboard latency and native rendering"
-  default_prompt: "Use $mydash-performance to measure and fix the slow interaction in mydash."

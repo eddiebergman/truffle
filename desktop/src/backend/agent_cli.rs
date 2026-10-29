@@ -372,7 +372,7 @@ fn enqueue(runtime: &Value, payload: &Value, reply: bool) -> Result<(PathBuf, St
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
-            .starts_with("mydash-agent-")
+            .starts_with("truffle-agent-")
     {
         return Err(Error::new("Invalid local registration inbox."));
     }
@@ -565,7 +565,7 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
             return Ok(());
         }
         let root = if options.get("home").is_empty() {
-            std::env::var_os("MYDASH_HOME")
+            std::env::var_os("TRUFFLE_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| home().join("code/mydash"))
         } else {
@@ -589,7 +589,7 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
             );
         } else {
             println!(
-                "Saved to mydash. {}#session={}",
+                "Saved to truffle. {}#session={}",
                 text(&runtime(&root)?, "url").trim_end_matches('/'),
                 text(&result, "id")
             );
@@ -752,7 +752,7 @@ mod tests {
             .unwrap();
         let id = text(&record, "id");
         let inbox = tempfile::Builder::new()
-            .prefix("mydash-agent-")
+            .prefix("truffle-agent-")
             .tempdir_in("/tmp")
             .unwrap();
         fs::set_permissions(inbox.path(), fs::Permissions::from_mode(0o700)).unwrap();

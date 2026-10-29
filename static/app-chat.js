@@ -28,7 +28,7 @@ function appChatOpenSettingsProposal(value){
   const dialog=el('dialog','settings-proposal-dialog');dialog.setAttribute('aria-label','Review settings proposal');
   const heading=el('header','settings-proposal-heading'),close=el('button','ui-control','Close');close.type='button';close.dataset.variant='secondary';close.setAttribute('aria-label','Close settings proposal');close.onclick=()=>dialog.close();
   heading.append(el('h2','','Review settings changes'),close);const content=el('div','settings-proposal-content');dialog.append(heading,content);document.body.append(dialog);
-  const preview=renderSettingsProfilePreview(content,{initialProfile:{format:'mydash-settings',version:1,values:command.patch},expectedRevision:command.revision,expectedContentHash:command.contentHash});
+  const preview=renderSettingsProfilePreview(content,{initialProfile:{format:'truffle-settings',version:1,values:command.patch},expectedRevision:command.revision,expectedContentHash:command.contentHash});
   dialog.addEventListener('close',()=>{preview.disposeProfileImport();dialog.remove();},{once:true});dialog.showModal();close.focus();return dialog;
 }
 async function appChatRefreshSavedViews(){
@@ -192,7 +192,7 @@ if(typeof document!=='undefined')(()=>{
   function placeChat(){const host=[...document.querySelectorAll('dialog[open]')].filter(dialog=>!panel.contains(dialog)).at(-1)||document.body;if(button.parentNode!==host)host.append(button,panel);update();}
   new MutationObserver(changes=>{if(changes.some(change=>change.target.tagName==='DIALOG'))placeChat();}).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
   new MutationObserver(()=>{update();if(!setup.hidden&&open)conversation.scrollTop=setup.offsetTop;}).observe(setup,{attributes:true,attributeFilter:['hidden']});
-  window.addEventListener('mydash-service-restarted',()=>{if(open)poll();});
+  window.addEventListener('truffle-service-restarted',()=>{if(open)poll();});
   registerRenderHook('app-chat:context',updateContext,{order:50});
   update();
 })();

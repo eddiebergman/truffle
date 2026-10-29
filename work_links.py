@@ -108,7 +108,7 @@ def resolve(url, api):
                 raise ValueError('Use a Linear issue URL with an identifier such as ENG-123.')
             token = os.environ.get('LINEAR_API_KEY')
             if not token:
-                raise ValueError('Configure LINEAR_API_KEY on the mydash server.')
+                raise ValueError('Configure LINEAR_API_KEY on the truffle server.')
             data = api.request_json('https://api.linear.app/graphql', {'query': 'query { issue(id: ' + json.dumps(match[1]) + ') { ' + LINEAR_FIELDS + ' } }'}, token)
             if not data.get('issue'):
                 raise ValueError('Linear issue is unavailable to the current account.')
@@ -116,7 +116,7 @@ def resolve(url, api):
         case host if host and (host == 'sentry.io' or host.endswith('.sentry.io')):
             org, _, _, _ = sentry_source.settings()
             if not sentry_source.configured():
-                raise ValueError('Configure Sentry on the mydash server first.')
+                raise ValueError('Configure Sentry on the truffle server first.')
             match = re.fullmatch(r'/(?:organizations/([^/]+)/)?issues/([0-9]+)/?', parsed.path)
             if not match or match[1] and match[1] != org:
                 raise ValueError('Use a Sentry issue link from the configured organization.')

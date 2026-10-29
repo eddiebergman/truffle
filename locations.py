@@ -12,7 +12,7 @@ class FolderRequired(ValueError):
 
 
 def root():
-    return Path(os.environ.get('MYDASH_WORKDIR', str(Path.home() / 'code'))).expanduser().resolve()
+    return Path(os.environ.get('TRUFFLE_WORKDIR', str(Path.home() / 'code'))).expanduser().resolve()
 
 
 def folders():

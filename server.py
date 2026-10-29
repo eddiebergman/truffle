@@ -87,7 +87,7 @@ class SyncError(Exception):
 
 def request_json(url, payload, token):
     req = Request(url, data=json.dumps(payload).encode(), headers={
-        'Authorization': token, 'Content-Type': 'application/json', 'User-Agent': 'mydash-local/1'})
+        'Authorization': token, 'Content-Type': 'application/json', 'User-Agent': 'truffle-local/1'})
     started=time.monotonic()
     diagnostic=dict(transport='http',host=urlsplit(url).hostname,phase='connect',timeoutSeconds=25)
     try:
@@ -289,7 +289,7 @@ class Store:
             fcntl.flock(self.file_lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self.file_lock.close()
-            raise ValueError('Another mydash process is using this data file.') from None
+            raise ValueError('Another truffle process is using this data file.') from None
         self.lock = threading.RLock()
         self.force_refresh_after = 0
         self.review_started_at = -100
@@ -973,7 +973,7 @@ class Store:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'mydash'
+    server_version = 'truffle'
 
     def log_message(self, *_):
         pass
@@ -1012,7 +1012,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-Length', '0')
                 self.end_headers()
             case '/api/health':
-                self.respond(200, {'service':'mydash','apiVersion':1,'storageVersion':1})
+                self.respond(200, {'service':'truffle','apiVersion':1,'storageVersion':1})
             case '/api/state':
                 self.respond(200, {**self.server.store.snapshot(), 'csrf': self.server.csrf})
             case '/api/library':
@@ -1161,7 +1161,7 @@ def main():
             stopped.wait(10)
     threading.Thread(target=background, daemon=True).start()
     url = 'http://' + server.authority
-    print(f'mydash → {url}' + (' (sample data)' if args.demo else ''), flush=True)
+    print(f'truffle → {url}' + (' (sample data)' if args.demo else ''), flush=True)
     if args.open:
         webbrowser.open(url)
     try:

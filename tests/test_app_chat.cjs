@@ -183,7 +183,7 @@ function proposalFixture(){
 test('settings proposal opens the shared local approval preview without applying settings',()=>{
  const f=proposalFixture(),dialog=f.c.appChatOpenSettingsProposal({type:'settings-proposal',revision:7,contentHash:'a'.repeat(64),patch:{editor:'zed'}});
  assert.equal(dialog.open,true);assert.equal(f.body.children[0],dialog);assert.equal(f.calls.length,1);
- assert.equal(f.calls[0].options.expectedRevision,7);assert.equal(f.calls[0].options.expectedContentHash,"a".repeat(64));assert.equal(f.calls[0].options.initialProfile.format,'mydash-settings');assert.equal(f.calls[0].options.initialProfile.values.editor,'zed');assert.equal(dialog.children[0].children[1].focused,true);
+ assert.equal(f.calls[0].options.expectedRevision,7);assert.equal(f.calls[0].options.expectedContentHash,"a".repeat(64));assert.equal(f.calls[0].options.initialProfile.format,'truffle-settings');assert.equal(f.calls[0].options.initialProfile.values.editor,'zed');assert.equal(dialog.children[0].children[1].focused,true);
  dialog.children[0].children[1].onclick();assert.equal(f.disposed(),1);assert.equal(dialog.removed,true);
 });
 test('settings proposals preserve dirty drafts and existing dialogs',()=>{

@@ -3,7 +3,7 @@
 if(serviceClient.isDesktop){
   document.documentElement.classList.add('desktop-app');
   if(/Mac/.test(navigator.platform))document.documentElement.classList.add('mac-titlebar');
-  window.addEventListener('mydash-tab-command',event=>{void runTabCommand(event.detail);});
+  window.addEventListener('truffle-tab-command',event=>{void runTabCommand(event.detail);});
   const titlebar=$('#agent-topbar');
   titlebar.addEventListener('mousedown',event=>{
     if(event.button!==0||event.target.closest('button,a,input,select,textarea,summary,details,.agent-tab'))return;
@@ -22,6 +22,6 @@ if(serviceClient.isDesktop){
     try{await window.__TAURI__.core.invoke('service_status');const reconnect=panel.hidden===false||!state;panel.hidden=true;if(reconnect)await refresh();}
     catch(error){if(!state)panel.hidden=false;panel.querySelector('h1').textContent=String(error).includes('update')?'Restart your local service':'Connect your local service';}
   }
-  window.addEventListener('mydash-connection',event=>{if(event.detail){panel.hidden=true;}else if(!state)panel.hidden=false;});
+  window.addEventListener('truffle-connection',event=>{if(event.detail){panel.hidden=true;}else if(!state)panel.hidden=false;});
   void checkDesktopService();setInterval(checkDesktopService,30000);
 }

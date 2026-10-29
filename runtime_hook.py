@@ -41,7 +41,7 @@ def main():
     # Subagent turn hooks must not overwrite the parent's turn state.
     if data.get('agent_id') and args.event in ('SessionStart','Stop','UserPromptSubmit'):
         return
-    root=Path(os.environ.get('MYDASH_HOME',str(Path.home()/'code/mydash')))
+    root=Path(os.environ.get('TRUFFLE_HOME',str(Path.home()/'code/mydash')))
     runtime=json.loads((root/'data/runtime.json').read_text())
     parsed=urlsplit(runtime['url'])
     if parsed.scheme!='http' or parsed.hostname!='127.0.0.1' or parsed.username or parsed.password or parsed.path not in ('','/') or parsed.query or parsed.fragment:

@@ -207,7 +207,7 @@ impl DashboardService for LocalHttpService {
                 None => self.client.get(self.url(path)),
             };
             let response = request.send().map_err(|_| {
-                "Cannot reach the local mydash service. Start ~/code/mydash/start.command in Terminal and retry."
+                "Cannot reach the local truffle service. Start ~/code/mydash/start.command in Terminal and retry."
             })?;
             let status = response.status().as_u16();
             let mut body: Value = response
@@ -229,13 +229,13 @@ impl DashboardService for LocalHttpService {
             .get(self.url("/api/health"))
             .timeout(Duration::from_secs(3))
             .send()
-            .map_err(|_| "The mydash service is not reachable.")?;
+            .map_err(|_| "The truffle service is not reachable.")?;
         if !response.status().is_success() {
-            return Err("The service needs an update. Restart mydash inside cmux.".into());
+            return Err("The service needs an update. Restart truffle inside cmux.".into());
         }
         let body: Value = response.json().map_err(|_| "Invalid service identity.")?;
-        if body["service"] != "mydash" || body["apiVersion"] != 1 {
-            return Err("Unsupported local service. Expected mydash API version 1.".into());
+        if body["service"] != "truffle" || body["apiVersion"] != 1 {
+            return Err("Unsupported local service. Expected truffle API version 1.".into());
         }
         Ok(body)
     }
@@ -414,7 +414,7 @@ mod transport_tests {
     fn health_checks_identity_and_protocol() {
         let (address, server) = mock_server(vec![
             (200, json!({"service":"another-app","apiVersion":1})),
-            (200, json!({"service":"mydash","apiVersion":1})),
+            (200, json!({"service":"truffle","apiVersion":1})),
         ]);
         let service = LocalHttpService::new(&address).unwrap();
         assert!(service.health().is_err());

@@ -133,7 +133,7 @@ impl Providers {
         redaction_secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
         Ok(Self {
             client: Client::builder()
-                .user_agent("mydash-local/1")
+                .user_agent("truffle-local/1")
                 .redirect(Policy::none())
                 .timeout(std::time::Duration::from_secs(25))
                 .build()
@@ -774,7 +774,7 @@ mod query_tests {
     #[test]
     fn profile_credentials_stay_private_and_preserve_explicit_child_auth() {
         let root = tempfile::tempdir().unwrap();
-        let sentinel_key = format!("MYDASH_TEST_SECRET_{}", uuid().replace('-', "_"));
+        let sentinel_key = format!("TRUFFLE_TEST_SECRET_{}", uuid().replace('-', "_"));
         let sentinel_value = "benign-profile-only-sentinel";
         std::fs::write(root.path().join(".env"), format!(
             "SENTRY_ORG=fixture-org\nSENTRY_AUTH_TOKEN=benign-sentry-fixture\nLINEAR_API_KEY=benign-linear-fixture\nGITHUB_TOKEN=benign-github-fixture\n{sentinel_key}={sentinel_value}\n"

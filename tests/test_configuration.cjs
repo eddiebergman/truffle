@@ -35,7 +35,7 @@ test('settings and visibility loaders discard delayed background responses after
   ['page-settings.js','async function loadPageSettings(','function pageSettingsGear(','loadPageSettings','pageSettingsDocument',{revision:2,pages:{}}]
  ]){
   const source=fs.readFileSync('static/'+file,'utf8');let release,allow=true,applied=0;const gate=new Promise(resolve=>release=resolve),previous={revision:1};
-  const c=vm.createContext({console,api:async path=>{await gate;return path==='/api/themes'?{themes:{}}:next;},$:()=>({open:false}),window:{mydashThemeCatalog:{}},applyAppSettings:()=>applied++,render:()=>applied++,[globalName]:previous});
+  const c=vm.createContext({console,api:async path=>{await gate;return path==='/api/themes'?{themes:{}}:next;},$:()=>({open:false}),window:{truffleThemeCatalog:{}},applyAppSettings:()=>applied++,render:()=>applied++,[globalName]:previous});
   vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
   const pending=c[functionName]({canApply:()=>allow});allow=false;release();assert.equal(await pending,null);assert.equal(c[globalName],previous);assert.equal(applied,0);
   allow=true;await c[functionName]({canApply:()=>allow});assert.equal(c[globalName],next);assert.equal(applied,1);

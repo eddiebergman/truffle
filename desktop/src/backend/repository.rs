@@ -16,7 +16,7 @@ struct DataFileLock(File);
 impl DataFileLock {
     fn acquire(file: File) -> Result<Self> {
         file.try_lock_exclusive()
-            .map_err(|_| Error::new("Another mydash service is using this data file."))?;
+            .map_err(|_| Error::new("Another truffle service is using this data file."))?;
         Ok(Self(file))
     }
 }
@@ -86,7 +86,7 @@ impl Repository {
         domain::initialize(&mut state)?;
         let agent_helper=super::agent_cli::helper(&root)?;
         let docs=data.parent().unwrap().join("runtime-docs");std::fs::create_dir_all(&docs)?;
-        super::http::private_write(&docs.join("mydash.md"),include_bytes!("../../../skill/SKILL.md"))?;
+        super::http::private_write(&docs.join("truffle.md"),include_bytes!("../../../skill/SKILL.md"))?;
         let providers = ProviderHost::new(&root, data.parent().unwrap())?;
         state["sources"]["sentry"]["disabled"] = json!(!providers.sentry_configured());
         let sharing = super::sharing::load(data.parent().unwrap())?;
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn sources_status_is_bounded_and_redacts_full_error_before_truncation() {
         let temp=tempfile::tempdir().unwrap();let secret="benign-private-sources-secret-boundary-marker";
-        std::fs::write(temp.path().join(".env"),format!("MYDASH_TEST_SECRET={secret}\n")).unwrap();
+        std::fs::write(temp.path().join(".env"),format!("TRUFFLE_TEST_SECRET={secret}\n")).unwrap();
         let repo=Repository::open(temp.path().into(),None,true).unwrap();
         repo.transaction(|state| {
             state["sources"]["github"]=json!({"disabled":false,"lastSuccess":123,"nextAttempt":456,"failures":2,"error":format!("{}{secret} suffix","x".repeat(1990)),"privateExtension":"private-extension-marker"});

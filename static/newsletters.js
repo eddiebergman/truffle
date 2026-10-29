@@ -156,7 +156,7 @@ async function viewArtifact(artifact){
   if(isText){
     const table=['csv','json'].includes(artifact.format);
     if(table){
-      const rows=async()=>{const text=await raw();if(artifact.format==='csv')return parseCSV(text);const data=JSON.parse(text);if(data.schema!=='mydash.table/v1'||!Array.isArray(data.columns)||!Array.isArray(data.rows))throw new Error('Unsupported table schema.');return [data.columns,...data.rows];};
+      const rows=async()=>{const text=await raw();if(artifact.format==='csv')return parseCSV(text);const data=JSON.parse(text);if(!['truffle.table/v1','mydash.table/v1'].includes(data.schema)||!Array.isArray(data.columns)||!Array.isArray(data.rows))throw new Error('Unsupported table schema.');return [data.columns,...data.rows];};
       copies.append(artifactCopyButton('Copy CSV',()=>serviceClient.copyText(artifact.format==='csv'?raw():rows().then(artifactCSV))),artifactCopyButton('Copy Markdown',()=>serviceClient.copyText(rows().then(artifactMarkdown))));
     }else copies.append(artifactCopyButton(artifact.format==='md'?'Copy Markdown':artifact.format==='html'?'Copy HTML':'Copy text',()=>serviceClient.copyText(raw())));
   }

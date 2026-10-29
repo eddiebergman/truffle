@@ -3,7 +3,7 @@ use std::sync::Mutex;
 static ENV: Mutex<()> = Mutex::new(());
 fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("mydash");
+    let root = temp.path().join("truffle");
     std::fs::create_dir(&root).unwrap();
     let repo = Repository::open(root, None, true).unwrap();
     (temp, repo)
@@ -117,6 +117,11 @@ fn schedule_catches_up_once_or_skips_and_never_replays_backlog() {
     assert_eq!(s["skillSchedules"]["daily"]["nextRun"], 13600.0);
 }
 #[test]
+fn tables_written_before_the_rename_remain_valid() {
+    artifacts::validate_table(&json!({"schema":"mydash.table/v1","columns":["metric"],"rows":[[1]]})).unwrap();
+    assert!(artifacts::validate_table(&json!({"schema":"other.table/v1","columns":["metric"],"rows":[[1]]})).is_err());
+}
+#[test]
 fn registered_tables_are_validated_and_snapshotted() {
     let (temp, repo) = fixture();
     let folder = temp.path().join("work");
@@ -131,7 +136,7 @@ fn registered_tables_are_validated_and_snapshotted() {
         .unwrap();
     let path = folder.join("metrics.json");
     let table =
-        json!({"schema":"mydash.table/v1","columns":["metric","value"],"rows":[["latency",12]]});
+        json!({"schema":"truffle.table/v1","columns":["metric","value"],"rows":[["latency",12]]});
     std::fs::write(&path, table.to_string()).unwrap();
     let artifact = repo
         .transaction(|s| {
@@ -269,8 +274,8 @@ fn linear_without_project_keeps_hierarchy_and_sentry_link() {
 fn quick_launch_attaches_only_clicked_work_and_newsletters_do_not_merge_work_groups() {
     let _env = ENV.lock().unwrap();
     let (temp,repo)=fixture();
-    let previous=std::env::var_os("MYDASH_WORKDIR");
-    std::env::set_var("MYDASH_WORKDIR",temp.path());
+    let previous=std::env::var_os("TRUFFLE_WORKDIR");
+    std::env::set_var("TRUFFLE_WORKDIR",temp.path());
     let folder=temp.path().join("api");std::fs::create_dir(&folder).unwrap();
     let folder=folder.canonicalize().unwrap();
     let a=json!({"id":"github:a","source":"github","kind":"Pull request","title":"Database tests","url":"https://github.com/acme/api/pull/1","reference":"#1","project":"acme/api","status":"draft"});
@@ -278,7 +283,7 @@ fn quick_launch_attaches_only_clicked_work_and_newsletters_do_not_merge_work_gro
     repo.transaction(|s|{s["items"]=json!([a,b]);s["sessions"]=json!([{"id":uuid(),"workflow":"newsletter","items":[a,b]}]);assert!(arr(&domain::bundles(s)).is_empty());s["workLinks"]=json!([[a["id"],b["id"]]]);assert_eq!(arr(&domain::bundles(s)).len(),1);Ok(())}).unwrap();
     let record=workflows::quick(&repo,&json!({"agent":"claude","itemId":"github:a","folderPath":folder}),false).unwrap();
     assert_eq!(arr(&record["items"]).len(),1);assert_eq!(record["items"][0]["id"],"github:a");assert_eq!(record["originItemId"],"github:a");
-    if let Some(value)=previous { std::env::set_var("MYDASH_WORKDIR",value); } else { std::env::remove_var("MYDASH_WORKDIR"); }
+    if let Some(value)=previous { std::env::set_var("TRUFFLE_WORKDIR",value); } else { std::env::remove_var("TRUFFLE_WORKDIR"); }
 }
 #[test]
 fn review_launch_reuses_identity_and_actual_worktree() {
@@ -287,8 +292,8 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     let work = temp.path().join("code");
     let folder = work.join("api");
     std::fs::create_dir_all(&folder).unwrap();
-    let previous = std::env::var_os("MYDASH_WORKDIR");
-    std::env::set_var("MYDASH_WORKDIR", &work);
+    let previous = std::env::var_os("TRUFFLE_WORKDIR");
+    std::env::set_var("TRUFFLE_WORKDIR", &work);
     let item = json!({"id":"github:42","source":"github","kind":"Pull request","title":"Fix","reference":"#42","url":"https://github.com/acme/api/pull/42","project":"acme/api","status":"draft"});
     repo.transaction(|s| {
         s["items"] = json!([item]);
@@ -316,9 +321,9 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     let packet = workflows::context(&repo, record["id"].as_str().unwrap()).unwrap();
     assert!(packet.contains("/eddie-review https://github.com/acme/api/pull/42"));
     if let Some(value) = previous {
-        std::env::set_var("MYDASH_WORKDIR", value)
+        std::env::set_var("TRUFFLE_WORKDIR", value)
     } else {
-        std::env::remove_var("MYDASH_WORKDIR")
+        std::env::remove_var("TRUFFLE_WORKDIR")
     }
 }
 #[test]
@@ -391,7 +396,7 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
         &main,
         &[
             "-c",
-            "user.name=Mydash test",
+            "user.name=Truffle test",
             "-c",
             "user.email=test@example.invalid",
             "commit",
@@ -478,10 +483,10 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
     assert_eq!(*repo.state.lock().unwrap(), before);
     let packet = workflows::context(&repo, text(&record, "id")).unwrap();
     assert!(packet.contains("Worktree reporting"));
-    assert!(packet.contains("runtime-docs/mydash.md"));
+    assert!(packet.contains("runtime-docs/truffle.md"));
     assert!(!packet.contains("register.py"));
     assert!(!packet.contains("uv run"));
-    assert!(std::fs::read_to_string(repo.data.parent().unwrap().join("runtime-docs/mydash.md")).unwrap().contains("MYDASH_BIN"));
+    assert!(std::fs::read_to_string(repo.data.parent().unwrap().join("runtime-docs/truffle.md")).unwrap().contains("TRUFFLE_BIN"));
 }
 
 #[test]

@@ -95,7 +95,7 @@ function profileFixture({previewError,initialProfile,expectedRevision,expectedCo
  const c=onboardingTestContext({TextEncoder,structuredClone,document:{createElement:tag=>new Node(tag)},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/settings/preview'){if(previewError)throw new Error(previewError);return {revision:current.revision,contentHash:current.contentHash,values:structuredClone(payload.patch)};}if(!payload)return structuredClone(current);current.values={...current.values,...structuredClone(payload.patch)};current.revision++;current.contentHash='b'.repeat(64);return structuredClone(current);},loadAppSettings:async()=>{}});
  const settings=fs.readFileSync('static/settings.js','utf8');vm.runInContext(settings.slice(settings.indexOf('function mergeSettingsProfile('),settings.indexOf('function exportSettingsProfile(')),c);vm.runInContext(fs.readFileSync('static/settings-profile.js','utf8'),c);const root=c.renderSettingsProfilePreview(container,{initialProfile,expectedRevision,expectedContentHash});
  const nodes=()=>{const visit=n=>[n,...n.children.flatMap(visit)];return visit(root);};const button=text=>nodes().find(n=>n.tagName==='button'&&n.textContent===text),input=nodes().find(n=>n.tagName==='textarea'),file=nodes().find(n=>n.tagName==='input'&&n.type==='file'),status=nodes().find(n=>n.attrs.role==='status');
- const paste=async values=>{input.value=JSON.stringify({format:'mydash-settings',version:1,values});await button('Preview pasted profile').onclick();};
+ const paste=async values=>{input.value=JSON.stringify({format:'truffle-settings',version:1,values});await button('Preview pasted profile').onclick();};
  return {c,current,calls,root,dialog,container,nodes,button,input,file,status,paste};
 }
 test('company profile preview reuses schema validation, clears raw input, defaults routine only and requires explicit apply',async()=>{
@@ -121,7 +121,7 @@ test('invalid, oversized and backend-rejected company profiles show no partial p
 test('company profile disposal clears private fields and ignores delayed preview responses',async()=>{
  for(const stage of ['settings','preview']){
   const f=profileFixture();let release;const original=f.c.api;f.c.api=async(path,payload)=>{if(stage==='settings'&&path==='/api/settings'&&!payload||stage==='preview'&&path==='/api/settings/preview')return new Promise(resolve=>release=()=>resolve(stage==='settings'?structuredClone(f.current):{revision:3,contentHash:f.current.contentHash,values:{...f.current.values,theme:'midnight'}}));return original(path,payload);};
-  f.input.value=JSON.stringify({format:'mydash-settings',version:1,values:{theme:'midnight'}});const pending=f.button('Preview pasted profile').onclick();while(!release)await Promise.resolve();f.file.value='fixture.json';f.dialog.handlers.close();assert.equal(f.input.value,'');assert.equal(f.file.value,'');release();await pending;assert.equal(f.nodes().some(n=>n.type==='checkbox'),false);assert.equal(f.button('Apply selected changes').disabled,true);
+  f.input.value=JSON.stringify({format:'truffle-settings',version:1,values:{theme:'midnight'}});const pending=f.button('Preview pasted profile').onclick();while(!release)await Promise.resolve();f.file.value='fixture.json';f.dialog.handlers.close();assert.equal(f.input.value,'');assert.equal(f.file.value,'');release();await pending;assert.equal(f.nodes().some(n=>n.type==='checkbox'),false);assert.equal(f.button('Apply selected changes').disabled,true);
  }
 });
 test('onboarding busy state preserves company importer disabled policy',()=>{
@@ -130,25 +130,25 @@ test('onboarding busy state preserves company importer disabled policy',()=>{
 });
 
 test('shared proposal review previews only requested changes and applies selected fields at the proposal revision',async()=>{
- const f=profileFixture({initialProfile:{format:'mydash-settings',version:1,values:{theme:'midnight',editor:'code'}},expectedRevision:3});await f.root.ready;
+ const f=profileFixture({initialProfile:{format:'truffle-settings',version:1,values:{theme:'midnight',editor:'code'}},expectedRevision:3});await f.root.ready;
  assert.equal(f.input.hidden,true);assert.equal(f.button('Choose profile file').hidden,true);assert.equal(f.button('Preview pasted profile').hidden,true);assert.equal(f.root.attrs['data-agent-context-exclude'],'true');
  const boxes=f.nodes().filter(n=>n.type==='checkbox');assert.equal(boxes.length,2);assert.equal(boxes.find(n=>n.attrs['aria-label']==='Apply Theme').checked,true);assert.equal(boxes.find(n=>n.attrs['aria-label']==='Approve changing Editor').checked,false);assert.equal(f.calls.filter(c=>c.path==='/api/settings'&&c.payload).length,0);
  await f.button('Apply selected changes').onclick();const request=f.calls.find(c=>c.path==='/api/settings'&&c.payload).payload;assert.equal(request.revision,3);assert.equal(request.contentHash,"a".repeat(64));assert.deepEqual(Object.keys(request.patch),['theme']);assert.equal(f.current.values.editor,'zed');
 });
 test('stale initial proposals require an explicit fresh preview and reset user approval choices',async()=>{
- const f=profileFixture({initialProfile:{format:'mydash-settings',version:1,values:{theme:'midnight',editor:'code'}},expectedRevision:2});await f.root.ready;
+ const f=profileFixture({initialProfile:{format:'truffle-settings',version:1,values:{theme:'midnight',editor:'code'}},expectedRevision:2});await f.root.ready;
  assert.match(f.status.textContent,/Settings changed since this proposal/);assert.equal(f.nodes().some(n=>n.type==='checkbox'),false);assert.equal(f.button('Apply selected changes').disabled,true);assert.equal(f.calls.some(c=>c.path==='/api/settings/preview'),false);
  await f.button('Apply selected changes').onclick();assert.equal(f.calls.some(c=>c.path==='/api/settings'&&c.payload),false);
  await f.button('Refresh preview').onclick();assert.equal(f.nodes().find(n=>n.attrs['aria-label']==='Approve changing Editor').checked,false);assert.equal(f.button('Apply selected changes').disabled,false);
 });
 test('shared proposal renderer copies its input and enforces the bounded settings profile schema',async()=>{
- const initialProfile={format:'mydash-settings',version:1,values:{editor:'code'}},f=profileFixture({initialProfile,expectedRevision:3});initialProfile.values.editor='cursor';await f.root.ready;assert.ok(f.nodes().some(n=>n.tagName==='pre'&&n.textContent==='code'));assert.equal(f.nodes().some(n=>n.tagName==='pre'&&n.textContent==='cursor'),false);
- const huge=profileFixture({initialProfile:{format:'mydash-settings',version:1,values:{codexReviewCommand:'x'.repeat(65537)}},expectedRevision:3});await huge.root.ready;assert.match(huge.status.textContent,/64 KiB/);assert.equal(huge.calls.length,0);assert.equal(huge.button('Apply selected changes').disabled,true);
+ const initialProfile={format:'truffle-settings',version:1,values:{editor:'code'}},f=profileFixture({initialProfile,expectedRevision:3});initialProfile.values.editor='cursor';await f.root.ready;assert.ok(f.nodes().some(n=>n.tagName==='pre'&&n.textContent==='code'));assert.equal(f.nodes().some(n=>n.tagName==='pre'&&n.textContent==='cursor'),false);
+ const huge=profileFixture({initialProfile:{format:'truffle-settings',version:1,values:{codexReviewCommand:'x'.repeat(65537)}},expectedRevision:3});await huge.root.ready;assert.match(huge.status.textContent,/64 KiB/);assert.equal(huge.calls.length,0);assert.equal(huge.button('Apply selected changes').disabled,true);
  f.root.disposeProfileImport();assert.equal(f.nodes().some(n=>n.type==='checkbox'),false);assert.equal(f.input.value,'');assert.equal(f.button('Refresh preview').disabled,true);
 });
 
 test('same-revision file changes invalidate proposal previews and approvals',async()=>{
- const initialProfile={format:'mydash-settings',version:1,values:{editor:'code'}},f=profileFixture({initialProfile,expectedRevision:3,expectedContentHash:'c'.repeat(64)});await f.root.ready;
+ const initialProfile={format:'truffle-settings',version:1,values:{editor:'code'}},f=profileFixture({initialProfile,expectedRevision:3,expectedContentHash:'c'.repeat(64)});await f.root.ready;
  assert.match(f.status.textContent,/changed since this proposal/);assert.equal(f.calls.some(c=>c.path==='/api/settings/preview'),false);await f.button('Refresh preview').onclick();const box=f.nodes().find(n=>n.type==='checkbox');box.checked=true;box.onchange();f.current.contentHash='d'.repeat(64);await f.button('Apply selected changes').onclick();assert.match(f.status.textContent,/changed elsewhere/);assert.equal(f.calls.some(c=>c.path==='/api/settings'&&c.payload),false);assert.equal(f.button('Apply selected changes').disabled,true);
 });
 

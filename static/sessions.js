@@ -233,7 +233,7 @@ function updateLaunchForm() {
   $('#connection-mode').hidden=editing;
   $('#scope-mode').hidden=editing;
   launchForm.elements.sessionId.readOnly=editing&&!!selectedSession?.sessionId;
-  $('#launch-note').textContent=attach?'Attaching keeps the existing conversation history. Opening it does not send a new message.':launchForm.elements.destination.value==='desktop'?'Codex opens a prefilled composer. Send it, then use the mydash skill or paste the chat link to register the conversation.':'The agent receives a local context packet and instructions to register its conversation with Truffle.';
+  $('#launch-note').textContent=attach?'Attaching keeps the existing conversation history. Opening it does not send a new message.':launchForm.elements.destination.value==='desktop'?'Codex opens a prefilled composer. Send it, then use the truffle skill or paste the chat link to register the conversation.':'The agent receives a local context packet and instructions to register its conversation with Truffle.';
   populateCandidates();renderWorkPicker();
 }
 function attachableSessionCandidate(candidate){return typeof candidate.sessionId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate.sessionId);}

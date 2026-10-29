@@ -21,7 +21,7 @@ fn io<T>(r: std::io::Result<T>) -> Result<T> {
     r.map_err(|e| format!("Restart operation failed: {e}"))
 }
 pub fn root() -> PathBuf {
-    std::env::var_os("MYDASH_HOME")
+    std::env::var_os("TRUFFLE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| backend::home().join("code/mydash"))
 }
@@ -122,7 +122,7 @@ fn matches_process(pid: u32, mode: &str, root: &Path) -> bool {
     let Ok(executable) = output("/bin/ps", &["-p", &id, "-o", "comm="]) else {
         return false;
     };
-    if !executable.ends_with("/mydash-desktop") {
+    if !executable.ends_with("/truffle-desktop") && !executable.ends_with("/mydash-desktop") {
         return false;
     }
     let Ok(command) = output("/bin/ps", &["-p", &id, "-o", "command="]) else {
@@ -253,7 +253,7 @@ fn inspect(root: &Path, url: &str) -> Result<Value> {
         .unwrap(),
     );
     Ok(
-        json!({"servicePid":pid,"daemonPid":host.as_ref().map(|h|h["pid"].clone()),"preserveTerminals":preserved,"liveCount":live.len(),"sessions":records,"problems":problems,"snapshot":snapshot,"serviceBuiltAt":runtime(root,url)?["builtAt"],"appBuiltAt":env!("MYDASH_BUILD_TIME")}),
+        json!({"servicePid":pid,"daemonPid":host.as_ref().map(|h|h["pid"].clone()),"preserveTerminals":preserved,"liveCount":live.len(),"sessions":records,"problems":problems,"snapshot":snapshot,"serviceBuiltAt":runtime(root,url)?["builtAt"],"appBuiltAt":env!("TRUFFLE_BUILD_TIME")}),
     )
 }
 pub fn preview(root: &Path, url: &str) -> Result<Value> {
@@ -285,7 +285,7 @@ pub fn status(root: &Path) -> Result<Value> {
     Ok(job)
 }
 fn latest_binary() -> Result<PathBuf> {
-    let installed = backend::home().join("Applications/mydash.app/Contents/MacOS/mydash-desktop");
+    let installed = backend::home().join("Applications/truffle.app/Contents/MacOS/truffle-desktop");
     if installed.is_file() {
         Ok(installed)
     } else {
@@ -390,7 +390,7 @@ fn stop(pid: u32, mode: &str, root: &Path) -> Result<()> {
         return Err("The target process changed. No signal was sent.".into());
     }
     if unsafe { libc::kill(pid as i32, libc::SIGTERM) } != 0 {
-        return Err("Could not stop the verified mydash process.".into());
+        return Err("Could not stop the verified truffle process.".into());
     }
     let until = Instant::now() + Duration::from_secs(10);
     while Instant::now() < until {
@@ -608,22 +608,22 @@ mod tests {
     #[test]
     fn process_profile_arguments_do_not_match_a_different_prefix() {
         assert!(argument_matches(
-            "/app/mydash-desktop --serve --home /code/mydash --port 8765",
+            "/app/truffle-desktop --serve --home /code/mydash --port 8765",
             "--home",
             "/code/mydash"
         ));
         assert!(argument_matches(
-            "/app/mydash-desktop --serve --home /code/my dash",
+            "/app/truffle-desktop --serve --home /code/my dash",
             "--home",
             "/code/my dash"
         ));
         assert!(!argument_matches(
-            "/app/mydash-desktop --serve --home /code/mydashboard",
+            "/app/truffle-desktop --serve --home /code/mydashboard",
             "--home",
             "/code/mydash"
         ));
         assert!(!argument_matches(
-            "/app/mydash-desktop --serve --other--home /code/mydash",
+            "/app/truffle-desktop --serve --other--home /code/mydash",
             "--home",
             "/code/mydash"
         ));

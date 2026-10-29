@@ -89,7 +89,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.store.state['overrides']['github:new']['status'], 'blocked')
 
     def test_single_writer_lock(self):
-        with self.assertRaisesRegex(ValueError, 'Another mydash'):
+        with self.assertRaisesRegex(ValueError, 'Another truffle'):
             server.Store(self.path)
 
     def test_workflow_mapping(self):
@@ -213,7 +213,7 @@ class DashboardTests(unittest.TestCase):
             return urlopen(request)
         try:
             with urlopen(base + '/api/health') as response:
-                self.assertEqual(json.load(response), {'service':'mydash','apiVersion':1,'storageVersion':1})
+                self.assertEqual(json.load(response), {'service':'truffle','apiVersion':1,'storageVersion':1})
                 self.assertIsNone(response.headers.get('Access-Control-Allow-Origin'))
             with urlopen(base + '/api/state') as response:
                 self.assertEqual(json.load(response)['csrf'], 'test-csrf')
@@ -242,7 +242,7 @@ class DashboardTests(unittest.TestCase):
             (runtime_dir / 'runtime.json').write_text(json.dumps({'url':base, 'token':'private-test-token'}))
             result = subprocess.run([sys.executable, str(Path(server.__file__).parent / 'register.py'), 'register',
                                      '--agent', 'codex', '--project', 'Agent-linked project', '--cwd', self.temp.name],
-                                    env={**os.environ, 'MYDASH_HOME':self.temp.name,
+                                    env={**os.environ, 'TRUFFLE_HOME':self.temp.name,
                                          'CODEX_THREAD_ID':'11111111-1111-4111-8111-111111111111'},
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)

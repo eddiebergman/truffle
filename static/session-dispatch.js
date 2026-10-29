@@ -1,6 +1,6 @@
 'use strict';
 // Durable delivery receipts belong to the service. This bounded cache only presents them.
-const chatDispatchCache=new Map(),chatDispatchStorageKey='mydash-dispatch-intents-v1';
+const chatDispatchCache=new Map(),chatDispatchStorageKey='truffle-dispatch-intents-v1';
 let chatDispatchStorageError=false;
 function storedChatDispatchIntents(){
  try{const raw=localStorage.getItem(chatDispatchStorageKey)||'[]';if(raw.length>32768)throw new Error('Recovery metadata is too large');const rows=JSON.parse(raw);if(!Array.isArray(rows)||rows.length>24||rows.some(row=>!row||Object.keys(row).some(key=>!['recordId','operationId','kind','itemId','revision','ticket','unavailable'].includes(key))||!['review-request','review-feedback','ci-investigation'].includes(row.kind)||typeof row.recordId!=='string'||row.recordId.length>80||typeof row.operationId!=='string'||row.operationId.length>80||row.unavailable!==undefined&&row.unavailable!==true||row.ticket!==undefined&&(typeof row.ticket!=='string'||!/^(0|[1-9][0-9]{0,19})$/.test(row.ticket))||row.revision!==undefined&&(!Number.isSafeInteger(row.revision)||row.revision<0)||row.itemId!==undefined&&(typeof row.itemId!=='string'||row.itemId.length>300)))throw new Error('Invalid recovery metadata');chatDispatchStorageError=false;return rows;}

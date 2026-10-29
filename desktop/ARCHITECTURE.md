@@ -1,4 +1,4 @@
-# mydash: Rust service and desktop host
+# truffle: Rust service and desktop host
 
 The active backend is Rust. It implements the existing loopback API and version-1 JSON storage; the old Python server remains in the source tree as migration reference/fallback, not the app's runtime. The small `register.py` helper remains a client for existing Claude/Codex skills. It does not own or write work state.
 
@@ -48,42 +48,42 @@ npm ci
 npm run build
 ```
 
-The bundle is `desktop/target/release/bundle/macos/mydash.app`. Install it under `~/Applications/`. Build dependencies are locked by `Cargo.lock` and `package-lock.json`.
+The bundle is `desktop/target/release/bundle/macos/truffle.app`. Install it under `~/Applications/`. Build dependencies are locked by `Cargo.lock` and `package-lock.json`.
 
 ```sh
 # In any terminal:
 ~/code/mydash/start.command
 # Launch the installed app from Finder, Spotlight, or:
-open ~/Applications/mydash.app
+open ~/Applications/truffle.app
 ```
 
-For an isolated service test, run the binary with `--serve --demo --home ~/code/mydash --data /tmp/mydash-preview/data/state.json --port 8766`. Demo mode uses the given cache and suppresses all provider sync and agent launches. `MYDASH_SERVICE_URL` selects another loopback origin for development; it is read at runtime or at build time. Production builds leave it unset.
+For an isolated service test, run the binary with `--serve --demo --home ~/code/mydash --data /tmp/truffle-preview/data/state.json --port 8766`. Demo mode uses the given cache and suppresses all provider sync and agent launches. `TRUFFLE_SERVICE_URL` selects another loopback origin for development; it is read at runtime or at build time. Production builds leave it unset.
 
 Close hides the native window. Clicking the Dock icon restores it. Cmd-Q quits the app. The independently running service continues. The app's reconnect screen explains how to start it if unavailable.
 
 ## Embedded agents and results
 
-A separate terminal daemon owns up to 12 live PTYs. Closing the app or restarting the HTTP service does not stop them. The daemon keeps process generations and replay buffers so a replacement service can reconnect. The daemon itself and laptop shutdown still end its PTYs. Existing terminals owned by the older service cannot be migrated; this applies to launches after activation. Each PTY retains at most 2 MiB of output. Sequential 32 KiB polling and xterm write callbacks provide bounded replay/backpressure. Input and resize use authenticated fixed routes, never an arbitrary command execution API. History stores conversation identity and work links, not terminal transcripts. Existing external processes cannot be transplanted; after closing them, Resume in mydash starts their saved conversation in an embedded terminal.
+A separate terminal daemon owns up to 12 live PTYs. Closing the app or restarting the HTTP service does not stop them. The daemon keeps process generations and replay buffers so a replacement service can reconnect. The daemon itself and laptop shutdown still end its PTYs. Existing terminals owned by the older service cannot be migrated; this applies to launches after activation. Each PTY retains at most 2 MiB of output. Sequential 32 KiB polling and xterm write callbacks provide bounded replay/backpressure. Input and resize use authenticated fixed routes, never an arbitrary command execution API. History stores conversation identity and work links, not terminal transcripts. Existing external processes cannot be transplanted; after closing them, Resume in truffle starts their saved conversation in an embedded terminal.
 
 Launch-local Claude/Codex hooks report waiting, working, permission requests and subagent counts through runtime_hook.py. Global instructions and skill directories remain unchanged. Unknown state/counts are shown explicitly. Lifecycle metadata is advisory; live PTY/surface checks determine the active strip.
 
-Registered local results become private immutable snapshots under data/artifacts. Supported results include Markdown, sandboxed HTML without scripts, PNG/WebP/JPEG/SVG, CSV and mydash.table/v1 JSON tables. The skill documents registration. Schedules support daily local time or intervals, with one catch-up run or skipping missed intervals; they never replay a backlog. A completed turn means the agent stopped producing output for that turn, not proof that its task succeeded.
+Registered local results become private immutable snapshots under data/artifacts. Supported results include Markdown, sandboxed HTML without scripts, PNG/WebP/JPEG/SVG, CSV and truffle.table/v1 JSON tables. The skill documents registration. Schedules support daily local time or intervals, with one catch-up run or skipping missed intervals; they never replay a backlog. A completed turn means the agent stopped producing output for that turn, not proof that its task succeeded.
 
 ## cmux retirement
 
 cmux inventory, focus and launch integration has been removed. Only backend-owned embedded PTYs appear as live agents. Legacy cmux destination records remain intact; opening one resumes its native conversation UUID in an embedded PTY and updates its destination. Close an external copy yourself before resuming to avoid concurrent agent work. No cmux socket is used and no cmux ancestry policy is required.
 
-Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, mydash checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
+Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, truffle checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
 
 
 ## Persistent terminal host
 
-The production repository delegates PTY operations over a private Unix socket in `/tmp/mydash-pty-<uid>-<state-path-hash>/terminal.sock`. The directory is user-owned mode 0700, with exclusive daemon and startup locks. Framed JSON has protocol version 1, a 512 KiB limit and bounded handlers/timeouts. The daemon starts lazily through `--terminal-daemon --home ROOT --data STATE`, detaches from the service process group, and retains at most 12 live terminals. The app/service must not kill it during routine restart or bundle replacement. Upgrade it only after its agents finish or after explicit permission to end them. Do not use broad `pkill mydash` commands. An unreachable locked daemon is an error, not permission to launch duplicate agents. Demo mode retains an in-process fixture host; the process regression uses an explicitly allowed shell fixture.
+The production repository delegates PTY operations over a private Unix socket in `/tmp/truffle-pty-<uid>-<state-path-hash>/terminal.sock`. The directory is user-owned mode 0700, with exclusive daemon and startup locks. Framed JSON has protocol version 1, a 512 KiB limit and bounded handlers/timeouts. The daemon starts lazily through `--terminal-daemon --home ROOT --data STATE`, detaches from the service process group, and retains at most 12 live terminals. The app/service must not kill it during routine restart or bundle replacement. Upgrade it only after its agents finish or after explicit permission to end them. Do not use broad `pkill truffle` commands. An unreachable locked daemon is an error, not permission to launch duplicate agents. Demo mode retains an in-process fixture host; the process regression uses an explicitly allowed shell fixture.
 
 `restart.rs` supplies native preview/start/status commands and a detached `--restart-dashboard` worker. It checks the reviewed live-agent snapshot again, verifies process ownership/executable/profile, and uses SIGTERM without force-kill. A service restart preserves daemon PTYs; a terminal restart or legacy migration explicitly closes them and resumes the original saved UUIDs/cwds. Missing resume metadata blocks disruptive operations. Exclusive worker locks and private atomic `data/restarts/` jobs prevent concurrent restarts and retain diagnostics across UI closure. New service output is bounded through `data/logs/service.log` rotation. The desktop can invoke the helper even if the running service predates these controls. `--restart-control` exposes the same fixed operations for isolated process regression tests; it is not an arbitrary shell interface.
 
 ## Agent resource metadata and work-view tasks
 
-`resources.rs` stores bounded open resource descriptors on the associated session; `register.py resource --record ID --file REPORT` accepts a resources array with provider/kind/id identity and optional status, timestamps, grouped URIs and metadata. Receipt time is separate from observed time. Metadata does not provision or clean up cloud resources, and closing a terminal never implies cleanup. Agent launch packets and the mydash skill describe reporting at lifecycle changes.
+`resources.rs` stores bounded open resource descriptors on the associated session; `register.py resource --record ID --file REPORT` accepts a resources array with provider/kind/id identity and optional status, timestamps, grouped URIs and metadata. Receipt time is separate from observed time. Metadata does not provision or clean up cloud resources, and closing a terminal never implies cleanup. Agent launch packets and the truffle skill describe reporting at lifecycle changes.
 
 `view_context.rs` prepares an immutable bounded JSON snapshot from the exact filtered work IDs sent by the frontend, including matches beyond pagination. It records source sync times, local status overrides and reference links. Request IDs make retries reuse the saved task. Snapshot items are context; they are not all attached as assigned work.

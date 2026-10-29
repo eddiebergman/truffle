@@ -343,7 +343,7 @@ mod tests {
     }
     #[test]
     fn cas_catches_stale_revisions_and_external_edits() {
-        let directory = std::env::temp_dir().join(format!("mydash-views-{}-{}",std::process::id(),uuid::Uuid::new_v4()));std::fs::create_dir_all(&directory).unwrap();let path = directory.join("views.json");
+        let directory = std::env::temp_dir().join(format!("truffle-views-{}-{}",std::process::id(),uuid::Uuid::new_v4()));std::fs::create_dir_all(&directory).unwrap();let path = directory.join("views.json");
         std::fs::write(&path,serde_json::to_vec(&defaults()).unwrap()).unwrap();let (doc,hash)=read_document(&path).unwrap();
         let payload=json!({"revision":doc.revision,"contentHash":hash,"views":doc.views});
         let next=update_file(&path,&payload).unwrap();assert_eq!(next["revision"],1);assert_eq!(update_file(&path,&payload).unwrap_err().status,409);

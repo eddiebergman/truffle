@@ -47,7 +47,7 @@ def get(path, params, api):
     if not org or not token:
         raise api.SyncError('Configure SENTRY_ORG and sign in with sentry-cli, or set SENTRY_AUTH_TOKEN.')
     req = Request(base + path + ('?' + urlencode(params) if params else ''),
-                  headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'mydash-local/1'})
+                  headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'truffle-local/1'})
     started=time.monotonic()
     diagnostic=dict(host=urlsplit(base).hostname,phase='connect')
     try:

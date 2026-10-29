@@ -531,7 +531,7 @@ function parseCSV(text){
 }
 function appendResultTable(node,text,format){
   const data=format==='json'?JSON.parse(text):null;
-  if(data&&(data.schema!=='mydash.table/v1'||!Array.isArray(data.columns)||!Array.isArray(data.rows)))throw new Error('Unsupported table schema.');
+  if(data&&(!['truffle.table/v1','mydash.table/v1'].includes(data.schema)||!Array.isArray(data.columns)||!Array.isArray(data.rows)))throw new Error('Unsupported table schema.');
   const values=data?[data.columns,...data.rows]:parseCSV(text);if(!values.length)return;
   const table=el('table','result-table'),head=el('thead'),header=el('tr');for(const value of values[0])header.append(el('th','',String(value)));head.append(header);table.append(head);
   const body=el('tbody');for(const row of values.slice(1,1001)){const tr=el('tr');for(const value of row)tr.append(el('td','',value===null?'':String(value)));body.append(tr);}table.append(body);node.append(table);

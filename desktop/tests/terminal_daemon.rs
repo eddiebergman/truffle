@@ -42,7 +42,7 @@ fn wait_for(mut check: impl FnMut() -> bool) {
 }
 fn backend(root: &Path, data: &Path, port: u16) -> Owned {
     Owned(
-        Command::new(env!("CARGO_BIN_EXE_mydash-desktop"))
+        Command::new(env!("CARGO_BIN_EXE_truffle-desktop"))
             .args(["--serve", "--home"])
             .arg(root)
             .arg("--data")
@@ -75,12 +75,12 @@ fn terminal_and_buffer_survive_backend_replacement() {
     std::fs::write(&data,serde_json::to_vec(&json!({"version":1,"sources":{"github":{"disabled":true},"linear":{"disabled":true},"sentry":{"disabled":true}}})).unwrap()).unwrap();
     let hash = context_kit::sha256(data.canonicalize().unwrap().to_string_lossy().as_bytes());
     let dir = PathBuf::from(format!(
-        "/tmp/mydash-pty-{}-{}",
+        "/tmp/truffle-pty-{}-{}",
         unsafe { libc::geteuid() },
         &hash[..16]
     ));
     let mut daemon = Owned(
-        Command::new(env!("CARGO_BIN_EXE_mydash-desktop"))
+        Command::new(env!("CARGO_BIN_EXE_truffle-desktop"))
             .args(["--terminal-daemon", "--allow-demo-terminals", "--home"])
             .arg(root.path())
             .arg("--data")
@@ -99,7 +99,7 @@ fn terminal_and_buffer_survive_backend_replacement() {
     );
     rpc(
         &dir,
-        json!({"op":"input","id":id,"data":"export MYDASH_RESTART_PROOF=kept-in-the-same-shell\n"}),
+        json!({"op":"input","id":id,"data":"export TRUFFLE_RESTART_PROOF=kept-in-the-same-shell\n"}),
     );
     let initial = rpc(
         &dir,
@@ -148,7 +148,7 @@ fn terminal_and_buffer_survive_backend_replacement() {
     };
     post(
         "/api/terminal/input",
-        json!({"id":id,"data":"printf 'PROOF:%s\\n' \"$MYDASH_RESTART_PROOF\"\n"}),
+        json!({"id":id,"data":"printf 'PROOF:%s\\n' \"$TRUFFLE_RESTART_PROOF\"\n"}),
     );
     let mut output = Vec::new();
     let mut next = cursor;
@@ -214,7 +214,7 @@ fn normal_launch_lazily_starts_detached_daemon_and_reuses_it() {
         .port();
     let base = format!("http://127.0.0.1:{port}");
     let mut service = Owned(
-        Command::new(env!("CARGO_BIN_EXE_mydash-desktop"))
+        Command::new(env!("CARGO_BIN_EXE_truffle-desktop"))
             .arg("--serve")
             .arg("--home")
             .arg(&root)
@@ -258,7 +258,7 @@ fn normal_launch_lazily_starts_detached_daemon_and_reuses_it() {
     assert_eq!(response["openReceipt"]["terminal"]["state"], "acknowledged");
     let hash = context_kit::sha256(data.to_string_lossy().as_bytes());
     let dir = PathBuf::from(format!(
-        "/tmp/mydash-pty-{}-{}",
+        "/tmp/truffle-pty-{}-{}",
         unsafe { libc::geteuid() },
         &hash[..16]
     ));

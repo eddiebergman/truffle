@@ -1,5 +1,5 @@
 {
-  "name": "mydash-desktop-tools",
+  "name": "truffle-desktop-tools",
   "private": true,
   "scripts": {
     "dev": "tauri dev",

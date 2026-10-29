@@ -18,7 +18,7 @@ test('changing diff layout keeps mounted files and line annotations and passes f
     render(){} setOptions(options){assert.notEqual(options,this.options);this.options=options;}
     rerender(){}setLineAnnotations(items){this.annotations=items;}cleanUp(){}
   }
-  const c=vm.createContext({themeName:()=> 'mydash-rose-pine',getComputedStyle:()=>({getPropertyValue:()=>''}),document:{documentElement:{dataset:{theme:'rose-pine'}}},Virtualizer,VirtualizedFileDiff,registerCustomTheme(){},rosePine:{}});
+  const c=vm.createContext({themeName:()=> 'truffle-rose-pine',getComputedStyle:()=>({getPropertyValue:()=>''}),document:{documentElement:{dataset:{theme:'rose-pine'}}},Virtualizer,VirtualizedFileDiff,registerCustomTheme(){},rosePine:{}});
   vm.runInContext(adapter.slice(adapter.indexOf('export function createDiffReview(')).replace('export function','function'),c);
   const controller=c.createDiffReview({},'unified');controller.mount({}, {path:'a',oldContent:'',newContent:'x'},[],()=>{});controller.mount({}, {path:'b',oldContent:'x',newContent:''},[],()=>{});
   controller.annotate('a',[{lineNumber:1}]);controller.setStyle('split');assert.deepEqual(views.map(v=>v.options.diffStyle),['split','split']);assert.equal(views[0].annotations.length,1);controller.setStyle('unified');assert.deepEqual(views.map(v=>v.options.diffStyle),['unified','unified']);
@@ -85,7 +85,7 @@ test('scrolling the review highlights the file at the reading position and revea
 
 test('review code highlighting retains literal text and newlines without treating code as HTML',async()=>{
  const adapter=fs.readFileSync('desktop/frontend/diff-viewer.js','utf8'),code={textContent:'if x:\n  print("<script>")',classList:['language-python'],isConnected:true,replaceChildren(fragment){this.children=fragment.children;}};
- const c=vm.createContext({themeName:()=> 'mydash-rose-pine',getFiletypeFromFileName:()=>{throw new Error('Explicit language should win');},getSharedHighlighter:async options=>{assert.equal(options.langs[0],'python');return {codeToTokens(text,options){assert.equal(text,code.textContent);assert.equal(options.lang,'python');return {tokens:[[{content:'if',color:'#c4a7e7'},{content:' x:'}],[{content:'  print("<script>")',color:'#f6c177'}]]};}};},document:{createDocumentFragment:()=>({children:[],append(node){this.children.push(node);}}),createElement:()=>({style:{}}),createTextNode:text=>({textContent:text})}});
+ const c=vm.createContext({themeName:()=> 'truffle-rose-pine',getFiletypeFromFileName:()=>{throw new Error('Explicit language should win');},getSharedHighlighter:async options=>{assert.equal(options.langs[0],'python');return {codeToTokens(text,options){assert.equal(text,code.textContent);assert.equal(options.lang,'python');return {tokens:[[{content:'if',color:'#c4a7e7'},{content:' x:'}],[{content:'  print("<script>")',color:'#f6c177'}]]};}};},document:{createDocumentFragment:()=>({children:[],append(node){this.children.push(node);}}),createElement:()=>({style:{}}),createTextNode:text=>({textContent:text})}});
  vm.runInContext(adapter.slice(adapter.indexOf('export async function highlightReviewCode('),adapter.indexOf('export function createDiffReview(')).replace('export async function','async function'),c);
  await c.highlightReviewCode({querySelectorAll:()=>[code]},'example.rs');assert.equal(code.children.map(x=>x.textContent).join(''),code.textContent);assert.equal(code.children[0].style.color,'#c4a7e7');assert.equal(code.children[3].textContent,'  print("<script>")');
 });
@@ -161,7 +161,7 @@ test('stale comments and archived comments retain source blocks and individually
 
 test('review highlighting keeps original CRLF and trailing newline when tokenization normalizes them',async()=>{
  const adapter=fs.readFileSync('desktop/frontend/diff-viewer.js','utf8');let replacements=0;
- const c=vm.createContext({themeName:()=> 'mydash-rose-pine',getSharedHighlighter:async()=>({codeToTokens:()=>({tokens:[[{content:'first'}],[{content:'second'}]]})}),document:{createDocumentFragment:()=>({})}});
+ const c=vm.createContext({themeName:()=> 'truffle-rose-pine',getSharedHighlighter:async()=>({codeToTokens:()=>({tokens:[[{content:'first'}],[{content:'second'}]]})}),document:{createDocumentFragment:()=>({})}});
  vm.runInContext(adapter.slice(adapter.indexOf('export async function highlightReviewCode('),adapter.indexOf('export function createDiffReview(')).replace('export async function','async function'),c);
  for(const text of ['first\r\nsecond','first\nsecond\n']){const code={textContent:text,classList:['language-python'],isConnected:true,replaceChildren(){replacements++;}};await c.highlightReviewCode({querySelectorAll:()=>[code]},'test.py');assert.equal(code.textContent,text);}assert.equal(replacements,0);
 });

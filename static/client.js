@@ -1,5 +1,7 @@
 /* UI-independent service client. Browser HTTP and desktop IPC implement the same contract. */
 'use strict';
+// Browser storage written before the rename used mydash-prefixed keys.
+try{for(const key of Object.keys(localStorage))if(key.startsWith('mydash')){const renamed='truffle'+key.slice(6);if(localStorage.getItem(renamed)===null)localStorage.setItem(renamed,localStorage.getItem(key));localStorage.removeItem(key);}}catch(_){}
 function createDashboardClient({fetch:fetcher=globalThis.fetch,native=null,onConnection=()=>{},clipboard=globalThis.navigator?.clipboard}={}){
   let csrf='';
   function failure(message,data,status){const error=new Error(message);error.data=data;if(Number.isInteger(status))error.status=status;return error;}
@@ -12,12 +14,12 @@ function createDashboardClient({fetch:fetcher=globalThis.fetch,native=null,onCon
         status=response.status;data=await response.json();
         if(data.csrf){csrf=data.csrf;delete data.csrf;}
       }
-    }catch(_){onConnection(false);throw failure('Cannot reach the local mydash service.',{});}
+    }catch(_){onConnection(false);throw failure('Cannot reach the local truffle service.',{});}
     onConnection(status!==503);
     if(status<200||status>=300)throw failure(data.error||'Request failed. Try again.',data,status);
     return data;
   }
-  function artifactUrl(id){if(!/^[a-f0-9]{24}$/i.test(id))throw new Error('Invalid artifact ID.');return native?'mydash-artifact://localhost/'+id:'/artifacts/'+id;}
+  function artifactUrl(id){if(!/^[a-f0-9]{24}$/i.test(id))throw new Error('Invalid artifact ID.');return native?'truffle-artifact://localhost/'+id:'/artifacts/'+id;}
   async function readArtifact(id){
     const path=artifactUrl(id);
     if(native)return native('read_artifact',{id});

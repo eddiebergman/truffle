@@ -5,7 +5,7 @@ const order = ['blocked', 'ready-to-merge', 'needs-review', 'in-progress', 'draf
 const sourceNames = { 'chat-results':'Search results',agents:'Agents',skills:'Skills', newsletters:'Newsletters', artifacts:'Artifacts', logs:'Logs', move:'Your move', changes:'Changes', briefing:'Briefings', github: 'GitHub', linear: 'Linear', sentry: 'Sentry', notes: 'Projects', sessions: 'Agent sessions', archive: 'Archive', all: 'All Items', pinned: 'Pinned' };
 const icons = { github: '⌘', linear: '◩', sentry: '◬', notes: '▤' };
 let prefs = {};
-try { prefs = JSON.parse(localStorage.getItem('mydash-view') || '{}'); } catch (_) { /* Browser storage is optional. */ }
+try { prefs = JSON.parse(localStorage.getItem('truffle-view') || '{}'); } catch (_) { /* Browser storage is optional. */ }
 if (!prefs || typeof prefs !== 'object') prefs = {};
 let source = ['chat-results','agents','skills','newsletters','artifacts','logs','move','changes','briefing','all', 'pinned', 'linear', 'sentry', 'github', 'notes', 'sessions', 'archive'].includes(prefs.source) ? prefs.source : 'agents';
 if(prefs.agentWorkspaceVersion!==1)source='agents';
@@ -29,7 +29,7 @@ for (const select of [$('#note-status'), $('#item-status')]) {
   for (const [value, text] of Object.entries(labels)) select.add(new Option(text, value));
 }
 function persist() {
-  try { localStorage.setItem('mydash-view', JSON.stringify({ leftSidebarCollapsed:typeof leftSidebarCollapsed==='undefined'?false:leftSidebarCollapsed,agentContextCollapseVersion:1,agentSidebarCollapsed:typeof agentSidebarCollapsed==='undefined'?true:agentSidebarCollapsed,contextSectionsCollapsed:typeof contextSectionsCollapsed==='undefined'?{}:contextSectionsCollapsed,linkedWorkCollapsed:typeof linkedWorkCollapsed!=='undefined'&&linkedWorkCollapsed, snoozedAgentTabs:typeof snoozedAgentTabs==='undefined'?{}:snoozedAgentTabs,gitDiffSelections:typeof gitDiffSelections==='undefined'?{}:gitDiffSelections,agentWorkspaceVersion:1,closedAgentTabs:typeof closedAgentTabs==='undefined'?[]:closedAgentTabs,selectedAgentKey:typeof selectedAgentKey==='undefined'?'':selectedAgentKey, source, githubView, status: statusFilter.value, group: $('#group-by').value, agent: $('#quick-agent').value, groups: groupingPrefs, scopes: scopePrefs, launchFolders: folderPrefs, sentryFilters, sentryView })); } catch (_) { /* The server still stores all work. */ }
+  try { localStorage.setItem('truffle-view', JSON.stringify({ leftSidebarCollapsed:typeof leftSidebarCollapsed==='undefined'?false:leftSidebarCollapsed,agentContextCollapseVersion:1,agentSidebarCollapsed:typeof agentSidebarCollapsed==='undefined'?true:agentSidebarCollapsed,contextSectionsCollapsed:typeof contextSectionsCollapsed==='undefined'?{}:contextSectionsCollapsed,linkedWorkCollapsed:typeof linkedWorkCollapsed!=='undefined'&&linkedWorkCollapsed, snoozedAgentTabs:typeof snoozedAgentTabs==='undefined'?{}:snoozedAgentTabs,gitDiffSelections:typeof gitDiffSelections==='undefined'?{}:gitDiffSelections,agentWorkspaceVersion:1,closedAgentTabs:typeof closedAgentTabs==='undefined'?[]:closedAgentTabs,selectedAgentKey:typeof selectedAgentKey==='undefined'?'':selectedAgentKey, source, githubView, status: statusFilter.value, group: $('#group-by').value, agent: $('#quick-agent').value, groups: groupingPrefs, scopes: scopePrefs, launchFolders: folderPrefs, sentryFilters, sentryView })); } catch (_) { /* The server still stores all work. */ }
 }
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -44,7 +44,7 @@ function toast(message,undo) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, undo?12000:5000);
 }
-const serviceClient=createDashboardClient({native:window.__TAURI__?.core.invoke||null,onConnection:connected=>window.dispatchEvent(new CustomEvent('mydash-connection',{detail:connected}))});
+const serviceClient=createDashboardClient({native:window.__TAURI__?.core.invoke||null,onConnection:connected=>window.dispatchEvent(new CustomEvent('truffle-connection',{detail:connected}))});
 async function api(path,payload){return serviceClient.request(path,payload);}
 
 function sameSnapshot(previous,next) {

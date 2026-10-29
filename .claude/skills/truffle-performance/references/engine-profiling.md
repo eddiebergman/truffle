@@ -10,7 +10,7 @@ WKWebView's Web Inspector **Timelines** separates JavaScript, network, layout, r
 - [WebKit CPU timeline](https://webkit.org/blog/8993/cpu-timeline-in-web-inspector/)
 - [Tauri inspector availability](https://v2.tauri.app/reference/javascript/api/namespacewebview/): release inspection requires the `devtools` feature.
 
-Find `mydash:render` and inspect adjacent layout/paint work. Look for long main-thread tasks, repeated style/layout cycles, large paint regions, and CPU activity while idle. A `sample <verified-pid> 3 -file <local-output>` capture can distinguish a blocked native host from an idle host waiting on its WebContent process. Verify PID and executable first; WebContent has its own process. Sampling only the Rust host cannot attribute JavaScript cost.
+Find `truffle:render` and inspect adjacent layout/paint work. Look for long main-thread tasks, repeated style/layout cycles, large paint regions, and CPU activity while idle. A `sample <verified-pid> 3 -file <local-output>` capture can distinguish a blocked native host from an idle host waiting on its WebContent process. Verify PID and executable first; WebContent has its own process. Sampling only the Rust host cannot attribute JavaScript cost.
 
 ## Browser comparison
 

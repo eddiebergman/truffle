@@ -3,7 +3,7 @@ function resourceTime(value){if(typeof value==='number'&&Number.isFinite(value)&
 function resourceLinks(resource){const result=[];for(const [category,values]of Object.entries(resource.uris||{})){for(const entry of Array.isArray(values)?values:[values]){const value=typeof entry==='string'?entry:entry?.uri;if(typeof value==='string'&&value)result.push({category,value,title:entry?.title||category});}}return result;}
 function resourceIsPast(resource){return ['stopped','deleted','terminated','closed','completed','done','cancelled','expired'].includes(String(resource.state).toLowerCase());}
 function resourceMayCost(resource){return !resourceIsPast(resource)&&(/(?:gpu|virtual.machine|compute|instance|dev.env|cluster|node|vm)/i.test(resource.kind||'')||resource.cost?.billable===true);}
-function resourceCheckPrompt(resource){return 'Check this existing resource and report its current state to mydash with an observation timestamp: '+JSON.stringify(resource)+'. Inspect only. Do not create, stop, delete or change resources. Include expiry and cleanup instructions if known.';}
+function resourceCheckPrompt(resource){return 'Check this existing resource and report its current state to truffle with an observation timestamp: '+JSON.stringify(resource)+'. Inspect only. Do not create, stop, delete or change resources. Include expiry and cleanup instructions if known.';}
 if(typeof module!=='undefined')module.exports={resourceTime,resourceLinks,resourceIsPast,resourceMayCost,resourceCheckPrompt};
 function resourceSection(record,expanded=new Set()){
   const section=el('section','agent-resource-section'),head=el('div','section-heading'),rows=record.resources||[];

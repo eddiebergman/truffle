@@ -132,7 +132,7 @@ pub fn themes(directory: &Path) -> Result<Value> {
         }
         let bytes = serde_json::to_vec(&theme)?;
         let hash = format!("{:x}", Sha256::digest(bytes));
-        themes.insert(id.into(),json!({"id":id,"label":theme["displayName"].as_str().unwrap_or(id),"type":theme["type"],"syntaxName":format!("mydash-{id}-{}",&hash[..12]),"theme":theme}));
+        themes.insert(id.into(),json!({"id":id,"label":theme["displayName"].as_str().unwrap_or(id),"type":theme["type"],"syntaxName":format!("truffle-{id}-{}",&hash[..12]),"theme":theme}));
         if themes.len() > 32 {
             return Err(Error::new("Load at most 32 local themes."));
         }

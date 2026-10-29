@@ -1,8 +1,8 @@
 [package]
-name = "mydash-desktop"
+name = "truffle-desktop"
 version = "0.2.0"
 edition = "2021"
-description = "Private mydash desktop client"
+description = "Private truffle desktop client"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -119,7 +119,7 @@ $('#action-palette').addEventListener('keydown',event=>{
   }else if(event.key==='Enter'){event.preventDefault();event.stopPropagation();void runPaletteCommand(actionSelected);}
 });
 $('#command-open').onclick=openCommands;
-window.addEventListener('mydash-ui-command',event=>{
+window.addEventListener('truffle-ui-command',event=>{
   if(event.detail==='settings')openSettings();else if(event.detail==='commands')openCommands();else if(event.detail==='find-work'){if($('#command-dialog').open)requestDialogClose($('#command-dialog'));else openPalette();}
   else if(event.detail==='toggle-left')toggleSidebar('left');else if(event.detail==='toggle-right')toggleSidebar('right');
 });

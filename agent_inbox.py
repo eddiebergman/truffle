@@ -27,7 +27,7 @@ def signature(token, data):
 class Inbox:
     def __init__(self, token):
         self.token = token
-        self.path = Path(tempfile.mkdtemp(prefix='mydash-agent-', dir='/tmp'))
+        self.path = Path(tempfile.mkdtemp(prefix='truffle-agent-', dir='/tmp'))
         self.path.chmod(0o700)
 
     def process(self, register):
@@ -73,8 +73,8 @@ def submit(runtime, payload, timeout=90):
     info = path.lstat()
     if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_uid != os.getuid()
             or info.st_mode & 0o077 or path.parent.resolve() != Path('/tmp').resolve()
-            or not path.name.startswith('mydash-agent-')):
-        raise ValueError('Invalid local registration inbox. Restart mydash.')
+            or not path.name.startswith('truffle-agent-')):
+        raise ValueError('Invalid local registration inbox. Restart truffle.')
     nonce = str(uuid.uuid4())
     data = {'nonce': nonce, 'time': time.time(), 'payload': payload}
     envelope = {'data': data, 'signature': signature(runtime['token'], data)}
@@ -94,7 +94,7 @@ def submit(runtime, payload, timeout=90):
                     raise ValueError(result['error'])
                 return result
             time.sleep(0.1)
-        raise ValueError('mydash did not acknowledge registration. Check that its server is running and retry once.')
+        raise ValueError('truffle did not acknowledge registration. Check that its server is running and retry once.')
     finally:
         request.unlink(missing_ok=True)
         result_path.unlink(missing_ok=True)

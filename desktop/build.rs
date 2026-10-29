@@ -1,6 +1,6 @@
 fn main() {
     println!(
-        "cargo:rustc-env=MYDASH_BUILD_TIME={}",
+        "cargo:rustc-env=TRUFFLE_BUILD_TIME={}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

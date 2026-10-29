@@ -2207,40 +2207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mydash-desktop"
-version = "0.2.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "chrono-tz",
- "context-kit",
- "fs2",
- "graphql-parser",
- "hmac",
- "libc",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "portable-pty",
- "regex",
- "reqwest 0.12.28",
- "security-framework",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-single-instance",
- "tauri-plugin-window-state",
- "tempfile",
- "tiny_http",
- "uuid",
- "wait-timeout",
- "zeroize",
-]
-
-[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4488,6 +4454,40 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "truffle-desktop"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "context-kit",
+ "fs2",
+ "graphql-parser",
+ "hmac",
+ "libc",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "portable-pty",
+ "regex",
+ "reqwest 0.12.28",
+ "security-framework",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-window-state",
+ "tempfile",
+ "tiny_http",
+ "uuid",
+ "wait-timeout",
+ "zeroize",
 ]
 
 [[package]]

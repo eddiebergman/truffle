@@ -24,7 +24,7 @@ fn terminal_environment(command: &mut CommandBuilder) {
     }
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
-    command.env("TERM_PROGRAM", "mydash");
+    command.env("TERM_PROGRAM", "truffle");
     command.env("FORCE_COLOR", "3");
     command.env("CLICOLOR", "1");
     command.env("CLICOLOR_FORCE", "1");
@@ -49,11 +49,11 @@ pub fn check_agent_storage(agent: &str) -> Result<()> {
     } else {
         home()
     };
-    probe_storage(&directory).map_err(|_|Error::new(format!("The mydash service cannot write {storage}. Start ~/code/mydash/start.command from a regular Terminal window, outside a coding-agent sandbox, before launching an embedded agent. Agent permission settings were not changed.", storage=storage.display())))
+    probe_storage(&directory).map_err(|_|Error::new(format!("The truffle service cannot write {storage}. Start ~/code/mydash/start.command from a regular Terminal window, outside a coding-agent sandbox, before launching an embedded agent. Agent permission settings were not changed.", storage=storage.display())))
 }
 fn probe_storage(directory: &std::path::Path) -> std::io::Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
-    let path = directory.join(format!(".mydash-write-check-{}", uuid()));
+    let path = directory.join(format!(".truffle-write-check-{}", uuid()));
     let file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -95,7 +95,7 @@ impl EmbeddedHost {
         command.arg("-i");
         command.cwd("/tmp");
         terminal_environment(&mut command);
-        command.env("PS1", "mydash smoke $ ");
+        command.env("PS1", "truffle smoke $ ");
         self.spawn(record, command)
     }
     fn get(&self, id: &str) -> Result<Arc<Session>> {
@@ -123,7 +123,7 @@ impl EmbeddedHost {
         check_agent_storage(agent)?;
         let mut command = CommandBuilder::new(super::terminal::executable(agent));
         command.cwd(&cwd);
-        let prompt=format!("Read the private work context at {packet}. Follow the instruction and register this conversation with mydash before your first reply.");
+        let prompt=format!("Read the private work context at {packet}. Follow the instruction and register this conversation with truffle before your first reply.");
         match (agent, new) {
             ("claude", true) => {
                 command.args([
@@ -180,12 +180,12 @@ impl EmbeddedHost {
             }
         }
         terminal_environment(&mut command);
-        command.env("MYDASH_BIN", std::env::current_exe()?.to_string_lossy().as_ref());
-        command.env("MYDASH_RECORD_ID", text(record, "id"));
-        command.env("MYDASH_HOME", root.to_string_lossy().as_ref());
+        command.env("TRUFFLE_BIN", std::env::current_exe()?.to_string_lossy().as_ref());
+        command.env("TRUFFLE_RECORD_ID", text(record, "id"));
+        command.env("TRUFFLE_HOME", root.to_string_lossy().as_ref());
         self.spawn(record, command)?;
         Ok(
-            json!({"message":"Agent terminal is ready in mydash.","embedded":true,"terminalId":record["id"]}),
+            json!({"message":"Agent terminal is ready in truffle.","embedded":true,"terminalId":record["id"]}),
         )
     }
     fn spawn(&self, record: &Value, command: CommandBuilder) -> Result<()> {

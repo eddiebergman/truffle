@@ -122,7 +122,7 @@ fn login(executable: &str, adc: bool, timeout: Duration, cancel: &AtomicBool) ->
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(_) => {
-            return json!({"status":"failed","message":"Cannot start gcloud. Install Google Cloud CLI and restart the mydash service."})
+            return json!({"status":"failed","message":"Cannot start gcloud. Install Google Cloud CLI and restart the truffle service."})
         }
     };
     let started = std::time::Instant::now();

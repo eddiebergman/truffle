@@ -137,7 +137,7 @@ class FeatureTests(unittest.TestCase):
         try:
             (Path(self.temp.name)/'data/runtime.json').write_text(json.dumps(dict(url='http://'+http.authority,token=http.agent_token)))
             report=Path(self.temp.name)/'report.md';report.write_text('Three next actions.\nCheck CI.')
-            result=subprocess.run([sys.executable,str(server.ROOT/'register.py'),'briefing','--record',record['id'],'--file',str(report)],env={**os.environ,'MYDASH_HOME':self.temp.name},capture_output=True,text=True,timeout=10)
+            result=subprocess.run([sys.executable,str(server.ROOT/'register.py'),'briefing','--record',record['id'],'--file',str(report)],env={**os.environ,'TRUFFLE_HOME':self.temp.name},capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertNotIn(http.agent_token,result.stdout)
             self.assertEqual(self.store.state['briefings'][0]['body'],report.read_text())

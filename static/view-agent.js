@@ -54,6 +54,6 @@ if(typeof document!=='undefined')(()=>{
     finally{pending=false;update();}
   };
   registerRenderHook('view-agent',update,{order:60});
-  window.addEventListener('mydash-service-restarted',()=>{if(!prepared)frozen=null;error.hidden=true;update();});
+  window.addEventListener('truffle-service-restarted',()=>{if(!prepared)frozen=null;error.hidden=true;update();});
   update();
 })();

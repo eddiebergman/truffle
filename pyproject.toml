@@ -1,5 +1,5 @@
 [project]
-name = "mydash"
+name = "truffle"
 version = "0.1.0"
 description = "A private local dashboard for GitHub, Linear, and notes"
 requires-python = ">=3.11"

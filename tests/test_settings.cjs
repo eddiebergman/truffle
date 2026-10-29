@@ -81,18 +81,18 @@ function profileImportContext(profile){
  return {c,draft,error,counts:()=>({paints,dirty})};
 }
 test('partial profile patches the unsaved draft and merges only supplied keyboard assignments',async()=>{
- const {c,draft,error,counts}=profileImportContext({format:'mydash-settings',version:1,values:{theme:'light',keybindings:{commands:'Primary+L'}}});
+ const {c,draft,error,counts}=profileImportContext({format:'truffle-settings',version:1,values:{theme:'light',keybindings:{commands:'Primary+L'}}});
  await c.file.onchange();
  const result=JSON.parse(JSON.stringify(c.settingsDraft));
  assert.deepEqual(result,{...draft,theme:'light',keybindings:{...draft.keybindings,commands:'Primary+L'}});
  assert.deepEqual(counts(),{paints:1,dirty:1});assert.match(error.textContent,/nothing has been applied/);assert.equal(c.file.value,'');
 });
 test('profile without keybindings retains all current draft shortcuts and other unsaved edits',async()=>{
- const {c,draft}=profileImportContext({format:'mydash-settings',version:1,values:{density:'comfortable'}});await c.file.onchange();
+ const {c,draft}=profileImportContext({format:'truffle-settings',version:1,values:{density:'comfortable'}});await c.file.onchange();
  assert.deepEqual(JSON.parse(JSON.stringify(c.settingsDraft)),{...draft,density:'comfortable'});
 });
 test('malformed or unsupported profiles leave the complete draft untouched',async()=>{
- for(const profile of ['{broken',null,[],{format:'mydash-settings',version:2,values:{}},{format:'mydash-settings',version:1,values:[]},{format:'mydash-settings',version:1,values:{theme:'light',unknown:'unsupported'}},{format:'mydash-settings',version:1,values:{theme:'light'},extension:{}},{format:'mydash-settings',version:1,values:{keybindings:{unknown:'Primary+L'}}},{format:'mydash-settings',version:1,values:{keybindings:{commands:null}}},{format:'mydash-settings',version:1,values:{keybindings:[]}},{format:'mydash-settings',version:1,values:{uiScale:'big'}},{format:'mydash-settings',version:1,values:{quickActions:[null]}},{format:'mydash-settings',version:1,values:{quickActions:[{id:'x',title:'X',command:'printf x',unsupported:true}]}}]){
+ for(const profile of ['{broken',null,[],{format:'truffle-settings',version:2,values:{}},{format:'truffle-settings',version:1,values:[]},{format:'truffle-settings',version:1,values:{theme:'light',unknown:'unsupported'}},{format:'truffle-settings',version:1,values:{theme:'light'},extension:{}},{format:'truffle-settings',version:1,values:{keybindings:{unknown:'Primary+L'}}},{format:'truffle-settings',version:1,values:{keybindings:{commands:null}}},{format:'truffle-settings',version:1,values:{keybindings:[]}},{format:'truffle-settings',version:1,values:{uiScale:'big'}},{format:'truffle-settings',version:1,values:{quickActions:[null]}},{format:'truffle-settings',version:1,values:{quickActions:[{id:'x',title:'X',command:'printf x',unsupported:true}]}}]){
   const {c,draft,error,counts}=profileImportContext(profile),identity=c.settingsDraft;await c.file.onchange();
   assert.equal(c.settingsDraft,identity);assert.deepEqual(JSON.parse(JSON.stringify(c.settingsDraft)),draft);assert.deepEqual(counts(),{paints:0,dirty:0});assert.ok(error.textContent);assert.equal(c.file.value,'');
  }
@@ -101,18 +101,18 @@ test('malformed or unsupported profiles leave the complete draft untouched',asyn
 
 test('backend preview validation and revision failures preserve the exact draft',async()=>{
  for(const patch of [{uiScale:-1},{density:'bad'},{quickActions:[{id:'',title:'',command:''}]}]){
-  const {c,draft,error,counts}=profileImportContext({format:'mydash-settings',version:1,values:patch}),identity=c.settingsDraft;
+  const {c,draft,error,counts}=profileImportContext({format:'truffle-settings',version:1,values:patch}),identity=c.settingsDraft;
   c.api=async()=>{throw new Error('Backend validation rejected the profile.');};await c.file.onchange();
   assert.equal(c.settingsDraft,identity);assert.deepEqual(JSON.parse(JSON.stringify(c.settingsDraft)),draft);assert.deepEqual(counts(),{paints:0,dirty:0});assert.match(error.textContent,/Backend validation/);
  }
- const {c,draft,error}=profileImportContext('{"format":"mydash-settings","version":1,"values":{"uiScale":1e999}}'),identity=c.settingsDraft;
+ const {c,draft,error}=profileImportContext('{"format":"truffle-settings","version":1,"values":{"uiScale":1e999}}'),identity=c.settingsDraft;
  c.api=async(_path,payload)=>{assert.equal(JSON.parse(JSON.stringify(payload)).patch.uiScale,null);throw new Error('Invalid numeric setting.');};await c.file.onchange();
  assert.equal(c.settingsDraft,identity);assert.deepEqual(JSON.parse(JSON.stringify(c.settingsDraft)),draft);assert.match(error.textContent,/Invalid numeric/);
- c.file.files[0].text=async()=>JSON.stringify({format:'mydash-settings',version:1,values:{uiScale:120}});
+ c.file.files[0].text=async()=>JSON.stringify({format:'truffle-settings',version:1,values:{uiScale:120}});
  c.api=async()=>{throw new Error('Settings changed elsewhere. Reload settings before saving.');};await c.file.onchange();assert.equal(c.settingsDraft,identity);assert.match(error.textContent,/changed elsewhere/);
 });
 test('edits made while preview is pending are retained and the imported draft is discarded',async()=>{
- const {c,error}=profileImportContext({format:'mydash-settings',version:1,values:{theme:'light'}});
+ const {c,error}=profileImportContext({format:'truffle-settings',version:1,values:{theme:'light'}});
  let finish;c.api=()=>new Promise(resolve=>finish=resolve);const importing=c.file.onchange();await new Promise(resolve=>setImmediate(resolve));
  c.settingsDraft.uiScale=125;finish({});await importing;assert.equal(c.settingsDraft.uiScale,125);assert.equal(c.settingsDraft.theme,'midnight');assert.match(error.textContent,/changed while validating/);
 });
@@ -172,7 +172,7 @@ test('deferred Settings Save freezes only its own draft controls and guards all 
  for(const node of [f.node('preference-theme'),f.node('shortcut-commands'),...f.quickInputs(),f.quickButton('Add quick action'),f.file])assert.equal(node.disabled,true);
  assert.equal(f.independent.disabled,false);
  f.edit('later');const shortcut=f.node('shortcut-commands');shortcut.value='Primary+J';shortcut.oninput();f.quickInputs()[0].value='Later action';f.quickInputs()[0].oninput();f.quickButton('Add quick action').onclick();f.quickButton('Remove').onclick();f.reset().onclick();
- f.file.files=[{size:100,text:async()=>JSON.stringify({format:'mydash-settings',version:1,values:{theme:'imported'}})}];await f.file.onchange();await f.c.discardSettingsDraft();
+ f.file.files=[{size:100,text:async()=>JSON.stringify({format:'truffle-settings',version:1,values:{theme:'imported'}})}];await f.file.onchange();await f.c.discardSettingsDraft();
  assert.equal(f.c.settingsDraft.theme,'midnight');assert.equal(f.c.settingsDraft.keybindings.commands,'Primary+K');assert.equal(f.c.settingsDraft.quickActions.length,1);assert.equal(f.c.settingsDraft.quickActions[0].title,'One');assert.equal(f.calls.length,1);
  pending.resolve({...f.c.appSettings,revision:8,contentHash:'b'.repeat(64),values:structuredClone(f.calls[0].payload.patch)});await saving;
  assert.equal(f.node('preference-theme').disabled,false);assert.equal(f.file.disabled,false);assert.equal(f.c.settingsSaving,false);assert.equal(f.c.settingsDirty,false);
@@ -196,7 +196,7 @@ test('deferred Settings Save failure preserves draft and CAS errors, reenables c
 
 test('profile reading and reload started before Save cannot overwrite the submitted or later draft',{timeout:1000},async()=>{
  const f=settingsSaveFixture();f.edit('midnight');const reading=deferredSave();f.file.files=[{size:100,text:()=>reading.promise}];const importing=f.file.onchange();const pending=deferredSave();f.api(()=>pending.promise);const saving=f.c.savePreferences();await new Promise(resolve=>setImmediate(resolve));
- reading.resolve(JSON.stringify({format:'mydash-settings',version:1,values:{theme:'imported'}}));await importing;assert.equal(f.c.settingsDraft.theme,'midnight');assert.equal(f.calls.length,1);
+ reading.resolve(JSON.stringify({format:'truffle-settings',version:1,values:{theme:'imported'}}));await importing;assert.equal(f.c.settingsDraft.theme,'midnight');assert.equal(f.calls.length,1);
  pending.reject(new Error('Save failed'));await saving;
  const reload=deferredSave();f.load(()=>reload.promise);const discarding=f.c.discardSettingsDraft();const request=deferredSave();f.api(()=>request.promise);const second=f.c.savePreferences();await new Promise(resolve=>setImmediate(resolve));reload.resolve({...f.c.appSettings,revision:99,values:{...f.c.settingsDraft,theme:'stale reload'}});await discarding;
  assert.equal(f.c.settingsBaseline.revision,7);assert.equal(f.c.settingsDraft.theme,'midnight');request.reject(new Error('Save failed'));await second;
@@ -244,7 +244,7 @@ test('Modified filter preserves actual shortcut recording ownership until native
 });
 
 test('Modified filtering recomputes through actual save, profile import and discard without writing filter state',async()=>{
- const f=settingsModifiedFixture();f.toggle();const profile={format:'mydash-settings',version:1,values:{theme:'dark'}};f.file.files=[{size:100,text:async()=>JSON.stringify(profile)}];await f.file.onchange();assert.equal(f.row('preference-theme').hidden,false);assert.equal(f.modified.getAttribute('aria-pressed'),'true');assert.equal(f.calls[0].path,'/api/settings/preview');
+ const f=settingsModifiedFixture();f.toggle();const profile={format:'truffle-settings',version:1,values:{theme:'dark'}};f.file.files=[{size:100,text:async()=>JSON.stringify(profile)}];await f.file.onchange();assert.equal(f.row('preference-theme').hidden,false);assert.equal(f.modified.getAttribute('aria-pressed'),'true');assert.equal(f.calls[0].path,'/api/settings/preview');
  f.api(async()=>({...f.c.appSettings,revision:8,contentHash:'b'.repeat(64),values:structuredClone(f.c.settingsDraft)}));await f.c.savePreferences();assert.equal(f.row('preference-theme').hidden,false,'saved custom values still differ from defaults');assert.equal(f.modified.getAttribute('aria-pressed'),'true');assert.equal(Object.hasOwn(f.calls.find(call=>call.path==='/api/settings').payload.patch,'modifiedOnly'),false);
  f.load(async()=>({revision:9,contentHash:'c'.repeat(64),values:structuredClone(f.c.appSettings.defaults)}));await f.c.discardSettingsDraft();assert.equal(f.row('preference-theme').hidden,true);assert.equal(f.row('shortcut-commands').hidden,true);assert.equal(f.node('settings-filter-status').hidden,false);assert.equal(f.independent.value,'Unsaved sharing draft');
 });

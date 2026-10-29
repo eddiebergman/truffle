@@ -103,7 +103,7 @@ async function openThemeChooser(){
   }catch(error){current.result.error=error.message;}
   finally{current.pending=false;if(current.isCurrent())paintOutcome();else{dispose();if(current.result.kind!=='rejected'&&current.result.presentation!=='ready')toast(current.result.kind==='accepted'?'Theme saved. Refresh settings to inspect it.':'The theme save outcome is unknown. Inspect settings before choosing again.');}}
  }
- const draw=()=>{for(const control of list.querySelectorAll('button'))current.controls.delete(control);list.replaceChildren();for(const theme of Object.values(window.mydashThemeCatalog).filter(theme=>(theme.label+' '+theme.type).toLowerCase().includes(query.value.toLowerCase()))){const button=featureButton(theme.label+' · '+theme.type,()=>choose(theme),'theme-choice');button.dataset.themeId=theme.id;button.setAttribute('aria-pressed',String(setting('theme','')===theme.id));list.append(button);}};
+ const draw=()=>{for(const control of list.querySelectorAll('button'))current.controls.delete(control);list.replaceChildren();for(const theme of Object.values(window.truffleThemeCatalog).filter(theme=>(theme.label+' '+theme.type).toLowerCase().includes(query.value.toLowerCase()))){const button=featureButton(theme.label+' · '+theme.type,()=>choose(theme),'theme-choice');button.dataset.themeId=theme.id;button.setAttribute('aria-pressed',String(setting('theme','')===theme.id));list.append(button);}};
  query.oninput=()=>{if(current.isCurrent()&&!current.pending&&!current.refreshing&&!current.result?.conflict&&!['accepted','unknown'].includes(current.result?.kind))draw();};
  form.onsubmit=event=>{event.preventDefault();if(current.isCurrent())list.querySelector('button')?.click();};
  draw();dialog.showModal();query.focus();return true;

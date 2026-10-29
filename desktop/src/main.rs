@@ -218,7 +218,7 @@ fn drag_titlebar(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 #[tauri::command]
 fn desktop_info(state: State<'_, NativeState>) -> Value {
-    serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"profile":if cfg!(debug_assertions){"debug"}else{"release"},"builtAt":env!("MYDASH_BUILD_TIME"),"service":state.service.origin()})
+    serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"profile":if cfg!(debug_assertions){"debug"}else{"release"},"builtAt":env!("TRUFFLE_BUILD_TIME"),"service":state.service.origin()})
 }
 fn external_url(url: &tauri::Url, service: &LocalHttpService) -> Result<String, String> {
     match url.scheme() {
@@ -226,7 +226,7 @@ fn external_url(url: &tauri::Url, service: &LocalHttpService) -> Result<String, 
             Ok(url.to_string())
         }
         "mailto" => Ok(url.to_string()),
-        "mydash-artifact" if url.host_str() == Some("localhost") => {
+        "truffle-artifact" if url.host_str() == Some("localhost") => {
             service.artifact_url(url.path().trim_start_matches('/'))
         }
         "tauri" if url.host_str() == Some("localhost") && url.path().starts_with("/linear/") => {
@@ -245,6 +245,16 @@ fn show(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+/// Copies web storage and window state saved under the bundle ID used before the rename.
+fn migrate_bundle_storage() {
+    let library = backend::home().join("Library");
+    for folder in ["WebKit", "Application Support"] {
+        let (old, new) = (library.join(folder).join("local.mydash.desktop"), library.join(folder).join("local.truffle.desktop"));
+        if old.is_dir() && !new.exists() {
+            let _ = std::process::Command::new("/usr/bin/ditto").arg(&old).arg(&new).status();
+        }
     }
 }
 fn main() {
@@ -299,7 +309,7 @@ fn main() {
         };
         let root = value("--home")
             .map(PathBuf::from)
-            .or_else(|| std::env::var_os("MYDASH_HOME").map(PathBuf::from))
+            .or_else(|| std::env::var_os("TRUFFLE_HOME").map(PathBuf::from))
             .unwrap_or_else(|| backend::home().join("code/mydash"));
         let port = value("--port").and_then(|x| x.parse().ok()).unwrap_or(8765);
         if let Err(e) = backend::http::serve(
@@ -315,9 +325,10 @@ fn main() {
         return;
     }
 
-    let address = std::env::var("MYDASH_SERVICE_URL")
+    migrate_bundle_storage();
+    let address = std::env::var("TRUFFLE_SERVICE_URL")
         .ok()
-        .or_else(|| option_env!("MYDASH_SERVICE_URL").map(str::to_owned))
+        .or_else(|| option_env!("TRUFFLE_SERVICE_URL").map(str::to_owned))
         .unwrap_or_else(|| "http://127.0.0.1:8765".into());
     let service =
         Arc::new(LocalHttpService::new(&address).expect("Invalid local service configuration"));
@@ -353,7 +364,7 @@ fn main() {
             open_settings_file
         ])
         .register_asynchronous_uri_scheme_protocol(
-            "mydash-artifact",
+            "truffle-artifact",
             move |_, request, responder| {
                 let service = assets.clone();
                 std::thread::spawn(move || {
@@ -406,7 +417,7 @@ fn main() {
                 if (url.scheme() == "tauri"
                     && url.host_str() == Some("localhost")
                     && !url.path().starts_with("/linear/"))
-                    || (url.scheme() == "mydash-artifact" && url.host_str() == Some("localhost"))
+                    || (url.scheme() == "truffle-artifact" && url.host_str() == Some("localhost"))
                     || url.as_str() == "about:blank"
                 {
                     return true;
@@ -455,7 +466,7 @@ fn main() {
             app.on_menu_event(|app, event| {
                 let id=event.id().as_ref();
                 if !["agent-new","agent-close","agent-reopen","agent-rename","toggle-left","toggle-right","commands","find-work","page-search","settings","chat-terminal"].contains(&id){return;}
-                let script=format!("window.dispatchEvent(new CustomEvent('mydash-configured-command',{{detail:{}}}))",serde_json::json!(id));
+                let script=format!("window.dispatchEvent(new CustomEvent('truffle-configured-command',{{detail:{}}}))",serde_json::json!(id));
                 if let Some(window) = app.get_webview_window("main") { let _ = window.eval(&script); }
             });
             app.set_menu(menu)?;
@@ -497,7 +508,7 @@ mod tests {
             "file:///etc/passwd",
             "javascript:alert(1)",
             "https://user:secret@example.com",
-            "mydash-artifact://localhost/../secret",
+            "truffle-artifact://localhost/../secret",
         ] {
             assert!(external_url(&tauri::Url::parse(value).unwrap(), &service).is_err());
         }

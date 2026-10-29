@@ -1,15 +1,15 @@
 'use strict';
 let appSettings=null,settingsDraft=null,settingsBaseline=null,settingsDirty=false,settingsCategory='appearance',settingsSaving=false,settingsOpenGeneration=0,quickActionTimer=null,shortcutRecording=null,shortcutRecordingSync=Promise.resolve();
 function setting(key,fallback){return appSettings?.values?.[key]??fallback;}
-window.mydashThemeCatalog={};
-function settingFields(){return (appSettings?.fields||[]).map(f=>[f.section,f.key,f.label,f.type,f.key==='theme'?[['system','Follow system'],...Object.values(window.mydashThemeCatalog).sort((a,b)=>a.type.localeCompare(b.type)||a.label.localeCompare(b.label)).map(t=>[t.id,t.label+' · '+t.type])]:f.type==='select'?f.choices:f.type==='number'?f.min:f.placeholder,f.max,f.unit]);}
+window.truffleThemeCatalog={};
+function settingFields(){return (appSettings?.fields||[]).map(f=>[f.section,f.key,f.label,f.type,f.key==='theme'?[['system','Follow system'],...Object.values(window.truffleThemeCatalog).sort((a,b)=>a.type.localeCompare(b.type)||a.label.localeCompare(b.label)).map(t=>[t.id,t.label+' · '+t.type])]:f.type==='select'?f.choices:f.type==='number'?f.min:f.placeholder,f.max,f.unit]);}
 function settingsCategories(){return [...(appSettings?.categories||[]).map(c=>[c.id,c.label]),['help','Help']];}
-function themeDefinition(){return window.mydashThemeCatalog[resolvedTheme()]||window.mydashThemeCatalog['rose-pine'];}
+function themeDefinition(){return window.truffleThemeCatalog[resolvedTheme()]||window.truffleThemeCatalog['rose-pine'];}
 function applyTheme(){
  const data=themeDefinition(),colors=data?.theme?.colors||{},color=(key,fallback)=>colors[key]||fallback;
  const base=data?.type==='light'?'#faf8f5':'#191724',foreground=data?.type==='light'?'#34313c':'#e0def4';
  const palette={'--bg':color('editor.background',base),'--panel':color('sideBar.background',color('editorGroupHeader.tabsBackground',base)),'--overlay':color('editorWidget.background',color('dropdown.background',base)),'--line':color('panel.border',color('editorGroup.border',data?.type==='light'?'#cec8bf':'#393552')),'--text':color('editor.foreground',foreground),'--muted':color('descriptionForeground',color('editorLineNumber.foreground',foreground)),'--iris':color('terminal.ansiMagenta',data?.type==='light'?'#72518e':'#c4a7e7'),'--foam':color('terminal.ansiCyan',data?.type==='light'?'#326a67':'#9ccfd8'),'--love':color('terminal.ansiRed',data?.type==='light'?'#b03e5a':'#eb6f92'),'--gold':color('terminal.ansiYellow',data?.type==='light'?'#8b601d':'#f6c177'),'--rose':color('terminal.ansiBrightMagenta',data?.type==='light'?'#a35d78':'#ebbcba')};
- for(const [key,value]of Object.entries(data?.theme?.mydash||{}))if(Object.hasOwn(palette,'--'+key)&&/^#[0-9a-f]{6,8}$/i.test(value))palette['--'+key]=value;
+ for(const [key,value]of Object.entries(data?.theme?.truffle||data?.theme?.mydash||{}))if(Object.hasOwn(palette,'--'+key)&&/^#[0-9a-f]{6,8}$/i.test(value))palette['--'+key]=value;
  Object.assign(palette,{'--sidebar':palette['--panel'],'--accent':palette['--iris'],'--green':palette['--foam'],'--subtle':palette['--muted'],'--review':palette['--iris'],'--progress':palette['--gold'],'--blocked':palette['--love']});
  for(const [key,value]of Object.entries(palette))document.documentElement.style.setProperty(key,value);document.documentElement.dataset.colorScheme=data?.type||'dark';document.documentElement.style.colorScheme=data?.type||'dark';
 }
@@ -31,15 +31,15 @@ function applyAppSettings(){
  for(const node of document.querySelectorAll('#sources [data-source]'))applyShortcutHint(node,'view-'+node.dataset.source);
  applyShortcutHint($('#activity-open'),'view-sessions');applyShortcutHint($('#command-open'),'commands');applyShortcutHint($('#new-note'),'agent-new');$('#new-note').title='New chat · '+shortcutLabel(setting('keybindings',{})['agent-new']);
  const hint=$('.search kbd');if(hint){hint.textContent='/ · '+shortcutLabel(setting('keybindings',{})['page-search']);hint.title='Search this page';}
- renderQuickActions();window.dispatchEvent(new Event('mydash-settings-changed'));
+ renderQuickActions();window.dispatchEvent(new Event('truffle-settings-changed'));
 }
 async function loadAppSettings({canApply=()=>true}={}){
- const identity=appSettings,catalog=window.mydashThemeCatalog,current=()=>appSettings===identity&&canApply();
+ const identity=appSettings,catalog=window.truffleThemeCatalog,current=()=>appSettings===identity&&canApply();
  try{const next=await api('/api/settings');let themes;try{themes=(await api('/api/themes')).themes;}catch(error){next.configError=error.message;}
   if(!current())return null;
-  const changed=JSON.stringify(next)!==JSON.stringify(appSettings)||(themes&&JSON.stringify(themes)!==JSON.stringify(window.mydashThemeCatalog));appSettings=next;
-  if(themes)window.mydashThemeCatalog=themes;
-  if(changed)try{applyAppSettings();}catch(error){if(appSettings===next){appSettings=identity;if(themes&&window.mydashThemeCatalog===themes)window.mydashThemeCatalog=catalog;}throw error;}
+  const changed=JSON.stringify(next)!==JSON.stringify(appSettings)||(themes&&JSON.stringify(themes)!==JSON.stringify(window.truffleThemeCatalog));appSettings=next;
+  if(themes)window.truffleThemeCatalog=themes;
+  if(changed)try{applyAppSettings();}catch(error){if(appSettings===next){appSettings=identity;if(themes&&window.truffleThemeCatalog===themes)window.truffleThemeCatalog=catalog;}throw error;}
   if(next.configError&&canApply()&&$('#settings-dialog').open)$('#settings-error').textContent=next.configError;return next;
  }catch(error){if((appSettings===identity&&canApply())&&$('#settings-dialog').open)$('#settings-error').textContent=error.message;}
 }
@@ -192,7 +192,7 @@ function paintSettingsBody(){for(const setup of document.querySelectorAll('#sett
  if(id==='connections'){const setup=el('div');panel.append(setup);void renderConnectionSetup(setup).catch(error=>{setup.textContent=error.message||String(error);});if(legacy){const help=el('details','settings-help');help.append(el('summary','','Existing CLI and environment connections'),legacy);panel.append(help);}}
  if(id==='help'){void renderGuidanceSettings(panel);}
  if(id==='sharing'){void renderSharingSettings(panel);panel.append(el('p','','Share selected context through files or company storage. Storage access controls determine who can read or write it. An inbox name is a routing label, not verified identity.'));}
- if(id==='data'){panel.append(settingsButton('Resume setup',()=>window.openAppChatSetup().catch(error=>toast(error.message)),'button'));for(const [name,path]of Object.entries(appSettings.files||{})){const row=el('div','settings-file-row');row.append(el('strong','',name),el('code','',path),settingsButton('Copy path',()=>serviceClient.copyText(path),'text-button'));panel.append(row);}panel.append(el('p','','Preferences are stored separately from chats and work history. Export a settings profile to move preferences to another installation. It contains quick-action commands but no connection credentials.'));panel.append(settingsButton('Export settings profile',exportSettingsProfile,'button'),settingsDraftButton('Import settings profile',()=>$('#settings-import').click(),'button'),settingsButton('Export workspace JSON',()=>$('#export').click(),'button'));panel.append(el('p','form-hint','Workspace JSON is a metadata export; local artifact files and credentials require separate backup.'));panel.append(el('code','settings-client-example','mydash-desktop --home "$MYDASH_HOME" settings --show'));panel.append(el('p','form-hint','Agents can read settings and apply routine patches at the current revision. Command, editor and review-workflow changes require you to save them here.'));}
+ if(id==='data'){panel.append(settingsButton('Resume setup',()=>window.openAppChatSetup().catch(error=>toast(error.message)),'button'));for(const [name,path]of Object.entries(appSettings.files||{})){const row=el('div','settings-file-row');row.append(el('strong','',name),el('code','',path),settingsButton('Copy path',()=>serviceClient.copyText(path),'text-button'));panel.append(row);}panel.append(el('p','','Preferences are stored separately from chats and work history. Export a settings profile to move preferences to another installation. It contains quick-action commands but no connection credentials.'));panel.append(settingsButton('Export settings profile',exportSettingsProfile,'button'),settingsDraftButton('Import settings profile',()=>$('#settings-import').click(),'button'),settingsButton('Export workspace JSON',()=>$('#export').click(),'button'));panel.append(el('p','form-hint','Workspace JSON is a metadata export; local artifact files and credentials require separate backup.'));panel.append(el('code','settings-client-example','truffle-desktop --home "$TRUFFLE_HOME" settings --show'));panel.append(el('p','form-hint','Agents can read settings and apply routine patches at the current revision. Command, editor and review-workflow changes require you to save them here.'));}
  body.append(panel);
  }
  filterSettings();
@@ -252,7 +252,7 @@ async function discardSettingsDraft(){
 }
 function mergeSettingsProfile(current,profile){
  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
- if(!object(profile)||profile.format!=='mydash-settings'||profile.version!==1||!object(profile.values)||Object.keys(profile).some(key=>!['format','version','values'].includes(key)))throw new Error('Unsupported settings profile. Nothing was loaded.');
+ if(!object(profile)||!['truffle-settings','mydash-settings'].includes(profile.format)||profile.version!==1||!object(profile.values)||Object.keys(profile).some(key=>!['format','version','values'].includes(key)))throw new Error('Unsupported settings profile. Nothing was loaded.');
  for(const [key,value]of Object.entries(profile.values)){
   if(!Object.hasOwn(current,key))throw new Error('Profile contains an unsupported setting. Nothing was loaded.');
   if(key==='keybindings'){
@@ -267,7 +267,7 @@ function mergeSettingsProfile(current,profile){
  if(Object.hasOwn(profile.values,'keybindings'))next.keybindings={...current.keybindings,...profile.values.keybindings};
  return next;
 }
-function exportSettingsProfile(){const blob=new Blob([JSON.stringify({format:'mydash-settings',version:1,values:settingsDraft},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='mydash-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function exportSettingsProfile(){const blob=new Blob([JSON.stringify({format:'truffle-settings',version:1,values:settingsDraft},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='truffle-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function renderQuickActions(){let root=$('#custom-quick-actions');if(!root){root=el('div');root.id='custom-quick-actions';root.setAttribute('aria-label','Quick actions');$('.utility-nav').before(root);}
  root.replaceChildren();for(const action of setting('quickActions',[])){const identity={revision:appSettings.revision,contentHash:appSettings.contentHash},button=settingsButton(action.title,()=>chooseQuickAction(action,identity),'nav-item quick-action-button');button.title=action.command;const icon=el('span','sidebar-icon');icon.append(sidebarGlyph('commands'));button.prepend(icon);root.append(button);}}
 async function browseReviewSkill(key){
@@ -299,7 +299,7 @@ async function chooseQuickAction(action,identity){const record=currentAgentRecor
  if(!choices.length){await start();return;}
  const dialog=$('#quick-action-picker'),form=$('#quick-action-picker-form');form.replaceChildren(el('h2','',action.title));for(const {field,items}of choices){const label=el('label','',field==='prId'?'Pull request':'Ticket'),select=el('select');for(const item of items)select.add(new Option((item.reference||'')+' · '+item.title,item.id));p[field]=select.value;select.onchange=()=>p[field]=select.value;label.append(select);form.append(label);}const controls=el('div','dialog-actions'),cancel=settingsButton('Cancel',()=>dialog.close(),'button');cancel.type='button';const run=el('button','button primary','Run action');run.type='submit';controls.append(cancel,run);form.append(controls);form.onsubmit=e=>{e.preventDefault();dialog.close();void start();};dialog.showModal();}
 async function loadQuickActionRuns(){clearTimeout(quickActionTimer);const root=$('#quick-action-runs');if(!root)return;try{const {jobs}=await api('/api/quick-actions'),expanded=new Set([...root.querySelectorAll('details[open]')].map(d=>d.dataset.jobId));root.replaceChildren();for(const job of jobs.sort((a,b)=>b.startedAt-a.startedAt)){const details=el('details','quick-action-output'),summary=el('summary','',job.title+' · '+job.state);details.dataset.jobId=job.id;details.open=expanded.has(job.id)||job.state==='running';details.append(summary,el('pre','',job.output||'No output yet.'));root.append(details);}if(jobs.some(j=>j.state==='running')&&$('#settings-dialog').open)quickActionTimer=setTimeout(loadQuickActionRuns,1500);}catch(error){root.textContent=error.message;}}
-window.addEventListener('mydash-configured-command',event=>runConfiguredCommand(event.detail));
+window.addEventListener('truffle-configured-command',event=>runConfiguredCommand(event.detail));
 openSettings=()=>openPreferences();$('#settings').onclick=openSettings;
 const oldDialog=$('#settings-dialog'),legacy=el('div');legacy.id='legacy-connections';while(oldDialog.children.length>2)legacy.append(oldDialog.children[2]);oldDialog.replaceChildren();oldDialog.classList.add('preferences-page');
 const heading=el('header','preferences-heading'),title=el('h1','','Settings'),search=el('input');search.id='settings-search';search.type='search';search.placeholder='Search settings…';search.setAttribute('aria-label','Search settings');search.oninput=filterSettings;const close=settingsButton('×',()=>{if(settingsDirty||settingsSaving){$('#settings-error').textContent='Save your changes, or use Discard before closing.';return;}oldDialog.close();},'icon-button');close.setAttribute('aria-label','Close settings');const scope=el('span','settings-scope','User'),context=el('span','settings-context','settings.json'),edit=settingsDraftButton('Edit settings.json',async()=>{try{if(serviceClient.isDesktop)await window.__TAURI__.core.invoke('open_settings_file');else{await serviceClient.copyText(appSettings.files.preferences);$('#settings-status').textContent='Settings path copied. Open it in your editor.';}}catch(error){$('#settings-error').textContent=error.message;}},'button settings-edit-file');heading.append(scope,context,edit,close);
@@ -309,4 +309,4 @@ const file=el('input');file.id='settings-import';file.type='file';file.accept='.
 const picker=el('dialog');picker.id='quick-action-picker';const pickerForm=el('form');pickerForm.id='quick-action-picker-form';picker.append(pickerForm);document.body.append(picker);
 $('#gcp-login').hidden=true;
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(setting('theme','')==='system')applyAppSettings();});
-void loadAppSettings();window.addEventListener('mydash-service-restarted',()=>void loadAppSettings());setInterval(()=>{if(!settingsDirty&&!document.hidden)void loadAppSettings();},10000);
+void loadAppSettings();window.addEventListener('truffle-service-restarted',()=>void loadAppSettings());setInterval(()=>{if(!settingsDirty&&!document.hidden)void loadAppSettings();},10000);

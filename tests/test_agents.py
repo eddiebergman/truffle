@@ -453,7 +453,7 @@ class SessionTests(unittest.TestCase):
 
     def test_quick_blank_session_registers_without_a_placeholder_project(self):
         folder=Path(self.temp.name)/'work';folder.mkdir()
-        with patch.dict('os.environ', {'MYDASH_WORKDIR': self.temp.name}):
+        with patch.dict('os.environ', {'TRUFFLE_WORKDIR': self.temp.name}):
             session = self.store.quick_session({'agent': 'codex','folderPath':str(folder.resolve())})
         self.assertEqual(session['items'], [])
         self.assertEqual(session['destination'], 'cmux')
@@ -475,21 +475,21 @@ class SessionTests(unittest.TestCase):
         item = dict(id='github:one', title='Fix upload', url='https://github.com/acme/api/pull/1',
                     source='github', status='todo', reference='#1', detail='Source context')
         self.store.state['items'] = [item]
-        with patch.dict('os.environ', {'MYDASH_WORKDIR': self.temp.name}):
+        with patch.dict('os.environ', {'TRUFFLE_WORKDIR': self.temp.name}):
             session = self.store.quick_session({'agent':'claude', 'itemId':item['id']})
         self.assertEqual(session['cwd'], str(repo.resolve()))
         self.assertEqual([x['id'] for x in session['items']], [item['id']])
         packet = agents.context_packet(self.store.session_context(session['id']))
         self.assertIn('Source context', packet)
         self.assertIn('Before your first reply', packet)
-        self.assertIn('Do not wait for a request to use mydash', packet)
+        self.assertIn('Do not wait for a request to use truffle', packet)
         self.assertIn('--session ' + session['sessionId'], packet)
 
     def test_quick_invalid_item_does_not_save_or_consume_launch_cooldown(self):
         with self.assertRaises(ValueError):
             self.store.quick_session({'agent':'claude','itemId':'missing'})
         folder=Path(self.temp.name)/'work';folder.mkdir()
-        with patch.dict('os.environ', {'MYDASH_WORKDIR': self.temp.name}):
+        with patch.dict('os.environ', {'TRUFFLE_WORKDIR': self.temp.name}):
             record = self.store.quick_session({'agent':'claude','itemId':self.item['id'],'folderPath':str(folder.resolve())})
         self.assertEqual(len(self.store.state['sessions']), 1)
         self.assertEqual(record['items'][0]['id'], self.item['id'])

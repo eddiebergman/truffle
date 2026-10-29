@@ -12,7 +12,7 @@ class FolderTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.root=Path(self.temp.name).resolve()
-        self.env=patch.dict(os.environ,{'MYDASH_WORKDIR':str(self.root)});self.env.start()
+        self.env=patch.dict(os.environ,{'TRUFFLE_WORKDIR':str(self.root)});self.env.start()
         self.store=server.Store(self.root/'data/state.json')
         self.repo=self.root/'api';self.repo.mkdir()
 

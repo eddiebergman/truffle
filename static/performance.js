@@ -20,12 +20,12 @@ function profileWrap(name,fn){return function(...args){
 let profileRenderSequence=0;
 registerRenderHook('performance:start',context=>{
   if(!profiling)return;
-  context.profileStart=performance.now();context.profileMark='mydash-render-'+(++profileRenderSequence);performance.mark(context.profileMark);
+  context.profileStart=performance.now();context.profileMark='truffle-render-'+(++profileRenderSequence);performance.mark(context.profileMark);
 },{phase:'before',order:-1000});
 registerRenderHook('performance:finish',context=>{
   if(context.profileStart===undefined)return;
   profileRecord('render:'+context.source,performance.now()-context.profileStart);
-  performance.clearMeasures('mydash:render');performance.measure('mydash:render',context.profileMark);performance.clearMarks(context.profileMark);
+  performance.clearMeasures('truffle:render');performance.measure('truffle:render',context.profileMark);performance.clearMarks(context.profileMark);
 },{phase:'finally'});
 allItems=profileWrap('projection:allItems',allItems);
 buildBundleIndex=profileWrap('projection:associations',buildBundleIndex);

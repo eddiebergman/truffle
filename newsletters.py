@@ -143,7 +143,7 @@ def instruction(preset):
         'Keep the skill read-only restrictions. Use uv for Python commands. Keep agent approval settings unchanged.',
         'This dashboard run saves local outputs. Do not send Slack messages or publish externally unless the user asks in this session.',
         'Save the finished report under '+preset['reports']+'.',
-        'Register every final report and supporting display artifact with the mydash artifact helper in this context.',
+        'Register every final report and supporting display artifact with the truffle artifact helper in this context.',
         'Do not register raw telemetry or credential files. Include verified links to tickets, PRs, and evidence.',
         'If an external Claude Artifact URL already exists, register that URL too. Do not invent a URL.',
         'Registering an artifact records its path or URL and links this conversation. It does not upload the file.'])

@@ -618,6 +618,8 @@ fn invoke(
     configure_assistant_environment(&mut command,Assistant::Claude,std::env::vars());
     command
         .env_remove("CLAUDECODE")
+        .env_remove("TRUFFLE_RECORD_ID")
+        .env_remove("TRUFFLE_AGENT_TOKEN")
         .env_remove("MYDASH_RECORD_ID")
         .env_remove("MYDASH_AGENT_TOKEN");
     if images.is_empty(){let output=execute_diagnosed(command,prompt,cancelled,deadline,diagnostics)?;return cli_response(&output,false,diagnostics);}
@@ -914,7 +916,7 @@ mod tests {
     #[test]
     fn codex_command_uses_proven_disable_flags_native_auth_allowlist_and_private_image_lifetime(){
         use std::os::unix::fs::PermissionsExt;
-        let values=["HOME","CODEX_HOME","CODEX_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","LINEAR_API_KEY","SENTRY_AUTH_TOKEN","GITHUB_TOKEN","MYDASH_AGENT_TOKEN","CODEX_THREAD_ID","CODEX_MODEL","PATH"].map(|key|(key.to_owned(),"benign-private-env".to_owned()));
+        let values=["HOME","CODEX_HOME","CODEX_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","LINEAR_API_KEY","SENTRY_AUTH_TOKEN","GITHUB_TOKEN","TRUFFLE_AGENT_TOKEN","CODEX_THREAD_ID","CODEX_MODEL","PATH"].map(|key|(key.to_owned(),"benign-private-env".to_owned()));
         let allowed=assistant_environment(Assistant::Codex,values).into_iter().map(|(key,_)|key).collect::<Vec<_>>();assert_eq!(allowed,vec!["HOME","CODEX_HOME","CODEX_API_KEY","PATH"]);
         let mut environment_command=Command::new("/usr/bin/env");configure_assistant_environment(&mut environment_command,Assistant::Codex,[("CODEX_API_KEY".into(),"native-fixture".into()),("GITHUB_TOKEN".into(),"integration-fixture".into())]);
         let output=environment_command.output().unwrap();let text=String::from_utf8(output.stdout).unwrap();assert_eq!(text.lines().count(),1);assert!(text.contains("CODEX_API_KEY=native-fixture"));assert!(!text.contains("integration-fixture"));

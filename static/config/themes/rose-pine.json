@@ -737,7 +737,7 @@
     }
   ],
   "type": "dark",
-  "mydash": {
+  "truffle": {
     "bg": "#191724",
     "panel": "#1f1d2e",
     "overlay": "#26233a",

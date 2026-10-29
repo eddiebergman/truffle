@@ -1,6 +1,6 @@
 'use strict';
 // Preparation reserves a saved record. Opening that record is a separate owner action.
-const chatPreparationKey='mydash-chat-preparations-v1',chatPreparations=new Map();
+const chatPreparationKey='truffle-chat-preparations-v1',chatPreparations=new Map();
 const chatPreparationKinds=['quick','pr-review','review','skill','recover','new','attach','view'];
 const preparationUUID=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 let chatPreparationStorageError='';

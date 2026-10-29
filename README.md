@@ -1,4 +1,4 @@
-# mydash
+# truffle
 
 A private desktop workspace for agents and their GitHub, Linear, Sentry and local project work. Rust owns sync, storage and schedules; a separate persistent Rust daemon owns embedded PTYs. The replaceable frontend uses local HTML/CSS/JavaScript and xterm.js. No CDN or telemetry.
 
@@ -19,7 +19,7 @@ you click Send.
 
 Sharing uses the independent Context Kit workspace at `../context-kit`: JSON format,
 Rust verification engine, and handoff/pickup/integration skills. Keep that workspace
-beside mydash when building. The executable embeds the protocol and handover instructions; runtime use does not need that checkout. The app's GCS, native history,
+beside truffle when building. The executable embeds the protocol and handover instructions; runtime use does not need that checkout. The app's GCS, native history,
 and session adapters are separate from the protocol. Cached metadata lives under
 `data/sharing/state.json`; manifests, raw deliveries, previews, and verified files
 are stored separately beneath `data/sharing/`. Active refresh and imports do not
@@ -33,13 +33,13 @@ for UI tests: its GCS adapter is a local mirror and it never launches real agent
 
 ## Start
 
-Install the built app at `~/Applications/mydash.app`, then start the service from a regular Terminal window outside coding-agent tool sandboxes:
+Install the built app at `~/Applications/truffle.app`, then start the service from a regular Terminal window outside coding-agent tool sandboxes:
 
 ```sh
 ~/code/mydash/start.command
 ```
 
-Open mydash from Finder or Spotlight. The same UI is available at http://127.0.0.1:8765. Closing the app window keeps the service and agents running. With the terminal daemon active, stopping the HTTP service also preserves terminals. Older service-owned terminals close with their service; saved conversation UUIDs remain resumable in History. The service does not start at login automatically.
+Open truffle from Finder or Spotlight. The same UI is available at http://127.0.0.1:8765. Closing the app window keeps the service and agents running. With the terminal daemon active, stopping the HTTP service also preserves terminals. Older service-owned terminals close with their service; saved conversation UUIDs remain resumable in History. The service does not start at login automatically.
 
 The desktop **Restart** button beside **GCP login** opens compact inline controls:
 
@@ -48,13 +48,13 @@ The desktop **Restart** button beside **GCP login** opens compact inline control
 
 Any restart that closes live terminals requires confirmation. Finish running work first: chat history can resume, but in-flight commands and subagents may be interrupted and cannot be restored as live processes. Missing chat UUIDs or working directories block disruptive restarts. Reopen the desktop after installing this feature to load its native restart commands; the helper can then upgrade an older service directly.
 
-The detached helper continues if the app window closes. Progress and failures persist in private `data/restarts/` job files; replacement-service output is in `data/logs/service.log`. Only verified same-user mydash processes for this installation are signalled, with no force-kill. Duplicate restarts are locked, and completed runs have a ten-second cooldown. These controls target the default `data/state.json` profile and do not replace saved conversations with new ones.
+The detached helper continues if the app window closes. Progress and failures persist in private `data/restarts/` job files; replacement-service output is in `data/logs/service.log`. Only verified same-user truffle processes for this installation are signalled, with no force-kill. Duplicate restarts are locked, and completed runs have a ten-second cooldown. These controls target the default `data/state.json` profile and do not replace saved conversations with new ones.
 
 Agent tabs use a dot only when waiting for your reply or permission. Activity stays on the right. Claude's Stop/SubagentStop hooks supply background shell, monitor, other task, and scheduled-wakeup counts; a paused session with pending work displays **Background**, rather than asking for attention. These are snapshots updated by hook events, not continuous process polling. Missing metadata stays unknown; a fresh empty snapshot clears previous counts. The bridge retains counts only, without shell commands, monitor output, or scheduled prompts.
 
 In an agent chat, **⌘R** edits its dashboard title directly in the title bar. **Enter** saves; **Escape** cancels. The saved conversation identity, folder, and linked work stay attached.
 
-cmux integration is retired. Existing saved cmux conversations remain in History and resume embedded when opened. Close any external copy first; mydash no longer inspects or controls cmux.
+cmux integration is retired. Existing saved cmux conversations remain in History and resume embedded when opened. Close any external copy first; truffle no longer inspects or controls cmux.
 
 ## Workspace
 
@@ -64,14 +64,14 @@ cmux integration is retired. Existing saved cmux conversations remain in History
 - **Work sources:** compact searchable lists. Start an agent or jump to its workspace from an issue. Repository/project folder choices can be remembered. Hide is reversible. Local projects support Done and Archive.
 - **History:** saved conversations whose terminals are no longer in memory. Resume preserves the conversation ID, work links and working directory.
 - **Skills:** on-demand presets and opt-in daily/interval schedules. Missed runs either catch up once or skip; no backlog replay. Schedules run only while the service is awake. The clock button shows new results and schedule failures/skips.
-- **Results:** Markdown, images, sandboxed HTML, CSV and `mydash.table/v1` JSON. Registered local outputs become private immutable snapshots; tables display the first 1,000 rows while preserving the full file.
+- **Results:** Markdown, images, sandboxed HTML, CSV and `truffle.table/v1` JSON. Registered local outputs become private immutable snapshots; tables display the first 1,000 rows while preserving the full file.
 - **Changes and Logs:** source changes, sync errors and optional UI performance recording.
 
-Choose Claude or Codex and click **+** for an embedded session. Issue/PR buttons supply context automatically. The global [mydash skill](skill/SKILL.md) explains work attribution, checkpoints and result registration. It is available to Claude and Codex through their global skill directories. The same Rust executable handles registration, lifecycle hooks and the signed-file fallback. New sessions do not need Python or uv. The retained Python server, clients and tests are migration reference and support previously launched sessions until they are resumed; they are not included in the app bundle.
+Choose Claude or Codex and click **+** for an embedded session. Issue/PR buttons supply context automatically. The global [truffle skill](skill/SKILL.md) explains work attribution, checkpoints and result registration. It is available to Claude and Codex through their global skill directories. The same Rust executable handles registration, lifecycle hooks and the signed-file fallback. New sessions do not need Python or uv. The retained Python server, clients and tests are migration reference and support previously launched sessions until they are resumed; they are not included in the app bundle.
 
 ## Connections
 
-The bottom-left **GCP login** button runs Google Cloud CLI login and Application Default Credentials login concurrently in the background, opening their normal browser flows. Complete both browser tabs. CLI login uses `--force` to refresh even cached credentials; both commands use `--quiet --launch-browser` so terminal confirmation prompts do not block. Separate statuses show completion/failure, with Cancel and a ten-minute timeout. Repeated clicks reuse the active run; a 30-second cooldown prevents duplicate launches. Credentials remain in gcloud’s own storage; mydash stores no tokens or raw authentication output.
+The bottom-left **GCP login** button runs Google Cloud CLI login and Application Default Credentials login concurrently in the background, opening their normal browser flows. Complete both browser tabs. CLI login uses `--force` to refresh even cached credentials; both commands use `--quiet --launch-browser` so terminal confirmation prompts do not block. Separate statuses show completion/failure, with Cancel and a ten-minute timeout. Repeated clicks reuse the active run; a 30-second cooldown prevents duplicate launches. Credentials remain in gcloud’s own storage; truffle stores no tokens or raw authentication output.
 
 GitHub uses `gh auth login`, or an optional `GITHUB_TOKEN` in `.env`. Linear uses `LINEAR_API_KEY`. Sentry uses `SENTRY_ORG` plus credentials from `~/.sentryclirc`, or `SENTRY_AUTH_TOKEN`; optional `SENTRY_STATS_PERIOD` is 1–90 days. Sync needs read access. Optional GitHub PR actions need repository write permissions for pull requests; tokens with read-only permissions can keep syncing. Copy `.env.example` to `.env`, fill it locally, set mode 600, and restart the service. Never commit credentials.
 
@@ -102,15 +102,15 @@ cd ..
 node --test tests/*.cjs
 ```
 
-Rust stable, Apple Command Line Tools and Node/npm are build dependencies. Production builds leave `MYDASH_SERVICE_URL` unset. Install `desktop/target/release/bundle/macos/mydash.app`, quit the old window and relaunch it. Restarting only the service does not replace bundled frontend assets.
+Rust stable, Apple Command Line Tools and Node/npm are build dependencies. Production builds leave `TRUFFLE_SERVICE_URL` unset. Install `desktop/target/release/bundle/macos/truffle.app`, quit the old window and relaunch it. Restarting only the service does not replace bundled frontend assets.
 
-See [desktop/ARCHITECTURE.md](desktop/ARCHITECTURE.md) for module boundaries. Use [the performance skill](.agents/skills/mydash-performance/SKILL.md) for measured diagnostics. In Logs, start UI performance recording, reproduce the interaction and inspect durations; stop recording afterward. Samples are bounded numeric data in memory.
+See [desktop/ARCHITECTURE.md](desktop/ARCHITECTURE.md) for module boundaries. Use [the performance skill](.agents/skills/truffle-performance/SKILL.md) for measured diagnostics. In Logs, start UI performance recording, reproduce the interaction and inspect durations; stop recording afterward. Samples are bounded numeric data in memory.
 
-Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, mydash checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
+Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, truffle checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
 
 The compact UI uses Rosé Pine main, including the terminal ANSI palette. The global + starts an agent immediately; its arrow holds remembered agent and folder choices. Work links and results attach inline. The terminal’s expand button hides the surrounding panels and leaves Exit focus visible. Cmd+Shift+Enter (Ctrl+Shift+Enter on other platforms) toggles focus; Escape remains available to the agent CLI.
 
-Agents report worktrees through registration. The service records Git branch, main repo, checkout path and linked work; `register.py worktree --record … --path … --url … [--primary]` links additional checkouts without changing the resume directory unless requested. Git metadata is read on explicit registration only. See the global mydash skill for the reporting protocol.
+Agents report worktrees through registration. The service records Git branch, main repo, checkout path and linked work; `register.py worktree --record … --path … --url … [--primary]` links additional checkouts without changing the resume directory unless requested. Git metadata is read on explicit registration only. See the global truffle skill for the reporting protocol.
 
 Keyboard navigation: ⌘1–9 selects live agents; ⌘⇧Enter toggles terminal focus.
 ⌘N opens the inline fuzzy folder picker for the selected agent (Enter starts it).
@@ -152,11 +152,11 @@ GitHub’s **Group: Stack** view uses cached base/head branch metadata to show d
 
 ## Native agent commands
 
-The installed `mydash-desktop` executable also runs `register`, `artifact`, `checkpoint`, `briefing`, `status`, `worktree`, `resource`, `context`, `review`, `ci`, and `hook`. Run a command with `--help` for options. Launch packets supply the exact executable and profile. New agent sessions receive `MYDASH_BIN` and `MYDASH_HOME`. The client reads its private runtime credential internally; do not print that file.
+The installed `truffle-desktop` executable also runs `register`, `artifact`, `checkpoint`, `briefing`, `status`, `worktree`, `resource`, `context`, `review`, `ci`, and `hook`. Run a command with `--help` for options. Launch packets supply the exact executable and profile. New agent sessions receive `TRUFFLE_BIN` and `TRUFFLE_HOME`. The client reads its private runtime credential internally; do not print that file.
 
 ```sh
-"$MYDASH_BIN" --home "$MYDASH_HOME" review --record RECORD_ID --show
-"$MYDASH_BIN" --home "$MYDASH_HOME" status --record RECORD_ID --state working
+"$TRUFFLE_BIN" --home "$TRUFFLE_HOME" review --record RECORD_ID --show
+"$TRUFFLE_BIN" --home "$TRUFFLE_HOME" status --record RECORD_ID --state working
 ```
 
 The binary embeds browser assets and reporting/protocol instructions. `--serve --home /absolute/data-profile` can run without this source tree. Git, installed agent CLIs and selected provider tools remain external dependencies. Switching an existing terminal daemon to native hooks requires restarting that daemon; service-only replacement preserves existing processes and their original hook commands.

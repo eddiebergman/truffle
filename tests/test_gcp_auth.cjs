@@ -16,8 +16,8 @@ test('opening the app checks status without starting authentication',async()=>{
   const f=fixture();await flush();assert.deepEqual(f.calls,[{path:'/api/gcp-auth',payload:undefined}]);assert.equal(f.node('#gcp-login-status').hidden,true);assert.equal(f.node('#gcp-login').disabled,false);
 });
 test('a service restart rechecks previously unavailable login routes without starting login',async()=>{
-  const f=fixture();await flush();f.setReply(new Error('Not found'));f.events['mydash-service-restarted']();await flush();assert.equal(f.node('#gcp-login').disabled,true);
-  f.setReply({runId:'',running:false});f.events['mydash-service-restarted']();await flush();assert.equal(f.node('#gcp-login').disabled,false);assert.equal(f.calls.filter(c=>c.path.endsWith('/start')).length,0);
+  const f=fixture();await flush();f.setReply(new Error('Not found'));f.events['truffle-service-restarted']();await flush();assert.equal(f.node('#gcp-login').disabled,true);
+  f.setReply({runId:'',running:false});f.events['truffle-service-restarted']();await flush();assert.equal(f.node('#gcp-login').disabled,false);assert.equal(f.calls.filter(c=>c.path.endsWith('/start')).length,0);
 });
 test('explicit login starts once and restores independent CLI and ADC statuses',async()=>{
   const f=fixture();await flush();f.setReply({runId:'run',running:true,cli:{status:'running',message:'Use browser'},adc:{status:'running',message:'Use browser'}});

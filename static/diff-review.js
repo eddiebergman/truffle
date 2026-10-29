@@ -2,7 +2,7 @@
 let reviewState=null,reviewRenderer=null,reviewObserver=null,reviewSizeObserver=null,reviewFileSizeObserver=null,reviewScrollFrame=null;
 const sharedReviewDrafts=new Map();
 function reviewDrafts(){return Object.fromEntries(sharedReviewDrafts);}
-function acceptReviewDraft(id,draft){const previous=sharedReviewDrafts.get(id);if((previous?.revision||0)>(draft.revision||0))return;if(JSON.stringify(sharedReviewDrafts.get(id))===JSON.stringify(draft))return;sharedReviewDrafts.set(id,draft);while(sharedReviewDrafts.size>20)sharedReviewDrafts.delete(sharedReviewDrafts.keys().next().value);window.dispatchEvent(new Event('mydash-review-draft'));if(reviewState?.record.id===id){reviewState.draft=draft;paintReviewComments();if(JSON.stringify(previous?.comments)!==JSON.stringify(draft.comments))updateReviewAnnotations();if(!reviewState.noteDirty&&document.activeElement!==$('#diff-review-note'))$('#diff-review-note').value=draft.note||'';}}
+function acceptReviewDraft(id,draft){const previous=sharedReviewDrafts.get(id);if((previous?.revision||0)>(draft.revision||0))return;if(JSON.stringify(sharedReviewDrafts.get(id))===JSON.stringify(draft))return;sharedReviewDrafts.set(id,draft);while(sharedReviewDrafts.size>20)sharedReviewDrafts.delete(sharedReviewDrafts.keys().next().value);window.dispatchEvent(new Event('truffle-review-draft'));if(reviewState?.record.id===id){reviewState.draft=draft;paintReviewComments();if(JSON.stringify(previous?.comments)!==JSON.stringify(draft.comments))updateReviewAnnotations();if(!reviewState.noteDirty&&document.activeElement!==$('#diff-review-note'))$('#diff-review-note').value=draft.note||'';}}
 async function reviewAction(id,action,fields={}){const result=await api('/api/session/review-draft',{id,action,...fields});const previous=sharedReviewDrafts.get(id);if(action==='read'&&previous?.revision===result.review.revision){for(const key of ['freshness','freshnessCheckedAt'])if(previous[key]!==undefined)result.review[key]=previous[key];for(const key of ['comments','assessments'])for(const entry of result.review[key]||[]){const old=(previous[key]||[]).find(x=>x.id===entry.id);if(old?.freshness)entry.freshness=old.freshness;}}acceptReviewDraft(id,result.review);return result.review;}
 const activeDiffCache={key:'',entries:new Map(),bytes:0,epoch:0};
 function activateDiffCache(key){if(activeDiffCache.key===key)return;activeDiffCache.key=key;activeDiffCache.entries.clear();activeDiffCache.bytes=0;activeDiffCache.epoch++;}
@@ -109,7 +109,7 @@ function positionQuickReview(current,anchor){
   dialog.style.setProperty('--inspector-right',Math.max(8,viewport.width-area.right)+'px');
   dialog.style.setProperty('--inspector-top',Math.max(Math.max(38,area.top),Math.min(desired,viewport.height-height-8))+'px');
 }
-function savedReviewUI(record,directory){try{return JSON.parse(localStorage.getItem('mydash-review-ui')||'{}')[record.id+'\0'+directory]||{};}catch(_){return {};}}
+function savedReviewUI(record,directory){try{return JSON.parse(localStorage.getItem('truffle-review-ui')||'{}')[record.id+'\0'+directory]||{};}catch(_){return {};}}
 function rememberReviewUI(){
   const current=reviewState;if(!current)return;
   const body=$('#diff-review-body'),bounds=body.getBoundingClientRect(),top=bounds.top;
@@ -117,7 +117,7 @@ function rememberReviewUI(){
   const previous=savedReviewUI(current.record,current.directory);
   const file=current.file;
   const value={mode:current.mode,drawer:$('#diff-review-drawer').open,expanded:[...$('#diff-review-assessments').querySelectorAll('details[open]')].map(d=>d.dataset.assessmentId),collapsed:[...$('#diff-review-files').querySelectorAll('details:not([open])')].map(d=>d.querySelector('summary')?.textContent),path:visible?.section.dataset.path||previous.path,offset:visible?top-visible.section.getBoundingClientRect().top:previous.offset||0,comment:$('#diff-review-comment').value,range:current.range,file:file?{path:file.path,fingerprint:file.fingerprint}:null,note:$('#diff-review-note').value,noteBase:current.noteBase??current.draft.note??'',noteDirty:!!current.noteDirty};
-  try{const key=current.record.id+'\0'+current.directory,all=JSON.parse(localStorage.getItem('mydash-review-ui')||'{}');delete all[key];all[key]=value;const entries=Object.entries(all).slice(-30);localStorage.setItem('mydash-review-ui',JSON.stringify(Object.fromEntries(entries)));}catch(_){}
+  try{const key=current.record.id+'\0'+current.directory,all=JSON.parse(localStorage.getItem('truffle-review-ui')||'{}');delete all[key];all[key]=value;const entries=Object.entries(all).slice(-30);localStorage.setItem('truffle-review-ui',JSON.stringify(Object.fromEntries(entries)));}catch(_){}
 }
 let reviewUISaveTimer;
 function scheduleReviewUISave(){clearTimeout(reviewUISaveTimer);reviewUISaveTimer=setTimeout(rememberReviewUI,150);}
@@ -131,7 +131,7 @@ function showReviewComposer(current){
   const below=point.y+12;composer.style.top=Math.max(12,Math.min(below+height<window.innerHeight-12?below:point.y-height-12,window.innerHeight-height-12))+'px';
   $('#diff-review-comment').focus({preventScroll:true});
 }
-function setReviewMode(mode){hideReviewComposer();if(!reviewState)return;reviewState.mode=mode;try{localStorage.setItem('mydash-diff-layout',mode);}catch(_){}for(const name of ['unified','split'])$('#diff-mode-'+name).setAttribute('aria-pressed',String(name===mode));reviewRenderer?.setStyle(mode);scheduleReviewUISave();}
+function setReviewMode(mode){hideReviewComposer();if(!reviewState)return;reviewState.mode=mode;try{localStorage.setItem('truffle-diff-layout',mode);}catch(_){}for(const name of ['unified','split'])$('#diff-mode-'+name).setAttribute('aria-pressed',String(name===mode));reviewRenderer?.setStyle(mode);scheduleReviewUISave();}
 async function openDiffReview(record,path,directory=selectedGitDirectory(record),anchor=null){
   const returnDialog=$('#diff-review-dialog'),returnTrigger=anchor&&typeof anchor==='object'?anchor:document.activeElement,preserveReturn=returnDialog.open;
   if(!requestDialogNavigation())return false;
@@ -140,7 +140,7 @@ async function openDiffReview(record,path,directory=selectedGitDirectory(record)
     return source==='agents'&&selected?.id===record.id&&selectedGitDirectory(selected)===directory;
   }});
   rememberReviewUI();disposeReview();$('#diff-review-dispatch')?.remove();
-  const quick=!!path&&anchor!=='full';let mode=typeof setting==='function'?setting(quick?'fileDiffLayout':'diffLayout',quick?'split':'unified'):(quick?'split':'unified');try{if(!quick&&localStorage.getItem('mydash-diff-layout')==='split')mode='split';}catch(_){}
+  const quick=!!path&&anchor!=='full';let mode=typeof setting==='function'?setting(quick?'fileDiffLayout':'diffLayout',quick?'split':'unified'):(quick?'split':'unified');try{if(!quick&&localStorage.getItem('truffle-diff-layout')==='split')mode='split';}catch(_){}
   const ui=savedReviewUI(record,directory);if(['split','unified'].includes(ui.mode))mode=ui.mode;
   const stored=sharedReviewDrafts.get(record.id);
   const current=reviewState={record,directory,draft:stored||{comments:[],note:''},files:new Map(),file:null,range:null,pending:false,mode,queue:[],loading:false,quick,noteDirty:!!ui.noteDirty,noteBase:ui.noteBase,restoredExpanded:new Set(ui.expanded||[])};

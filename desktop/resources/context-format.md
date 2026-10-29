@@ -1,6 +1,6 @@
 # Context Bundle draft 0.1 — wire version 1.0
 
-Status: local prototype, not an established public standard. The protocol has no dependency on mydash, Claude, Codex, GCS, a database, or a UI toolkit.
+Status: local prototype, not an established public standard. The protocol has no dependency on truffle, Claude, Codex, GCS, a database, or a UI toolkit.
 
 ## Envelope
 

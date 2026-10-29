@@ -27,11 +27,13 @@ pub fn socket_directory(data: &Path) -> Result<PathBuf> {
         .canonicalize()?;
     let canonical = parent.join(data.file_name().ok_or(Error::new("Invalid state path."))?);
     let hash = context_kit::sha256(canonical.to_string_lossy().as_bytes());
-    Ok(PathBuf::from(format!(
-        "/tmp/mydash-pty-{}-{}",
-        unsafe { libc::geteuid() },
-        &hash[..16]
-    )))
+    let [current, legacy] = ["truffle", "mydash"]
+        .map(|name| PathBuf::from(format!("/tmp/{name}-pty-{}-{}", unsafe { libc::geteuid() }, &hash[..16])));
+    // A daemon started before the rename keeps its socket until it is replaced.
+    if !current.join("terminal.sock").exists() && legacy.join("terminal.sock").exists() {
+        return Ok(legacy);
+    }
+    Ok(current)
 }
 fn private_directory(path: &Path) -> Result<()> {
     match std::fs::create_dir(path) {
@@ -272,7 +274,7 @@ impl Remote {
     }
     fn validate(&self, health: &Value) -> Result<()> {
         if health["root"] != json!(self.root) {
-            return Err(Error::new("The terminal daemon belongs to a different mydash installation. Keep it running until its agents finish."));
+            return Err(Error::new("The terminal daemon belongs to a different truffle installation. Keep it running until its agents finish."));
         }
         Ok(())
     }
@@ -418,6 +420,21 @@ mod tests {
         let link = root.path().join("link");
         std::os::unix::fs::symlink(&private, &link).unwrap();
         assert!(private_directory(&link).is_err());
+    }
+    #[test]
+    fn socket_directory_keeps_a_live_daemon_from_before_the_rename() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("state.json");
+        let current = socket_directory(&data).unwrap();
+        let legacy = PathBuf::from(current.to_string_lossy().replace("/tmp/truffle-pty-", "/tmp/mydash-pty-"));
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("terminal.sock"), "").unwrap();
+        assert_eq!(socket_directory(&data).unwrap(), legacy);
+        std::fs::create_dir_all(&current).unwrap();
+        std::fs::write(current.join("terminal.sock"), "").unwrap();
+        assert_eq!(socket_directory(&data).unwrap(), current);
+        std::fs::remove_dir_all(&legacy).unwrap();
+        std::fs::remove_dir_all(&current).unwrap();
     }
     #[test]
     fn framing_and_dispatch_bound_untrusted_messages() {

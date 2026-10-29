@@ -20,7 +20,7 @@ Select candidate records, then check their source evidence.
 Use the attached cache as a starting point. Check live source records before you make recommendations.
 Use available read-only provider tools or the authenticated GitHub CLI. Report any missing access.
 Do not change tickets, PRs, comments, branches, dashboard statuses, or project files.
-Register only this review conversation with mydash. Do not attach every reviewed item to this conversation.
+Register only this review conversation with truffle. Do not attach every reviewed item to this conversation.
 Do not create a local project for this review. Existing work sessions must keep their associations.
 
 Check these categories:

@@ -65,7 +65,7 @@ function themeFixture(){
  const catalog={dark:{id:'dark',label:'Dark',type:'dark'},light:{id:'light',label:'Light',type:'light'}};
  let saved={revision:1,contentHash:'a',values:{theme:'dark',other:'latest'}};
  const {MutationObserver}=require(require('node:path').resolve('tests/helpers/dialog-mutations.cjs'))();
- const c=vm.createContext({Event,MutationObserver,source:'all',document,window:{mydashThemeCatalog:catalog},appSettings:saved,
+ const c=vm.createContext({Event,MutationObserver,source:'all',document,window:{truffleThemeCatalog:catalog},appSettings:saved,
   $:selector=>({'#quick-action-picker':dialog,'#quick-action-picker-form':form,'#settings-dialog':settingsDialog,'#settings-error':settingsError})[selector],
   el:(...args)=>new Node(...args),featureButton:(label,onclick,cls)=>Object.assign(new Node('button',cls,label),{onclick,type:'button'}),
   setting:key=>c.appSettings.values[key],toast:text=>notices.push(text),applyAppSettings(){},
@@ -147,9 +147,9 @@ test('theme accepted paint failures remain read-only until a GET actually paints
  }
 });
 test('settings loader retries catalog-only presentation failure and never rolls back newer references',async()=>{
- const f=themeFixture(),prior=f.c.appSettings,catalog=f.c.window.mydashThemeCatalog,newCatalog={dark:{id:'dark',label:'Updated',type:'dark'}};let paints=0;f.c.api=async path=>path==='/api/settings'?structuredClone(prior):{themes:newCatalog};f.c.applyAppSettings=()=>{paints++;throw Error('Paint failed');};
- assert.equal(await f.c.loadAppSettings(),undefined);assert.equal(f.c.appSettings,prior);assert.equal(f.c.window.mydashThemeCatalog,catalog);assert.equal(await f.c.loadAppSettings(),undefined);assert.equal(paints,2);
- const newer={revision:99,values:{theme:'newer'}},newerCatalog={newer:{id:'newer'}};f.c.applyAppSettings=()=>{f.c.appSettings=newer;f.c.window.mydashThemeCatalog=newerCatalog;throw Error('Paint changed owner');};await f.c.loadAppSettings();assert.equal(f.c.appSettings,newer);assert.equal(f.c.window.mydashThemeCatalog,newerCatalog);
+ const f=themeFixture(),prior=f.c.appSettings,catalog=f.c.window.truffleThemeCatalog,newCatalog={dark:{id:'dark',label:'Updated',type:'dark'}};let paints=0;f.c.api=async path=>path==='/api/settings'?structuredClone(prior):{themes:newCatalog};f.c.applyAppSettings=()=>{paints++;throw Error('Paint failed');};
+ assert.equal(await f.c.loadAppSettings(),undefined);assert.equal(f.c.appSettings,prior);assert.equal(f.c.window.truffleThemeCatalog,catalog);assert.equal(await f.c.loadAppSettings(),undefined);assert.equal(paints,2);
+ const newer={revision:99,values:{theme:'newer'}},newerCatalog={newer:{id:'newer'}};f.c.applyAppSettings=()=>{f.c.appSettings=newer;f.c.window.truffleThemeCatalog=newerCatalog;throw Error('Paint changed owner');};await f.c.loadAppSettings();assert.equal(f.c.appSettings,newer);assert.equal(f.c.window.truffleThemeCatalog,newerCatalog);
 });
 test('settings loader does not overwrite a newer document while awaiting themes or paint obsolete errors',async()=>{
  const f=themeFixture(),themes=deferred();f.c.api=async path=>path==='/api/settings'?{revision:1,values:{theme:'old'}}:themes.promise;const read=f.c.loadAppSettings();await Promise.resolve();const latest={revision:3,values:{theme:'latest',other:'kept'}};f.c.appSettings=latest;themes.resolve({themes:{}});assert.equal(await read,null);assert.equal(f.c.appSettings,latest);

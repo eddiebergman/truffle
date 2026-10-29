@@ -8,7 +8,7 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
-const BIN: &str = env!("CARGO_BIN_EXE_mydash-desktop");
+const BIN: &str = env!("CARGO_BIN_EXE_truffle-desktop");
 fn read(p: impl AsRef<Path>) -> Value {
     serde_json::from_slice(&fs::read(p).unwrap()).unwrap()
 }
@@ -162,7 +162,7 @@ fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
     );
     let hash = context_kit::sha256(data.to_string_lossy().as_bytes());
     let socket = PathBuf::from(format!(
-        "/tmp/mydash-pty-{}-{}",
+        "/tmp/truffle-pty-{}-{}",
         unsafe { libc::geteuid() },
         &hash[..16]
     ));
@@ -223,13 +223,13 @@ fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
     assert_eq!(before["preserveTerminals"], true);
     let generation = before["sessions"][0]["generation"].clone();
     let daemon = before["daemonPid"].clone();
-    f.rpc(json!({"op":"input","id":id,"data":"export MYDASH_RESTART_PROOF=still-in-memory\n"}));
+    f.rpc(json!({"op":"input","id":id,"data":"export TRUFFLE_RESTART_PROOF=still-in-memory\n"}));
     std::thread::sleep(Duration::from_millis(150));
     f.restart("service");
     let after = f.preview();
     assert_eq!(after["sessions"][0]["generation"], generation);
     assert_eq!(after["daemonPid"], daemon);
-    f.rpc(json!({"op":"input","id":id,"data":"printf 'PROOF:%s\\n' \"$MYDASH_RESTART_PROOF\"\n"}));
+    f.rpc(json!({"op":"input","id":id,"data":"printf 'PROOF:%s\\n' \"$TRUFFLE_RESTART_PROOF\"\n"}));
     wait(|| {
         let p = f.rpc(json!({"op":"poll","id":id,"cursor":0,"generation":""}));
         let bytes = p["bytes"]

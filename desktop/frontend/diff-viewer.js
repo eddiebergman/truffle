@@ -1,8 +1,8 @@
 import {VirtualizedFileDiff,Virtualizer,registerCustomTheme,getSharedHighlighter,getFiletypeFromFileName} from '@pierre/diffs';
 import rosePine from '@shikijs/themes/rose-pine';
-registerCustomTheme('mydash-rose-pine',()=>Promise.resolve({...rosePine,name:'mydash-rose-pine'}));
+registerCustomTheme('truffle-rose-pine',()=>Promise.resolve({...rosePine,name:'truffle-rose-pine'}));
 const registeredThemes=new Set();
-function themeName(){const data=window.mydashThemeCatalog?.[document.documentElement.dataset.theme];if(!data)return 'mydash-rose-pine';if(!registeredThemes.has(data.syntaxName)){registerCustomTheme(data.syntaxName,()=>Promise.resolve({...data.theme,name:data.syntaxName}));registeredThemes.add(data.syntaxName);}return data.syntaxName;}
+function themeName(){const data=window.truffleThemeCatalog?.[document.documentElement.dataset.theme];if(!data)return 'truffle-rose-pine';if(!registeredThemes.has(data.syntaxName)){registerCustomTheme(data.syntaxName,()=>Promise.resolve({...data.theme,name:data.syntaxName}));registeredThemes.add(data.syntaxName);}return data.syntaxName;}
 export async function highlightReviewCode(root,path){
   const blocks=[...root.querySelectorAll('code')];
   await Promise.all(blocks.map(async code=>{

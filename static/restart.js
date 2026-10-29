@@ -21,7 +21,7 @@ if(typeof document!=='undefined')(()=>{
   }
   async function finish(){
     if(job?.status!=='succeeded'||finished===job.id)return;finished=job.id;
-    await refresh();await loadInventory();await loadArtifactLibrary(true);window.dispatchEvent(new CustomEvent('mydash-service-restarted'));
+    await refresh();await loadInventory();await loadArtifactLibrary(true);window.dispatchEvent(new CustomEvent('truffle-service-restarted'));
     toast(job.message);
   }
   async function poll(){

@@ -2412,7 +2412,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         std::fs::write(
             temp.path().join(".env"),
-            "MYDASH_TEST_SECRET=benign-private-command-sentinel",
+            "TRUFFLE_TEST_SECRET=benign-private-command-sentinel",
         )
         .unwrap();
         let repo = Repository::open(temp.path().into(), None, true).unwrap();

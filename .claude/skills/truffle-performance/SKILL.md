@@ -1,16 +1,16 @@
 ---
-name: mydash-performance
-description: Diagnose and fix slow startup, navigation, search, scrolling, refresh, or agent actions in the mydash browser and Rust/Tauri desktop app. Use measured service, JavaScript, and native rendering costs to isolate regressions.
+name: truffle-performance
+description: Diagnose and fix slow startup, navigation, search, scrolling, refresh, or agent actions in the truffle browser and Rust/Tauri desktop app. Use measured service, JavaScript, and native rendering costs to isolate regressions.
 ---
 
-# Profile mydash
+# Profile truffle
 
-Establish which installed build and service the user is actually running before changing code. The frontend is bundled into `mydash.app`: editing `static/` or restarting the backend does not update a running desktop window. Release builds leave `MYDASH_SERVICE_URL` unset; preview builds can point at a copied cache. Inspect the exact executable path when several bundles share `local.mydash.desktop`.
+Establish which installed build and service the user is actually running before changing code. The frontend is bundled into `truffle.app`: editing `static/` or restarting the backend does not update a running desktop window. Release builds leave `TRUFFLE_SERVICE_URL` unset; preview builds can point at a copied cache. Inspect the exact executable path when several bundles share `local.truffle.desktop`.
 
 ## Measure the reported interaction
 
-- Open **Logs → UI performance → Start recording**. Reproduce the slow action several times, then return to Logs and refresh the report. It identifies the native build profile, item count, CPU render times, service round trips, and approximate input-to-next-frame times. Stop recording afterwards. It stores only bounded numeric samples in memory. `mydash:render` also appears in the engine's User Timing timeline.
-- Use `uv run --no-project .agents/skills/mydash-performance/scripts/benchmark_service.py` from the repo root for a read-only cache baseline. It reads state without syncing or launching an agent. It reports bytes, counts, JSON parsing, and warm/cold latency. It does not print work titles or credentials.
+- Open **Logs → UI performance → Start recording**. Reproduce the slow action several times, then return to Logs and refresh the report. It identifies the native build profile, item count, CPU render times, service round trips, and approximate input-to-next-frame times. Stop recording afterwards. It stores only bounded numeric samples in memory. `truffle:render` also appears in the engine's User Timing timeline.
+- Use `uv run --no-project .agents/skills/truffle-performance/scripts/benchmark_service.py` from the repo root for a read-only cache baseline. It reads state without syncing or launching an agent. It reports bytes, counts, JSON parsing, and warm/cold latency. It does not print work titles or credentials.
 - A tool's click/screenshot/accessibility call duration includes automation and accessibility traversal; it is not an app latency measurement. Use runtime timings and visible results. Avoid dumping thousands of accessibility rows while profiling.
 
 Separate CPU work from waiting. A fast HTTP read with a slow native IPC request points to IPC/serialization/queueing; a fast JavaScript render with slow presentation points to layout, paint, or native frame scheduling. Agent actions have separate cmux inventory or embedded PTY launch costs and should not block hover or navigation. Do not launch real agents merely to benchmark the dashboard.

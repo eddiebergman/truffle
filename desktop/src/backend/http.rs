@@ -95,10 +95,10 @@ fn header<'a>(r: &'a tiny_http::Request, name: &str) -> &'a str {
         .unwrap_or("")
 }
 fn equal(a: &str, b: &str) -> bool {
-    let mut mac = Hmac::<Sha256>::new_from_slice(b"mydash-comparison").unwrap();
+    let mut mac = Hmac::<Sha256>::new_from_slice(b"truffle-comparison").unwrap();
     mac.update(b.as_bytes());
     let expected = mac.finalize().into_bytes();
-    let mut mac = Hmac::<Sha256>::new_from_slice(b"mydash-comparison").unwrap();
+    let mut mac = Hmac::<Sha256>::new_from_slice(b"truffle-comparison").unwrap();
     mac.update(a.as_bytes());
     mac.verify_slice(&expected).is_ok()
 }
@@ -119,7 +119,7 @@ fn handle(
             return Ok(match path.as_str() {
                 "/api/health" => json_response(
                     200,
-                    json!({"service":"mydash","apiVersion":1,"storageVersion":1,"backend":"rust"}),
+                    json!({"service":"truffle","apiVersion":1,"storageVersion":1,"backend":"rust"}),
                 ),
                 "/api/state" => {
                     let mut state = repo.snapshot(false);
@@ -625,12 +625,12 @@ pub fn serve(
         }
     }
     let server = tiny_http::Server::http(("127.0.0.1", port))
-        .map_err(|_| Error::new("Cannot bind the mydash loopback port."))?;
+        .map_err(|_| Error::new("Cannot bind the truffle loopback port."))?;
     let port = server.server_addr().to_ip().unwrap().port();
     let authority = format!("127.0.0.1:{port}");
     let token = format!("{}{}", uuid(), uuid());
     let csrf = format!("{}{}", uuid(), uuid());
-    let inbox = PathBuf::from("/tmp").join(format!("mydash-agent-{}", uuid()));
+    let inbox = PathBuf::from("/tmp").join(format!("truffle-agent-{}", uuid()));
     std::fs::create_dir(&inbox)?;
     std::fs::set_permissions(&inbox, std::fs::Permissions::from_mode(0o700))?;
     let runtime = repo.data.parent().unwrap().join(if demo {
@@ -641,7 +641,7 @@ pub fn serve(
     private_write(
         &runtime,
         &serde_json::to_vec(
-            &json!({"url":format!("http://{authority}"),"token":token,"inbox":inbox,"backend":"rust","pid":std::process::id(),"root":repo.root,"data":repo.data,"builtAt":env!("MYDASH_BUILD_TIME")}),
+            &json!({"url":format!("http://{authority}"),"token":token,"inbox":inbox,"backend":"rust","pid":std::process::id(),"root":repo.root,"data":repo.data,"builtAt":env!("TRUFFLE_BUILD_TIME")}),
         )?,
     )?;
     let sync_repo = repo.clone();
@@ -666,7 +666,7 @@ pub fn serve(
         std::thread::sleep(std::time::Duration::from_millis(500));
     });
     println!(
-        "mydash Rust service → http://{authority}{}",
+        "truffle Rust service → http://{authority}{}",
         if demo {
             " (preview; no external requests)"
         } else {

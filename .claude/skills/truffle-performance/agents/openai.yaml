@@ -1,0 +1,4 @@
+interface:
+  display_name: "truffle performance"
+  short_description: "Profile dashboard latency and native rendering"
+  default_prompt: "Use $truffle-performance to measure and fix the slow interaction in truffle."

@@ -41,6 +41,6 @@
     try{current=await api('/api/gcp-auth/cancel',{});paint();schedule();}
     catch(error){toast(error.message);cancel.disabled=false;}
   };
-  window.addEventListener('mydash-service-restarted',()=>{clearTimeout(timer);void load();});
+  window.addEventListener('truffle-service-restarted',()=>{clearTimeout(timer);void load();});
   void load();
 })();

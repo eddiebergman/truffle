@@ -15,7 +15,7 @@ function settingsProfilePatch(baseline,rows){
 function renderSettingsProfilePreview(container,{initialProfile,expectedRevision,expectedContentHash}={}){
  const make=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n;};
  const root=make('section',null,'settings-profile-import');root.setAttribute('aria-label','Settings profile review');for(const marker of ['data-private','data-agent-private','data-agent-context-exclude'])root.setAttribute(marker,'true');container.append(root);
- const paste=make('textarea');paste.rows=4;paste.placeholder='Paste an exported mydash-settings v1 JSON profile';paste.setAttribute('aria-label','Settings profile JSON');paste.autocomplete='off';paste.spellcheck=false;for(const marker of ['data-private','data-agent-private','data-agent-context-exclude'])paste.setAttribute(marker,'true');
+ const paste=make('textarea');paste.rows=4;paste.placeholder='Paste an exported truffle-settings v1 JSON profile';paste.setAttribute('aria-label','Settings profile JSON');paste.autocomplete='off';paste.spellcheck=false;for(const marker of ['data-private','data-agent-private','data-agent-context-exclude'])paste.setAttribute(marker,'true');
  const file=make('input');file.type='file';file.accept='.json,application/json';file.hidden=true;file.setAttribute('aria-label','Choose settings profile JSON');
  const controls=make('div',null,'settings-profile-actions ui-actiongroup'),preview=make('div',null,'settings-profile-preview'),status=make('p',null,'settings-profile-status');status.setAttribute('role','status');
  controls.setAttribute('role','group');controls.setAttribute('aria-label','Settings profile actions');
