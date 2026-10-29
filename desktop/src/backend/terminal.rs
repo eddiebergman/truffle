@@ -12,6 +12,8 @@ pub fn run(program: &str, args: &[String], input: Option<&str>, seconds: u64) ->
 pub fn run_bytes(program: &str, args: &[String], input: Option<&str>, seconds: u64) -> Result<Vec<u8>> {
     let mut child = Command::new(program)
         .args(args)
+        // Callers parse stdout; gh colors JSON in a pipe when this is set.
+        .env_remove("CLICOLOR_FORCE")
         .stdin(if input.is_some() {
             Stdio::piped()
         } else {
@@ -128,6 +130,17 @@ mod open_outcome_tests{
  #[test]fn saved_chat_desktop_open_classifies_only_prespawn_failures_as_rejected(){assert!(desktop_command_outcome(Command::new("/nonexistent/desktop-opener"),Duration::from_millis(50)).is_err());assert_eq!(desktop_command_outcome(Command::new("/usr/bin/true"),Duration::from_secs(1)).unwrap(),OpenOutcome::Accepted);assert_eq!(desktop_command_outcome(Command::new("/usr/bin/false"),Duration::from_secs(1)).unwrap(),OpenOutcome::Unknown);let mut sleep=Command::new("/bin/sleep");sleep.arg("1");assert_eq!(desktop_command_outcome(sleep,Duration::from_millis(1)).unwrap(),OpenOutcome::Unknown);}
 }
 
+#[cfg(test)]
+mod run_tests{
+ use super::*;
+ #[test]
+ fn parsed_commands_never_inherit_forced_color(){
+  let previous=std::env::var_os("CLICOLOR_FORCE");std::env::set_var("CLICOLOR_FORCE","1");
+  let output=run("/bin/sh",&["-c".into(),"printf %s \"${CLICOLOR_FORCE-unset}\"".into()],None,5);
+  if let Some(value)=previous{std::env::set_var("CLICOLOR_FORCE",value);}else{std::env::remove_var("CLICOLOR_FORCE");}
+  assert_eq!(output.unwrap(),"unset");
+ }
+}
 #[cfg(test)]
 mod runtime_observation_tests{
  use super::*;
