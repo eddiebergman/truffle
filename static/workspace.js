@@ -389,6 +389,7 @@ function renderAgentWorkspace(){
   for(const artifact of outputs){const row=libraryRow({...artifact,available:artifact.available!==false});row.append(detachLinkButton(record,'artifactIds',artifact.id));results.append(row);}
 
   if(record&&directory)context.append(agentGitSection(record,directory));
+  const commands=agentCommandSection(record);if(commands)context.append(commands);
   if(record?.resources?.length)context.append(collapsibleContextSection(resourceSection(record,expandedResources),'resources'));
   if(items.length||agentContextReveals.has(record?.id+':work'))context.append(work);
   const trees=(record?.worktrees||[]).filter(x=>x.primary||x.isWorktree);
@@ -403,6 +404,13 @@ function renderAgentWorkspace(){
   if(contextFocusKey&&(document.activeElement===contextFocused||document.activeElement===document.body||!document.activeElement?.isConnected)){
     [...context.querySelectorAll('[data-focus-key]')].find(node=>node.dataset.focusKey===contextFocusKey)?.focus({preventScroll:true});
   }
+}
+function agentCommandSection(record){
+  const commands=[...(record?.agentCommands||[])].reverse();if(!commands.length)return null;
+  const section=el('section','agent-commands-section'),head=el('div','section-heading');head.append(el('h3','','Agent commands'));section.append(head);
+  for(const command of commands){const outcome=command.ok===false?'failed':command.ok===true?'ran':'running',row=el('div','agent-command-row '+outcome),when=el('small','',relative(command.at));when.title=new Date(command.at*1000).toLocaleString();row.append(el('code','agent-command-name',command.name),el('span','agent-command-outcome',outcome),when);section.append(row);}
+  if(!('agentCommands' in contextSectionsCollapsed))contextSectionsCollapsed.agentCommands=false;
+  return collapsibleContextSection(section,'agentCommands',commands.length);
 }
 function collapsibleContextSection(section,key,count){
   const heading=$('h3',section),head=heading.parentElement,body=el('div','context-section-body');body.id='context-section-'+key;

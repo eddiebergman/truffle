@@ -231,3 +231,15 @@ test('agent tabs show the title and shortcut and open their actions on right-cli
  assert.equal(prevented,1);assert.deepEqual(selected,['two']);assert.equal(f.menu('two').open,true);assert.equal(f.document.activeElement,f.control('two','manage'));
  f.menu('two').open=false;f.tab('two').oncontextmenu({preventDefault(){}});assert.deepEqual(selected,['two']);assert.equal(f.menu('two').open,true);
 });
+
+test('agent commands show newest first with their outcome and stay open by default',()=>{
+  const {FakeDocument}=require('./helpers/fake-dom.cjs');
+  const {c}=load({document:new FakeDocument()},{keepHost:['document']});let collapsed;c.collapsibleContextSection=(section,key,count)=>{collapsed={key,count};return section;};
+  const all=(node,cls)=>(node.children||[]).flatMap(child=>[...(String(child.className).split(' ').includes(cls)?[child]:[]),...all(child,cls)]);
+  const section=c.agentCommandSection({agentCommands:[{id:'a',name:'projects.create',at:100,ok:true},{id:'b',name:'chats.prepare.quick',at:200,ok:false},{id:'c',name:'settings.apply',at:300}]});
+  const rows=all(section,'agent-command-row');
+  assert.deepEqual(rows.map(row=>row.children[0].textContent),['settings.apply','chats.prepare.quick','projects.create']);
+  assert.deepEqual(rows.map(row=>row.children[1].textContent),['running','failed','ran']);
+  assert.equal(c.contextSectionsCollapsed.agentCommands,false);assert.equal(collapsed.key,'agentCommands');assert.equal(collapsed.count,3);
+  assert.equal(c.agentCommandSection({agentCommands:[]}),null);
+});

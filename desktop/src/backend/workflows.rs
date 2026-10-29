@@ -949,13 +949,53 @@ fn save_session_output(repo: &Repository, p: &Value) -> Result<Value> {
     repo.edit(&edit)?;
     Ok(record)
 }
+const AGENT_COMMAND_LOG: usize = 20;
+/// Run an app command for an agent. Writes and user-action commands are logged on the
+/// session first, so its chat shows every one that ran.
+fn agent_command(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
+    let name = text(p, "name");
+    if !commands::shown_to_user(name) {
+        return Ok(json!({"commandResult": commands::invoke(repo, p, false)?}));
+    }
+    let id = sid(text(p, "id"))?;
+    let entry = json!({"id": uuid(), "name": name, "at": now()});
+    repo.transaction(|s| {
+        let record = s["sessions"]
+            .as_array_mut()
+            .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
+            .ok_or_else(|| {
+                Error::new("Pass this chat's --record ID so the chat can show the command.")
+            })?;
+        let mut log = arr(&record["agentCommands"]);
+        log.push(entry.clone());
+        let excess = log.len().saturating_sub(AGENT_COMMAND_LOG);
+        log.drain(..excess);
+        record["agentCommands"] = Value::Array(log);
+        Ok(())
+    })?;
+    let result = commands::invoke(repo, p, false);
+    let ok = result.is_ok();
+    // The command already ran; failing to store its outcome must not report it as failed.
+    let _ = repo.transaction(|s| {
+        if let Some(logged) = s["sessions"]
+            .as_array_mut()
+            .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
+            .and_then(|record| record["agentCommands"].as_array_mut())
+            .and_then(|log| log.iter_mut().find(|row| row["id"] == entry["id"]))
+        {
+            logged["ok"] = json!(ok);
+        }
+        Ok(())
+    });
+    Ok(json!({"commandResult": result?}))
+}
 fn register_resolving(
     repo: &Arc<Repository>,
     p: &Value,
     resolve: impl Fn(&str) -> Result<Value>,
 ) -> Result<Value> {
     if p["operation"] == "command" {
-        return Ok(json!({"commandResult":super::commands::invoke(repo,p,false)?}));
+        return agent_command(repo, p);
     }
     if p["operation"] == "settings-read" {
         return Ok(json!({"settings":repo.settings.view()}));
@@ -1509,5 +1549,7 @@ mod registration_merge_tests;
 #[cfg(test)]
 mod live_unregistered_open_tests;
 
+#[cfg(test)]
+mod agent_command_tests;
 #[cfg(test)]
 mod quick_folder_cleanup_tests;

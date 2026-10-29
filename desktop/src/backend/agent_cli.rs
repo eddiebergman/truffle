@@ -143,7 +143,7 @@ fn require_context_revision(input: &Value) -> Result<()> {
 }
 fn payload(command: &str, o: &Options) -> Result<Value> {
     let mut p = json!({});
-    if command != "register" && command != "settings" && command != "command" {
+    if command != "register" && command != "settings" {
         p["id"] = json!(sid(o.required("record")?)?);
     }
     match command {
@@ -169,7 +169,7 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
     Ok(p)
 }
 fn command_payload(o: &Options, p: &mut Value) -> Result<()> {
-    o.validate(&["name", "file"])?;
+    o.validate(&["record", "name", "file"])?;
     p["operation"] = json!("command");
     p["name"] = json!(o.required("name")?);
     p["args"] = if o.get("file").is_empty() {
@@ -607,7 +607,7 @@ fn shown_result<'a>(command: &str, result: &'a Value) -> &'a Value {
     }]
 }
 fn command_help(command: &str) -> String {
-    format!("{command}: --record UUID [--home DIRECTORY] [--file PATH] [--state STATE] [--show]\nregister: --agent claude|codex [--session UUID] [--cwd PATH] [--url URL] [--item ID]\nreview/ci: --request UUID [--pass NAME] [--reviewed-revision NUMBER]\ncommand: --name COMMAND [--file ARGUMENTS_JSON]\nsettings: --show OR --file PATCH_JSON --revision NUMBER --content-hash HASH (routine settings only)\ncontext: --record UUID --show OR --file CONTEXT_JSON (replacement requires its captured revision)\nresource: --record UUID --file REPORT_JSON [--replace]; --replace requires report.revision from context --show\nReplacement lists: omitted stays unchanged; [] clears dashboard links only, never external resources/files. On conflict re-read context and reapply intended edits; do not substitute a fresh revision into the stale file.\nUse --inbox to use the private signed local inbox.")
+    format!("{command}: --record UUID [--home DIRECTORY] [--file PATH] [--state STATE] [--show]\nregister: --agent claude|codex [--session UUID] [--cwd PATH] [--url URL] [--item ID]\nreview/ci: --request UUID [--pass NAME] [--reviewed-revision NUMBER]\ncommand: --record UUID --name COMMAND [--file ARGUMENTS_JSON] (writes show in that chat)\nsettings: --show OR --file PATCH_JSON --revision NUMBER --content-hash HASH (routine settings only)\ncontext: --record UUID --show OR --file CONTEXT_JSON (replacement requires its captured revision)\nresource: --record UUID --file REPORT_JSON [--replace]; --replace requires report.revision from context --show\nReplacement lists: omitted stays unchanged; [] clears dashboard links only, never external resources/files. On conflict re-read context and reapply intended edits; do not substitute a fresh revision into the stale file.\nUse --inbox to use the private signed local inbox.")
 }
 pub fn run(args: &[String]) -> Option<Result<()>> {
     let mut index = 1;
@@ -618,7 +618,7 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
     }
     let command = args.get(index)?;
     if command == "--help" {
-        println!("Truffle: {}\nUse COMMAND --help for options. Discover app commands with: command --name commands.list\nService: --serve --home DIRECTORY", COMMANDS.join(", "));
+        println!("Truffle: {}\nUse COMMAND --help for options. Discover app commands with: command --record UUID --name commands.list\nService: --serve --home DIRECTORY", COMMANDS.join(", "));
         return Some(Ok(()));
     }
     if !COMMANDS.contains(&command.as_str()) {

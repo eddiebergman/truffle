@@ -4592,3 +4592,26 @@ button.git-file-row {
   white-space: pre;
   overflow-wrap: normal;
 }
+
+.agent-command-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.agent-command-name {
+  overflow: hidden;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-command-outcome {
+  color: var(--muted);
+}
+
+.agent-command-row.failed .agent-command-outcome {
+  color: var(--love);
+}

@@ -1152,6 +1152,13 @@ fn exact_page_visibility_scopes(repo: &Repository, scopes: &Value) -> Result<()>
     Ok(())
 }
 
+/// Whether an agent running this command must leave a notice in its chat.
+pub fn shown_to_user(name: &str) -> bool {
+    specifications().into_iter().any(|entry| {
+        entry.name == name
+            && (entry.effect == Effect::Write || entry.assistant == AssistantPolicy::UserAction)
+    })
+}
 pub fn invoke(repo: &Arc<Repository>, p: &Value, assistant: bool) -> Result<Value> {
     let name = checked(p, "name", 80, true)?;
     let args = p.get("args").cloned().unwrap_or_else(|| json!({}));
