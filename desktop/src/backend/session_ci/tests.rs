@@ -60,7 +60,7 @@ fn scope_and_updates_preserve_other_prs_relations_and_source_health() {
     assert_eq!(state["items"][0]["relations"], json!(["authored"]));
     assert_eq!(state["items"][1]["ci"]["state"], "pending");
     assert_eq!(state["sources"], health);
-    assert!(updates(&state, &[fresh]).is_empty());
+    assert_eq!(updates(&state, &[fresh]), [] as [serde_json::Value; 0]);
     assert!(linked_prs(&state, &uuid()).is_err());
 }
 #[test]

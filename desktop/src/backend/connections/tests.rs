@@ -1,4 +1,5 @@
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 #[derive(Default)]
 struct MemoryStore {
     values: Mutex<BTreeMap<String, String>>,
@@ -56,7 +57,7 @@ impl Remote for FixtureRemote {
     }
 }
 fn host(profile: &Path, store: Arc<MemoryStore>, remote: Arc<FixtureRemote>) -> SetupHost {
-    SetupHost::with_adapters(profile.into(), store, remote).unwrap()
+    SetupHost::with_adapters(profile, store, remote).unwrap()
 }
 fn preview_payload(host: &SetupHost, payload: &Value) -> Result<Value> {
     host.preview_with_ticket(payload, host.begin_preview())
@@ -104,7 +105,6 @@ fn preview_commit_and_rotation_keep_secrets_out_of_configuration_and_results() {
     broker.commit(&commit_payload(&second)).unwrap();
     assert_eq!(store.values.lock().unwrap().len(), 1);
     assert_eq!(broker.view().unwrap()["revision"], 2);
-    use std::os::unix::fs::PermissionsExt;
     assert_eq!(
         std::fs::metadata(config_path(directory.path()))
             .unwrap()
@@ -339,7 +339,7 @@ fn cancelled_in_flight_preview_cannot_replace_a_newer_account() {
     let (release_tx, release_rx) = mpsc::channel();
     let broker = Arc::new(
         SetupHost::with_adapters(
-            directory.path().into(),
+            directory.path(),
             Arc::new(MemoryStore::default()),
             Arc::new(OrderedRemote {
                 calls: AtomicU64::new(0),
@@ -402,12 +402,9 @@ fn provider_reload_serializes_keychain_reads_and_keeps_the_latest_account() {
     let providers = Arc::new(
         ProviderHost::with_store(directory.path(), directory.path(), store.clone()).unwrap(),
     );
-    let broker = SetupHost::with_adapters(
-        directory.path().into(),
-        store,
-        Arc::new(FixtureRemote::default()),
-    )
-    .unwrap();
+    let broker =
+        SetupHost::with_adapters(directory.path(), store, Arc::new(FixtureRemote::default()))
+            .unwrap();
     let first = preview_payload(&broker, &json!({"provider":"sentry","source":"manual","token":"benign-first-fixture","org":"first-org","base":"https://sentry.io"})).unwrap();
     broker.commit(&commit_payload(&first)).unwrap();
     let old_providers = providers.clone();

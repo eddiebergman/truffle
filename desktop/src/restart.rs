@@ -164,7 +164,7 @@ fn daemon(root: &Path) -> Result<Option<Value>> {
     if !dir.join("terminal.sock").exists() {
         return Ok(None);
     }
-    match backend::terminal_daemon::call(&dir, json!({"op":"health"})) {
+    match backend::terminal_daemon::call(&dir, &json!({"op":"health"})) {
         Ok(health) => {
             if health["root"] != json!(root)
                 || !health["pid"]
@@ -191,7 +191,7 @@ fn daemon(root: &Path) -> Result<Option<Value>> {
 }
 fn daemon_request(root: &Path, p: Value) -> Result<Value> {
     let dir = backend::terminal_daemon::socket_directory(&data(root)).map_err(|e| e.message)?;
-    backend::terminal_daemon::call(&dir, p).map_err(|e| e.message)
+    backend::terminal_daemon::call(&dir, &p).map_err(|e| e.message)
 }
 fn inspect(root: &Path, url: &str) -> Result<Value> {
     runtime(root, url)?;

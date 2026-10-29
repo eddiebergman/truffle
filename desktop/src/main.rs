@@ -54,9 +54,8 @@ fn connection_host(
         }
         host.cancel();
     }
-    let host = Arc::new(
-        backend::connections::SetupHost::new(profile.clone()).map_err(|error| error.message)?,
-    );
+    let host =
+        Arc::new(backend::connections::SetupHost::new(&profile).map_err(|error| error.message)?);
     *cached = Some((profile, host.clone()));
     drop(cached);
     Ok(host)
@@ -475,8 +474,8 @@ fn terminal_daemon(args: &[String]) {
     };
     let result = match (value("--home"), value("--data")) {
         (Some(root), Some(data)) => backend::terminal_daemon::serve(
-            root,
-            data,
+            &root,
+            &data,
             args.iter().any(|x| x == "--allow-demo-terminals"),
         ),
         _ => Err(backend::Error::new(

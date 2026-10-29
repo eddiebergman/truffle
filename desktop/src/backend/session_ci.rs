@@ -168,6 +168,12 @@ fn pr_ids(refs: &[Value]) -> Result<Vec<String>> {
 pub fn refresh(repo: &Repository, id: &str) -> Result<Value> {
     refresh_with(repo, id, |refs| repo.providers.refresh("github", refs))
 }
+struct Guard<'a>(&'a Repository, String);
+impl Drop for Guard<'_> {
+    fn drop(&mut self) {
+        self.0.opening.lock().unwrap().remove(&self.1);
+    }
+}
 fn refresh_with(
     repo: &Repository,
     id: &str,
@@ -220,14 +226,12 @@ fn refresh_with(
         }
         opening.insert(key.clone());
         cooldown.insert(key.clone(), time + 25.0);
+        drop(opening);
+        drop(cooldown);
+        drop(running);
+        drop(state);
         (refs, ids)
     };
-    struct Guard<'a>(&'a Repository, String);
-    impl Drop for Guard<'_> {
-        fn drop(&mut self) {
-            self.0.opening.lock().unwrap().remove(&self.1);
-        }
-    }
     let _guard = Guard(repo, key);
     let fresh = match remote(&refs) {
         Ok(items) => items,

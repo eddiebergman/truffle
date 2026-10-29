@@ -23,9 +23,11 @@ fn concurrent_logins_use_fixed_arguments_and_do_not_expose_output() {
     let program=script(t.path(),&format!("case \"$2\" in application-default) name=adc;; *) name=cli;; esac\nprintf '%s\\n' \"$@\" > '{root}/'$name.args\ntouch '{root}/'$name.started\nwhile [ ! -f '{root}/release' ]; do sleep 0.01; done\nprintf 'SECRET_TOKEN_NEVER_LOGGED'\nexit 0"));
     let host = Arc::new(LoginHost::default());
     let first = host
-        .launch(program.clone(), false, Duration::from_secs(2))
+        .launch(&program, false, Duration::from_secs(2))
         .unwrap();
-    let again = host.launch(program, false, Duration::from_secs(2)).unwrap();
+    let again = host
+        .launch(&program, false, Duration::from_secs(2))
+        .unwrap();
     assert_eq!(first["runId"], again["runId"]);
     for _ in 0..100 {
         if t.path().join("cli.started").exists() && t.path().join("adc.started").exists() {
@@ -57,7 +59,7 @@ fn login_failures_are_independent() {
         "case \"$2\" in application-default) exit 7;; *) exit 0;; esac",
     );
     let host = Arc::new(LoginHost::default());
-    host.launch(p, false, Duration::from_secs(2)).unwrap();
+    host.launch(&p, false, Duration::from_secs(2)).unwrap();
     let v = finished(&host);
     assert_eq!(v["cli"]["status"], "succeeded");
     assert_eq!(v["adc"]["exitCode"], 7);
@@ -67,13 +69,12 @@ fn timeout_and_cancel_reap_background_commands() {
     let t = tempfile::tempdir().unwrap();
     let p = script(t.path(), "while :; do sleep 0.01; done");
     let host = Arc::new(LoginHost::default());
-    host.launch(p.clone(), false, Duration::from_millis(50))
-        .unwrap();
+    host.launch(&p, false, Duration::from_millis(50)).unwrap();
     let v = finished(&host);
     assert_eq!(v["cli"]["status"], "timed_out");
     assert_eq!(v["adc"]["status"], "timed_out");
     let host = Arc::new(LoginHost::default());
-    host.launch(p, false, Duration::from_secs(2)).unwrap();
+    host.launch(&p, false, Duration::from_secs(2)).unwrap();
     host.cancel();
     let v = finished(&host);
     assert_eq!(v["cli"]["status"], "cancelled");

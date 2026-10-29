@@ -77,7 +77,11 @@ fn write_frame(stream: &mut UnixStream, value: &Value) -> Result<()> {
     if bytes.len() > FRAME_LIMIT {
         return Err(Error::new("Terminal message exceeds 512 KiB."));
     }
-    stream.write_all(&(bytes.len() as u32).to_be_bytes())?;
+    stream.write_all(
+        &u32::try_from(bytes.len())
+            .map_err(|_| Error::new("Terminal message exceeds 512 KiB."))?
+            .to_be_bytes(),
+    )?;
     stream.write_all(&bytes)?;
     Ok(())
 }
@@ -92,7 +96,7 @@ fn read_frame(stream: &mut UnixStream) -> Result<Value> {
     stream.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-pub fn call(dir: &Path, payload: Value) -> Result<Value> {
+pub fn call(dir: &Path, payload: &Value) -> Result<Value> {
     let mut stream=UnixStream::connect(dir.join("terminal.sock")).map_err(|_|Error::new("Terminal daemon is unavailable. Running agents were not closed; retry after it responds."))?;
     stream.set_read_timeout(Some(Duration::from_secs(8)))?;
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
@@ -110,7 +114,7 @@ pub fn call(dir: &Path, payload: Value) -> Result<Value> {
 }
 // Legacy open has no durable operation acknowledgement. Once any frame bytes
 // may be transmitted, rejection, malformed replies and disconnects are unknown.
-pub(super) fn open_request(dir: &Path, payload: Value) -> Result<super::terminal::OpenOutcome> {
+pub(super) fn open_request(dir: &Path, payload: &Value) -> Result<super::terminal::OpenOutcome> {
     let frame = serde_json::to_vec(&json!({"protocol":PROTOCOL,"request":payload}))?;
     if frame.len() > FRAME_LIMIT {
         return Err(Error::new("Terminal message exceeds 512 KiB."));
@@ -120,8 +124,10 @@ pub(super) fn open_request(dir: &Path, payload: Value) -> Result<super::terminal
     })?;
     stream.set_read_timeout(Some(Duration::from_secs(8)))?;
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
+    let size =
+        u32::try_from(frame.len()).map_err(|_| Error::new("Terminal message exceeds 512 KiB."))?;
     if stream
-        .write_all(&(frame.len() as u32).to_be_bytes())
+        .write_all(&size.to_be_bytes())
         .and_then(|()| stream.write_all(&frame))
         .is_err()
     {
@@ -171,7 +177,7 @@ impl Host {
         match self {
             Self::Local(host) => Ok(host.inventory()),
             Self::Remote(remote) => remote
-                .request(json!({"op":"inventory"}))?
+                .request(&json!({"op":"inventory"}))?
                 .as_array()
                 .cloned()
                 .ok_or_else(|| Error::new("Terminal inventory response is invalid.")),
@@ -217,7 +223,7 @@ impl Host {
                 }
                 open_request(
                     &r.dir,
-                    json!({"op":"open","record":launch,"packet":packet,"new":new}),
+                    &json!({"op":"open","record":launch,"packet":packet,"new":new}),
                 )
             }
         }
@@ -227,7 +233,7 @@ impl Host {
             Self::Local(host) => host.open_shell(record),
             Self::Remote(remote) => {
                 remote.ensure()?;
-                remote.request(json!({"op":"shell","record":record}))
+                remote.request(&json!({"op":"shell","record":record}))
             }
         }
     }
@@ -241,7 +247,7 @@ impl Host {
         match self {
             Self::Local(h) => h.poll(id, cursor, generation),
             Self::Remote(r) => {
-                r.request(json!({"op":"poll","id":id,"cursor":cursor,"generation":generation}))
+                r.request(&json!({"op":"poll","id":id,"cursor":cursor,"generation":generation}))
             }
         }
     }
@@ -249,7 +255,7 @@ impl Host {
         match self {
             Self::Local(h) => h.input(id, data),
             Self::Remote(r) => r
-                .request(json!({"op":"input","id":id,"data":data}))
+                .request(&json!({"op":"input","id":id,"data":data}))
                 .map(|_| ()),
         }
     }
@@ -257,7 +263,7 @@ impl Host {
         match self {
             Self::Local(h) => h.resize(id, cols, rows),
             Self::Remote(r) => r
-                .request(json!({"op":"resize","id":id,"cols":cols,"rows":rows}))
+                .request(&json!({"op":"resize","id":id,"cols":cols,"rows":rows}))
                 .map(|_| ()),
         }
     }
@@ -265,13 +271,13 @@ impl Host {
         match self {
             Self::Local(h) => h.close(id, generation),
             Self::Remote(r) => r
-                .request(json!({"op":"close","id":id,"generation":generation}))
+                .request(&json!({"op":"close","id":id,"generation":generation}))
                 .map(|_| ()),
         }
     }
 }
 impl Remote {
-    fn request(&self, payload: Value) -> Result<Value> {
+    fn request(&self, payload: &Value) -> Result<Value> {
         call(&self.dir, payload)
     }
     fn ensure(&self) -> Result<()> {
@@ -279,7 +285,7 @@ impl Remote {
         let launch = lockfile(&self.dir.join("launch.lock"))?;
         launch.lock_exclusive()?;
         if self.dir.join("terminal.sock").exists() {
-            match self.request(json!({"op":"health"})) {
+            match self.request(&json!({"op":"health"})) {
                 Ok(v) => return self.validate(&v),
                 Err(e) => {
                     let owner = lockfile(&self.dir.join("daemon.lock"))?;
@@ -313,7 +319,7 @@ impl Remote {
         let until = Instant::now() + Duration::from_secs(4);
         while Instant::now() < until {
             if self.dir.join("terminal.sock").exists() {
-                if let Ok(value) = self.request(json!({"op":"health"})) {
+                if let Ok(value) = self.request(&json!({"op":"health"})) {
                     let result = self.validate(&value);
                     std::thread::spawn(move || {
                         let _ = child.wait();
@@ -411,9 +417,9 @@ fn dispatch(
         _ => Err(Error::new("Unsupported terminal operation.")),
     }
 }
-pub fn serve(root: PathBuf, data: PathBuf, allow_demo: bool) -> Result<()> {
+pub fn serve(root: &Path, data: &Path, allow_demo: bool) -> Result<()> {
     let root = root.canonicalize()?;
-    let dir = socket_directory(&data)?;
+    let dir = socket_directory(data)?;
     private_directory(&dir)?;
     let lock = lockfile(&dir.join("daemon.lock"))?;
     lock.try_lock_exclusive()
@@ -437,7 +443,7 @@ pub fn serve(root: PathBuf, data: PathBuf, allow_demo: bool) -> Result<()> {
         let host = host.clone();
         let active = active.clone();
         let root = root.clone();
-        let data = data.clone();
+        let data = data.to_path_buf();
         std::thread::spawn(move || {
             struct Slot(Arc<AtomicUsize>);
             impl Drop for Slot {
@@ -493,7 +499,7 @@ mod saved_chat_open_transport_tests {
                     write_frame(&mut stream, &response).unwrap();
                 }
             });
-            let outcome = open_request(temp.path(), json!({"op":"open"})).unwrap();
+            let outcome = open_request(temp.path(), &json!({"op":"open"})).unwrap();
             assert_eq!(
                 outcome,
                 if accepted {
@@ -505,8 +511,8 @@ mod saved_chat_open_transport_tests {
             worker.join().unwrap();
         }
         let temp = tempfile::tempdir().unwrap();
-        assert!(open_request(temp.path(), json!({"op":"open"})).is_err());
-        assert!(open_request(temp.path(), json!({"body":"x".repeat(FRAME_LIMIT)})).is_err());
+        assert!(open_request(temp.path(), &json!({"op":"open"})).is_err());
+        assert!(open_request(temp.path(), &json!({"body":"x".repeat(FRAME_LIMIT)})).is_err());
     }
 }
 

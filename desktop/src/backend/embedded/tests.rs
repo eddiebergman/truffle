@@ -83,7 +83,7 @@ fn companion_shell_action_preserves_whitespace_input_and_validates_payloads() {
             bytes.extend(
                 arr(&packet["bytes"])
                     .iter()
-                    .map(|n| n.as_u64().unwrap() as u8),
+                    .map(|n| u8::try_from(n.as_u64().unwrap()).unwrap()),
             );
             // The PTY echoes input too (expanding tabs); cat's returned line
             // retains the actual tab, distinguishing it from that echo.
@@ -150,12 +150,16 @@ fn exited_pty_replays_all_buffered_chunks() {
         let p = host.poll(&id, cursor, &generation).unwrap();
         cursor = p["cursor"].as_u64().unwrap();
         generation = text(&p, "generation").into();
-        bytes.extend(arr(&p["bytes"]).iter().map(|x| x.as_u64().unwrap() as u8));
+        bytes.extend(
+            arr(&p["bytes"])
+                .iter()
+                .map(|x| u8::try_from(x.as_u64().unwrap()).unwrap()),
+        );
         if p["alive"] == false && p["hasMore"] == false {
             break;
         }
     }
-    assert_eq!(bytes.len(), 100003);
+    assert_eq!(bytes.len(), 100_003);
     assert!(bytes.ends_with(b"END"));
 }
 #[test]
@@ -179,7 +183,7 @@ fn pty_streams_input_and_resize_and_reaps_exit() {
         result.extend(
             arr(&poll["bytes"])
                 .iter()
-                .map(|x| x.as_u64().unwrap() as u8),
+                .map(|x| u8::try_from(x.as_u64().unwrap()).unwrap()),
         );
         if poll["alive"] == false {
             break;

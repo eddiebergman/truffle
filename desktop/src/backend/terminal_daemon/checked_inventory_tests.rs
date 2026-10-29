@@ -14,7 +14,7 @@ fn runtime_inventory_failure_is_per_call_even_when_shared_warning_is_clear() {
     let failure = host.inventory_checked();
     assert!(failure.is_err());
     assert!(host.warning().is_none());
-    assert!(host.inventory().is_empty());
+    assert_eq!(host.inventory(), [] as [serde_json::Value; 0]);
     assert!(failure.is_err());
     assert!(!temp.path().join("terminal.sock").exists());
 }

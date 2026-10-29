@@ -163,131 +163,148 @@ impl Host {
             .map_or_else(home, PathBuf::from);
         let id = uuid();
         let job = json!({"command":action["command"],"cwd":cwd,"id":id,"actionId":action["id"],"title":action["title"],"state":"running","startedAt":now(),"output":""});
-        {
-            let mut jobs = self.jobs.lock().unwrap();
-            if jobs.values().filter(|j| j["state"] == "running").count() >= 4
-                || jobs
-                    .values()
-                    .any(|j| j["state"] == "running" && j["actionId"] == action["id"])
-            {
-                return Err(Error::new(
-                    "This action is already running, or four actions are active.",
-                ));
-            }
-            let mut next = jobs.clone();
-            if next.len() >= 30 {
-                let oldest = next
-                    .iter()
-                    .filter(|(_, j)| j["state"] != "running")
-                    .min_by(|(_, a), (_, b)| {
-                        a["startedAt"]
-                            .as_f64()
-                            .partial_cmp(&b["startedAt"].as_f64())
-                            .unwrap()
-                    })
-                    .map(|(k, _)| k.clone());
-                if let Some(k) = oldest {
-                    next.remove(&k);
-                }
-            }
-            next.insert(id.clone(), job);
-            self.persist(&next)?;
-            *jobs = next;
-        }
+        self.reserve(&id, &action, job)?;
         let reply_id = id.clone();
         let host = self.clone();
         let repo = repo.clone();
         std::thread::spawn(move || {
-            let mut command = Command::new("/bin/zsh");
-            command
-                .args(["-lc", text(&action, "command")])
-                .current_dir(cwd)
-                .envs(context)
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            unsafe {
-                command.pre_exec(|| {
-                    if libc::setsid() < 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
-            }
-            let result = (|| -> Result<(bool, bool)> {
-                let mut child = command.spawn()?;
-                let stdout = child.stdout.take().unwrap();
-                let stderr = child.stderr.take().unwrap();
-                let readers = [
-                    Box::new(stdout) as Box<dyn Read + Send>,
-                    Box::new(stderr) as Box<dyn Read + Send>,
-                ]
-                .into_iter()
-                .map(|mut stream| {
-                    let host = host.clone();
-                    let id = id.clone();
-                    let mut redactor = super::commands::stream_redactor(&repo);
-                    std::thread::spawn(move || {
-                        let mut decoder = Utf8Output::default();
-                        let mut bytes = [0; 2048];
-                        while let Ok(n) = stream.read(&mut bytes) {
-                            if n == 0 {
-                                break;
-                            }
-                            host.output(&id, &decoder.push_redacted(&bytes[..n], &mut redactor));
-                        }
-                        host.output(&id, &finish_stream(&mut decoder, &mut redactor));
-                    })
-                })
-                .collect::<Vec<_>>();
-                let start = Instant::now();
-                let mut timed_out = false;
-                let success = loop {
-                    if let Some(status) = child.try_wait()? {
-                        if let Some(job) = host.jobs.lock().unwrap().get_mut(&id) {
-                            job["exitCode"] = json!(status.code());
-                        }
-                        break status.success();
-                    }
-                    if start.elapsed() > Duration::from_secs(600) {
-                        timed_out = true;
-                        unsafe {
-                            libc::kill(-(child.id() as i32), libc::SIGKILL);
-                        }
-                        let _ = child.wait();
-                        break false;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                };
-                unsafe {
-                    libc::kill(-(child.id() as i32), libc::SIGKILL);
-                }
-                for reader in readers {
-                    let _ = reader.join();
-                }
-                Ok((success, timed_out))
-            })();
-            let mut jobs = host.jobs.lock().unwrap();
-            let job = jobs.get_mut(&id).unwrap();
-            job["finishedAt"] = json!(now());
-            match result {
-                Ok((success, timed_out)) => {
-                    job["state"] = json!(if timed_out {
-                        "timed_out"
-                    } else if success {
-                        "succeeded"
-                    } else {
-                        "failed"
-                    });
-                }
-                Err(e) => {
-                    job["state"] = json!("failed");
-                    job["output"] = json!(e.message);
-                }
-            }
-            let _ = host.persist(&jobs);
+            let result = host.run(&repo, &id, &action, cwd, context);
+            let _ = host.finish(&id, result);
         });
         Ok(json!({"id":reply_id}))
+    }
+    fn reserve(&self, id: &str, action: &Value, job: Value) -> Result<()> {
+        let mut jobs = self.jobs.lock().unwrap();
+        if jobs.values().filter(|j| j["state"] == "running").count() >= 4
+            || jobs
+                .values()
+                .any(|j| j["state"] == "running" && j["actionId"] == action["id"])
+        {
+            return Err(Error::new(
+                "This action is already running, or four actions are active.",
+            ));
+        }
+        let mut next = jobs.clone();
+        if next.len() >= 30 {
+            let oldest = next
+                .iter()
+                .filter(|(_, j)| j["state"] != "running")
+                .min_by(|(_, a), (_, b)| {
+                    a["startedAt"]
+                        .as_f64()
+                        .partial_cmp(&b["startedAt"].as_f64())
+                        .unwrap()
+                })
+                .map(|(k, _)| k.clone());
+            if let Some(k) = oldest {
+                next.remove(&k);
+            }
+        }
+        next.insert(id.to_owned(), job);
+        self.persist(&next)?;
+        *jobs = next;
+        drop(jobs);
+        Ok(())
+    }
+    fn run(
+        self: &Arc<Self>,
+        repo: &Arc<Repository>,
+        id: &str,
+        action: &Value,
+        cwd: PathBuf,
+        context: BTreeMap<String, String>,
+    ) -> Result<(bool, bool)> {
+        let mut command = Command::new("/bin/zsh");
+        command
+            .args(["-lc", text(action, "command")])
+            .current_dir(cwd)
+            .envs(context)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let mut child = command.spawn()?;
+        let group = -libc::pid_t::try_from(child.id()).map_err(|_| Error::io())?;
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let readers = [
+            Box::new(stdout) as Box<dyn Read + Send>,
+            Box::new(stderr) as Box<dyn Read + Send>,
+        ]
+        .into_iter()
+        .map(|mut stream| {
+            let host = self.clone();
+            let id = id.to_owned();
+            let mut redactor = super::commands::stream_redactor(repo);
+            std::thread::spawn(move || {
+                let mut decoder = Utf8Output::default();
+                let mut bytes = [0; 2048];
+                while let Ok(n) = stream.read(&mut bytes) {
+                    if n == 0 {
+                        break;
+                    }
+                    host.output(&id, &decoder.push_redacted(&bytes[..n], &mut redactor));
+                }
+                host.output(&id, &finish_stream(&mut decoder, &mut redactor));
+            })
+        })
+        .collect::<Vec<_>>();
+        let start = Instant::now();
+        let mut timed_out = false;
+        let success = loop {
+            if let Some(status) = child.try_wait()? {
+                if let Some(job) = self.jobs.lock().unwrap().get_mut(id) {
+                    job["exitCode"] = json!(status.code());
+                }
+                break status.success();
+            }
+            if start.elapsed() > Duration::from_secs(600) {
+                timed_out = true;
+                unsafe {
+                    libc::kill(group, libc::SIGKILL);
+                }
+                let _ = child.wait();
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        unsafe {
+            libc::kill(group, libc::SIGKILL);
+        }
+        for reader in readers {
+            let _ = reader.join();
+        }
+        Ok((success, timed_out))
+    }
+    fn finish(&self, id: &str, result: Result<(bool, bool)>) -> Result<()> {
+        let mut jobs = self.jobs.lock().unwrap();
+        let job = jobs.get_mut(id).unwrap();
+        job["finishedAt"] = json!(now());
+        match result {
+            Ok((success, timed_out)) => {
+                job["state"] = json!(if timed_out {
+                    "timed_out"
+                } else if success {
+                    "succeeded"
+                } else {
+                    "failed"
+                });
+            }
+            Err(e) => {
+                job["state"] = json!("failed");
+                job["output"] = json!(e.message);
+            }
+        }
+        let persisted = self.persist(&jobs);
+        drop(jobs);
+        persisted
     }
 }
 fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
@@ -295,8 +312,7 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
     if text(p, "recordId").is_empty() {
         return Ok(result);
     }
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    let record = arr(&state["sessions"])
+    let record = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"])
         .into_iter()
         .find(|r| r["id"] == p["recordId"])
         .ok_or_else(|| Error::new("Selected chat unavailable."))?;

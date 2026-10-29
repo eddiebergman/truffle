@@ -38,7 +38,7 @@ impl LoginHost {
     }
     pub fn start(self: &Arc<Self>, demo: bool) -> Result<Value> {
         self.launch(
-            super::terminal::executable("gcloud"),
+            &super::terminal::executable("gcloud"),
             demo,
             Duration::from_secs(600),
         )
@@ -50,12 +50,7 @@ impl LoginHost {
         }
         state.view()
     }
-    fn launch(
-        self: &Arc<Self>,
-        executable: String,
-        demo: bool,
-        timeout: Duration,
-    ) -> Result<Value> {
+    fn launch(self: &Arc<Self>, executable: &str, demo: bool, timeout: Duration) -> Result<Value> {
         let mut state = self.state.lock().unwrap();
         if state.running() {
             return Ok(state.view());
@@ -80,7 +75,7 @@ impl LoginHost {
             let host = self.clone();
             let id = id.clone();
             let cancel = cancel.clone();
-            let executable = executable.clone();
+            let executable = executable.to_owned();
             std::thread::spawn(move || {
                 let task = if demo {
                     json!({"status":"succeeded","message":"Demo completed; no credentials changed."})
@@ -119,11 +114,8 @@ fn login(executable: &str, adc: bool, timeout: Duration, cancel: &AtomicBool) ->
     if cancel.load(Ordering::Relaxed) {
         return json!({"status":"cancelled","message":"Login cancelled."});
     }
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(_) => {
-            return json!({"status":"failed","message":"Cannot start gcloud. Install Google Cloud CLI and restart the truffle service."})
-        }
+    let Ok(mut child) = command.spawn() else {
+        return json!({"status":"failed","message":"Cannot start gcloud. Install Google Cloud CLI and restart the truffle service."});
     };
     let started = std::time::Instant::now();
     loop {

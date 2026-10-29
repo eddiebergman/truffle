@@ -39,7 +39,7 @@ fn socket_directory_keeps_a_live_daemon_from_before_the_rename() {
 fn framing_and_dispatch_bound_untrusted_messages() {
     let (mut writer, mut reader) = UnixStream::pair().unwrap();
     writer
-        .write_all(&((FRAME_LIMIT + 1) as u32).to_be_bytes())
+        .write_all(&u32::try_from(FRAME_LIMIT + 1).unwrap().to_be_bytes())
         .unwrap();
     assert!(read_frame(&mut reader).is_err());
     let root = tempfile::tempdir().unwrap();

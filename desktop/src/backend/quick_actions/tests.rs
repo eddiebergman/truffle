@@ -202,7 +202,10 @@ fn reviewed_command_identity_is_checked_before_lookup_without_execution() {
     assert_eq!(checked_action(&repo,&json!({"revision":fresh["revision"],"contentHash":baseline["contentHash"],"actionId":"fixture"})).unwrap_err().status,409);
     assert_eq!(checked_action(&repo,&json!({"revision":fresh["revision"],"contentHash":fresh["contentHash"],"actionId":"fixture"})).unwrap()["command"],"printf changed");
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
-    assert!(arr(&repo.quick_actions.view()["jobs"]).is_empty());
+    assert_eq!(
+        arr(&repo.quick_actions.view()["jobs"]),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[test]
@@ -212,13 +215,11 @@ fn failed_start_persistence_preserves_jobs_and_allows_retry() {
     repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf retry"}]}}), false).unwrap();
     let path = root.path().join("runs.json");
     let host = Arc::new(Host::load(path.clone()).unwrap());
-    {
-        let mut jobs = host.jobs.lock().unwrap();
-        for index in 0..30 {
-            jobs.insert(format!("old-{index}"), json!({"id":format!("old-{index}"),"state":"succeeded","startedAt":index,"output":"saved"}));
-        }
-        host.persist(&jobs).unwrap();
-    }
+    let jobs = (0..30)
+        .map(|index| (format!("old-{index}"), json!({"id":format!("old-{index}"),"state":"succeeded","startedAt":index,"output":"saved"})))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    host.persist(&jobs).unwrap();
+    *host.jobs.lock().unwrap() = jobs;
     let baseline = host.view();
     let bytes = std::fs::read(&path).unwrap();
     let blocked_temp = path.with_extension("tmp");
@@ -251,14 +252,12 @@ fn persisted_output_survives_service_restart_without_replaying_commands() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("runs.json");
     let host = Host::load(path.clone()).unwrap();
-    {
-        let mut jobs = host.jobs.lock().unwrap();
-        jobs.insert(
-            "run".into(),
-            json!({"state":"running","output":"diagnostic output"}),
-        );
-        host.persist(&jobs).unwrap();
-    }
+    let jobs = std::collections::BTreeMap::from([(
+        "run".to_owned(),
+        json!({"state":"running","output":"diagnostic output"}),
+    )]);
+    host.persist(&jobs).unwrap();
+    *host.jobs.lock().unwrap() = jobs;
     drop(host);
     let restored = Host::load(path).unwrap();
     let value = restored.view();

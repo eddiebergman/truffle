@@ -7,11 +7,11 @@ fn null_id_runtime_observation_requires_exact_live_identity_and_canonical_genera
     let record = json!({"id":id,"agent":"codex","sessionId":null});
     let live = json!({"host":"embedded","recordId":id,"agent":"codex","sessionId":null,"live":true,"generation":generation});
     assert_eq!(
-        existing_codex_runtime(&record, &[live.clone()], false),
+        existing_codex_runtime(&record, std::slice::from_ref(&live), false),
         RuntimeObservation::Observed(generation)
     );
     assert_eq!(
-        existing_codex_runtime(&record, &[live.clone()], true),
+        existing_codex_runtime(&record, std::slice::from_ref(&live), true),
         RuntimeObservation::Unavailable
     );
     for (key, value) in [("recordId", json!(uuid())), ("live", json!(false))] {

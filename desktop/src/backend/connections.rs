@@ -231,10 +231,10 @@ impl ProviderRemote {
         let mut auth = reqwest::header::HeaderValue::from_str(token)
             .map_err(|_| Error::new("Invalid token format."))?;
         auth.set_sensitive(true);
-        let request = match query {
-            Some(query) => self.client.post(url).json(&json!({"query":query})),
-            None => self.client.get(url),
-        };
+        let request = query.map_or_else(
+            || self.client.get(url),
+            |query| self.client.post(url).json(&json!({"query":query})),
+        );
         let response = request
             .header(reqwest::header::AUTHORIZATION, auth)
             .send()
@@ -337,7 +337,7 @@ pub struct SetupHost {
     generation: AtomicU64,
 }
 impl SetupHost {
-    pub fn new(profile: PathBuf) -> Result<Self> {
+    pub fn new(profile: &Path) -> Result<Self> {
         Self::with_adapters(
             profile,
             Arc::new(Keychain),
@@ -345,7 +345,7 @@ impl SetupHost {
         )
     }
     fn with_adapters(
-        profile: PathBuf,
+        profile: &Path,
         store: Arc<dyn CredentialStore>,
         remote: Arc<dyn Remote>,
     ) -> Result<Self> {
@@ -436,6 +436,7 @@ impl SetupHost {
             revision: config.revision,
             expires: now() + TTL,
         });
+        drop(pending);
         preview["previewId"] = json!(id);
         preview["expectedRevision"] = json!(config.revision);
         preview["expiresInSeconds"] = json!(TTL);
@@ -474,7 +475,10 @@ impl SetupHost {
                 "Connections changed. Validate this connection again.",
             ));
         }
-        Ok(json!({"provider":current.provider,"identity":current.identity,"profile":self.profile}))
+        let view =
+            json!({"provider":current.provider,"identity":current.identity,"profile":self.profile});
+        drop(pending);
+        Ok(view)
     }
     pub fn commit(&self, payload: &Value) -> Result<Value> {
         self.commit_with_sync(payload, |directory| {
@@ -511,6 +515,7 @@ impl SetupHost {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .mode(0o600)
             .open(directory.join("connections.lock"))?;
         lock.lock_exclusive()?;
@@ -560,6 +565,7 @@ impl SetupHost {
             return Err(Error::new("Connection configuration could not be saved. The previous connection remains active."));
         }
         pending.take();
+        drop(pending);
         let mut view = config_view(&config);
         if let Some(old) = old {
             if self
@@ -610,9 +616,7 @@ fn github_cli_token() -> Result<Zeroizing<String>> {
             .read_to_end(&mut bytes)
             .map(|_| bytes)
     });
-    let status = if let Some(status) = child.wait_timeout(Duration::from_secs(15))? {
-        status
-    } else {
+    let Some(status) = child.wait_timeout(Duration::from_secs(15))? else {
         let _ = child.kill();
         let _ = child.wait();
         let _ = reader.join();

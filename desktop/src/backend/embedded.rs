@@ -254,6 +254,7 @@ impl EmbeddedHost {
             killer: Mutex::new(child.clone_killer()),
         });
         sessions.insert(id, session.clone());
+        drop(sessions);
         let output = session.clone();
         std::thread::spawn(move || {
             let mut buffer = [0u8; 16384];
@@ -268,6 +269,7 @@ impl EmbeddedHost {
                     data.bytes.pop_front();
                     data.base += 1;
                 }
+                drop(data);
                 output.changed.notify_all();
             }
             output.alive.store(false, Ordering::Relaxed);
@@ -296,13 +298,17 @@ impl EmbeddedHost {
         killer
             .kill()
             .map_err(|_| Error::new("Could not close this agent terminal."))?;
-        let output = session.output.lock().unwrap();
-        let _wait = session
-            .changed
-            .wait_timeout_while(output, Duration::from_secs(2), |_| {
-                !session.exited.load(Ordering::Relaxed)
-            })
-            .unwrap();
+        drop(killer);
+        drop(
+            session
+                .changed
+                .wait_timeout_while(
+                    session.output.lock().unwrap(),
+                    Duration::from_secs(2),
+                    |_| !session.exited.load(Ordering::Relaxed),
+                )
+                .unwrap(),
+        );
         if !session.exited.load(Ordering::Relaxed) {
             return Err(Error::new(
                 "The agent is still stopping. Try closing its tab again.",
@@ -330,12 +336,15 @@ impl EmbeddedHost {
         let bytes = output
             .bytes
             .iter()
-            .skip((start - output.base) as usize)
+            .skip(usize::try_from(start - output.base).map_err(|_| Error::io())?)
             .take(32768)
             .copied()
             .collect::<Vec<_>>();
+        let has_more = start + (bytes.len() as u64) < output.end;
+        let truncated = reset && output.base > 0;
+        drop(output);
         Ok(
-            json!({"generation":session.generation,"cursor":start+bytes.len()as u64,"hasMore":start+(bytes.len()as u64)<output.end,"bytes":bytes,"reset":reset,"truncated":reset&&output.base>0,"alive":session.alive.load(Ordering::Relaxed)}),
+            json!({"generation":session.generation,"cursor":start+bytes.len()as u64,"hasMore":has_more,"bytes":bytes,"reset":reset,"truncated":truncated,"alive":session.alive.load(Ordering::Relaxed)}),
         )
     }
     pub fn input(&self, id: &str, data: &str) -> Result<()> {
@@ -349,6 +358,7 @@ impl EmbeddedHost {
         let mut writer = session.writer.lock().unwrap();
         writer.write_all(data.as_bytes())?;
         writer.flush()?;
+        drop(writer);
         Ok(())
     }
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<()> {
