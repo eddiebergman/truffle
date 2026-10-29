@@ -94,8 +94,10 @@ body{background:var(--bg);color:var(--text)}button,a,input,select,textarea{accen
 .titlebar-app-title{font-size:11px;color:var(--muted);white-space:nowrap;flex:0 1 58px;overflow:hidden;text-overflow:ellipsis}
 .live-agent-bar{align-self:stretch;align-items:center;gap:3px;padding:0;overflow-y:hidden;scrollbar-width:none;flex:1;min-width:0}
 .live-agent-bar::-webkit-scrollbar{display:none}
-.agent-tab{position:relative;display:flex;align-items:center;flex:0 1 auto;min-width:54px;max-width:240px;height:32px;border:1px solid transparent;border-radius:6px;overflow:hidden}
+.agent-tab{position:relative;display:flex;align-items:center;flex:1 1 0;min-width:54px;height:32px;border:1px solid transparent;border-radius:6px;overflow:hidden}
 .agent-tab:has(.selected){background:var(--overlay);border-color:#524f67}
+/* Tabs share the bar evenly; the selected tab grows to fit its title and the others share the rest. */
+.agent-tab:has(.selected){min-width:max-content}.agent-tab:has(.selected) .live-agent-words strong{max-width:420px}
 .agent-tab:hover{background:var(--overlay)}
 .agent-tab .live-agent{flex:1 1 auto;min-width:0;max-width:none;width:auto;height:30px;padding:3px 23px 3px 7px;gap:6px;border:0;border-radius:0;background:transparent}
 .agent-tab .live-agent-words{flex:1 1 50px;min-width:0;gap:0}
