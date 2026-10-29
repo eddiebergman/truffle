@@ -90,7 +90,7 @@ function loadInventory(fresh = false) {
         if (state && !document.querySelector("dialog[open]")) render();
       }
       return next;
-    } catch (_) {
+    } catch {
       return null;
     } finally {
       inventoryLoading = null;
@@ -1142,7 +1142,7 @@ async function openSavedSession(
         loadStateSnapshot({ attempts: 2 }),
         loadInventory(true),
       ]);
-    } catch (_) {
+    } catch {
       snapshot = null;
       agents = null;
     }
@@ -1182,7 +1182,7 @@ async function openSavedSession(
       try {
         selectAgent(latest, candidate);
         result.navigated = true;
-      } catch (_) {
+      } catch {
         entry.resolved = false;
         result.presentation = "pending";
       }
@@ -1205,7 +1205,7 @@ async function openSavedSession(
     if (current())
       try {
         render();
-      } catch (_) {
+      } catch {
         entry.resolved = false;
         if (outcome) outcome.presentation = "pending";
         if (notify) toast(savedSessionOpenMessage(entry));
@@ -1232,7 +1232,6 @@ let recoveryOriginal = null,
   recoveryPrepared = null,
   recoveryLifetime = 0,
   recoveryPending = false,
-  recoveryCreationUnknown = false,
   recoveryContext = null;
 function recoveryIsCurrent(lifetime) {
   return (
@@ -1285,7 +1284,6 @@ function showSessionRecovery(session, message) {
   recoveryOriginal = session;
   recoveryPrepared = null;
   recoveryPending = false;
-  recoveryCreationUnknown = false;
   recoveryContext = {
     page: source,
     key: typeof selectedAgentKey === "string" ? selectedAgentKey : null,
@@ -1649,7 +1647,7 @@ function beginManagedLaunch(id, lifetime) {
   void readManagedLaunch(current);
   return current;
 }
-async function saveExistingLaunch(values, { lifetime, open, context }) {
+async function saveExistingLaunch(values, { lifetime, open }) {
   const dialog = $("#launch-dialog"),
     current = launchEdit,
     id = values.id;
@@ -1741,7 +1739,7 @@ async function saveExistingLaunch(values, { lifetime, open, context }) {
         outcome.candidate
       )
         focusPreparedTerminal(outcome.record, outcome.candidate, returnFocus);
-    } catch (_) {
+    } catch {
       toast(
         "Session changes saved. The open outcome could not be confirmed. Inspect this saved chat before another open request.",
       );

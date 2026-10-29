@@ -20,12 +20,16 @@ let savedViewPageStates = {},
 try {
   savedViewMigrationComplete =
     localStorage.getItem("truffle-saved-view-migration") === "1";
-} catch (_) {}
+} catch {
+  // Storage can be unavailable; run the migration again.
+}
 try {
   const stored = JSON.parse(localStorage.getItem(savedViewStorageKey) || "{}");
   if (stored && typeof stored === "object" && !Array.isArray(stored))
     savedViewPageStates = stored;
-} catch (_) {}
+} catch {
+  // Storage can be unavailable or hold bad JSON; start without saved state.
+}
 function cloneSavedView(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -394,7 +398,7 @@ function currentSavedViewState(page = source) {
     )
       throw new Error();
     validateSavedViewFilter(state.draft.filter);
-  } catch (_) {
+  } catch {
     state = defaultSavedViewState(page);
     savedViewPageStates[page] = state;
   }
@@ -463,7 +467,9 @@ function persistSavedViewState() {
       savedViewStorageKey,
       JSON.stringify(savedViewPageStates),
     );
-  } catch (_) {}
+  } catch {
+    // Storage can be unavailable or full; the state stays in memory.
+  }
 }
 function savedViewAllows(item, page = source) {
   const state = currentSavedViewState(page);
@@ -615,7 +621,9 @@ async function loadSavedViews({ canApply = () => true } = {}) {
     savedViewMigrationComplete = true;
     try {
       localStorage.setItem("truffle-saved-view-migration", "1");
-    } catch (_) {}
+    } catch {
+      // Storage can be unavailable; the migration runs again next time.
+    }
     if (savedViewPages.includes(source))
       applySavedViewPresentation(currentSavedViewState().draft);
     persistSavedViewState();
@@ -1540,7 +1548,7 @@ function openSavedViewEditor() {
       if (!current.isCurrent()) return;
       if (savedViewsError) throw new Error(savedViewsError);
       presentAccepted();
-    } catch (_) {
+    } catch {
       paintFailed();
     } finally {
       finish();
@@ -1632,7 +1640,7 @@ function openSavedViewEditor() {
       if (current.isCurrent()) {
         try {
           presentAccepted();
-        } catch (_) {
+        } catch {
           paintFailed();
         }
       }
@@ -1700,7 +1708,7 @@ function openSavedViewEditor() {
             if (current.isCurrent()) {
               try {
                 presentAccepted();
-              } catch (_) {
+              } catch {
                 paintFailed();
               }
             }

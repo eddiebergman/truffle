@@ -1731,7 +1731,7 @@ search.type = "search";
 search.placeholder = "Search settings…";
 search.setAttribute("aria-label", "Search settings");
 search.oninput = filterSettings;
-const close = settingsButton(
+const settingsCloseButton = settingsButton(
   "×",
   () => {
     if (settingsDirty || settingsSaving) {
@@ -1743,7 +1743,7 @@ const close = settingsButton(
   },
   "icon-button",
 );
-close.setAttribute("aria-label", "Close settings");
+settingsCloseButton.setAttribute("aria-label", "Close settings");
 const scope = el("span", "settings-scope", "User"),
   context = el("span", "settings-context", "settings.json"),
   edit = settingsDraftButton(
@@ -1763,7 +1763,7 @@ const scope = el("span", "settings-scope", "User"),
     },
     "button settings-edit-file",
   );
-heading.append(scope, context, edit, close);
+heading.append(scope, context, edit, settingsCloseButton);
 const layout = el("div", "preferences-layout"),
   nav = el("nav", "preferences-nav");
 const navHead = el("div", "preferences-nav-head");
@@ -1789,9 +1789,9 @@ body.id = "settings-body";
 body.append(legacy);
 layout.append(nav, body);
 const footer = el("footer", "preferences-footer"),
-  status = el("span");
-status.id = "settings-status";
-status.setAttribute("role", "status");
+  settingsStatusLine = el("span");
+settingsStatusLine.id = "settings-status";
+settingsStatusLine.setAttribute("role", "status");
 const error = el("span", "inline-error");
 error.id = "settings-error";
 error.setAttribute("role", "alert");
@@ -1802,7 +1802,7 @@ const discard = settingsDraftButton(
 );
 const save = settingsButton("Save changes", savePreferences, "button primary");
 save.id = "settings-save";
-footer.append(status, error, discard, save);
+footer.append(settingsStatusLine, error, discard, save);
 const settingsFrame = el("div", "preferences-main");
 settingsFrame.append(heading, body);
 nav.prepend(navHead);

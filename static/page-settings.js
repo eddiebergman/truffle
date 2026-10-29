@@ -363,7 +363,7 @@ async function openPageVisibilitySettings(page) {
           holdFormFocus(dialog, current);
           try {
             present();
-          } catch (_) {
+          } catch {
             presentationFailed();
           } finally {
             releaseFocus(retry);
@@ -396,7 +396,7 @@ async function openPageVisibilitySettings(page) {
         if (dialog.open) {
           try {
             present();
-          } catch (_) {
+          } catch {
             presentationFailed();
           }
         } else

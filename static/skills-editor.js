@@ -150,7 +150,7 @@ async function refreshSkillEditor(current) {
     } else
       current.ui.message.textContent =
         "The save outcome is unknown. Skills were refreshed. Inspect them before saving again; this draft was not resubmitted.";
-  } catch (_) {
+  } catch {
     if (current.isCurrent())
       current.ui.message.textContent = localWriteMessage(
         current.result,

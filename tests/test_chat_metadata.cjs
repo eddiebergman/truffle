@@ -18,7 +18,7 @@ function fixture() {
     renders = 0,
     terminalFocus = 0;
   class Node {
-    constructor(tag, cls = "", text = "") {
+    constructor(tag, cls, text = "") {
       this.tag = tag;
       this.textContent = text;
       this.children = [];

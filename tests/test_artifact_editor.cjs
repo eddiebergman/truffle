@@ -27,8 +27,7 @@ function fixture({
   realLibrary = false,
   libraryRead,
 } = {}) {
-  const calls = [],
-    messages = [];
+  const calls = [];
   let libraries = 0;
   const f = base({
     handler: async (path, payload, owner) => {

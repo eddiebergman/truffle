@@ -118,7 +118,9 @@ function commandEntries() {
             resource.state || "Unknown",
             () => openCommandLink(url.href),
           );
-        } catch (_) {}
+        } catch {
+          // Not a URL; offer no link for this reference.
+        }
       }
     add("copy", "work links", record.title, () =>
       serviceClient.copyText(

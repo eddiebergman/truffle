@@ -391,7 +391,6 @@ test("late queued read cannot resurrect a result already acknowledged by an expl
   assert.equal(f.ui().host.hidden, true);
 });
 test("an authoritative later queue may reuse an expired UUID without a permanent local tombstone", async () => {
-  let acknowledged = false;
   const f = fixture(async (p) =>
     p.name === "ui.presentations.read"
       ? queued()

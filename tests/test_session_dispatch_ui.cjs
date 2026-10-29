@@ -1052,7 +1052,7 @@ test("invalid server identity or unavailable local persistence prevents lookup s
 test("accepted submit with a lost response returns the finalized read receipt and refreshes the actual review", async () => {
   let accepted = false;
   const f = reviewFixture({
-    handler: async (name, args) => {
+    handler: async (name) => {
       if (name === "chats.dispatch.read")
         return {
           operations: accepted

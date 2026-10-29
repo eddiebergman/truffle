@@ -48,6 +48,7 @@ function writeGlobal(raw, name, value) {
     if (error?.name === "TypeError")
       throw new TypeError(
         `Cannot replace const ${name} declared by a static script`,
+        { cause: error },
       );
     throw error;
   } finally {

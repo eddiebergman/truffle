@@ -17,7 +17,6 @@ function fixture(extra = {}) {
     chatDispatchRecovery: () => ({}),
     chatDispatchBlocked: () => false,
     queueMicrotask() {},
-    selectedAgentKey: "one",
     Date: class extends Date {
       static now() {
         return clock;
@@ -361,7 +360,7 @@ test("a changed source policy clears obsolete source retry and hints while uncha
 });
 test("source policy changes leave independent CI backoff intact and healthy full-sync intervals do not restart cadence", async () => {
   let requests = 0;
-  const { c, advance } = fixture({
+  const { c } = fixture({
     api: async () => {
       requests++;
       return {

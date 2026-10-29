@@ -371,7 +371,7 @@ function refreshPresentations({ force = false } = {}) {
             error: "",
           });
       paintPendingPresentations();
-    } catch (_) {
+    } catch {
       /* Preserve the last safe notice; ordinary polling does not interrupt work. */
     } finally {
       presentationPoll = null;

@@ -56,7 +56,7 @@ if (serviceClient.isDesktop) {
       try {
         await navigator.clipboard.writeText(code.textContent);
         toast("Start command copied.");
-      } catch (_) {
+      } catch {
         toast("Select and copy the command above.");
       }
     },

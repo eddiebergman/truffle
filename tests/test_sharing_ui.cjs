@@ -718,7 +718,7 @@ test("changing Recent conversation after a ready preparation invalidates it unti
       status: "ready",
     },
   ];
-  f.handlers["sharing.prepare"] = (args) => {
+  f.handlers["sharing.prepare"] = () => {
     f.server.jobs.push({
       id: "without-conversation",
       kind: "prepare",

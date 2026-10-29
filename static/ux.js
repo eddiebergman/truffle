@@ -62,7 +62,7 @@ function snoozeScheduleControl(key, entry) {
 function detachLinkButton(record, field, key) {
   const button = featureButton(
     "×",
-    async (event) => {
+    async () => {
       button.disabled = true;
       try {
         const before = (await api("/api/session/links", { id: record.id }))
@@ -131,7 +131,7 @@ function detachLinkButton(record, field, key) {
         try {
           if (!(await refreshLinks()))
             message += "; refresh to update this view";
-        } catch (error) {
+        } catch {
           message += "; dashboard refresh failed";
         }
         toast(message, undo);
@@ -247,9 +247,7 @@ document.addEventListener("keydown", (event) => {
 
 function paintReviewDraftBadges() {
   for (const button of document.querySelectorAll("[data-review-for]")) {
-    const draft = reviewDrafts()[button.dataset.reviewFor],
-      count = draft?.comments?.length || 0,
-      active = ["requested", "reviewing"].includes(draft?.run?.state);
+    const draft = reviewDrafts()[button.dataset.reviewFor];
     button.textContent = "Review";
     button.title = reviewRunLabel(draft) || "Review changes";
   }

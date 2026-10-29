@@ -761,7 +761,7 @@ test("unknown environment outcome remains sticky after GET success and A→B→A
 test("late environmentA completion does not repaint B or remove B outcome; recovery never captures stale page focus", async () => {
   const posted = deferred(),
     f = scriptFixture({
-      handler: async (path, payload, owner) => {
+      handler: async (path) => {
         if (path === "/api/sentry/environment") return posted.promise;
         throw Error("GET failed");
       },

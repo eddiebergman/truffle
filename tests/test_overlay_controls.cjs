@@ -1,7 +1,6 @@
 const { test } = require("node:test"),
   readCompactCss = require("./helpers/compact-css.cjs"),
   assert = require("node:assert/strict"),
-  fs = require("node:fs"),
   vm = require("node:vm");
 const { browserContext, loadScripts } = require("./helpers/static-script.cjs"),
   { FakeDocument, browserHost } = require("./helpers/fake-dom.cjs");

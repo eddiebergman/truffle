@@ -1,6 +1,5 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const {
   browserContext,
   loadScripts,
@@ -407,8 +406,7 @@ function visibilityNodes(f) {
 test("pending visibility save freezes edits and all dismissal routes honor the actual cancel guard", async () => {
   const f = dialogFixture();
   await f.c.openPageVisibilitySettings("sentry");
-  const { dialog, save, clear, done, category, error, checks } =
-    visibilityNodes(f);
+  const { dialog, save, clear, done, category, checks } = visibilityNodes(f);
   clear.onclick();
   checks.find((node) => node.value === "Frontend").checked = true;
   let resolve,

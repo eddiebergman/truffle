@@ -149,7 +149,9 @@ async function warmActiveDiff(record, directory, key) {
       if (activeDiffCache.key !== key) return;
       await cachedReviewFile(record, file.path, directory).catch(() => {});
     }
-  } catch (_) {}
+  } catch {
+    // Prefetching is optional; the review loads files on demand.
+  }
 }
 setInterval(syncActiveDiff, 1000);
 function reviewRunLabel(draft) {
@@ -465,7 +467,7 @@ function savedReviewUI(record, directory) {
         record.id + "\0" + directory
       ] || {}
     );
-  } catch (_) {
+  } catch {
     return {};
   }
 }
@@ -513,7 +515,9 @@ function rememberReviewUI() {
       "truffle-review-ui",
       JSON.stringify(Object.fromEntries(entries)),
     );
-  } catch (_) {}
+  } catch {
+    // Storage can be unavailable or full; the layout stays in memory.
+  }
 }
 let reviewUISaveTimer;
 function scheduleReviewUISave() {
@@ -561,7 +565,9 @@ function setReviewMode(mode) {
   reviewState.mode = mode;
   try {
     localStorage.setItem("truffle-diff-layout", mode);
-  } catch (_) {}
+  } catch {
+    // Storage can be unavailable or full; the layout stays in memory.
+  }
   for (const name of ["unified", "split"])
     $("#diff-mode-" + name).setAttribute("aria-pressed", String(name === mode));
   reviewRenderer?.setStyle(mode);
@@ -613,7 +619,9 @@ async function openDiffReview(
   try {
     if (!quick && localStorage.getItem("truffle-diff-layout") === "split")
       mode = "split";
-  } catch (_) {}
+  } catch {
+    // Storage can be unavailable; keep the default layout.
+  }
   const ui = savedReviewUI(record, directory);
   if (["split", "unified"].includes(ui.mode)) mode = ui.mode;
   const stored = sharedReviewDrafts.get(record.id);

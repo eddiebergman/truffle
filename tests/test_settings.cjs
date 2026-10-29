@@ -776,13 +776,13 @@ function settingsSaveFixture() {
     paintSettingsBody: () => draw(),
   });
   c.resetSettingsDraft(baseline);
-  let routine, shortcut, quickPanel;
+  let routine, quickPanel;
   // The real paint draws the quick actions in the Actions panel; theme and shortcut controls are drawn directly.
   function draw() {
     for (const node of nodes) if (node.draftNode) node.isConnected = false;
     const start = nodes.length;
     routine = c.settingInput(["appearance", "theme", "Theme", "text", ""]);
-    shortcut = c.shortcutInput({ id: "commands", label: "Commands" });
+    c.shortcutInput({ id: "commands", label: "Commands" });
     paint();
     quickPanel = settingsBody.children.find(
       (panel) => panel.dataset.category === "actions",

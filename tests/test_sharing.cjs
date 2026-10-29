@@ -751,7 +751,7 @@ test("initial sharing command waits for the app state bootstrap", async () => {
   const requests = [];
   const f = sharingFixture({
       state: null,
-      sharingCommand: async (name, args) => {
+      sharingCommand: async (name) => {
         requests.push(name);
         return { entries: [] };
       },

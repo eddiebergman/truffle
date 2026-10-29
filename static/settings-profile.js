@@ -82,10 +82,9 @@ function renderSettingsProfilePreview(
     return b;
   };
   const previewButton = actionButton("Preview pasted profile", async () => {
-    let raw = paste.value;
+    const raw = paste.value;
     paste.value = "";
     await read(raw);
-    raw = "";
   });
   const choose = actionButton("Choose profile file", () => file.click()),
     refresh = actionButton("Refresh preview", () => validate(profile)),

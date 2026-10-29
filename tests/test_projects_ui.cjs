@@ -1253,7 +1253,7 @@ test("a later read-only Refresh click that leaves Close focused does not transfe
 test("local status accepted with failed presentation holds focus and retries reads only", async () => {
   let reads = 0;
   const f = fixture({
-    handler: async (path, args) => {
+    handler: async (path) => {
       if (path === "/api/edit") return { revision: "ignored" };
       if (++reads === 1) throw Error("Offline");
       return {

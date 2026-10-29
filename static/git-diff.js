@@ -270,8 +270,6 @@ function agentGitSection(record, directory) {
     head = el("div", "section-heading");
   head.append(el("h3", "", "Git diff"));
   const controls = el("div", "git-header-actions");
-  const draft = reviewDrafts()[record.id],
-    count = draft?.comments?.length || 0;
   controls.append(
     featureButton(
       "Review",

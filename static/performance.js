@@ -120,7 +120,9 @@ function renderPerformancePanel() {
           if (serviceClient.isDesktop)
             try {
               profileBuild = await window.__TAURI__.core.invoke("desktop_info");
-            } catch (_) {}
+            } catch {
+              // Build details are optional in a profile.
+            }
         }
         render();
       },

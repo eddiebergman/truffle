@@ -61,7 +61,7 @@ try {
       });
     }
   }
-} catch (_) {
+} catch {
   chatPreparationStorageError =
     "Local chat recovery is unavailable or invalid. Earlier preparation or open requests may have occurred. Inspect History before clearing this local recovery data.";
 }
@@ -173,7 +173,7 @@ function captureUnavailableRecovery() {
       serialized = JSON.stringify(entries);
     if (serialized.length > 65536) return null;
     return { raw, entries, serialized, error: chatPreparationStorageError };
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -190,7 +190,7 @@ function unavailableRecoveryUnchanged(baseline) {
     )
       return false;
     return localStorage.getItem(chatPreparationKey) === baseline.raw;
-  } catch (_) {
+  } catch {
     return false;
   }
 }
@@ -372,7 +372,7 @@ function persistChatPreparations() {
     );
   try {
     localStorage.setItem(chatPreparationKey, text);
-  } catch (_) {
+  } catch {
     throw new Error(
       "Chat recovery could not be saved locally. Earlier requests may have occurred. Inspect History; do not repeat them.",
     );
@@ -588,7 +588,7 @@ function preparationUI(attempt, context, options) {
         dialog.close();
         try {
           render();
-        } catch (_) {
+        } catch {
           toast(
             "Local recovery data cleared. The view could not refresh. Refresh the view; no chat was created, opened or removed.",
           );
@@ -665,7 +665,7 @@ async function readPreparedChat(attempt) {
       loadStateSnapshot({ attempts: 2 }),
       loadInventory(true),
     ]);
-  } catch (_) {
+  } catch {
     throw new Error(
       "The chat was prepared, but its view could not refresh. Use Refresh view; do not create another chat.",
     );

@@ -507,7 +507,6 @@ function preparedFixture() {
 }
 test("actual deliberate recovery retains the named prepared record and only checks its existing open request", async () => {
   const f = preparedFixture(),
-    dialog = f.$("#recovery-dialog"),
     form = f.$("#recovery-form");
   await form.onsubmit({ preventDefault() {} });
   let ui = evaluate(f.c, 'featureForms.get($("#recovery-dialog"))');

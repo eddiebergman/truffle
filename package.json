@@ -3,13 +3,18 @@
   "private": true,
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:rust",
-    "lint:js": "prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\"",
-    "format:js": "prettier --write \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\"",
+    "lint:js": "eslint . && prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
+    "format:js": "eslint --fix . ; prettier --write \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
     "lint:css": "stylelint \"static/*.css\" && prettier --check \"static/*.css\"",
     "format:css": "prettier --write \"static/*.css\" && stylelint --fix \"static/*.css\"",
     "lint:rust": "cd desktop && cargo fmt --check && cargo clippy --all-targets"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "eslint-scope": "9.1.2",
+    "espree": "11.2.0",
+    "globals": "17.13.0",
     "prettier": "3.9.10",
     "stylelint": "17.16.0",
     "stylelint-config-standard": "40.0.0"

@@ -895,7 +895,7 @@ if (typeof document !== "undefined")
                   try {
                     await navigator.clipboard.writeText(send.uri);
                     toast("Context URI copied.");
-                  } catch (_) {
+                  } catch {
                     toast(send.uri);
                   }
                 },

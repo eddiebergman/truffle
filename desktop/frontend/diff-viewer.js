@@ -61,7 +61,9 @@ export async function highlightReviewCode(root, path) {
           }
         }
         code.replaceChildren(fragment);
-      } catch (_) {}
+      } catch {
+        // Highlighting is optional; keep the plain text.
+      }
     }),
   );
 }

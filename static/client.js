@@ -9,7 +9,9 @@ try {
         localStorage.setItem(renamed, localStorage.getItem(key));
       localStorage.removeItem(key);
     }
-} catch (_) {}
+} catch {
+  // Storage can be unavailable; the old keys stay as they are.
+}
 function createDashboardClient({
   fetch: fetcher = globalThis.fetch,
   native = null,
@@ -52,7 +54,7 @@ function createDashboardClient({
           delete data.csrf;
         }
       }
-    } catch (_) {
+    } catch {
       onConnection(false);
       throw failure("Cannot reach the local truffle service.", {});
     }

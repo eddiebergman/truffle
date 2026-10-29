@@ -13,7 +13,7 @@ briefingMarkdown.validateLink = (value) => {
   try {
     const url = new URL(value);
     return !url.username && !url.password;
-  } catch (_) {
+  } catch {
     return false;
   }
 };

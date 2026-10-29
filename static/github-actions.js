@@ -591,7 +591,9 @@ function syncChatCISourceAdmission() {
     }
     for (const [id, checked] of chatCIChecks)
       if (["disabled", "backoff"].includes(checked.reason)) {
-        const { reason, retryAt, ...retained } = checked;
+        const retained = { ...checked };
+        delete retained.reason;
+        delete retained.retryAt;
         chatCIChecks.set(id, retained);
       }
   }
@@ -747,14 +749,14 @@ async function syncActiveChatCI() {
         chatCIChecks.set(id, { at: presentation.checkedAt });
       activeChatCI.presentation = null;
       if (chatCIContext()?.key === presentation.key) render();
-    } catch (_) {
+    } catch {
       for (const id of presentation.itemIds)
         chatCIChecks.set(id, {
           ...chatCIChecks.get(id),
           reason: "presentation",
         });
     }
-  } catch (_) {
+  } catch {
     for (const pr of prs)
       chatCIChecks.set(pr.id, { ...chatCIChecks.get(pr.id), error: true });
   } finally {

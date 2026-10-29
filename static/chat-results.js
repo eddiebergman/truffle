@@ -9,14 +9,18 @@ try {
       ...JSON.parse(saved),
       command: appChatCommand(JSON.parse(saved).command),
     };
-} catch {}
+} catch {
+  // Saved results are optional; start without them.
+}
 function saveChatResults() {
   try {
     sessionStorage.setItem(
       "truffle-chat-results",
       JSON.stringify(chatSearchPage),
     );
-  } catch {}
+  } catch {
+    // Storage can be unavailable or full; results stay in memory.
+  }
 }
 function rememberChatResults(command) {
   chatSearchPage = {

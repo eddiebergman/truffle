@@ -194,7 +194,9 @@ function resourceSection(record, expanded = new Set()) {
       let url = null;
       try {
         url = new URL(ref.value);
-      } catch (_) {}
+      } catch {
+        // Not a URL; url stays null.
+      }
       if (
         url &&
         ["https:", "http:"].includes(url.protocol) &&
@@ -214,7 +216,7 @@ function resourceSection(record, expanded = new Set()) {
             try {
               await serviceClient.copyText(ref.value);
               toast("Copied resource reference.");
-            } catch (_) {
+            } catch {
               toast(ref.value);
             }
           },
@@ -251,7 +253,9 @@ function resourceSection(record, expanded = new Set()) {
         a.target = "_blank";
         a.rel = "noopener noreferrer";
         details.append(a);
-      } catch (_) {}
+      } catch {
+        // Not a URL; show no link for this reference.
+      }
     }
     const metadata = el("details", "resource-metadata"),
       label = el("summary", "", "Details"),

@@ -205,7 +205,7 @@ async function refreshFeatureForm(current) {
     } else
       current.ui.message.textContent =
         "The save outcome is unknown. The view was refreshed. Inspect it before saving again; this draft was not resubmitted.";
-  } catch (_) {
+  } catch {
     if (current.isCurrent())
       current.ui.message.textContent = localWriteMessage(
         current.result,
@@ -334,13 +334,6 @@ function dated(timestamp) {
     timeStyle: "short",
   });
 }
-function sourceLink(url, label) {
-  const link = el("a", "linear-ticket-link", label);
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
-}
 function renderRelatedWork(item) {
   const section = $("#related-work");
   section.replaceChildren(el("h3", "", "Related work"));
@@ -394,11 +387,9 @@ function renderRelatedWork(item) {
   $("#snooze-open").textContent = item.snoozed ? "Change snooze" : "◷ Snooze";
   $("#snooze-open").onclick = () => openSnooze(item);
 }
-let snoozeItem = null;
 function openSnooze(item) {
   if (!requestDialogNavigation()) return false;
   disposeFeatureForm($("#snooze-dialog"));
-  snoozeItem = item;
   $("#snooze-form").reset();
   $("#snooze-title").textContent = item.title;
   $("#snooze-custom").hidden = true;
@@ -547,7 +538,7 @@ async function refreshEnvironmentView(name, entry) {
       return;
     render();
     if (entry.kind === "accepted") environmentOutcomes.delete(name);
-  } catch (_) {
+  } catch {
     /* The request outcome stays unresolved; recovery only reads cached state. */
   } finally {
     entry.reading = false;
@@ -1115,11 +1106,9 @@ $("#briefing-form").onsubmit = async (event) => {
     () => $("#briefing-dialog").close(),
   );
 };
-let checkpointSession = null;
 function openCheckpoint(session) {
   if (!requestDialogNavigation()) return false;
   disposeFeatureForm($("#checkpoint-dialog"));
-  checkpointSession = session;
   const form = $("#checkpoint-form");
   form.reset();
   for (const key of ["done", "blocked", "next"])
@@ -1801,7 +1790,7 @@ function renderLogsView(list, controls, query) {
             JSON.stringify(displayedEntry, null, 2),
           );
           toast("Log entry copied.");
-        } catch (_) {
+        } catch {
           toast(
             "Copy unavailable. Expand " +
               (entry.source === "app-chat" ? "Diagnostic JSON" : "Raw JSON") +

@@ -41,7 +41,7 @@ const icons = { github: "⌘", linear: "◩", sentry: "◬", notes: "▤" };
 let prefs = {};
 try {
   prefs = JSON.parse(localStorage.getItem("truffle-view") || "{}");
-} catch (_) {
+} catch {
   /* Browser storage is optional. */
 }
 if (!prefs || typeof prefs !== "object") prefs = {};
@@ -177,7 +177,7 @@ function persist() {
         sentryView,
       }),
     );
-  } catch (_) {
+  } catch {
     /* The server still stores all work. */
   }
 }
@@ -266,7 +266,7 @@ async function refresh() {
       typeof window.refreshPresentations === "function"
     )
       void window.refreshPresentations();
-  } catch (_) {
+  } catch {
     $("#sync-label").textContent =
       "Server unavailable · showing last loaded view";
     $("#sync-dot").classList.add("error-dot");
@@ -1806,7 +1806,7 @@ async function refreshProjectEditor(current) {
         ? current.acceptedText || "Project saved on this computer."
         : "No project changes.",
     );
-  } catch (error) {
+  } catch {
     if (current.isCurrent()) {
       current.ui.message.textContent = current.localWriteResult
         ? localWriteMessage(current.localWriteResult, current.acceptedText)
@@ -2003,7 +2003,7 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
           : "Project status saved locally.",
       );
       projectStatusAction = null;
-    } catch (_) {
+    } catch {
       if (isCurrent()) {
         ui.message.textContent = current.unknown
           ? "The status save outcome is unknown. Inspect Projects before changing status again."
@@ -2079,7 +2079,7 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
               ui.message.textContent =
                 "This project is unavailable in the refreshed dashboard.";
           }
-        } catch (_) {
+        } catch {
           if (isCurrent())
             ui.message.textContent =
               "The project could not reload. Your newer changes were kept. Try Reload project again.";

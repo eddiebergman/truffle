@@ -46,7 +46,7 @@ function storedChatDispatchIntents() {
       throw new Error("Invalid recovery metadata");
     chatDispatchStorageError = false;
     return rows;
-  } catch (_) {
+  } catch {
     chatDispatchStorageError = true;
     return [];
   }
@@ -65,7 +65,7 @@ function storeChatDispatchIntent(intent) {
       chatDispatchStorageKey,
       JSON.stringify([...others, intent]),
     );
-  } catch (_) {
+  } catch {
     chatDispatchStorageError = true;
     throw new Error(
       "Delivery recovery storage could not be saved. Nothing was submitted.",
@@ -85,7 +85,7 @@ function clearChatDispatchIntent(recordId, operationId) {
           ),
         ),
       );
-    } catch (_) {
+    } catch {
       chatDispatchStorageError = true;
     }
 }
@@ -213,7 +213,7 @@ async function lookupChatDispatch(receipt) {
         args: { recordId, operationId },
       }),
     );
-  } catch (_) {
+  } catch {
     const known = entry.operations.find((op) => op.operationId === operationId);
     if (
       known?.finalized ||
@@ -231,7 +231,9 @@ async function lookupChatDispatch(receipt) {
     );
     try {
       await readChatDispatch(recordId, true);
-    } catch (_) {}
+    } catch {
+      // The read is a refresh; keep the state already known.
+    }
     return (
       entry.operations.find((op) => op.operationId === operationId) ||
       unresolvedChatDispatch(recordId) ||
@@ -301,7 +303,9 @@ async function submitChatDispatch(name, kind, args) {
     } catch (error) {
       try {
         await readChatDispatch(recordId, true);
-      } catch (_) {}
+      } catch {
+        // The read is a refresh; keep the state already known.
+      }
       const recovered = unresolvedChatDispatch(recordId);
       if (recovered) return recovered;
       throw error;
@@ -348,7 +352,7 @@ async function refreshChatDispatch(
     if (canPresent()) render();
     notifyChatDispatch(receipt.recordId);
     return true;
-  } catch (_) {
+  } catch {
     entry.presentation = receipt;
     notifyChatDispatch(receipt.recordId);
     return false;
@@ -403,7 +407,7 @@ function chatDispatchRecovery(
     host.refreshDispatch();
     try {
       await action();
-    } catch (_) {
+    } catch {
       failure =
         "Delivery status could not be updated. Check delivery before trying again.";
     } finally {

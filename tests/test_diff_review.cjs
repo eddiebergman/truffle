@@ -633,7 +633,7 @@ test("review comments render safe Markdown while source excerpts keep literal wh
   assert.match(body.innerHTML, /<code>x_test_bytes<\/code>/);
   assert.match(
     body.innerHTML,
-    /<pre><code class="language-python">if ready:\n    print\(&quot;&lt;script&gt;&quot;\)/,
+    /<pre><code class="language-python">if ready:\n {4}print\(&quot;&lt;script&gt;&quot;\)/,
   );
   assert.ok(!body.innerHTML.includes("<img"));
   const text =

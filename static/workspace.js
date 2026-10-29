@@ -2622,7 +2622,7 @@ $("#search").oninput = (event) => {
   workKeyboardMode = workSearchSources.has(source);
   originalSearchInput?.(event);
 };
-for (const [key, name] of Object.entries(sidebarKeys)) {
+for (const name of Object.values(sidebarKeys)) {
   const button = $('#sources [data-source="' + name + '"]');
   if (!button) continue;
   const hint = el("kbd", "nav-shortcut");
