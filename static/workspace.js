@@ -172,9 +172,10 @@ function renderLiveBar(){
       const button=el('button','live-agent '+runtime.kind+(source==='agents'&&selectedAgentKey===candidateKey(candidate)?' selected':''));
       const words=el('span','live-agent-words');words.append(el('strong','',record?.title||candidate.title||agentName(candidate.agent)));
       if(runtime.attention){const dot=el('i','agent-state-dot attention');dot.setAttribute('aria-hidden','true');button.append(dot);}
-      button.append(words,el('span','live-agent-state',runtime.summary));
-      if(index<9){button.append(el('kbd','agent-shortcut','⌘'+(index+1)));button.setAttribute('aria-keyshortcuts','Meta+'+(index+1));}
-      button.title=`${record?.title||candidate.title} · ${runtime.summary}${runtime.attention?' · Needs your attention':''}${runtime.subagents===null?' · Subagent count unavailable':''} · ${workSummary(record)||candidate.cwd||''} · Rename ⌘R · Tab / Shift+Tab to switch`;
+      button.append(words);
+      if(index<9)button.setAttribute('aria-keyshortcuts','Meta+'+(index+1));
+      button.title=`${record?.title||candidate.title} · ${runtime.summary}${runtime.attention?' · Needs your attention':''}${runtime.subagents===null?' · Subagent count unavailable':''} · ${workSummary(record)||candidate.cwd||''}${index<9?' · ⌘'+(index+1):''} · Rename ⌘R · Tab / Shift+Tab to switch${record?' · Right-click for actions':''}`;
+      if(record)tab.oncontextmenu=event=>{event.preventDefault();if(source!=='agents'||selectedAgentKey!==key)selectAgent(record,candidate);const menu=$('#live-agent-bar .agent-tab[data-agent-key="'+key+'"]')?.querySelector('.agent-menu');if(menu){menu.open=true;menu.querySelector('.text-button')?.focus();}};
       button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(source==='agents'&&selectedAgentKey===candidateKey(candidate)));button.onclick=()=>selectAgent(record,candidate);tab.append(bind(button,key,process,'tab'));
       const snooze=featureButton('',()=>snoozeAgentTab(candidate),'agent-tab-snooze');snooze.append(agentIcon('snooze'));
       snooze.title='Snooze tab · keep agent running';snooze.setAttribute('aria-label','Snooze '+(record?.title||candidate.title||agentName(candidate.agent)));tab.append(bind(snooze,key,process,'snooze'));
