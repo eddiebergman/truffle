@@ -28,15 +28,15 @@ test('unsupported status is bounded to one error and does not acknowledge resour
  const f=fixture();const good=f.status;f.status={version:2,resources:{}};await f.refresh();await f.refresh();assert.deepEqual(f.errors,['status']);assert.equal(f.calls.length,0);f.status=good;await f.refresh();assert.equal(f.calls.length,3);
 });
 
-const fs=require('node:fs'),vm=require('node:vm');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
 test('settings and visibility loaders discard delayed background responses after editing begins',async()=>{
- for(const [file,start,end,functionName,globalName,next]of [
-  ['settings.js','async function loadAppSettings(','function focusPageSearch(','loadAppSettings','appSettings',{revision:2,values:{theme:'light'}}],
-  ['page-settings.js','async function loadPageSettings(','function pageSettingsGear(','loadPageSettings','pageSettingsDocument',{revision:2,pages:{}}]
+ for(const [file,functionName,globalName,next]of [
+  ['settings.js','loadAppSettings','appSettings',{revision:2,values:{theme:'light'}}],
+  ['page-settings.js','loadPageSettings','pageSettingsDocument',{revision:2,pages:{}}]
  ]){
-  const source=fs.readFileSync('static/'+file,'utf8');let release,allow=true,applied=0;const gate=new Promise(resolve=>release=resolve),previous={revision:1};
-  const c=vm.createContext({console,api:async path=>{await gate;return path==='/api/themes'?{themes:{}}:next;},$:()=>({open:false}),window:{truffleThemeCatalog:{}},applyAppSettings:()=>applied++,render:()=>applied++,[globalName]:previous});
-  vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
+  let release,allow=true,applied=0;const gate=new Promise(resolve=>release=resolve),previous={revision:1};
+  const c=browserContext({console,api:async path=>{await gate;return path==='/api/themes'?{themes:{}}:next;},document:{querySelector:()=>({open:false})},window:{truffleThemeCatalog:{}},applyAppSettings:()=>applied++,render:()=>applied++,[globalName]:previous});
+  loadScripts(c,['static/client.js','static/app.js','static/features.js','static/'+file]);
   const pending=c[functionName]({canApply:()=>allow});allow=false;release();assert.equal(await pending,null);assert.equal(c[globalName],previous);assert.equal(applied,0);
   allow=true;await c[functionName]({canApply:()=>allow});assert.equal(c[globalName],next);assert.equal(applied,1);
  }
