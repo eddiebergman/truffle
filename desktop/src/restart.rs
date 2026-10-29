@@ -189,9 +189,9 @@ fn daemon(root: &Path) -> Result<Option<Value>> {
         }
     }
 }
-fn daemon_request(root: &Path, p: Value) -> Result<Value> {
+fn daemon_request(root: &Path, p: &Value) -> Result<Value> {
     let dir = backend::terminal_daemon::socket_directory(&data(root)).map_err(|e| e.message)?;
-    backend::terminal_daemon::call(&dir, &p).map_err(|e| e.message)
+    backend::terminal_daemon::call(&dir, p).map_err(|e| e.message)
 }
 fn inspect(root: &Path, url: &str) -> Result<Value> {
     runtime(root, url)?;
@@ -200,7 +200,7 @@ fn inspect(root: &Path, url: &str) -> Result<Value> {
     let inventory = if pid.is_some() {
         api(url, "/api/agents", None)?
     } else {
-        json!({"candidates":if host.is_some(){daemon_request(root,json!({"op":"inventory"}))?}else{json!([])}})
+        json!({"candidates":if host.is_some(){daemon_request(root,&json!({"op":"inventory"}))?}else{json!([])}})
     };
     if !inventory["warning"].is_null() {
         return Err(
@@ -212,7 +212,7 @@ fn inspect(root: &Path, url: &str) -> Result<Value> {
         .filter(|c| c["live"] == true)
         .collect::<Vec<_>>();
     let daemon_live = if host.is_some() {
-        arr(&daemon_request(root, json!({"op":"inventory"}))?)
+        arr(&daemon_request(root, &json!({"op":"inventory"}))?)
     } else {
         vec![]
     };
@@ -495,7 +495,7 @@ fn restart_terminal_daemon(
     interrupted: &mut bool,
 ) -> Result<()> {
     if let Some(host) = daemon(root)? {
-        let actual = arr(&daemon_request(root, json!({"op":"inventory"}))?);
+        let actual = arr(&daemon_request(root, &json!({"op":"inventory"}))?);
         if actual.iter().filter(|r| r["live"] == true).any(|r| {
             !records
                 .iter()
@@ -512,7 +512,7 @@ fn restart_terminal_daemon(
             *interrupted = true;
             daemon_request(
                 root,
-                json!({"op":"close","id":candidate["recordId"],"generation":candidate["generation"]}),
+                &json!({"op":"close","id":candidate["recordId"],"generation":candidate["generation"]}),
             )?;
             *touched = true;
         }
