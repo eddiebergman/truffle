@@ -57,11 +57,12 @@ impl Fixture {
         );
         serde_json::from_slice(&out.stdout).unwrap()
     }
-    fn rpc(&self, p: Value) -> Value {
+    fn rpc(&self, p: &Value) -> Value {
         let mut s = UnixStream::connect(self.socket.join("terminal.sock")).unwrap();
         s.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
         let bytes = serde_json::to_vec(&json!({"protocol":1,"request":p})).unwrap();
-        s.write_all(&(bytes.len() as u32).to_be_bytes()).unwrap();
+        s.write_all(&u32::try_from(bytes.len()).unwrap().to_be_bytes())
+            .unwrap();
         s.write_all(&bytes).unwrap();
         let mut n = [0; 4];
         s.read_exact(&mut n).unwrap();
@@ -108,9 +109,12 @@ impl Drop for Fixture {
         // These PIDs come only from this temporary profile, never the user's dashboard.
         let runtime = self.root.path().join("data/runtime.json");
         if runtime.exists() {
-            if let Some(pid) = read(runtime)["pid"].as_i64() {
+            if let Some(pid) = read(runtime)["pid"]
+                .as_i64()
+                .and_then(|pid| libc::pid_t::try_from(pid).ok())
+            {
                 unsafe {
-                    libc::kill(pid as i32, libc::SIGTERM);
+                    libc::kill(pid, libc::SIGTERM);
                 }
             }
         }
@@ -119,7 +123,7 @@ impl Drop for Fixture {
                 let bytes =
                     serde_json::to_vec(&json!({"protocol":1,"request":{"op":"health"}})).unwrap();
                 let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
-                let _ = s.write_all(&(bytes.len() as u32).to_be_bytes());
+                let _ = s.write_all(&u32::try_from(bytes.len()).unwrap().to_be_bytes());
                 let _ = s.write_all(&bytes);
                 let mut n = [0; 4];
                 if s.read_exact(&mut n).is_ok() {
@@ -128,9 +132,12 @@ impl Drop for Fixture {
                         let mut out = vec![0; size];
                         if s.read_exact(&mut out).is_ok() {
                             if let Ok(v) = serde_json::from_slice::<Value>(&out) {
-                                if let Some(pid) = v["value"]["pid"].as_i64() {
+                                if let Some(pid) = v["value"]["pid"]
+                                    .as_i64()
+                                    .and_then(|pid| libc::pid_t::try_from(pid).ok())
+                                {
                                     unsafe {
-                                        libc::kill(pid as i32, libc::SIGTERM);
+                                        libc::kill(pid, libc::SIGTERM);
                                     }
                                 }
                             }
@@ -141,6 +148,26 @@ impl Drop for Fixture {
         }
     }
 }
+fn install_fake_agent(path: &Path) {
+    let fake = path.join("bin/claude");
+    fs::write(&fake,"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/agent-args\"\npwd > \"$HOME/agent-cwd\"\nexec /bin/sh -i\n").unwrap();
+    fs::set_permissions(fake, fs::Permissions::from_mode(0o700)).unwrap();
+}
+fn terminal_socket(data: &Path) -> PathBuf {
+    let hash = context_kit::sha256(data.to_string_lossy().as_bytes());
+    PathBuf::from(format!(
+        "/tmp/truffle-pty-{}-{}",
+        unsafe { libc::geteuid() },
+        &hash[..16]
+    ))
+}
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
+}
 #[test]
 fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
     let root = tempfile::tempdir().unwrap();
@@ -150,9 +177,7 @@ fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
     fs::create_dir(path.join(".claude")).unwrap();
     let cwd = path.join("worktree with spaces");
     fs::create_dir(&cwd).unwrap();
-    let fake = path.join("bin/claude");
-    fs::write(&fake,"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/agent-args\"\npwd > \"$HOME/agent-cwd\"\nexec /bin/sh -i\n").unwrap();
-    fs::set_permissions(fake, fs::Permissions::from_mode(0o700)).unwrap();
+    install_fake_agent(&path);
     let id = uuid::Uuid::new_v4().to_string();
     let sid = uuid::Uuid::new_v4().to_string();
     let data = path.join("data/state.json");
@@ -160,20 +185,10 @@ fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
         &data,
         &json!({"version":1,"sessions":[{"id":id,"sessionId":sid,"agent":"claude","title":"Restart fixture","cwd":cwd,"destination":"embedded","items":[]}],"sources":{"github":{"disabled":true},"linear":{"disabled":true},"sentry":{"disabled":true}}}),
     );
-    let hash = context_kit::sha256(data.to_string_lossy().as_bytes());
-    let socket = PathBuf::from(format!(
-        "/tmp/truffle-pty-{}-{}",
-        unsafe { libc::geteuid() },
-        &hash[..16]
-    ));
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
+    let port = free_port();
     let f = Fixture {
         root,
-        socket,
+        socket: terminal_socket(&data),
         url: format!("http://127.0.0.1:{port}"),
     };
     let mut old = f
@@ -223,20 +238,22 @@ fn restart_migrates_legacy_preserves_live_shell_and_resumes_terminal_host() {
     assert_eq!(before["preserveTerminals"], true);
     let generation = before["sessions"][0]["generation"].clone();
     let daemon = before["daemonPid"].clone();
-    f.rpc(json!({"op":"input","id":id,"data":"export TRUFFLE_RESTART_PROOF=still-in-memory\n"}));
+    f.rpc(&json!({"op":"input","id":id,"data":"export TRUFFLE_RESTART_PROOF=still-in-memory\n"}));
     std::thread::sleep(Duration::from_millis(150));
     f.restart("service");
     let after = f.preview();
     assert_eq!(after["sessions"][0]["generation"], generation);
     assert_eq!(after["daemonPid"], daemon);
-    f.rpc(json!({"op":"input","id":id,"data":"printf 'PROOF:%s\\n' \"$TRUFFLE_RESTART_PROOF\"\n"}));
+    f.rpc(
+        &json!({"op":"input","id":id,"data":"printf 'PROOF:%s\\n' \"$TRUFFLE_RESTART_PROOF\"\n"}),
+    );
     wait(|| {
-        let p = f.rpc(json!({"op":"poll","id":id,"cursor":0,"generation":""}));
+        let p = f.rpc(&json!({"op":"poll","id":id,"cursor":0,"generation":""}));
         let bytes = p["bytes"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|v| v.as_u64().unwrap() as u8)
+            .map(|v| u8::try_from(v.as_u64().unwrap()).unwrap())
             .collect::<Vec<_>>();
         String::from_utf8_lossy(&bytes).contains("PROOF:still-in-memory")
     });
