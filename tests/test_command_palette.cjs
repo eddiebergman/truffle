@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
-const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs'),{FakeDocument}=require('./helpers/fake-dom.cjs');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs'),{FakeDocument,browserHost}=require('./helpers/fake-dom.cjs');
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 // Static scripts in index.html order, up to and with `file`.
 const pageScripts=[...fs.readFileSync('static/index.html','utf8').matchAll(/<script src="\/([^"]+)"/g)].map(match=>'static/'+match[1]).filter(file=>!file.startsWith('static/vendor/xterm')&&file!=='static/vendor/addon-fit.js');
 const scriptsThrough=file=>pageScripts.slice(0,pageScripts.findIndex(name=>name===file)+1);
@@ -83,12 +84,18 @@ test('focused command Enter runs that row while close control Enter keeps its na
 });
 
 
-test('configured Cmd+K honors the actual saving filter-editor cancel guard and opens only after cancellation is allowed',()=>{
- const f=paletteFixture({through:'static/settings.js'}),views=fs.readFileSync('static/views.js','utf8'),dialog=f.$('#saved-view-editor'),field=f.$('#filter-field');dialog.open=true;field.focus();
- Object.assign(f.c,{dialog,saving:true,settingsDirty:false,settingsSaving:false,chordFromEvent:event=>event.metaKey&&event.key==='k'?'Primary+K':'',appSettings:{values:{keybindings:{commands:'Primary+K'}}}});
- evaluate(f.c,views.split('\n').find(line=>line.includes("dialog.addEventListener('cancel'")));
+test('configured Cmd+K honors the actual saving filter-editor cancel guard and opens only after cancellation is allowed',async()=>{
+ const f=paletteFixture({through:'static/settings.js'}),dialog=f.$('#saved-view-editor'),field=f.$('#filter-field'),reload=deferred(),doc=new FakeDocument(),el=f.c.el;
+ const viewState={id:'',draft:{parent:'github',lifecycle:'active',filter:{op:'all',conditions:[]},query:'',groupBy:'status'}};
+ Object.assign(f.c,{settingsDirty:false,settingsSaving:false,chordFromEvent:event=>event.metaKey&&event.key==='k'?'Primary+K':'',appSettings:{values:{keybindings:{commands:'Primary+K'}}},currentSavedViewState:()=>viewState,api:()=>reload.promise,Option:browserHost().Option});
+ loadScripts(f.c,'static/views.js');
+ // The real editor opens on the fixture dialog, so the palette sees it open; its contents are tolerant fake elements.
+ Object.assign(dialog,{isConnected:true,remove(){}});f.c.document.body=doc.body;f.c.el=(tag,cls,text)=>tag==='dialog'?dialog:Object.assign(doc.createElement(tag),{className:cls||'',textContent:text??''});
+ try{f.c.openSavedViewEditor();}finally{f.c.el=el;}
+ // A pending Reload views holds the editor's saving guard.
+ dialog.children.find(node=>String(node.className).includes('saved-view-editor-actions')).children.find(node=>node.textContent==='Reload views').onclick();field.focus();
  f.$('#action-query').value='Preserve pending query';f.key('k',{metaKey:true});assert.equal(dialog.open,true);assert.notEqual(f.$('#action-palette').open,true);assert.equal(f.entryBuilds,0);assert.equal(f.active,field);assert.equal(f.$('#action-query').value,'Preserve pending query');
- f.c.saving=false;f.key('k',{metaKey:true});assert.equal(dialog.open,false);assert.equal(f.$('#action-palette').open,true);assert.equal(f.entryBuilds,1);assert.equal(f.active,f.$('#action-query'));assert.equal(f.$('#action-query').value,'');
+ reload.reject(Error('Reload failed'));await new Promise(resolve=>setImmediate(resolve));f.key('k',{metaKey:true});assert.equal(dialog.open,false);assert.equal(f.$('#action-palette').open,true);assert.equal(f.entryBuilds,1);assert.equal(f.active,f.$('#action-query'));assert.equal(f.$('#action-query').value,'');
 });
 
 test('palette dismisses topmost dialogs first and a veto leaves lower dialogs untouched',()=>{
