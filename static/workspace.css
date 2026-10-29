@@ -354,7 +354,7 @@ button.git-file-row { border:0; background:transparent; width:100%; padding:0; t
 .agent-page .embedded-terminal{height:calc(calc(100dvh / var(--ui-scale,1)) - var(--titlebar-height) - 24px)}
 .agent-context-grid{max-height:calc(calc(100dvh / var(--ui-scale,1)) - var(--titlebar-height) - 24px)}
 .left-sidebar-collapsed .sidebar{display:none}.left-sidebar-collapsed .shell{grid-template-columns:minmax(0,1fr)}
-.active-agent-tab{flex:0 1 max-content;max-width:none;min-width:120px;overflow:visible}
+.active-agent-tab{overflow:visible}
 .active-agent-tab .live-agent-state{max-width:none}
 .agent-tab .agent-menu{position:absolute;right:3px;bottom:0;width:0;height:0}
 .agent-tab .agent-menu>summary{display:none}
