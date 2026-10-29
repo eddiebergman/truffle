@@ -1,10 +1,11 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('static/feedback.js','utf8'),chat=fs.readFileSync('static/app-chat.js','utf8');
+const test=require('node:test'),assert=require('node:assert/strict');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
 async function fixture({draft='',pending=false,attachments=0,scrollTop=500,setup=false,hidden=false,viewport=500,starEligible=false,page='all',candidates=[],record=null}={}){
  const closeEvents=[];
  class Node{
-  constructor(tag,cls='',text=''){this.tagName=tag.toUpperCase();this.className=cls;this.textContent=text;this.value='';this.children=[];this.attrs={};this.hidden=false;this.open=false;this.listeners={};}
+  constructor(tag,cls='',text=''){this.tagName=tag.toUpperCase();this.className=cls||'';this.textContent=text;this.value='';this.children=[];this.attrs={};this.hidden=false;this.open=false;this.listeners={};}
+  get classList(){const names=()=>this.className.split(' ').filter(Boolean);return {add:name=>{this.className=[...names(),name].join(' ');},toggle:(name,on)=>{this.className=[...names().filter(item=>item!==name),...(on?[name]:[])].join(' ');}};}
   append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node);}}
   replaceChildren(...nodes){this.children=[];this.append(...nodes);}
   setAttribute(key,value){this.attrs[key]=value;}
@@ -20,19 +21,25 @@ async function fixture({draft='',pending=false,attachments=0,scrollTop=500,setup
   focus(){if(document.activeElement)document.activeElement.focused=false;this.focused=true;document.activeElement=this;}
   closest(selector){for(let node=this;node;node=node.parent)if(selector.split(',').some(part=>node.matches(part)))return node;return null;}
  }
- const body=new Node('body'),panel=new Node('section');panel.id='app-chat-panel';panel.hidden=hidden;
- const conversation=new Node('div','app-chat-conversation'),messages=new Node('div','app-chat-messages'),assistant=new Node('article','is-assistant'),inline=new Node('section');inline.id='app-chat-setup';inline.hidden=!setup;messages.setAttribute('aria-busy','false');messages.append(assistant);conversation.append(messages,inline);
- const form=new Node('form','app-chat-form'),input=new Node('textarea');input.value=draft;form.append(input);const newChat=new Node('button','app-chat-new');panel.append(newChat,conversation,form);body.append(panel);
- let position=scrollTop,writes=0;Object.defineProperties(conversation,{scrollHeight:{get:()=>1000},clientHeight:{get:()=>viewport-(body.querySelector('.app-feedback-hint')?80:0)},scrollTop:{get:()=>Math.min(position,1000-conversation.clientHeight),set:value=>{writes++;position=Math.max(0,Math.min(value,1000-conversation.clientHeight));}}});
+ // The work page controls that the App chat context reads.
+ const body=new Node('body'),search=new Node('input'),groupBy=new Node('select');search.id='search';groupBy.id='group-by';body.append(search,groupBy);
  let clock=1000000;const calls=[],intervals=[],prepared=[];const feedback={progress:{revision:1,hint:'unseen',star:'unseen'},config:{repository:'https://example.invalid/repo',feedbackText:'Help improve Truffle'},starEligible};
- const document={body,hidden:false,activeElement:null,querySelector:selector=>body.querySelector(selector),addEventListener(){}};
- const c=vm.createContext({window:{truffleChatImages:{count:()=>attachments}},document,Date:{now:()=>clock},TextEncoder,URLSearchParams,source:page,liveCandidates:()=>candidates,currentAgentRecord:()=>record,pending,open:false,input,showError:()=>{},update:()=>prepared.push('update'),api:async(path,payload)=>{calls.push({path,payload});if(payload)feedback.progress={...feedback.progress,revision:2,hint:'dismissed'};return structuredClone(feedback);},el:(tag,cls,text)=>new Node(tag,cls,text),featureButton:(text,onclick,cls)=>Object.assign(new Node('button',cls,text),{onclick}),$:selector=>document.querySelector(selector),toast(){},setInterval:fn=>intervals.push(fn)});
- vm.runInContext(chat.slice(chat.indexOf('  window.prepareAppChatMessage='),chat.indexOf('  window.openAppChatSetup=')),c);vm.runInContext(source,c);await Promise.resolve();await Promise.resolve();
+ const document={body,hidden:false,activeElement:null,querySelector:selector=>body.querySelector(selector),querySelectorAll:selector=>body.descendants().filter(node=>node.matches(selector)),addEventListener(){}};
+ const api=async(path,payload)=>{calls.push({path,payload});if(payload)feedback.progress={...feedback.progress,revision:2,hint:'dismissed'};return structuredClone(feedback);};
+ const c=browserContext({module:{exports:{}},window:{truffleChatImages:{count:()=>attachments},addEventListener(){}},document,Date:{now:()=>clock},TextEncoder,URLSearchParams,source:page,statusFilter:{value:'all'},scopePrefs:{},sourceNames:{},registerRenderHook(){},setTimeout:()=>0,clearTimeout(){},liveCandidates:()=>candidates,currentAgentRecord:()=>record,api,el:(tag,cls,text)=>new Node(tag,cls,text),featureButton:(text,onclick,cls)=>Object.assign(new Node('button',cls,text),{onclick}),$:selector=>document.querySelector(selector),toast(){},setInterval:fn=>intervals.push(fn)});
+ const keepHost=['window','document','setInterval'];loadScripts(c,'static/app-chat.js',{keepHost});
+ // App chat builds its own panel; a running reply comes from its real poll.
+ const chat=c.module.exports.appChatPanel,panel=c.$('#app-chat-panel'),conversation=c.$('.app-chat-conversation'),inline=c.$('#app-chat-setup'),input=c.$('.app-chat-form').querySelector('textarea'),launcher=c.$('#app-chat-toggle');
+ if(pending){c.api=async()=>({messages:[],job:{id:'running-reply',state:'running'}});await chat.poll();c.api=api;}
+ panel.hidden=hidden;inline.hidden=!setup;input.value=draft;c.$('.app-chat-messages').append(new Node('article','is-assistant'));
+ const mark=launcher.setAttribute.bind(launcher);launcher.setAttribute=(key,value)=>{if(key==='aria-busy')prepared.push('update');mark(key,value);};
+ let position=scrollTop,writes=0;Object.defineProperties(conversation,{scrollHeight:{get:()=>1000},clientHeight:{get:()=>viewport-(body.querySelector('.app-feedback-hint')?80:0)},scrollTop:{get:()=>Math.min(position,1000-conversation.clientHeight),set:value=>{writes++;position=Math.max(0,Math.min(value,1000-conversation.clientHeight));}}});
+ loadScripts(c,'static/feedback.js',{keepHost});await Promise.resolve();await Promise.resolve();
  const openDraft=(title='Feedback title',description='Feedback body')=>{c.window.openFeedbackDraft({title,body:description});const dialog=document.querySelector('#feedback-draft');return {dialog,title:dialog.querySelector('input'),body:dialog.querySelector('textarea'),ask:dialog.descendants().find(node=>node.textContent==='Ask the app assistant'),error:dialog.descendants().find(node=>node.attrs.role==='alert')};};
- return {c,document,panel,conversation,input,inline,calls,prepared,openDraft,advance:milliseconds=>{clock+=milliseconds;},flushClose:()=>{for(const event of closeEvents.splice(0))event();},check:intervals[0],get writes(){return writes;}};
+ return {c,chat,document,panel,conversation,input,inline,calls,prepared,openDraft,advance:milliseconds=>{clock+=milliseconds;},flushClose:()=>{for(const event of closeEvents.splice(0))event();},check:intervals[0],get writes(){return writes;}};
 }
 test('feedback Ask prepares a full unsent draft through the existing helper and closes only after success',async()=>{
- const f=await fixture(),draft=f.openDraft('A precise title','Reproduction\nwith a second line.'),calls=f.calls.length;draft.ask.onclick();f.flushClose();assert.equal(f.input.value,'Help me draft a Truffle issue about: A precise title\n\nReproduction\nwith a second line.');assert.equal(f.c.open,true);assert.equal(f.input.focused,true);assert.equal(draft.dialog.open,false);assert.equal(f.calls.length,calls);assert.equal(draft.title.value,'A precise title');assert.equal(draft.body.value,'Reproduction\nwith a second line.');
+ const f=await fixture(),draft=f.openDraft('A precise title','Reproduction\nwith a second line.'),calls=f.calls.length;draft.ask.onclick();f.flushClose();assert.equal(f.input.value,'Help me draft a Truffle issue about: A precise title\n\nReproduction\nwith a second line.');assert.equal(f.chat.open,true);assert.equal(f.input.focused,true);assert.equal(draft.dialog.open,false);assert.equal(f.calls.length,calls);assert.equal(draft.title.value,'A precise title');assert.equal(draft.body.value,'Reproduction\nwith a second line.');
 });
 test('feedback Ask preserves source, draft and attachments when preparation is rejected',async()=>{
  for(const options of [{draft:'Existing unsent message'},{pending:true},{attachments:1}]){
