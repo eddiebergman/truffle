@@ -13,10 +13,10 @@ fn expected(view: &Value, patch: &Value) -> Value {
     }
     expected
 }
-fn patch(repo: &Repository, baseline: &Value, patch: Value) -> Result<Value> {
+fn patch(repo: &Repository, baseline: &Value, patch: &Value) -> Result<Value> {
     update(
         repo,
-        &json!({"id":baseline["project"]["id"],"expected":expected(baseline,&patch),"patch":patch}),
+        &json!({"id":baseline["project"]["id"],"expected":expected(baseline,patch),"patch":patch}),
     )
 }
 #[test]
@@ -35,8 +35,8 @@ fn projects_patch_preserves_latest_other_fields_unknown_metadata_and_status_over
     let baseline = read(&repo, &json!({"id":id})).unwrap();
     assert_eq!(baseline["project"]["status"], "blocked");
     assert!(!baseline.to_string().contains("extension marker"));
-    patch(&repo, &baseline, json!({"detail":"Concurrent detail"})).unwrap();
-    let changed = patch(&repo, &baseline, json!({"title":"New title"})).unwrap();
+    patch(&repo, &baseline, &json!({"detail":"Concurrent detail"})).unwrap();
+    let changed = patch(&repo, &baseline, &json!({"title":"New title"})).unwrap();
     assert_eq!(changed["changedFields"], json!(["title"]));
     assert_eq!(changed["project"]["detail"], "Concurrent detail");
     assert_eq!(changed["project"]["status"], "blocked");
@@ -63,7 +63,7 @@ fn projects_status_tokens_guard_raw_and_override_and_only_explicit_status_clears
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        patch(&repo, &baseline, json!({"status":"done"}))
+        patch(&repo, &baseline, &json!({"status":"done"}))
             .unwrap_err()
             .status,
         409
@@ -72,7 +72,7 @@ fn projects_status_tokens_guard_raw_and_override_and_only_explicit_status_clears
         patch(
             &repo,
             &baseline,
-            json!({"title":"Must remain initial","status":"done"})
+            &json!({"title":"Must remain initial","status":"done"})
         )
         .unwrap_err()
         .status,
@@ -80,7 +80,7 @@ fn projects_status_tokens_guard_raw_and_override_and_only_explicit_status_clears
     );
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    let result = patch(&repo, &current, json!({"status":"done"})).unwrap();
+    let result = patch(&repo, &current, &json!({"status":"done"})).unwrap();
     assert_eq!(result["project"]["status"], "done");
     let state = repo.state.lock().unwrap().clone();
     assert_eq!(state["notes"][0]["status"], "done");
@@ -88,7 +88,7 @@ fn projects_status_tokens_guard_raw_and_override_and_only_explicit_status_clears
     assert_eq!(state["overrides"][id]["hidden"], true);
     assert_eq!(state["overrides"][id]["futureNs"], 7);
     // A status action does not invalidate a captured token for an unchanged title.
-    patch(&repo, &baseline, json!({"title":"Independent title"})).unwrap();
+    patch(&repo, &baseline, &json!({"title":"Independent title"})).unwrap();
     assert_eq!(
         read(&repo, &json!({"id":id})).unwrap()["project"]["status"],
         "done"
@@ -96,7 +96,7 @@ fn projects_status_tokens_guard_raw_and_override_and_only_explicit_status_clears
     let baseline = read(&repo, &json!({"id":id})).unwrap();
     super::super::agent_access::update_work(&repo, &json!({"id":id,"status":"blocked"})).unwrap();
     assert_eq!(
-        patch(&repo, &baseline, json!({"status":"todo"}))
+        patch(&repo, &baseline, &json!({"status":"todo"}))
             .unwrap_err()
             .status,
         409
@@ -121,7 +121,7 @@ fn projects_same_field_race_has_one_winner_and_unrelated_field_races_both_commit
                 let mut change = json!({});
                 change[field] = json!(format!("value-{index}"));
                 gate.wait();
-                patch(&repo, &baseline, change)
+                patch(&repo, &baseline, &change)
             }));
         }
         gate.wait();
@@ -264,7 +264,7 @@ fn projects_failed_canonical_save_never_changes_metadata_or_status_override() {
     let bytes = std::fs::read(&repo.data).unwrap();
     std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
     assert_eq!(
-        patch(&repo, &baseline, json!({"status":"done"}))
+        patch(&repo, &baseline, &json!({"status":"done"}))
             .unwrap_err()
             .status,
         500
@@ -273,7 +273,7 @@ fn projects_failed_canonical_save_never_changes_metadata_or_status_override() {
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     std::fs::remove_dir(repo.data.with_extension("tmp")).unwrap();
-    patch(&repo, &baseline, json!({"status":"done"})).unwrap();
+    patch(&repo, &baseline, &json!({"status":"done"})).unwrap();
     assert_eq!(
         read(&repo, &json!({"id":id})).unwrap()["project"]["status"],
         "done"

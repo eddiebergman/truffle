@@ -64,10 +64,10 @@ fn temporal_filters_match_utc_boundaries_and_rolling_windows() {
             let older: Predicate =
                 serde_json::from_value(json!({"op":"olderThan","field":field,"days":7})).unwrap();
             let mut item = json!({"source":source});
-            item[field] = json!(time - 7.0 * 86400.0);
+            item[field] = json!(7.0f64.mul_add(-86400.0, time));
             assert!(matches_filter_at(&within, &item, time));
             assert!(!matches_filter_at(&older, &item, time));
-            item[field] = json!(time - 7.0 * 86400.0 - 0.001);
+            item[field] = json!(7.0f64.mul_add(-86400.0, time) - 0.001);
             assert!(!matches_filter_at(&within, &item, time));
             assert!(matches_filter_at(&older, &item, time));
             item[field] = json!(time + 1.0);
@@ -116,9 +116,11 @@ fn temporal_filters_match_utc_boundaries_and_rolling_windows() {
 #[test]
 fn calendar_filters_use_saved_timezones_and_calendar_days_across_dst() {
     let timestamp = |value: &str| {
-        chrono::DateTime::parse_from_rfc3339(value)
-            .unwrap()
-            .timestamp() as f64
+        exact_f64(
+            chrono::DateTime::parse_from_rfc3339(value)
+                .unwrap()
+                .timestamp(),
+        )
     };
     for (time, before, first, last, after) in [
         (

@@ -2,10 +2,9 @@
 use super::{json, Error, Repository, Result, Value};
 
 fn status(document: Result<Value>, message: &str) -> Value {
-    match document.and_then(|value| Ok(context_kit::sha256(&serde_json::to_vec(&value)?))) {
-        Ok(token) => json!({"token":token}),
-        Err(_) => json!({"error":message}),
-    }
+    document
+        .and_then(|value| Ok(context_kit::sha256(&serde_json::to_vec(&value)?)))
+        .map_or_else(|_| json!({"error":message}), |token| json!({"token":token}))
 }
 fn settings(repo: &Repository) -> Result<Value> {
     let document = repo.settings.view();

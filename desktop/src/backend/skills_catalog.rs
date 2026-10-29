@@ -74,13 +74,18 @@ pub fn discover(user_home: &Path, projects: &[PathBuf], application_skills: &Pat
 
 fn project_directories(project: &Path) -> Vec<PathBuf> {
     let ancestors = project.ancestors().take(16).collect::<Vec<_>>();
-    match ancestors.iter().position(|path| path.join(".git").exists()) {
-        Some(index) => ancestors[..=index]
-            .iter()
-            .map(|path| path.to_path_buf())
-            .collect(),
-        None => vec![project.to_path_buf()],
-    }
+    ancestors
+        .iter()
+        .position(|path| path.join(".git").exists())
+        .map_or_else(
+            || vec![project.to_path_buf()],
+            |index| {
+                ancestors[..=index]
+                    .iter()
+                    .map(|path| path.to_path_buf())
+                    .collect()
+            },
+        )
 }
 
 fn scan(roots: &[Root]) -> Value {

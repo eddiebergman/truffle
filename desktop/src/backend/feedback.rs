@@ -24,14 +24,13 @@ pub fn view(repo: &Repository) -> Result<Value> {
     {
         return Err(Error::new("Invalid feedback configuration."));
     }
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    let current = progress(&state["feedback"]);
+    let current = progress(&repo.state.lock().map_err(|_| Error::io())?["feedback"]);
     let eligible = !repo.demo
         && current["star"] == "unseen"
         && arr(&current["days"]).len() >= 2
-        && current["firstUsedAt"].as_f64().is_some_and(|t| {
-            now() - t >= config["starAfterDays"].as_u64().unwrap() as f64 * 86400.0
-        });
+        && current["firstUsedAt"]
+            .as_f64()
+            .is_some_and(|t| now() - t >= config["starAfterDays"].as_f64().unwrap() * 86400.0);
     Ok(json!({"config":config,"progress":current,"starEligible":eligible,"demo":repo.demo}))
 }
 fn advance(previous: &Value, p: &Value) -> Result<Value> {
@@ -80,7 +79,7 @@ mod eligibility_tests {
         let tmp = tempfile::tempdir().unwrap();
         let repo = Repository::open(tmp.path().into(), None, false).unwrap();
         assert_eq!(view(&repo).unwrap()["starEligible"], false);
-        repo.transaction(|s|{s["feedback"]=json!({"version":1,"revision":0,"days":["first","second"],"firstUsedAt":now()-172801.0,"star":"unseen","hint":"unseen"});Ok(())}).unwrap();
+        repo.transaction(|s|{s["feedback"]=json!({"version":1,"revision":0,"days":["first","second"],"firstUsedAt":now()-172_801.0,"star":"unseen","hint":"unseen"});Ok(())}).unwrap();
         assert_eq!(view(&repo).unwrap()["starEligible"], true);
         update(&repo, &json!({"revision":0,"action":"star-dismiss"})).unwrap();
         assert_eq!(view(&repo).unwrap()["starEligible"], false);

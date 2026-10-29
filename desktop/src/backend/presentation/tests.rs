@@ -53,7 +53,7 @@ fn presentation_canonical_builder_is_shared_bounded_and_strips_private_extension
         result["pending"][0]["presentation"]["items"][1]["item"]["items"][0]["title"],
         "Linked"
     );
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -70,7 +70,7 @@ fn presentation_replay_precedes_catalog_resolution_and_conflicts_before_mutation
     let before = std::fs::read(&repo.data).unwrap();
     assert_eq!(present(&repo, &args).unwrap(), first);
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
-    let mut changed = args.clone();
+    let mut changed = args;
     changed["presentation"]["title"] = json!("Other intent");
     assert_eq!(present(&repo, &changed).unwrap_err().status, 409);
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
@@ -112,7 +112,7 @@ fn presentation_ack_is_exact_and_releases_only_its_pending_descriptor() {
     assert_eq!(result["pending"].as_array().unwrap().len(), 1);
     assert_eq!(result["pending"][0]["requestId"], second["requestId"]);
     assert!(!result.to_string().contains("PRIVATE"));
-    let state = repo.state.lock().unwrap();
+    let state = repo.state.lock().unwrap().clone();
     assert_eq!(
         state["uiPresentations"]["extension"]["private"],
         "ROOT_PRIVATE"
@@ -139,13 +139,14 @@ fn presentation_pending_capacity_never_evicts_and_acknowledged_retention_is_boun
     assert_eq!(present(&repo, &requests[0]).unwrap()["status"], "queued");
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     for index in 0..40 {
-        let request_id = if index < 7 {
-            requests[index]["requestId"].as_str().unwrap().to_owned()
-        } else {
-            let next = args(&uuid());
-            present(&repo, &next).unwrap();
-            next["requestId"].as_str().unwrap().to_owned()
-        };
+        let request_id = requests.get(index).filter(|_| index < 7).map_or_else(
+            || {
+                let next = args(&uuid());
+                present(&repo, &next).unwrap();
+                next["requestId"].as_str().unwrap().to_owned()
+            },
+            |request| request["requestId"].as_str().unwrap().to_owned(),
+        );
         acknowledge(
             &repo,
             &json!({"requestId":request_id,"outcome":"dismissed"}),

@@ -65,6 +65,7 @@ fn rows(repo: &Repository) -> Vec<Value> {
         };
         rows.push(json!({"id":id,"title":c["title"],"cwd":c["cwd"],"agent":c["agent"],"items":[],"archived":false,"live":true}));
     }
+    drop(state);
     rows
 }
 pub fn search(repo: &Repository, args: &Value) -> Result<Value> {
@@ -86,7 +87,7 @@ pub fn search(repo: &Repository, args: &Value) -> Result<Value> {
             .then_with(|| text(&a.1, "title").cmp(text(&b.1, "title")))
     });
     let total = found.len();
-    let offset = args["offset"].as_u64().unwrap_or(0).min(100000) as usize;
+    let offset = args["offset"].as_u64().unwrap_or(0).min(100_000) as usize;
     Ok(
         json!({"chats":found.into_iter().skip(offset).take(40).map(|(_,row)|row).collect::<Vec<_>>(),"total":total,"offset":offset,"includes":"live, snoozed, saved and archived chats","matching":"Ranked title, working folder and linked work; ignores punctuation. Results can match only some query words. Verify the title and folder before opening.","note":"No terminal transcript is searched. If no match appears, try the folder, project name, or a shorter keyword."}),
     )

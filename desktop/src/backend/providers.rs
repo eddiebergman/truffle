@@ -221,7 +221,7 @@ impl Providers {
     pub const fn sentry_configured(&self) -> bool {
         !self.sentry_org.is_empty() && !self.sentry_token.is_empty()
     }
-    fn remote_error(&self, source: &str, response: reqwest::blocking::Response) -> Error {
+    fn remote_error(source: &str, response: &reqwest::blocking::Response) -> Error {
         let status = response.status().as_u16();
         let mut e=Error::new(format!("{source} returned HTTP {status}. Check network access and account permissions. Cached data remains available."));
         e.retry = response
@@ -237,7 +237,7 @@ impl Providers {
     fn graphql(&self, url: &str, token: &str, query: &str, source: &str) -> Result<Value> {
         let response=self.client.post(url).header("Authorization",token).json(&json!({"query":query})).send().map_err(|e|{let mut error=Error::new(format!("{source} {}. Cached data remains available.",if e.is_timeout(){"timed out"}else{"connection failed"}));error.data=json!({"kind":if e.is_timeout(){"timeout"}else{"network"},"transport":"http","timeoutSeconds":25});error})?;
         if !response.status().is_success() {
-            return Err(self.remote_error(source, response));
+            return Err(Self::remote_error(source, &response));
         }
         let body: Value = response
             .json()
@@ -475,7 +475,7 @@ impl Providers {
             return Ok((Value::Null, String::new()));
         }
         if !response.status().is_success() {
-            return Err(self.remote_error("Sentry", response));
+            return Err(Self::remote_error("Sentry", &response));
         }
         let links = response
             .headers()
@@ -831,19 +831,18 @@ fn github_mutation(mutation: &str, input: &Value, selection: &str) -> String {
         .replace("__FIELDS__", selection)
 }
 fn linear_query(fields: &str, viewer: &Value, cursor: &Value) -> String {
-    r#"query { issues(first:100, after:__CURSOR__, filter:{ or:[
-        {assignee:{id:{eq:__VIEWER__}}}, {creator:{id:{eq:__VIEWER__}}},
-        {subscribers:{some:{id:{eq:__VIEWER__}}}}, {comments:{some:{user:{id:{eq:__VIEWER__}}}}},
-        {attachments:{some:{sourceType:{eq:"sentry"}}}}
-    ], state:{type:{nin:["completed","canceled","duplicate"]}} }) {
-        pageInfo {hasNextPage endCursor} nodes { __FIELDS__
-          assignee{id} creator{id} subscribers(first:1,filter:{id:{eq:__VIEWER__}}){nodes{id}}
-          comments(first:1,filter:{user:{id:{eq:__VIEWER__}}}){nodes{id}}
-        }
-    } }"#
-        .replace("__CURSOR__", &cursor.to_string())
-        .replace("__VIEWER__", &viewer.to_string())
-        .replace("__FIELDS__", fields)
+    format!(
+        r#"query {{ issues(first:100, after:{cursor}, filter:{{ or:[
+        {{assignee:{{id:{{eq:{viewer}}}}}}}, {{creator:{{id:{{eq:{viewer}}}}}}},
+        {{subscribers:{{some:{{id:{{eq:{viewer}}}}}}}}}, {{comments:{{some:{{user:{{id:{{eq:{viewer}}}}}}}}}}},
+        {{attachments:{{some:{{sourceType:{{eq:"sentry"}}}}}}}}
+    ], state:{{type:{{nin:["completed","canceled","duplicate"]}}}} }}) {{
+        pageInfo {{hasNextPage endCursor}} nodes {{ {fields}
+          assignee{{id}} creator{{id}} subscribers(first:1,filter:{{id:{{eq:{viewer}}}}}){{nodes{{id}}}}
+          comments(first:1,filter:{{user:{{id:{{eq:{viewer}}}}}}}){{nodes{{id}}}}
+        }}
+    }} }}"#
+    )
 }
 #[cfg(test)]
 mod query_tests;

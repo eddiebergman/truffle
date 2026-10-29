@@ -308,6 +308,101 @@ pub fn observe(s: &mut Value, source: &str, items: &[Value]) {
             .push(json!(source));
     }
 }
+fn override_item(s: &mut Value, key: &str, cat: &BTreeMap<String, Value>, p: &Value) -> Result<()> {
+    if !cat.contains_key(key) {
+        return Err(Error::new("Item no longer exists."));
+    }
+    let values = p["value"]
+        .as_object()
+        .ok_or_else(|| Error::new("Invalid override."))?;
+    for (field, value) in values {
+        let valid = match field.as_str() {
+            "hidden" | "pinned" => value.is_boolean(),
+            "status" => value.is_null() || STATUSES.contains(&value.as_str().unwrap_or("")),
+            _ => false,
+        };
+        if !valid {
+            return Err(Error::new("Invalid override."));
+        }
+        if field == "status" {
+            if let Some(project) = s["notes"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|x| x["id"] == key)
+            {
+                if !value.is_null() {
+                    project["status"] = value.clone();
+                }
+                if let Some(old) = s["overrides"][key].as_object_mut() {
+                    old.remove("status");
+                }
+                continue;
+            }
+        }
+        if !s["overrides"][key].is_object() {
+            s["overrides"][key] = json!({});
+        }
+        s["overrides"][key][field] = value.clone();
+    }
+    Ok(())
+}
+fn snooze(s: &mut Value, key: &str, cat: &BTreeMap<String, Value>, p: &Value) -> Result<()> {
+    let item = cat
+        .get(key)
+        .ok_or_else(|| Error::new("Work item no longer exists."))?;
+    match text(p, "mode") {
+        "clear" => {
+            s["snoozes"].as_object_mut().unwrap().remove(key);
+        }
+        "change" => {
+            s["snoozes"][key] = json!({"fingerprint":fingerprint(item),"createdAt":now()});
+        }
+        "until" => {
+            let until = p["until"].as_f64().unwrap_or(0.0);
+            if !until.is_finite() || until <= now() || until >= 366.0f64.mul_add(86400.0, now()) {
+                return Err(Error::new("Choose a future time within the next year."));
+            }
+            s["snoozes"][key] = json!({"until":until,"createdAt":now()});
+        }
+        _ => return Err(Error::new("Choose a snooze duration.")),
+    }
+    Ok(())
+}
+fn valid_sentry_filter(filters: &Value, k: &str, v: &Value) -> bool {
+    match k {
+        "minUsers" | "minEvents" | "days" => v
+            .as_u64()
+            .is_some_and(|n| n <= if k == "days" { 90 } else { 100_000_000 }),
+        "level" => ["", "fatal", "error", "warning", "info", "debug"]
+            .contains(&v.as_str().unwrap_or("invalid")),
+        "category" => ["", "error", "performance", "replay", "metric"]
+            .contains(&v.as_str().unwrap_or("invalid")),
+        "environment" => v.as_str().is_some() && text(filters, k).len() <= 100,
+        _ => false,
+    }
+}
+fn save_sentry_view(s: &mut Value, key: &str, p: &Value) -> Result<()> {
+    let name = checked(p, "name", 60, true)?;
+    let filters = p["filters"]
+        .as_object()
+        .ok_or_else(|| Error::new("Invalid Sentry filters."))?;
+    if filters
+        .iter()
+        .any(|(k, v)| !valid_sentry_filter(&p["filters"], k, v))
+    {
+        return Err(Error::new("Invalid Sentry filters."));
+    }
+    let id = if key.is_empty() { uuid() } else { sid(key)? };
+    let mut views = arr(&s["sentryViews"]);
+    views.retain(|x| x["id"] != id);
+    if views.len() >= 20 {
+        return Err(Error::new("Keep up to 20 saved filters."));
+    }
+    views.push(json!({"id":id,"name":name,"filters":filters}));
+    s["sentryViews"] = json!(views);
+    Ok(())
+}
 pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
     let key = text(p, "id");
     let action = text(p, "action");
@@ -363,69 +458,8 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 };
             }
         }
-        "override" => {
-            if !cat.contains_key(key) {
-                return Err(Error::new("Item no longer exists."));
-            }
-            let values = p["value"]
-                .as_object()
-                .ok_or_else(|| Error::new("Invalid override."))?;
-            for (field, value) in values {
-                match field.as_str() {
-                    "hidden" | "pinned" if value.is_boolean() => (),
-                    "status"
-                        if value.is_null() || STATUSES.contains(&value.as_str().unwrap_or("")) =>
-                    {
-                        ();
-                    }
-                    _ => return Err(Error::new("Invalid override.")),
-                }
-                if field == "status" {
-                    if let Some(project) = s["notes"]
-                        .as_array_mut()
-                        .unwrap()
-                        .iter_mut()
-                        .find(|x| x["id"] == key)
-                    {
-                        if !value.is_null() {
-                            project["status"] = value.clone();
-                        }
-                        if let Some(old) = s["overrides"][key].as_object_mut() {
-                            old.remove("status");
-                        }
-                        continue;
-                    }
-                }
-                if !s["overrides"][key].is_object() {
-                    s["overrides"][key] = json!({});
-                }
-                s["overrides"][key][field] = value.clone();
-            }
-        }
-        "snooze" => {
-            let item = cat
-                .get(key)
-                .ok_or_else(|| Error::new("Work item no longer exists."))?;
-            match text(p, "mode") {
-                "clear" => {
-                    s["snoozes"].as_object_mut().unwrap().remove(key);
-                }
-                "change" => {
-                    s["snoozes"][key] = json!({"fingerprint":fingerprint(item),"createdAt":now()});
-                }
-                "until" => {
-                    let until = p["until"].as_f64().unwrap_or(0.0);
-                    if !until.is_finite()
-                        || until <= now()
-                        || until >= 366.0f64.mul_add(86400.0, now())
-                    {
-                        return Err(Error::new("Choose a future time within the next year."));
-                    }
-                    s["snoozes"][key] = json!({"until":until,"createdAt":now()});
-                }
-                _ => return Err(Error::new("Choose a snooze duration.")),
-            }
-        }
+        "override" => override_item(s, key, &cat, p)?,
+        "snooze" => snooze(s, key, &cat, p)?,
         "read-changes" => {
             super::changes::legacy_mark(s, p)?;
         }
@@ -459,48 +493,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             reports.truncate(30);
             s["briefings"] = json!(reports);
         }
-        "save-sentry-view" => {
-            let name = checked(p, "name", 60, true)?;
-            let filters = p["filters"]
-                .as_object()
-                .ok_or_else(|| Error::new("Invalid Sentry filters."))?;
-            for (k, v) in filters {
-                match k.as_str() {
-                    "minUsers" | "minEvents" | "days"
-                        if v.as_u64().is_some()
-                            && v.as_u64().unwrap() <= if k == "days" { 90 } else { 100000000 } =>
-                    {
-                        ();
-                    }
-                    "level"
-                        if ["", "fatal", "error", "warning", "info", "debug"]
-                            .contains(&v.as_str().unwrap_or("invalid")) =>
-                    {
-                        ();
-                    }
-                    "category"
-                        if ["", "error", "performance", "replay", "metric"]
-                            .contains(&v.as_str().unwrap_or("invalid")) =>
-                    {
-                        ();
-                    }
-                    "environment"
-                        if v.as_str().is_some() && text(&p["filters"], k).len() <= 100 =>
-                    {
-                        ();
-                    }
-                    _ => return Err(Error::new("Invalid Sentry filters.")),
-                }
-            }
-            let id = if key.is_empty() { uuid() } else { sid(key)? };
-            let mut views = arr(&s["sentryViews"]);
-            views.retain(|x| x["id"] != id);
-            if views.len() >= 20 {
-                return Err(Error::new("Keep up to 20 saved filters."));
-            }
-            views.push(json!({"id":id,"name":name,"filters":filters}));
-            s["sentryViews"] = json!(views);
-        }
+        "save-sentry-view" => save_sentry_view(s, key, p)?,
         _ => return Err(Error::new("Unknown local action.")),
     }
     Ok(())

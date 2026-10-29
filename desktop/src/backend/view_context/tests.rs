@@ -9,7 +9,7 @@ fn snapshot_preserves_the_filtered_set_overrides_links_and_retry_identity() {
     let record = prepare(&repo, &payload).unwrap();
     let again = prepare(&repo, &payload).unwrap();
     assert_eq!(record["id"], again["id"]);
-    assert!(arr(&record["items"]).is_empty());
+    assert_eq!(arr(&record["items"]), [] as [serde_json::Value; 0]);
     let path = PathBuf::from(text(&record["viewContext"], "path"));
     let bytes = std::fs::read(&path).unwrap();
     let saved: Value = serde_json::from_slice(&bytes).unwrap();
@@ -35,6 +35,9 @@ fn empty_invalid_or_stale_views_do_not_create_sessions() {
     for ids in [json!([]), json!(["missing"]), json!([null])] {
         let payload = json!({"requestId":uuid(),"source":"github","agent":"codex","question":"Check these","folderPath":temp.path(),"itemIds":ids,"filters":{}});
         assert!(prepare(&repo, &payload).is_err());
-        assert!(arr(&repo.snapshot(false)["sessions"]).is_empty());
+        assert_eq!(
+            arr(&repo.snapshot(false)["sessions"]),
+            [] as [serde_json::Value; 0]
+        );
     }
 }

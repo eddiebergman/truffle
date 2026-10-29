@@ -29,7 +29,11 @@ fn shell_identity_and_working_directory_survive_reopen() {
             .unwrap();
         generation = text(&v, "generation").into();
         cursor = v["cursor"].as_u64().unwrap();
-        output.extend(arr(&v["bytes"]).iter().map(|n| n.as_u64().unwrap() as u8));
+        output.extend(
+            arr(&v["bytes"])
+                .iter()
+                .map(|n| u8::try_from(n.as_u64().unwrap()).unwrap()),
+        );
         if String::from_utf8_lossy(&output).contains("shell-check:retained") {
             break;
         }

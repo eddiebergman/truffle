@@ -85,7 +85,10 @@ pub fn view(repo: &Repository) -> Value {
             "Saved setup progress is invalid. Continuing restarts setup and retains the original progress for recovery.",
         )
     });
-    json!({"progress":public_progress(stored),"progressReadOnly":unsupported_progress(stored).is_some(),"progressError":progress_error,"assistants":[{"id":"claude","label":"Claude","installed":detected("claude")},{"id":"codex","label":"Codex","installed":detected("codex")}],"editors":[{"id":"zed","label":"Zed","installed":detected("zed"),"diffSupported":true},{"id":"code","label":"VS Code","installed":detected("code"),"diffSupported":false},{"id":"cursor","label":"Cursor","installed":detected("cursor"),"diffSupported":false}],"connections":connections,"credentialBrokerAvailable":false})
+    let progress = public_progress(stored);
+    let progress_read_only = unsupported_progress(stored).is_some();
+    drop(state);
+    json!({"progress":progress,"progressReadOnly":progress_read_only,"progressError":progress_error,"assistants":[{"id":"claude","label":"Claude","installed":detected("claude")},{"id":"codex","label":"Codex","installed":detected("codex")}],"editors":[{"id":"zed","label":"Zed","installed":detected("zed"),"diffSupported":true},{"id":"code","label":"VS Code","installed":detected("code"),"diffSupported":false},{"id":"cursor","label":"Cursor","installed":detected("cursor"),"diffSupported":false}],"connections":connections,"credentialBrokerAvailable":false})
 }
 /// Read setup metadata without retrieving credentials.
 pub fn assistant_context(repo: &Repository) -> Value {

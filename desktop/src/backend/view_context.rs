@@ -3,6 +3,7 @@ use super::{
     arr, checked, directory, http, json, repository, sid, text, uuid, workflows, Error, Repository,
     Result, Value,
 };
+use std::os::unix::fs::PermissionsExt;
 
 pub fn prepare(repo: &Repository, p: &Value) -> Result<Value> {
     prepare_with_request(repo, p, None)
@@ -81,7 +82,6 @@ pub(super) fn prepare_with_request(
         let bytes=serde_json::to_vec_pretty(&snapshot)?;
         if bytes.len()>8*1024*1024 {return Err(Error::new("This view is too large. Narrow the filters and try again."));}
         std::fs::create_dir_all(file.parent().unwrap())?;
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(file.parent().unwrap(),std::fs::Permissions::from_mode(0o700))?;
         http::private_write(&file,&bytes)?;
         record["workflow"]=json!("view-context");record["viewRequestId"]=json!(request_id);

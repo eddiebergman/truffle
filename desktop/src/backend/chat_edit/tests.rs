@@ -11,7 +11,7 @@ fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
 fn baseline(repo: &Repository, id: &str) -> Value {
     read(repo, &json!({"recordId":id})).unwrap()
 }
-fn request(base: &Value, patch: Value) -> Value {
+fn request(base: &Value, patch: &Value) -> Value {
     let mut expected = json!({});
     for key in patch.as_object().unwrap().keys() {
         expected[key] = base["expected"][key].clone();
@@ -24,10 +24,10 @@ fn chat_metadata_patched_fields_commute_and_preserve_latest_extensions_folders_a
     let old = baseline(&repo, &id);
     update(
         &repo,
-        &request(&old, json!({"itemIds":["note:a","note:b"]})),
+        &request(&old, &json!({"itemIds":["note:a","note:b"]})),
     )
     .unwrap();
-    update(&repo, &request(&old, json!({"title":"Renamed"}))).unwrap();
+    update(&repo, &request(&old, &json!({"title":"Renamed"}))).unwrap();
     let current = baseline(&repo, &id);
     assert_eq!(current["chat"]["itemIds"], json!(["note:a", "note:b"]));
     assert_eq!(current["chat"]["title"], "Renamed");
@@ -49,13 +49,13 @@ fn chat_metadata_patched_fields_commute_and_preserve_latest_extensions_folders_a
 fn chat_metadata_stale_mixed_patch_and_bad_shape_leave_state_and_disk_unchanged() {
     let (_temp, repo, id) = fixture();
     let old = baseline(&repo, &id);
-    update(&repo, &request(&old, json!({"title":"Concurrent"}))).unwrap();
+    update(&repo, &request(&old, &json!({"title":"Concurrent"}))).unwrap();
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
         update(
             &repo,
-            &request(&old, json!({"title":"Stale","instruction":"Do not apply"}))
+            &request(&old, &json!({"title":"Stale","instruction":"Do not apply"}))
         )
         .unwrap_err()
         .status,
@@ -86,9 +86,9 @@ fn chat_metadata_link_tokens_ignore_ref_refresh_but_conflict_on_relationship_cha
         baseline(&repo, &id)["expected"]["itemIds"],
         old["expected"]["itemIds"]
     );
-    update(&repo, &request(&old, json!({"itemIds":["note:b"]}))).unwrap();
+    update(&repo, &request(&old, &json!({"itemIds":["note:b"]}))).unwrap();
     assert_eq!(
-        update(&repo, &request(&old, json!({"itemIds":["note:a"]})))
+        update(&repo, &request(&old, &json!({"itemIds":["note:a"]})))
             .unwrap_err()
             .status,
         409
@@ -99,20 +99,20 @@ fn chat_metadata_association_only_fills_empty_identity_and_detects_conflicts() {
     let (_temp, repo, id) = fixture();
     let old = baseline(&repo, &id);
     let session = uuid();
-    update(&repo, &request(&old, json!({"sessionId":session}))).unwrap();
+    update(&repo, &request(&old, &json!({"sessionId":session}))).unwrap();
     assert_eq!(
         repo.state.lock().unwrap()["sessions"][0]["launchNew"],
         false
     );
     assert_eq!(
-        update(&repo, &request(&old, json!({"sessionId":uuid()})))
+        update(&repo, &request(&old, &json!({"sessionId":uuid()})))
             .unwrap_err()
             .status,
         409
     );
     let latest = baseline(&repo, &id);
     assert_eq!(
-        update(&repo, &request(&latest, json!({"sessionId":""})))
+        update(&repo, &request(&latest, &json!({"sessionId":""})))
             .unwrap_err()
             .status,
         409
@@ -128,7 +128,7 @@ fn chat_metadata_association_only_fills_empty_identity_and_detects_conflicts() {
     })
     .unwrap();
     assert_eq!(
-        update(&repo, &request(&old, json!({"sessionId":session})))
+        update(&repo, &request(&old, &json!({"sessionId":session})))
             .unwrap_err()
             .status,
         409
@@ -138,7 +138,7 @@ fn chat_metadata_association_only_fills_empty_identity_and_detects_conflicts() {
 fn chat_metadata_url_resolution_rechecks_tokens_and_never_overwrites_newer_cache() {
     let (_temp, repo, id) = fixture();
     let old = baseline(&repo, &id);
-    let mut args = request(&old, json!({"itemIds":["note:a"]}));
+    let mut args = request(&old, &json!({"itemIds":["note:a"]}));
     args["urls"] = json!(["https://example.invalid/work"]);
     let mut empty = args.clone();
     empty["urls"] = json!([""]);
@@ -160,12 +160,10 @@ fn chat_metadata_url_resolution_rechecks_tokens_and_never_overwrites_newer_cache
         )
     });
     assert_eq!(result.unwrap_err().status, 409);
-    assert!(domain::catalog(&repo.state.lock().unwrap())
-        .get("github:new")
-        .is_none());
+    assert!(!domain::catalog(&repo.state.lock().unwrap()).contains_key("github:new"));
     assert_ne!(std::fs::read(&repo.data).unwrap(), bytes);
     let latest = baseline(&repo, &id);
-    let mut args = request(&latest, json!({"itemIds":["note:a","note:b"]}));
+    let mut args = request(&latest, &json!({"itemIds":["note:a","note:b"]}));
     args["urls"] = json!(["https://example.invalid/work"]);
     update_with(&repo,&args,|_|{repo.transaction(|s|{s["items"].as_array_mut().unwrap().push(json!({"id":"github:new","source":"github","title":"Newer","url":"https://example.invalid/work"}));Ok(())})?;Ok(json!({"id":"github:new","source":"github","title":"Old result","url":"https://example.invalid/work"}))}).unwrap();
     assert_eq!(
@@ -188,11 +186,11 @@ fn chat_metadata_failed_persistence_rolls_back_and_retry_succeeds() {
     let bytes = std::fs::read(&repo.data).unwrap();
     let blocker = repo.data.with_extension("tmp");
     std::fs::create_dir(&blocker).unwrap();
-    assert!(update(&repo, &request(&old, json!({"title":"After failure"}))).is_err());
+    assert!(update(&repo, &request(&old, &json!({"title":"After failure"}))).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     std::fs::remove_dir(blocker).unwrap();
-    update(&repo, &request(&old, json!({"title":"After failure"}))).unwrap();
+    update(&repo, &request(&old, &json!({"title":"After failure"}))).unwrap();
 }
 #[test]
 fn chat_metadata_legacy_requires_checked_patch_and_does_not_resolve_unchecked_urls() {
@@ -215,7 +213,7 @@ fn chat_metadata_legacy_requires_checked_patch_and_does_not_resolve_unchecked_ur
     assert!(
         workflows::prepare(&repo, &json!({"id":3,"agent":"codex","title":"Invalid ID"})).is_err()
     );
-    let checked = request(&old, json!({"title":"Checked legacy"}));
+    let checked = request(&old, &json!({"title":"Checked legacy"}));
     workflows::prepare(
         &repo,
         &json!({"id":id,"patch":checked["patch"],"expected":checked["expected"]}),
@@ -245,7 +243,7 @@ fn chat_metadata_command_redaction_preserves_tokens_and_hides_reference_text() {
     assert!(!base.to_string().contains(secret));
     let result = commands::invoke(
         &repo,
-        &json!({"name":"chats.metadata.update","args":request(&base,json!({"title":"Changed"}))}),
+        &json!({"name":"chats.metadata.update","args":request(&base, &json!({"title":"Changed"}))}),
         false,
     )
     .unwrap();
@@ -261,7 +259,7 @@ fn chat_metadata_command_redaction_preserves_tokens_and_hides_reference_text() {
     .unwrap();
     assert!(read(&repo, &json!({"recordId":id})).is_err());
     let bytes = std::fs::read(&repo.data).unwrap();
-    assert!(update(&repo, &request(&base, json!({"itemIds":[secret]}))).is_err());
+    assert!(update(&repo, &request(&base, &json!({"itemIds":[secret]}))).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
 }
 #[test]
@@ -269,17 +267,15 @@ fn chat_metadata_concurrent_same_field_allows_one_commit() {
     let (_temp, repo, id) = fixture();
     let old = baseline(&repo, &id);
     let barrier = Arc::new(std::sync::Barrier::new(3));
-    let threads = (0..2)
-        .map(|n| {
-            let repo = repo.clone();
-            let barrier = barrier.clone();
-            let args = request(&old, json!({"title":format!("Writer {n}")}));
-            std::thread::spawn(move || {
-                barrier.wait();
-                update(&repo, &args)
-            })
+    let threads: [_; 2] = std::array::from_fn(|n| {
+        let repo = repo.clone();
+        let barrier = barrier.clone();
+        let args = request(&old, &json!({"title":format!("Writer {n}")}));
+        std::thread::spawn(move || {
+            barrier.wait();
+            update(&repo, &args)
         })
-        .collect::<Vec<_>>();
+    });
     barrier.wait();
     let results = threads
         .into_iter()
@@ -306,7 +302,7 @@ fn chat_metadata_invalid_stored_fields_fail_closed_and_legacy_association_cannot
     let bytes = std::fs::read(&repo.data).unwrap();
     let payload = json!({"agent":"codex","sessionId":session,"title":"Unchecked","cwd":"invalid","urls":["invalid"]});
     assert_eq!(workflows::prepare(&repo, &payload).unwrap_err().status, 409);
-    let mut edit = payload.clone();
+    let mut edit = payload;
     edit["action"] = json!("save-session");
     assert_eq!(repo.edit(&edit).unwrap_err().status, 409);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
@@ -353,7 +349,7 @@ fn chat_metadata_read_is_pure_and_preserves_complete_link_set() {
     assert_eq!(result["chat"]["itemIds"].as_array().unwrap().len(), 100);
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    update(&repo, &request(&result, json!({"title":"Only title"}))).unwrap();
+    update(&repo, &request(&result, &json!({"title":"Only title"}))).unwrap();
     assert_eq!(
         baseline(&repo, &id)["chat"]["itemIds"],
         result["chat"]["itemIds"]

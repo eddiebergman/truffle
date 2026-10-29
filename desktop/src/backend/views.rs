@@ -152,7 +152,13 @@ fn date_boundary(date: &str) -> Option<f64> {
         return None;
     }
     let day = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
-    Some(day.and_hms_opt(0, 0, 0)?.and_utc().timestamp() as f64)
+    Some(exact_f64(day.and_hms_opt(0, 0, 0)?.and_utc().timestamp()))
+}
+// Same value as an `as f64` cast: the high half scales exactly, so the sum rounds once.
+fn exact_f64(value: i64) -> f64 {
+    let high = i32::try_from(value >> 32).expect("an i64 shifted by 32 bits fits in i32");
+    let low = u32::try_from(value & 0xFFFF_FFFF).expect("a 32-bit mask fits in u32");
+    f64::from(high).mul_add(4_294_967_296.0, f64::from(low))
 }
 fn item_time(item: &Value, field: DateField) -> Option<f64> {
     let value = &item[match field {
@@ -166,20 +172,28 @@ fn item_time(item: &Value, field: DateField) -> Option<f64> {
     if date.timestamp_subsec_nanos() >= 1_000_000_000 {
         return None;
     }
-    Some(date.timestamp_millis() as f64 / 1000.0)
+    Some(exact_f64(date.timestamp_millis()) / 1000.0)
 }
 fn calendar_date(time: f64, timezone: chrono_tz::Tz) -> Option<chrono::NaiveDate> {
     if !time.is_finite() {
         return None;
     }
-    let milliseconds = time * 1000.0;
-    if milliseconds < i64::MIN as f64 || milliseconds >= i64::MAX as f64 {
-        return None;
-    }
+    let milliseconds = (time * 1000.0).floor();
+    // Duration converts the whole magnitude exactly; out-of-range values are rejected.
+    let magnitude = i64::try_from(
+        std::time::Duration::try_from_secs_f64(milliseconds.abs())
+            .ok()?
+            .as_secs(),
+    )
+    .ok()?;
     Some(
-        chrono::DateTime::from_timestamp_millis(milliseconds.floor() as i64)?
-            .with_timezone(&timezone)
-            .date_naive(),
+        chrono::DateTime::from_timestamp_millis(if milliseconds < 0.0 {
+            -magnitude
+        } else {
+            magnitude
+        })?
+        .with_timezone(&timezone)
+        .date_naive(),
     )
 }
 fn matches_calendar_period(period: CalendarPeriod, timezone: &str, at: f64, time: f64) -> bool {
@@ -307,7 +321,7 @@ fn read_document(path: &Path) -> Result<(Document, String)> {
         format!("{:x}", Sha256::digest(&bytes)),
     ))
 }
-fn response(doc: &Document, hash: String) -> Result<Value> {
+fn response(doc: &Document, hash: &str) -> Result<Value> {
     let mut value = serde_json::to_value(doc)?;
     value["contentHash"] = json!(hash);
     Ok(value)
@@ -317,7 +331,7 @@ pub fn load(repo: &Repository) -> Result<Document> {
 }
 pub fn view(repo: &Repository) -> Result<Value> {
     let (doc, hash) = read_document(&repo.settings.config_directory().join("views.json"))?;
-    response(&doc, hash)
+    response(&doc, &hash)
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -354,7 +368,7 @@ fn update_file(path: &Path, payload: &Value) -> Result<Value> {
     let temp = path.with_extension("json.tmp");
     super::http::private_write(&temp, &bytes)?;
     std::fs::rename(&temp, path)?;
-    response(&next, format!("{:x}", Sha256::digest(&bytes)))
+    response(&next, &format!("{:x}", Sha256::digest(&bytes)))
 }
 pub fn update(repo: &Repository, payload: &Value) -> Result<Value> {
     update_file(

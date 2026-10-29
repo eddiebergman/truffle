@@ -62,7 +62,10 @@ fn replacement_changes_only_supplied_fields_and_preserves_other_sessions_artifac
         )
         .unwrap();
     let state = repo.state.lock().unwrap();
-    assert!(arr(&state["sessions"][0]["resources"]).is_empty());
+    assert_eq!(
+        arr(&state["sessions"][0]["resources"]),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(arr(&state["sessions"][0]["worktrees"]).len(), 1);
     assert_eq!(arr(&state["sessions"][0]["items"]).len(), 2);
     assert_eq!(state["artifacts"][0]["sessionIds"], json!(["other", id]));
@@ -155,7 +158,7 @@ fn replacement_requires_captured_revision_and_preserves_state_on_missing_invalid
     let captured = read(&repo, &id).unwrap()["context"].clone();
     let result=workflows::register(&repo,&json!({"operation":"context-replace","id":id,"context":{"revision":captured["revision"],"resources":[]}})).unwrap();
     assert_eq!(result["id"], id);
-    assert!(arr(&result["resources"]).is_empty());
+    assert_eq!(arr(&result["resources"]), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn mutation_receipt_binds_undo_to_exact_commit_and_excludes_private_record_data() {

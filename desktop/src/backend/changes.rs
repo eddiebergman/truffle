@@ -86,8 +86,8 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|value| (1..=100).contains(value))
-            .ok_or_else(|| Error::new("Choose a change limit from 1 to 100."))?
-            as usize,
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| Error::new("Choose a change limit from 1 to 100."))?,
         None => 40,
     };
     let after = args.get("afterId").map(id).transpose()?;

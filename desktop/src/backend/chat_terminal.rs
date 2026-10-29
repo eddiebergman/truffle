@@ -45,12 +45,14 @@ pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
             let cols = p["cols"]
                 .as_u64()
                 .filter(|n| (10..=500).contains(n))
+                .and_then(|n| u16::try_from(n).ok())
                 .ok_or_else(|| Error::new("Invalid columns."))?;
             let rows = p["rows"]
                 .as_u64()
                 .filter(|n| (2..=200).contains(n))
+                .and_then(|n| u16::try_from(n).ok())
                 .ok_or_else(|| Error::new("Invalid rows."))?;
-            repo.shells.resize(&id, cols as u16, rows as u16)?;
+            repo.shells.resize(&id, cols, rows)?;
             Ok(json!({}))
         }
         "close" => {

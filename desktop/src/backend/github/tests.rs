@@ -109,7 +109,7 @@ fn action_receipts_report_preview_or_confirmed_cache_commit_without_private_item
         receipt,
         json!({"id":"github:PR_test","action":"request-review","status":"completed","remote":"confirmed","localSaved":true})
     );
-    let state = repo.state.lock().unwrap();
+    let state = repo.state.lock().unwrap().clone();
     assert_eq!(arr(&state["items"][0]["requestedReviewers"]).len(), 2);
     assert!(state["items"][0]["reviewerUpdatedAt"].as_f64().unwrap() > 0.0);
     assert!(repo.opening.lock().unwrap().is_empty());

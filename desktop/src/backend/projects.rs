@@ -213,14 +213,14 @@ pub fn folder(repo: &Repository, args: &Value) -> Result<Value> {
 fn folder_with(repo: &Repository, args: &Value, root: &std::path::Path) -> Result<Value> {
     object_keys(args, &["id"])?;
     let id = project_id(&args["id"])?;
-    let (project, context) = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        let project = state["notes"][position(&state, id)?].clone();
-        let context = json!({"itemSettings":{id:state["itemSettings"][id]},"folderMappings":state["folderMappings"]});
-        (project, context)
-    };
+    let (project, context) = folder_inputs(&*repo.state.lock().map_err(|_| Error::io())?, id)?;
     let cwd = super::workflows::automatic_folder(&context, &project, root, &json!([]));
     Ok(json!({"id":id,"requiresSelection":cwd.is_none(),"cwd":cwd}))
+}
+fn folder_inputs(state: &Value, id: &str) -> Result<(Value, Value)> {
+    let project = state["notes"][position(state, id)?].clone();
+    let context = json!({"itemSettings":{id:state["itemSettings"][id]},"folderMappings":state["folderMappings"]});
+    Ok((project, context))
 }
 pub fn create(repo: &Repository, args: &Value) -> Result<Value> {
     let fields = normalize(args, true)?;

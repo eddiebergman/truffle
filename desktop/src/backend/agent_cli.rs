@@ -4,6 +4,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Write as _,
     fs::{self, OpenOptions},
     io::{Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt},
@@ -146,182 +147,14 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
         p["id"] = json!(sid(o.required("record")?)?);
     }
     match command {
-        "command" => {
-            o.validate(&["name", "file"])?;
-            p["operation"] = json!("command");
-            p["name"] = json!(o.required("name")?);
-            p["args"] = if o.get("file").is_empty() {
-                json!({})
-            } else {
-                json_file(o, 64 * 1024)?
-            };
-        }
-        "settings" => {
-            o.validate(&["show", "file", "revision", "content-hash"])?;
-            if o.has("show") {
-                if !o.get("file").is_empty() {
-                    return Err(Error::new("Read settings separately from updates."));
-                }
-                p["operation"] = json!("settings-read");
-            } else {
-                p["operation"] = json!("settings-apply");
-                p["patch"] = json_file(o, 64 * 1024)?;
-                p["revision"] = json!(o
-                    .required("revision")?
-                    .parse::<u64>()
-                    .map_err(|_| Error::new("Supply the current settings revision."))?);
-                let hash=o.required("content-hash").map_err(|_|Error::new("Read settings --show, then supply its revision and --content-hash with your patch."))?;
-                if hash.len() != 64
-                    || !hash
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-                {
-                    return Err(Error::new("Supply --content-hash from settings --show."));
-                }
-                p["contentHash"] = json!(hash);
-            }
-        }
-        "register" => {
-            o.validate(&[
-                "agent",
-                "session",
-                "record",
-                "title",
-                "cwd",
-                "url",
-                "item",
-                "project",
-                "destination",
-            ])?;
-            let agent = o.required("agent")?;
-            if !["claude", "codex"].contains(&agent) {
-                return Err(Error::new("Choose Claude or Codex."));
-            }
-            let variable = if agent == "claude" {
-                "CLAUDE_CODE_SESSION_ID"
-            } else {
-                "CODEX_THREAD_ID"
-            };
-            let session = if o.get("session").is_empty() {
-                std::env::var(variable).unwrap_or_default()
-            } else {
-                o.get("session").into()
-            };
-            let cwd = if o.get("cwd").is_empty() {
-                std::env::current_dir()?.to_string_lossy().into()
-            } else {
-                path(o.get("cwd"))?
-            };
-            p = json!({"agent":agent,"sessionId":sid(&session)?,"cwd":cwd,"urls":o.many("url"),"itemIds":o.many("item")});
-            for (key, field) in [
-                ("record", "id"),
-                ("title", "title"),
-                ("project", "project"),
-                ("destination", "destination"),
-            ] {
-                if !o.get(key).is_empty() {
-                    p[field] = json!(o.get(key));
-                }
-            }
-        }
-        "review" => {
-            o.validate(&[
-                "record",
-                "request",
-                "state",
-                "pass",
-                "file",
-                "show",
-                "reviewed-revision",
-            ])?;
-            if o.has("show")
-                && (!o.get("file").is_empty()
-                    || !o.get("state").is_empty()
-                    || !o.get("pass").is_empty())
-            {
-                return Err(Error::new("Read the draft separately from review updates."));
-            }
-            if !o.has("show") && o.get("file").is_empty() && o.get("state").is_empty() {
-                return Err(Error::new("Review needs --show, --file, or --state."));
-            }
-            p["operation"] = json!("review");
-            for (key, field) in [
-                ("request", "requestId"),
-                ("state", "state"),
-                ("pass", "pass"),
-            ] {
-                if !o.get(key).is_empty() {
-                    p[field] = json!(o.get(key));
-                }
-            }
-            if !o.get("state").is_empty() || !o.get("pass").is_empty() {
-                sid(o.required("request")?)?;
-            }
-            if !o.get("file").is_empty() {
-                p["report"] = json_file(o, 96 * 1024)?;
-            }
-            if !o.get("reviewed-revision").is_empty() {
-                p["reviewedRevision"] = json!(o
-                    .get("reviewed-revision")
-                    .parse::<u64>()
-                    .map_err(|_| Error::new("Invalid review revision."))?);
-            }
-        }
-        "context" => {
-            o.validate(&["record", "file", "show"])?;
-            if o.has("show") != o.get("file").is_empty() {
-                return Err(Error::new("Choose either --show or --file."));
-            }
-            p["operation"] = json!(if o.has("show") {
-                "context-read"
-            } else {
-                "context-replace"
-            });
-            if !o.has("show") {
-                p["context"] = json_file(o, 96 * 1024)?;
-                require_context_revision(&p["context"])?;
-            }
-        }
-        "resource" => {
-            o.validate(&["record", "file", "replace"])?;
-            let mut report = json_file(o, 64 * 1024)?;
-            if !report["resources"].is_array() {
-                return Err(Error::new("Resource report needs a resources array."));
-            }
-            if o.has("replace") {
-                require_context_revision(&report)?;
-            }
-            report["replace"] = json!(o.has("replace"));
-            p["operation"] = json!("resources");
-            p["report"] = report;
-        }
-        "worktree" => {
-            o.validate(&["record", "path", "url", "item", "primary"])?;
-            let cwd = std::env::current_dir()?;
-            p["operation"] = json!("worktree");
-            p["path"] = json!(path(if o.get("path").is_empty() {
-                cwd.to_str().ok_or_else(Error::io)?
-            } else {
-                o.get("path")
-            })?);
-            p["urls"] = json!(o.many("url"));
-            p["itemIds"] = json!(o.many("item"));
-            p["primary"] = json!(o.has("primary"));
-        }
-        "status" => {
-            o.validate(&["record", "state", "subagents", "reason"])?;
-            p["operation"] = json!("runtime");
-            p["state"] = json!(o.required("state")?);
-            if !o.get("subagents").is_empty() {
-                p["subagents"] = json!(o
-                    .get("subagents")
-                    .parse::<u64>()
-                    .map_err(|_| Error::new("Subagent count must be nonnegative."))?);
-            }
-            if !o.get("reason").is_empty() {
-                p["reason"] = json!(o.get("reason"));
-            }
-        }
+        "command" => command_payload(o, &mut p)?,
+        "settings" => settings_payload(o, &mut p)?,
+        "register" => p = register_payload(o)?,
+        "review" => review_payload(o, &mut p)?,
+        "context" => context_payload(o, &mut p)?,
+        "resource" => resource_payload(o, &mut p)?,
+        "worktree" => worktree_payload(o, &mut p)?,
+        "status" => status_payload(o, &mut p)?,
         "ci" => {
             o.validate(&["record", "item", "request", "state"])?;
             p["operation"] = json!("ci-investigation");
@@ -329,54 +162,239 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
             p["requestId"] = json!(sid(o.required("request")?)?);
             p["state"] = json!(o.required("state")?);
         }
-        "artifact" => {
-            o.validate(&["record", "file", "url", "title", "skill-output"])?;
-            if o.has("skill-output") {
-                p["skillOutput"] = json!(true);
-            }
-            if o.get("file").is_empty() == o.get("url").is_empty() {
-                return Err(Error::new("Choose a file or URL."));
-            }
-            p["operation"] = json!("save-artifact");
-            if o.get("file").is_empty() {
-                p["url"] = json!(safe_url(o.get("url"))?);
-            } else {
-                p["path"] = json!(path(o.get("file"))?);
-            }
-            if !o.get("title").is_empty() {
-                p["title"] = json!(o.get("title"));
-            }
-        }
-        "checkpoint" | "briefing" => {
-            o.validate(&["record", "file"])?;
-            let bytes = read(&expand(o.required("file")?), 96000)?;
-            if command == "briefing" {
-                p["operation"] = json!("save-briefing");
-                p["body"] =
-                    json!(String::from_utf8(bytes)
-                        .map_err(|_| Error::new("Report must be UTF-8."))?);
-            } else {
-                let report: Value = serde_json::from_slice(&bytes)?;
-                let object = report
-                    .as_object()
-                    .ok_or_else(|| Error::new("Checkpoint must be an object."))?;
-                if object
-                    .keys()
-                    .any(|k| !["done", "blocked", "next"].contains(&k.as_str()))
-                {
-                    return Err(Error::new(
-                        "Checkpoint supports done, blocked, and next only.",
-                    ));
-                }
-                p["operation"] = json!("checkpoint");
-                for (k, v) in object {
-                    p[k] = v.clone();
-                }
-            }
-        }
+        "artifact" => artifact_payload(o, &mut p)?,
+        "checkpoint" | "briefing" => report_payload(command, o, &mut p)?,
         _ => return Err(Error::new("Unknown agent command.")),
     }
     Ok(p)
+}
+fn command_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["name", "file"])?;
+    p["operation"] = json!("command");
+    p["name"] = json!(o.required("name")?);
+    p["args"] = if o.get("file").is_empty() {
+        json!({})
+    } else {
+        json_file(o, 64 * 1024)?
+    };
+    Ok(())
+}
+fn settings_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["show", "file", "revision", "content-hash"])?;
+    if o.has("show") {
+        if !o.get("file").is_empty() {
+            return Err(Error::new("Read settings separately from updates."));
+        }
+        p["operation"] = json!("settings-read");
+    } else {
+        p["operation"] = json!("settings-apply");
+        p["patch"] = json_file(o, 64 * 1024)?;
+        p["revision"] = json!(o
+            .required("revision")?
+            .parse::<u64>()
+            .map_err(|_| Error::new("Supply the current settings revision."))?);
+        let hash=o.required("content-hash").map_err(|_|Error::new("Read settings --show, then supply its revision and --content-hash with your patch."))?;
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(Error::new("Supply --content-hash from settings --show."));
+        }
+        p["contentHash"] = json!(hash);
+    }
+    Ok(())
+}
+fn register_payload(o: &Options) -> Result<Value> {
+    o.validate(&[
+        "agent",
+        "session",
+        "record",
+        "title",
+        "cwd",
+        "url",
+        "item",
+        "project",
+        "destination",
+    ])?;
+    let agent = o.required("agent")?;
+    if !["claude", "codex"].contains(&agent) {
+        return Err(Error::new("Choose Claude or Codex."));
+    }
+    let variable = if agent == "claude" {
+        "CLAUDE_CODE_SESSION_ID"
+    } else {
+        "CODEX_THREAD_ID"
+    };
+    let session = if o.get("session").is_empty() {
+        std::env::var(variable).unwrap_or_default()
+    } else {
+        o.get("session").into()
+    };
+    let cwd = if o.get("cwd").is_empty() {
+        std::env::current_dir()?.to_string_lossy().into()
+    } else {
+        path(o.get("cwd"))?
+    };
+    let mut p = json!({"agent":agent,"sessionId":sid(&session)?,"cwd":cwd,"urls":o.many("url"),"itemIds":o.many("item")});
+    for (key, field) in [
+        ("record", "id"),
+        ("title", "title"),
+        ("project", "project"),
+        ("destination", "destination"),
+    ] {
+        if !o.get(key).is_empty() {
+            p[field] = json!(o.get(key));
+        }
+    }
+    Ok(p)
+}
+fn review_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&[
+        "record",
+        "request",
+        "state",
+        "pass",
+        "file",
+        "show",
+        "reviewed-revision",
+    ])?;
+    if o.has("show")
+        && (!o.get("file").is_empty() || !o.get("state").is_empty() || !o.get("pass").is_empty())
+    {
+        return Err(Error::new("Read the draft separately from review updates."));
+    }
+    if !o.has("show") && o.get("file").is_empty() && o.get("state").is_empty() {
+        return Err(Error::new("Review needs --show, --file, or --state."));
+    }
+    p["operation"] = json!("review");
+    for (key, field) in [
+        ("request", "requestId"),
+        ("state", "state"),
+        ("pass", "pass"),
+    ] {
+        if !o.get(key).is_empty() {
+            p[field] = json!(o.get(key));
+        }
+    }
+    if !o.get("state").is_empty() || !o.get("pass").is_empty() {
+        sid(o.required("request")?)?;
+    }
+    if !o.get("file").is_empty() {
+        p["report"] = json_file(o, 96 * 1024)?;
+    }
+    if !o.get("reviewed-revision").is_empty() {
+        p["reviewedRevision"] = json!(o
+            .get("reviewed-revision")
+            .parse::<u64>()
+            .map_err(|_| Error::new("Invalid review revision."))?);
+    }
+    Ok(())
+}
+fn context_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "file", "show"])?;
+    if o.has("show") != o.get("file").is_empty() {
+        return Err(Error::new("Choose either --show or --file."));
+    }
+    p["operation"] = json!(if o.has("show") {
+        "context-read"
+    } else {
+        "context-replace"
+    });
+    if !o.has("show") {
+        p["context"] = json_file(o, 96 * 1024)?;
+        require_context_revision(&p["context"])?;
+    }
+    Ok(())
+}
+fn resource_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "file", "replace"])?;
+    let mut report = json_file(o, 64 * 1024)?;
+    if !report["resources"].is_array() {
+        return Err(Error::new("Resource report needs a resources array."));
+    }
+    if o.has("replace") {
+        require_context_revision(&report)?;
+    }
+    report["replace"] = json!(o.has("replace"));
+    p["operation"] = json!("resources");
+    p["report"] = report;
+    Ok(())
+}
+fn worktree_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "path", "url", "item", "primary"])?;
+    let cwd = std::env::current_dir()?;
+    p["operation"] = json!("worktree");
+    p["path"] = json!(path(if o.get("path").is_empty() {
+        cwd.to_str().ok_or_else(Error::io)?
+    } else {
+        o.get("path")
+    })?);
+    p["urls"] = json!(o.many("url"));
+    p["itemIds"] = json!(o.many("item"));
+    p["primary"] = json!(o.has("primary"));
+    Ok(())
+}
+fn status_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "state", "subagents", "reason"])?;
+    p["operation"] = json!("runtime");
+    p["state"] = json!(o.required("state")?);
+    if !o.get("subagents").is_empty() {
+        p["subagents"] = json!(o
+            .get("subagents")
+            .parse::<u64>()
+            .map_err(|_| Error::new("Subagent count must be nonnegative."))?);
+    }
+    if !o.get("reason").is_empty() {
+        p["reason"] = json!(o.get("reason"));
+    }
+    Ok(())
+}
+fn artifact_payload(o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "file", "url", "title", "skill-output"])?;
+    if o.has("skill-output") {
+        p["skillOutput"] = json!(true);
+    }
+    if o.get("file").is_empty() == o.get("url").is_empty() {
+        return Err(Error::new("Choose a file or URL."));
+    }
+    p["operation"] = json!("save-artifact");
+    if o.get("file").is_empty() {
+        p["url"] = json!(safe_url(o.get("url"))?);
+    } else {
+        p["path"] = json!(path(o.get("file"))?);
+    }
+    if !o.get("title").is_empty() {
+        p["title"] = json!(o.get("title"));
+    }
+    Ok(())
+}
+fn report_payload(command: &str, o: &Options, p: &mut Value) -> Result<()> {
+    o.validate(&["record", "file"])?;
+    let bytes = read(&expand(o.required("file")?), 96000)?;
+    if command == "briefing" {
+        p["operation"] = json!("save-briefing");
+        p["body"] =
+            json!(String::from_utf8(bytes).map_err(|_| Error::new("Report must be UTF-8."))?);
+    } else {
+        let report: Value = serde_json::from_slice(&bytes)?;
+        let object = report
+            .as_object()
+            .ok_or_else(|| Error::new("Checkpoint must be an object."))?;
+        if object
+            .keys()
+            .any(|k| !["done", "blocked", "next"].contains(&k.as_str()))
+        {
+            return Err(Error::new(
+                "Checkpoint supports done, blocked, and next only.",
+            ));
+        }
+        p["operation"] = json!("checkpoint");
+        for (k, v) in object {
+            p[k] = v.clone();
+        }
+    }
+    Ok(())
 }
 fn runtime(root: &Path) -> Result<Value> {
     let value: Value = serde_json::from_slice(&read(&root.join("data/runtime.json"), 16384)?)?;
@@ -429,8 +447,10 @@ fn enqueue(runtime: &Value, payload: &Value, reply: bool) -> Result<(PathBuf, St
         .finalize()
         .into_bytes()
         .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        });
     let bytes = serde_json::to_vec(&json!({"data":data,"signature":signature}))?;
     if bytes.len() > LIMIT {
         return Err(Error::new("Registration request exceeds 128 KiB."));
@@ -475,7 +495,7 @@ fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Resul
         let client = reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_millis(if hook { 1500 } else { 120000 }))
+            .timeout(Duration::from_millis(if hook { 1500 } else { 120_000 }))
             .build()
             .map_err(|_| Error::io())?;
         match client

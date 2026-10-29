@@ -85,7 +85,7 @@ fn skips_oversized_files_and_uses_folder_name_without_frontmatter() {
     std::fs::write(root.join("plain/SKILL.md"), "# Plain skill").unwrap();
     std::fs::write(
         root.join("large/SKILL.md"),
-        vec![b'x'; MAX_FILE_BYTES as usize + 1],
+        vec![b'x'; usize::try_from(MAX_FILE_BYTES).unwrap() + 1],
     )
     .unwrap();
     let result = scan(&[Root {

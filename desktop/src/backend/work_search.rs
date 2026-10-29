@@ -65,6 +65,16 @@ pub fn project(item: &Value, detail_limit: usize) -> Value {
     row
 }
 
+fn subsequence(value: &str, word: &str) -> bool {
+    let mut rest = value;
+    for ch in word.chars() {
+        let Some(index) = rest.find(ch) else {
+            return false;
+        };
+        rest = &rest[index + ch.len_utf8()..];
+    }
+    true
+}
 fn rank(item: &Value, words: &[String]) -> Option<(usize, bool, Vec<&'static str>)> {
     let fields = [
         ("title", 40),
@@ -94,23 +104,13 @@ fn rank(item: &Value, words: &[String]) -> Option<(usize, bool, Vec<&'static str
     for word in words {
         let mut best = None;
         for (name, weight, value) in &values {
-            let found = if let Some(index) = value.find(word) {
-                Some((100 + weight + usize::from(index == 0) * 10, true, *name))
-            } else if *name == "detail" {
-                None
-            } else {
-                let mut rest = value.as_str();
-                let mut found = true;
-                for ch in word.chars() {
-                    if let Some(index) = rest.find(ch) {
-                        rest = &rest[index + ch.len_utf8()..];
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                found.then_some((*weight, false, *name))
-            };
+            let found = value.find(word).map_or_else(
+                || {
+                    (*name != "detail" && subsequence(value, word))
+                        .then_some((*weight, false, *name))
+                },
+                |index| Some((100 + weight + usize::from(index == 0) * 10, true, *name)),
+            );
             if let Some(found) = found {
                 if best
                     .as_ref()
@@ -213,7 +213,7 @@ pub fn search(repo: &Repository, args: &Value) -> Result<Value> {
             .then_with(|| text(&a.3, "title").cmp(text(&b.3, "title")))
             .then_with(|| text(&a.3, "id").cmp(text(&b.3, "id")))
     });
-    let offset = args["offset"].as_u64().unwrap_or(0).min(100000) as usize;
+    let offset = args["offset"].as_u64().unwrap_or(0).min(100_000) as usize;
     let total = rows.len();
     let rows = rows
         .into_iter()

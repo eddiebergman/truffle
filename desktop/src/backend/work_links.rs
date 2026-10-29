@@ -116,8 +116,8 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|offset| *offset <= MAX_LINKS as u64)
-            .ok_or_else(|| Error::new("Choose a manual work-link offset from 0 to 2000."))?
-            as usize,
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| Error::new("Choose a manual work-link offset from 0 to 2000."))?,
         None => 0,
     };
     let supplied = match args.get("snapshot") {

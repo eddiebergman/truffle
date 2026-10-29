@@ -84,9 +84,13 @@ pub fn view(repo: &Repository) -> Result<Value> {
             }
         }
     }
+    let setup_complete = state["onboarding"]["completed"] == true;
+    let assistant_used = !arr(&state["appChat"]["messages"]).is_empty()
+        || !arr(&state["appChat"]["history"]).is_empty();
+    drop(state);
     let definitions = json!({"version":1,"tips":arr(&definitions["tips"]).iter().map(|tip|json!({"id":tip["id"],"title":tip["title"],"text":tip["text"]})).collect::<Vec<_>>()});
     Ok(
-        json!({"progress":current,"definitions":definitions,"setupComplete":state["onboarding"]["completed"]==true,"assistantUsed":!arr(&state["appChat"]["messages"]).is_empty()||!arr(&state["appChat"]["history"]).is_empty(),"demo":repo.demo}),
+        json!({"progress":current,"definitions":definitions,"setupComplete":setup_complete,"assistantUsed":assistant_used,"demo":repo.demo}),
     )
 }
 

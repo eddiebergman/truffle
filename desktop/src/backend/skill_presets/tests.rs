@@ -19,7 +19,7 @@ fn raw_skill_source_preserves_document_paths_extensions_and_overlay_precedence()
     ]});
     let bytes = configured(&repo, &document);
     let custom = json!({"id":"override","title":"Custom","cwd":"relative folder","skill":"raw.md","reports":"custom-reports","privateNs":{"custom":true}});
-    let state = json!({"skillPresets":[custom.clone(),{"id":"last","reports":"last-reports"}]});
+    let state = json!({"skillPresets":[custom,{"id":"last","reports":"last-reports"}]});
     let source = load(&repo).unwrap();
     assert_eq!(source.document, document);
     assert_eq!(source.hash, context_kit::sha256(&bytes));
@@ -62,7 +62,7 @@ fn raw_skill_source_validation_is_identical_for_catalog_and_editor() {
     }
     std::fs::write(
         config_path(&repo),
-        vec![b' '; MAX_CONFIG_BYTES as usize + 1],
+        vec![b' '; usize::try_from(MAX_CONFIG_BYTES).unwrap() + 1],
     )
     .unwrap();
     assert!(load(&repo).err().unwrap().message.contains("Cannot read"));

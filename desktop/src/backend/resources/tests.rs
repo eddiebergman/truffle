@@ -40,7 +40,10 @@ fn bad_resource_reports_do_not_partially_modify_sessions() {
         })
         .unwrap();
     assert!(repo.transaction(|s|save(s,text(&record,"id"),&json!({"resources":[{"provider":"gcp","id":"ok","kind":"vm"},{"provider":"gcp","kind":"vm"}]}))).is_err());
-    assert!(arr(&repo.snapshot(false)["sessions"][0]["resources"]).is_empty());
+    assert_eq!(
+        arr(&repo.snapshot(false)["sessions"][0]["resources"]),
+        [] as [serde_json::Value; 0]
+    );
 }
 fn replacement_fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>, String) {
     let temp = tempfile::tempdir().unwrap();
@@ -67,9 +70,9 @@ fn resource_context_undo_preserves_exact_captured_report_time_without_clock_assu
         &json!({"revision":before["revision"],"resources":[]}),
     )
     .unwrap();
-    assert!(
-        arr(&super::super::session_context::read(&repo, &id).unwrap()["context"]["resources"])
-            .is_empty()
+    assert_eq!(
+        arr(&super::super::session_context::read(&repo, &id).unwrap()["context"]["resources"]),
+        [] as [serde_json::Value; 0]
     );
     let restored = super::super::session_context::replace_receipt(
         &repo,
@@ -239,7 +242,10 @@ fn pending_destructive_reports_keep_bytes_and_pending_identity_until_valid_revis
     import_pending(&repo);
     assert!(!file.exists());
     assert!(file.with_extension("imported").exists());
-    assert!(arr(&repo.state.lock().unwrap()["sessions"][0]["resources"]).is_empty());
+    assert_eq!(
+        arr(&repo.state.lock().unwrap()["sessions"][0]["resources"]),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn staged_reports_import_once_and_new_state_does_not_inherit_old_observation() {

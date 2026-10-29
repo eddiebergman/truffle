@@ -108,6 +108,49 @@ fn cached_scope(item: &Value, page: &str) -> Result<String> {
     Ok(key)
 }
 
+fn cached_choices(state: &Value, page: &str) -> Result<std::collections::BTreeMap<String, bool>> {
+    let mut choices = std::collections::BTreeMap::new();
+    for item in state["items"]
+        .as_array()
+        .ok_or_else(|| Error::new("Cached work is unavailable."))?
+    {
+        if item["source"] != page {
+            continue;
+        }
+        choices.insert(cached_scope(item, page)?, true);
+        if choices.len() > 4096 {
+            return Err(Error::new("Visibility choices exceed 4096 keys."));
+        }
+    }
+    Ok(choices)
+}
+fn choices(
+    repo: &Repository,
+    page: &str,
+    selected: &Value,
+) -> Result<std::collections::BTreeMap<String, bool>> {
+    let mut choices = cached_choices(&*repo.state.lock().map_err(|_| Error::io())?, page)?;
+    for key in selected.as_array().into_iter().flatten() {
+        choices
+            .entry(key.as_str().unwrap().to_owned())
+            .or_insert(false);
+        if choices.len() > 4096 {
+            return Err(Error::new("Visibility choices exceed 4096 keys."));
+        }
+    }
+    // This owner serves the named read. Check the complete union before a query
+    // or page can hide an unsafe actionable key behind a count or snapshot.
+    for key in choices.keys() {
+        let mut projected = key.clone();
+        super::commands::redact_text(repo, &mut projected);
+        if projected != *key {
+            return Err(Error::new(
+                "Page visibility scopes cannot be safely projected.",
+            ));
+        }
+    }
+    Ok(choices)
+}
 pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
     if args.as_object().is_none_or(|args| {
         args.keys()
@@ -132,8 +175,8 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|offset| *offset <= 4096)
-            .ok_or_else(|| Error::new("Choose a visibility offset from 0 to 4096."))?
-            as usize,
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| Error::new("Choose a visibility offset from 0 to 4096."))?,
         None => 0,
     };
     let supplied_snapshot = match args.get("snapshot") {
@@ -150,41 +193,7 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
     };
     let current = view(repo)?;
     let selected = &current["pages"][page]["scopes"];
-    let mut choices = std::collections::BTreeMap::new();
-    {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        for item in state["items"]
-            .as_array()
-            .ok_or_else(|| Error::new("Cached work is unavailable."))?
-        {
-            if item["source"] != page {
-                continue;
-            }
-            choices.insert(cached_scope(item, page)?, true);
-            if choices.len() > 4096 {
-                return Err(Error::new("Visibility choices exceed 4096 keys."));
-            }
-        }
-    }
-    for key in selected.as_array().into_iter().flatten() {
-        choices
-            .entry(key.as_str().unwrap().to_owned())
-            .or_insert(false);
-        if choices.len() > 4096 {
-            return Err(Error::new("Visibility choices exceed 4096 keys."));
-        }
-    }
-    // This owner serves the named read. Check the complete union before a query
-    // or page can hide an unsafe actionable key behind a count or snapshot.
-    for key in choices.keys() {
-        let mut projected = key.clone();
-        super::commands::redact_text(repo, &mut projected);
-        if projected != *key {
-            return Err(Error::new(
-                "Page visibility scopes cannot be safely projected.",
-            ));
-        }
-    }
+    let choices = choices(repo, page, selected)?;
     let rows = choices
         .into_iter()
         .map(|(key, cached)| {

@@ -13,14 +13,14 @@ fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
         }).unwrap();
     (temp, repo)
 }
-fn invoke(repo: &Arc<Repository>, name: &str, args: Value) -> Result<Value> {
+fn invoke(repo: &Arc<Repository>, name: &str, args: &Value) -> Result<Value> {
     commands::invoke(repo, &json!({"name":name,"args":args}), true)
 }
 
 #[test]
 fn work_links_commands_are_exact_idempotent_and_share_the_legacy_owner() {
     let (_temp, repo) = fixture();
-    let added = invoke(&repo, "work.links.add", json!({"itemIds":["b","a"]})).unwrap();
+    let added = invoke(&repo, "work.links.add", &json!({"itemIds":["b","a"]})).unwrap();
     assert_eq!(
         added,
         json!({"scope":"local","manualOnly":true,"itemIds":["a","b"],"linked":true,"changed":true})
@@ -28,7 +28,7 @@ fn work_links_commands_are_exact_idempotent_and_share_the_legacy_owner() {
     let bytes = std::fs::read(&repo.data).unwrap();
     let revision = repo.snapshot(false)["revision"].clone();
     assert_eq!(
-        invoke(&repo, "work.links.add", json!({"itemIds":["a","b"]})).unwrap()["changed"],
+        invoke(&repo, "work.links.add", &json!({"itemIds":["a","b"]})).unwrap()["changed"],
         false
     );
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
@@ -36,16 +36,16 @@ fn work_links_commands_are_exact_idempotent_and_share_the_legacy_owner() {
     repo.edit(&json!({"action":"link-work","itemIds":["d","c"]}))
         .unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.read", json!({"itemId":"a"})).unwrap()["links"],
+        invoke(&repo, "work.links.read", &json!({"itemId":"a"})).unwrap()["links"],
         json!([{"itemIds":["a","b"]}])
     );
     assert_eq!(
-        invoke(&repo, "work.links.remove", json!({"itemIds":["b","a"]})).unwrap()["changed"],
+        invoke(&repo, "work.links.remove", &json!({"itemIds":["b","a"]})).unwrap()["changed"],
         true
     );
     let before = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.remove", json!({"itemIds":["a","b"]})).unwrap()["changed"],
+        invoke(&repo, "work.links.remove", &json!({"itemIds":["a","b"]})).unwrap()["changed"],
         false
     );
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
@@ -53,7 +53,7 @@ fn work_links_commands_are_exact_idempotent_and_share_the_legacy_owner() {
     repo.edit(&json!({"action":"unlink-work","itemIds":["c","d"]}))
         .unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.read", json!({})).unwrap()["total"],
+        invoke(&repo, "work.links.read", &json!({})).unwrap()["total"],
         0
     );
     assert_eq!(
@@ -80,7 +80,7 @@ fn work_links_preserve_legacy_escaped_order_and_retained_catalog_identities() {
     })
     .unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.add", json!({"itemIds":escaped})).unwrap()["itemIds"],
+        invoke(&repo, "work.links.add", &json!({"itemIds":escaped})).unwrap()["itemIds"],
         json!(expected)
     );
     repo.edit(&json!({"action":"link-work","itemIds":["aBé","a\""]}))
@@ -91,7 +91,7 @@ fn work_links_preserve_legacy_escaped_order_and_retained_catalog_identities() {
         json!(["archive:retained", "session:retained"]),
     ] {
         assert_eq!(
-            invoke(&repo, "work.links.add", json!({"itemIds":ids})).unwrap()["changed"],
+            invoke(&repo, "work.links.add", &json!({"itemIds":ids})).unwrap()["changed"],
             true
         );
     }
@@ -107,7 +107,7 @@ fn work_links_atomic_pair_changes_preserve_concurrent_unrelated_edges_and_inferr
         let barrier = Arc::clone(&barrier);
         threads.push(std::thread::spawn(move || {
             barrier.wait();
-            invoke(&repo, "work.links.add", json!({"itemIds":ids})).unwrap()
+            invoke(&repo, "work.links.add", &json!({"itemIds":ids})).unwrap()
         }));
     }
     barrier.wait();
@@ -115,7 +115,7 @@ fn work_links_atomic_pair_changes_preserve_concurrent_unrelated_edges_and_inferr
         assert_eq!(thread.join().unwrap()["changed"], true);
     }
     assert_eq!(
-        invoke(&repo, "work.links.read", json!({})).unwrap()["links"],
+        invoke(&repo, "work.links.read", &json!({})).unwrap()["links"],
         json!([{"itemIds":["a","b"]},{"itemIds":["c","d"]}])
     );
     let barrier = Arc::new(Barrier::new(3));
@@ -128,7 +128,7 @@ fn work_links_atomic_pair_changes_preserve_concurrent_unrelated_edges_and_inferr
         let barrier = Arc::clone(&barrier);
         threads.push(std::thread::spawn(move || {
             barrier.wait();
-            invoke(&repo, name, json!({"itemIds":ids})).unwrap()
+            invoke(&repo, name, &json!({"itemIds":ids})).unwrap()
         }));
     }
     barrier.wait();
@@ -136,7 +136,7 @@ fn work_links_atomic_pair_changes_preserve_concurrent_unrelated_edges_and_inferr
         thread.join().unwrap();
     }
     assert_eq!(
-        invoke(&repo, "work.links.read", json!({})).unwrap()["links"],
+        invoke(&repo, "work.links.read", &json!({})).unwrap()["links"],
         json!([{"itemIds":["a","c"]},{"itemIds":["c","d"]}])
     );
     repo.transaction(|state| {
@@ -144,7 +144,7 @@ fn work_links_atomic_pair_changes_preserve_concurrent_unrelated_edges_and_inferr
         Ok(())
     })
     .unwrap();
-    let receipt = invoke(&repo, "work.links.remove", json!({"itemIds":["a","c"]})).unwrap();
+    let receipt = invoke(&repo, "work.links.remove", &json!({"itemIds":["a","c"]})).unwrap();
     assert_eq!(receipt["linked"], false);
     assert_eq!(receipt["manualOnly"], true);
     assert!(arr(&domain::bundles(&repo.state.lock().unwrap()))
@@ -164,17 +164,17 @@ fn work_links_pagination_checks_complete_set_and_filter_without_writes() {
     })
     .unwrap();
     let before = std::fs::read(&repo.data).unwrap();
-    let first = invoke(&repo, "work.links.read", json!({})).unwrap();
+    let first = invoke(&repo, "work.links.read", &json!({})).unwrap();
     assert_eq!(first["total"], 110);
     assert_eq!(first["links"].as_array().unwrap().len(), 100);
     assert_eq!(first["nextOffset"], 100);
     let args = json!({"offset":100,"snapshot":first["snapshot"]});
-    let next = invoke(&repo, "work.links.read", args.clone()).unwrap();
+    let next = invoke(&repo, "work.links.read", &args).unwrap();
     assert_eq!(next["links"].as_array().unwrap().len(), 10);
     assert_eq!(next["links"][0]["itemIds"], json!(["a", "other:100"]));
     assert!(next["nextOffset"].is_null());
     assert_eq!(
-        invoke(&repo, "work.links.read", json!({"itemId":"other:109"})).unwrap()["total"],
+        invoke(&repo, "work.links.read", &json!({"itemId":"other:109"})).unwrap()["total"],
         1
     );
     for invalid in [
@@ -182,16 +182,16 @@ fn work_links_pagination_checks_complete_set_and_filter_without_writes() {
         json!({"itemId":"a","offset":100,"snapshot":first["snapshot"]}),
     ] {
         assert_eq!(
-            invoke(&repo, "work.links.read", invalid)
+            invoke(&repo, "work.links.read", &invalid)
                 .unwrap_err()
                 .status,
             409
         );
     }
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
-    invoke(&repo, "work.links.add", json!({"itemIds":["c","d"]})).unwrap();
+    invoke(&repo, "work.links.add", &json!({"itemIds":["c","d"]})).unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.read", args).unwrap_err().status,
+        invoke(&repo, "work.links.read", &args).unwrap_err().status,
         409
     );
 }
@@ -215,20 +215,20 @@ fn work_links_capacity_allows_noops_and_removals_but_not_an_extra_pair() {
         invoke(
             &repo,
             "work.links.add",
-            json!({"itemIds":["known:0000","a"]})
+            &json!({"itemIds":["known:0000","a"]})
         )
         .unwrap()["changed"],
         false
     );
-    assert!(invoke(&repo, "work.links.add", json!({"itemIds":["c","d"]})).is_err());
+    assert!(invoke(&repo, "work.links.add", &json!({"itemIds":["c","d"]})).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     invoke(
         &repo,
         "work.links.remove",
-        json!({"itemIds":["known:0000","a"]}),
+        &json!({"itemIds":["known:0000","a"]}),
     )
     .unwrap();
-    invoke(&repo, "work.links.add", json!({"itemIds":["c","d"]})).unwrap();
+    invoke(&repo, "work.links.add", &json!({"itemIds":["c","d"]})).unwrap();
     assert_eq!(
         repo.state.lock().unwrap()["workLinks"]
             .as_array()
@@ -256,7 +256,7 @@ fn work_links_invalid_arguments_and_malformed_storage_preserve_exact_state() {
             json!({"itemIds":["a","missing"]}),
             json!({"itemIds":["a","b"],"links":[]}),
         ] {
-            assert!(invoke(&repo, name, args).is_err());
+            assert!(invoke(&repo, name, &args).is_err());
         }
     }
     for args in [
@@ -268,7 +268,7 @@ fn work_links_invalid_arguments_and_malformed_storage_preserve_exact_state() {
         json!({"snapshot":"bad"}),
         json!({"all":true}),
     ] {
-        assert!(invoke(&repo, "work.links.read", args).is_err());
+        assert!(invoke(&repo, "work.links.read", &args).is_err());
     }
     assert!(repo
         .edit(&json!({"action":"link-work","itemIds":["a","b"],"unexpected":true}))
@@ -290,8 +290,8 @@ fn work_links_invalid_arguments_and_malformed_storage_preserve_exact_state() {
         .unwrap();
         let before = std::fs::read(&repo.data).unwrap();
         let state = repo.state.lock().unwrap().clone();
-        assert!(invoke(&repo, "work.links.read", json!({})).is_err());
-        assert!(invoke(&repo, "work.links.add", json!({"itemIds":["a","b"]})).is_err());
+        assert!(invoke(&repo, "work.links.read", &json!({})).is_err());
+        assert!(invoke(&repo, "work.links.add", &json!({"itemIds":["a","b"]})).is_err());
         assert!(repo
             .edit(&json!({"action":"unlink-work","itemIds":["a","b"]}))
             .is_err());
@@ -324,7 +324,7 @@ fn work_links_projection_rejects_secrets_before_writes_and_before_read_paginatio
             json!(["a", secret])
         };
         for name in ["work.links.add", "work.links.remove"] {
-            let error = invoke(&repo, name, json!({"itemIds":ids})).unwrap_err();
+            let error = invoke(&repo, name, &json!({"itemIds":ids})).unwrap_err();
             assert!(!error.message.contains(secret));
             assert_eq!(*repo.state.lock().unwrap(), state);
             assert_eq!(std::fs::read(&repo.data).unwrap(), before);
@@ -351,7 +351,7 @@ fn work_links_projection_rejects_secrets_before_writes_and_before_read_paginatio
     .unwrap();
     let before = std::fs::read(&repo.data).unwrap();
     for args in [json!({}), json!({"itemId":"a"})] {
-        assert!(invoke(&repo, "work.links.read", args).is_err());
+        assert!(invoke(&repo, "work.links.read", &args).is_err());
         assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     }
 }
@@ -362,12 +362,12 @@ fn work_links_failed_save_rolls_back_then_the_same_pair_can_be_applied() {
     let before = std::fs::read(&repo.data).unwrap();
     let state = repo.state.lock().unwrap().clone();
     std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
-    assert!(invoke(&repo, "work.links.add", json!({"itemIds":["a","b"]})).is_err());
+    assert!(invoke(&repo, "work.links.add", &json!({"itemIds":["a","b"]})).is_err());
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     std::fs::remove_dir(repo.data.with_extension("tmp")).unwrap();
     assert_eq!(
-        invoke(&repo, "work.links.add", json!({"itemIds":["a","b"]})).unwrap()["changed"],
+        invoke(&repo, "work.links.add", &json!({"itemIds":["a","b"]})).unwrap()["changed"],
         true
     );
 }

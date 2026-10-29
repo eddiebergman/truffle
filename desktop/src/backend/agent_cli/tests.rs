@@ -1,7 +1,13 @@
 use super::*;
 use crate::backend::{arr, workflows, Repository};
 fn options(args: &[&str]) -> Options {
-    Options::parse(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap()
+    Options::parse(
+        &args
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap()
 }
 #[test]
 fn replacement_payloads_require_and_preserve_the_captured_revision_without_new_flags() {

@@ -64,6 +64,57 @@ pub fn seen(repo: &Repository, p: &Value) -> Result<()> {
         Ok(())
     })
 }
+struct Guard<'a>(&'a Repository, String);
+impl Drop for Guard<'_> {
+    fn drop(&mut self) {
+        self.0.opening.lock().unwrap().remove(&self.1);
+    }
+}
+fn demo_item(mut item: Value, operation: &str, login: &str) -> Result<Value> {
+    match operation {
+        "ready" => {
+            item["isDraft"] = json!(false);
+            item["status"] = json!("needs-review");
+            item["sourceStatus"] = json!("Awaiting review");
+        }
+        "request-review" => {
+            if item["isDraft"] == true {
+                return Err(Error::new(
+                    "Mark this draft ready before requesting a review.",
+                ));
+            }
+            let mut reviewers = arr(&item["requestedReviewers"]);
+            if !reviewers
+                .iter()
+                .any(|r| text(r, "login").eq_ignore_ascii_case(login))
+            {
+                reviewers.push(json!({"login":login,"kind":"user"}));
+            }
+            item["requestedReviewers"] = json!(reviewers);
+            item["reviewerCount"] = json!(reviewers.len());
+        }
+        _ => (),
+    }
+    Ok(item)
+}
+fn relations(old: &Value, item: &Value, viewer: &str) -> Vec<Value> {
+    let mut roles = arr(&old["relations"]);
+    roles.retain(|r| r != "reviews" && r != "authored");
+    if text(item, "author").eq_ignore_ascii_case(viewer) {
+        roles.push(json!("authored"));
+    }
+    if arr(&item["requestedReviewers"])
+        .iter()
+        .any(|r| text(r, "login").eq_ignore_ascii_case(viewer))
+        || (arr(&old["relations"]).contains(&json!("reviews"))
+            && arr(&item["requestedReviewers"])
+                .iter()
+                .any(|r| r["kind"] == "team"))
+    {
+        roles.push(json!("reviews"));
+    }
+    roles
+}
 pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
     action_with(repo, p, |id, operation, login| {
         repo.providers.github_pr_action(id, operation, login)
@@ -101,41 +152,10 @@ fn action_with(
     if !repo.opening.lock().unwrap().insert(key.clone()) {
         return Err(Error::new("This PR action is already running."));
     }
-    struct Guard<'a>(&'a Repository, String);
-    impl Drop for Guard<'_> {
-        fn drop(&mut self) {
-            self.0.opening.lock().unwrap().remove(&self.1);
-        }
-    }
     let _guard = Guard(repo, key.clone());
     repo.cooldown(&format!("{key}:{operation}"), 3.0)?;
     let mut item = if repo.demo {
-        let mut item = old;
-        match operation.as_str() {
-            "ready" => {
-                item["isDraft"] = json!(false);
-                item["status"] = json!("needs-review");
-                item["sourceStatus"] = json!("Awaiting review");
-            }
-            "request-review" => {
-                if item["isDraft"] == true {
-                    return Err(Error::new(
-                        "Mark this draft ready before requesting a review.",
-                    ));
-                }
-                let mut reviewers = arr(&item["requestedReviewers"]);
-                if !reviewers
-                    .iter()
-                    .any(|r| text(r, "login").eq_ignore_ascii_case(&login))
-                {
-                    reviewers.push(json!({"login":login,"kind":"user"}));
-                }
-                item["requestedReviewers"] = json!(reviewers);
-                item["reviewerCount"] = json!(reviewers.len());
-            }
-            _ => (),
-        }
-        item
+        demo_item(old, &operation, &login)?
     } else {
         let (node, viewer) = remote(node_id, &operation, &login).map_err(|mut error|{
             if error.data["githubActionStage"]=="dispatched" {
@@ -145,22 +165,7 @@ fn action_with(
         })?;
         let mut item = super::providers::github_item(&node)
             .map_err(|_| confirmed_cache_error(&id, &operation))?;
-        let mut roles = arr(&old["relations"]);
-        roles.retain(|r| r != "reviews" && r != "authored");
-        if text(&item, "author").eq_ignore_ascii_case(&viewer) {
-            roles.push(json!("authored"));
-        }
-        if arr(&item["requestedReviewers"])
-            .iter()
-            .any(|r| text(r, "login").eq_ignore_ascii_case(&viewer))
-            || (arr(&old["relations"]).contains(&json!("reviews"))
-                && arr(&item["requestedReviewers"])
-                    .iter()
-                    .any(|r| r["kind"] == "team"))
-        {
-            roles.push(json!("reviews"));
-        }
-        item["relations"] = json!(roles);
+        item["relations"] = json!(relations(&old, &item, &viewer));
         item
     };
     if item["id"] != id {

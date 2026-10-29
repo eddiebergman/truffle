@@ -364,13 +364,12 @@ fn update_with(
     resolve: impl Fn(&str) -> Result<Value>,
 ) -> Result<Value> {
     let patch = validate(repo, args)?;
-    {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        let row = &state["sessions"][position(&state, text(args, "recordId"))?];
-        identity(repo, row)?;
-        check_tokens(row, args)?;
-        association(&state, row, &patch, repo)?;
-    }
+    check_current(
+        repo,
+        &*repo.state.lock().map_err(|_| Error::io())?,
+        args,
+        &patch,
+    )?;
     let mut imported = vec![];
     for url in arr(&args["urls"]) {
         let url = safe_url(url.as_str().unwrap())?;
@@ -386,6 +385,12 @@ fn update_with(
         });
     }
     repo.transaction_if_changed(|state| apply(repo, state, args, &patch, &imported))
+}
+fn check_current(repo: &Repository, state: &Value, args: &Value, patch: &Value) -> Result<()> {
+    let row = &state["sessions"][position(state, text(args, "recordId"))?];
+    identity(repo, row)?;
+    check_tokens(row, args)?;
+    association(state, row, patch, repo)
 }
 pub(super) fn reject_unchecked_association(state: &Value, args: &Value) -> Result<()> {
     if args.get("id").is_some_and(|value| !value.is_string()) {

@@ -128,40 +128,40 @@ fn work(repo: &Repository, item: &Value) -> Result<Value> {
             .collect::<Vec<_>>());
     }
     if item["ci"].is_object() {
-        let mut ci = json!({});
-        if item["ci"]["state"].is_string() {
-            ci["state"] = json!(identity(repo, &item["ci"]["state"], 40)?);
-        }
-        if item["ci"]["summary"].is_string() {
-            ci["summary"] = clipped(repo, &item["ci"]["summary"], 300);
-        }
-        for field in ["total", "passed", "failed", "pending", "skipped"] {
-            if let Some(count) = item["ci"][field].as_u64() {
-                ci[field] = json!(count.min(1000000));
-            }
-        }
-        if let Some(checks) = item["ci"]["checks"].as_array() {
-            ci["checks"] = json!(checks
-                .iter()
-                .take(100)
-                .map(|check| {
-                    let mut result = json!({});
-                    for field in ["name", "state", "url", "workflow"] {
-                        if check[field].is_string() {
-                            result[field] = clipped(
-                                repo,
-                                &check[field],
-                                if field == "url" { 4096 } else { 300 },
-                            );
-                        }
-                    }
-                    result
-                })
-                .collect::<Vec<_>>());
-        }
-        result["ci"] = ci;
+        result["ci"] = ci(repo, &item["ci"])?;
     }
     Ok(result)
+}
+fn ci(repo: &Repository, source: &Value) -> Result<Value> {
+    let mut ci = json!({});
+    if source["state"].is_string() {
+        ci["state"] = json!(identity(repo, &source["state"], 40)?);
+    }
+    if source["summary"].is_string() {
+        ci["summary"] = clipped(repo, &source["summary"], 300);
+    }
+    for field in ["total", "passed", "failed", "pending", "skipped"] {
+        if let Some(count) = source[field].as_u64() {
+            ci[field] = json!(count.min(1_000_000));
+        }
+    }
+    if let Some(checks) = source["checks"].as_array() {
+        ci["checks"] = json!(checks
+            .iter()
+            .take(100)
+            .map(|check| {
+                let mut result = json!({});
+                for field in ["name", "state", "url", "workflow"] {
+                    if check[field].is_string() {
+                        result[field] =
+                            clipped(repo, &check[field], if field == "url" { 4096 } else { 300 });
+                    }
+                }
+                result
+            })
+            .collect::<Vec<_>>());
+    }
+    Ok(ci)
 }
 fn parent(repo: &Repository, item: &Value, depth: usize) -> Result<Value> {
     let mut result = json!({"id":identity(repo,&item["id"],160)?});
@@ -349,30 +349,49 @@ pub(super) fn present(repo: &Repository, args: &Value) -> Result<Value> {
     vocabulary(repo)?;
     let id = request(repo, &args["requestId"])?;
     let hash = context_kit::sha256(&serde_json::to_vec(&args["presentation"])?);
-    {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        let rows = entries(&state["uiPresentations"])?;
-        if let Some(row) = rows.iter().find(|row| row["requestId"] == id) {
-            if row["hash"] != hash {
-                return Err(conflict(
-                    "This presentation request ID already has different content.",
-                ));
-            }
-            return receipt(repo, row);
-        }
-        if rows.iter().filter(|row| row["status"] == "queued").count() >= MAX_PENDING {
-            return Err(conflict("Eight presentation requests are awaiting review. Show or dismiss one before queuing another."));
-        }
+    let rows = entries(&repo.state.lock().map_err(|_| Error::io())?["uiPresentations"])?;
+    if let Some(existing) = existing_receipt(repo, &rows, &id, &hash)? {
+        return Ok(existing);
     }
     let descriptor = canonical(repo, &args["presentation"])?;
-    repo.transaction_if_changed(|state|{let mut rows=entries(&state["uiPresentations"])?;if let Some(row)=rows.iter().find(|row|row["requestId"]==id){if row["hash"]!=hash{return Err(conflict("This presentation request ID already has different content."));}return receipt(repo,row);}if rows.iter().filter(|row|row["status"]=="queued").count()>=MAX_PENDING{return Err(conflict("Eight presentation requests are awaiting review. Show or dismiss one before queuing another."));}let row=json!({"requestId":id,"hash":hash,"status":"queued","presentation":descriptor});let result=receipt(repo,&row)?;rows.push(row);if state["uiPresentations"].is_null(){state["uiPresentations"]=empty();}state["uiPresentations"]["entries"]=json!(rows);entries(&state["uiPresentations"])?;Ok(result)})
+    repo.transaction_if_changed(|state| {
+        let mut rows = entries(&state["uiPresentations"])?;
+        if let Some(existing) = existing_receipt(repo, &rows, &id, &hash)? {
+            return Ok(existing);
+        }
+        let row = json!({"requestId":id,"hash":hash,"status":"queued","presentation":descriptor});
+        let result = receipt(repo, &row)?;
+        rows.push(row);
+        if state["uiPresentations"].is_null() {
+            state["uiPresentations"] = empty();
+        }
+        state["uiPresentations"]["entries"] = json!(rows);
+        entries(&state["uiPresentations"])?;
+        Ok(result)
+    })
+}
+fn existing_receipt(
+    repo: &Repository,
+    rows: &[Value],
+    id: &str,
+    hash: &str,
+) -> Result<Option<Value>> {
+    if let Some(row) = rows.iter().find(|row| row["requestId"] == id) {
+        if row["hash"] != hash {
+            return Err(conflict(
+                "This presentation request ID already has different content.",
+            ));
+        }
+        return receipt(repo, row).map(Some);
+    }
+    if rows.iter().filter(|row| row["status"] == "queued").count() >= MAX_PENDING {
+        return Err(conflict("Eight presentation requests are awaiting review. Show or dismiss one before queuing another."));
+    }
+    Ok(None)
 }
 pub(super) fn read(repo: &Repository) -> Result<Value> {
     vocabulary(repo)?;
-    let rows = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        entries(&state["uiPresentations"])?
-    };
+    let rows = entries(&repo.state.lock().map_err(|_| Error::io())?["uiPresentations"])?;
     let mut pending = vec![];
     let mut receipts = vec![];
     for row in rows {
