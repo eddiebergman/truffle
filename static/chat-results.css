@@ -35,11 +35,6 @@
   background: var(--panel);
 }
 
-.chat-search-match.recommended {
-  border-color: var(--accent);
-  background: var(--overlay, var(--panel));
-}
-
 .chat-search-match-heading {
   display: flex;
   align-items: center;
@@ -59,7 +54,6 @@
 .chat-search-recommended {
   font-size: 11px;
   border: 1px solid var(--accent);
-  color: var(--accent);
   padding: 1px 7px;
   border-radius: 20px;
 }

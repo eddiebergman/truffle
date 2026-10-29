@@ -11,19 +11,12 @@
 
 .skill-picker-results {
   display: grid;
-  gap: 3px;
-  max-height: 230px;
   overflow-y: auto;
 }
 
 .skill-picker-result {
-  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px 8px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
   border-radius: 7px;
-  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -52,7 +45,6 @@
 .skill-picker-path {
   grid-column: 1/-1;
   color: var(--muted);
-  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

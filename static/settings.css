@@ -62,7 +62,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 
 #settings-dialog.preferences-page {
   position: fixed;
-  inset: calc(var(--titlebar-height, 32px) + 12px) 12px 12px;
   margin: 0;
   width: auto;
   max-width: none;
@@ -70,7 +69,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   max-height: none;
   padding: 0;
   overflow: hidden;
-  border-radius: 10px;
   z-index: 90;
 }
 
@@ -82,9 +80,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 .preferences-heading {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
 
@@ -111,49 +106,39 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 
 .preferences-layout {
   display: grid;
-  grid-template-columns: 195px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
 
 .preferences-nav {
-  padding: 18px 10px;
   border-right: 1px solid var(--line);
   overflow: auto;
-  background: var(--sidebar);
 }
 
 .preferences-nav button {
-  display: block;
   width: 100%;
   text-align: left;
-  padding: 10px 14px;
   margin: 0 0 3px;
   border: 0;
   border-radius: 6px;
   color: var(--muted);
-  font-size: 13px;
   background: transparent;
 }
 
 .preferences-nav button[aria-current="true"] {
-  background: var(--overlay);
   color: var(--text);
 }
 
 .preferences-body {
-  padding: 24px 32px;
   overflow: auto;
   min-width: 0;
 }
 
 .preferences-panel {
-  max-width: 1000px;
   margin: 0 auto 30px;
 }
 
 .preferences-panel h2 {
-  font-size: 20px;
   margin: 0 0 20px;
 }
 
@@ -170,10 +155,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 .preference-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   gap: 24px;
-  min-height: 62px;
-  padding: 13px 0;
   margin: 0;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
@@ -203,8 +185,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preference-control input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
   min-height: 0;
   accent-color: var(--iris);
 }
@@ -215,9 +195,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preference-reset {
-  font-size: 11px;
   color: var(--muted);
-  width: 42px;
   flex-shrink: 0;
 }
 
@@ -227,7 +205,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   gap: 12px;
   padding: 14px 24px;
   border-top: 1px solid var(--line);
-  background: var(--panel);
   flex-shrink: 0;
 }
 
@@ -330,7 +307,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 
 #custom-quick-actions .quick-action-button {
   font-size: 11px;
-  display: block;
   width: 100%;
   padding: 8px 12px;
   text-align: left;
@@ -353,16 +329,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 @media (max-width: 800px) {
-  .preferences-layout {
-    grid-template-columns: 150px minmax(0, 1fr);
-  }
-
-  .preferences-body {
-    padding: 20px;
-  }
-
   .preference-row {
-    align-items: flex-start;
     flex-direction: column;
     gap: 8px;
   }
@@ -371,10 +338,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
     flex: 0 0 auto;
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .preferences-heading {
-    padding: 14px;
   }
 
   .preferences-heading input {
