@@ -1,18 +1,21 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const vm=require('node:vm');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
+// performance.js wraps existing globals at load. loadScripts would put the test's
+// stubs back over those wrappers, so run the whole file without that step.
+function loadWrapping(c,file){evaluate(c,fs.readFileSync(file,'utf8'));}
 function fixture(){
   let tick=0,calls=0;
   const listeners={};
-  const context=vm.createContext({Map,Number,JSON,performance:{now:()=>++tick,mark(){},clearMeasures(){},measure(){},clearMarks(){}},
+  const context=browserContext({Map,Number,JSON,performance:{now:()=>++tick,mark(){},clearMeasures(){},measure(){},clearMarks(){}},
     renderWorkspacePage:()=>{calls++;return 42;},allItems:()=>[],buildBundleIndex:()=>{},renderRow:()=>({}),api:async()=>({ok:true}),
-    source:'sentry',state:{items:[{title:'private title'}]},serviceClient:{isDesktop:false},
+    source:'sentry',state:{items:[{title:'private title'}]},
     document:{hidden:false,addEventListener:(name,fn)=>listeners[name]=fn,querySelectorAll:()=>[]},requestAnimationFrame:fn=>fn(),
     el:(tag,cls,text)=>({tag,cls,text,children:[],append(...nodes){this.children.push(...nodes);}}),featureButton:(title,fn)=>({title,fn})});
-  const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('const renderHooks='),app.indexOf('function renderWorkPage()')),context);
-  vm.runInContext(fs.readFileSync('static/performance.js','utf8'),context);
-  return {context,run:code=>vm.runInContext(code,context),calls:()=>calls,listeners};
+  loadScripts(context,['static/client.js','static/app.js']);
+  loadWrapping(context,'static/performance.js');
+  return {context,run:code=>evaluate(context,code),calls:()=>calls,listeners};
 }
 test('profiling is off by default and preserves render return values',()=>{
   const f=fixture();assert.equal(f.run('render()'),42);assert.equal(f.calls(),1);
