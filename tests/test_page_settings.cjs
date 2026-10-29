@@ -1,12 +1,11 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const vm=require('node:vm');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
 const readCompactCss=require('./helpers/compact-css.cjs');
 test('provider visibility keeps all, none and selected project meanings distinct',()=>{
- const source=fs.readFileSync('static/page-settings.js','utf8').replace('void loadPageSettings();','');
- const context=vm.createContext({scopeKey:item=>item.project});vm.runInContext(source,context);
- const check=(doc,item)=>{context.doc=doc;context.item=item;return vm.runInContext('pageSettingsDocument=doc;pageSettingsAllows(item,item.source)',context);};
+ const context=browserContext({scopeKey:item=>item.project});loadScripts(context,'static/page-settings.js');
+ const check=(doc,item)=>{context.doc=doc;context.item=item;return evaluate(context,'pageSettingsDocument=doc;pageSettingsAllows(item,item.source)');};
  assert.equal(check(null,{source:'linear',project:'Latency'}),true);
  assert.equal(check({pages:{linear:{scopes:null}}},{source:'linear',project:'New project'}),true);
  assert.equal(check({pages:{linear:{scopes:[]}}},{source:'linear',project:'Latency'}),false);
@@ -14,7 +13,7 @@ test('provider visibility keeps all, none and selected project meanings distinct
  assert.equal(check(doc,{source:'linear',project:'Latency'}),true);
  assert.equal(check(doc,{source:'linear',project:'Other'}),false);
  assert.equal(check(doc,{source:'github',project:'Other'}),true);
- context.doc=doc;context.item={source:'linear',project:'Other'};assert.equal(vm.runInContext("pageSettingsDocument=doc;pageSettingsAllows(item,'all')",context),true);
+ context.doc=doc;context.item={source:'linear',project:'Other'};assert.equal(evaluate(context,"pageSettingsDocument=doc;pageSettingsAllows(item,'all')"),true);
 });
 
 function dialogFixture({fail=false}={}){
@@ -40,9 +39,8 @@ function dialogFixture({fail=false}={}){
   close(){this.open=false;if(this.contains(document.activeElement))document.activeElement=body;this.onclose?.();}
   remove(){if(this.contains(document.activeElement))document.activeElement=body;this.removed=true;if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(child=>child!==this);}
  }
- const body=new Node('body');document={body,activeElement:body,querySelectorAll:selector=>selector==='dialog[open]'?nodes.filter(node=>node.tag==='dialog'&&node.open&&node.isConnected):[],createTextNode:text=>new Node('text','',text)};const c=vm.createContext({Event,toast:message=>calls.push(message),el:(...args)=>new Node(...args),document,currentSavedViewState:()=>({}),openSavedViewEditor:()=>calls.push('filters'),api:async(path,payload)=>{calls.push({path,payload});if(fail)throw new Error('Fixture load failed');return {revision:7,contentHash:'a'.repeat(64),pages:{sentry:{scopes:payload?.scopes??null}}};},allItems:()=>[{source:'sentry',project:'Frontend'},{source:'sentry',project:'Backend'}],scopeKey:item=>item.project,scopePrefs:{sentry:'Frontend'},persist:()=>calls.push('persist'),render:()=>calls.push('render')});
- vm.runInContext(fs.readFileSync('static/page-settings.js','utf8').replace('void loadPageSettings();',''),c);
- const app=fs.readFileSync('static/app.js','utf8'),features=fs.readFileSync('static/features.js','utf8');vm.runInContext(app.slice(app.indexOf('function holdFormFocus('),app.indexOf('function projectCorrectionTarget(')),c);vm.runInContext(features.slice(features.indexOf('function freezeFeatureForm('),features.indexOf('function presentFeatureFormResult(')),c);vm.runInContext(app.slice(app.indexOf('function requestDialogClose('),app.indexOf("for (const button of document.querySelectorAll('.close-dialog')")),c);vm.runInContext(app.slice(app.indexOf('function dismissOpenDialog('),app.indexOf("document.addEventListener('keydown',dismissOpenDialog")),c);
+ const body=new Node('body');document={body,activeElement:body,querySelectorAll:selector=>selector==='dialog[open]'?nodes.filter(node=>node.tag==='dialog'&&node.open&&node.isConnected):[],createTextNode:text=>new Node('text','',text)};const c=browserContext({Event,toast:message=>calls.push(message),el:(...args)=>new Node(...args),document,currentSavedViewState:()=>({}),openSavedViewEditor:()=>calls.push('filters'),api:async(path,payload)=>{calls.push({path,payload});if(fail)throw new Error('Fixture load failed');return {revision:7,contentHash:'a'.repeat(64),pages:{sentry:{scopes:payload?.scopes??null}}};},allItems:()=>[{source:'sentry',project:'Frontend'},{source:'sentry',project:'Backend'}],scopeKey:item=>item.project,persist:()=>calls.push('persist'),render:()=>calls.push('render')});
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/page-settings.js']);c.scopePrefs.sentry='Frontend';
  return {c,body,nodes,calls,document,Node,get nativeFocusDrops(){return nativeFocusDrops;},get nativeHiddenDrops(){return nativeHiddenDrops;}};
 }
 test('page chooser groups parallel actions with shared control variants and a secondary Close',async()=>{
@@ -68,7 +66,7 @@ test('visibility conflicts preserve checkbox choices and offer explicit discard/
  const f=dialogFixture();await f.c.openPageVisibilitySettings('sentry');const dialog=f.body.children[0],group=dialog.children.find(node=>node.className.includes('ui-actiongroup')),save=group.children.at(-1);
  group.children[0].onclick();const choices=f.nodes.filter(node=>node.type==='checkbox');assert.ok(choices.every(node=>!node.checked));let sent;
  f.c.api=async(path,payload)=>{sent=payload;const error=new Error('Conflict');error.status=409;throw error;};
- f.c.changed={revision:99,contentHash:'b'.repeat(64),pages:{sentry:{scopes:['Backend']}}};vm.runInContext('pageSettingsDocument=changed',f.c);
+ f.c.changed={revision:99,contentHash:'b'.repeat(64),pages:{sentry:{scopes:['Backend']}}};evaluate(f.c,'pageSettingsDocument=changed');
  await save.onclick();assert.equal(sent.revision,7);assert.equal(sent.contentHash,'a'.repeat(64));assert.equal(dialog.open,true);assert.ok(choices.every(node=>!node.checked));assert.equal(save.disabled,true);assert.ok(!f.calls.includes('render'));
  assert.match(dialog.children.find(node=>node.className.includes('page-settings-error')).textContent,/Your selection is kept/);
  const reload=group.children.find(node=>node.textContent==='Discard selection and reload');assert.ok(reload);f.c.api=async()=>f.c.changed;await reload.onclick();assert.equal(dialog.removed,true);assert.equal(f.body.children.at(-1).open,true);const current=f.nodes.filter(node=>node.type==='checkbox').slice(choices.length);assert.equal(current.find(node=>node.value==='Backend').checked,true);assert.equal(current.find(node=>node.value==='Frontend').checked,false);
