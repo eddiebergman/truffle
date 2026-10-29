@@ -1,7 +1,6 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const app=fs.readFileSync('static/app.js','utf8');
-const workspace=fs.readFileSync('static/workspace.js','utf8'),newsletters=fs.readFileSync('static/newsletters.js','utf8');
-function helpers(globals={}){const ctx=vm.createContext(globals);vm.runInContext(newsletters.slice(newsletters.indexOf('function isSkillOutput('),newsletters.indexOf('function artifactLink(')),ctx);vm.runInContext(workspace.slice(workspace.indexOf('function skillOutputs('),workspace.indexOf('function renderSkills(')),ctx);return ctx;}
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs'),{FakeDocument}=require('./helpers/fake-dom.cjs');
+function helpers(globals={},options){const ctx=browserContext(globals);loadScripts(ctx,['static/client.js','static/app.js','static/sessions.js','static/newsletters.js','static/workspace.js'],options);return ctx;}
 const output={id:'report',presetId:'daily',role:'skill-output',at:20};
 const attachments=[{id:'ledger',sessionIds:['run'],sourcePath:'/reports/ledger.md',at:30},{id:'permissions',presetId:'daily',role:'attachment',at:30},{id:'other',presetId:'other',role:'skill-output',at:20}];
 test('skill results exclude supporting attachments even in the same chat and folder',()=>{
@@ -10,23 +9,20 @@ test('skill results exclude supporting attachments even in the same chat and fol
  for(const artifact of [null,{role:'skill-output'},{role:'skill-output',presetId:''},{role:'attachment',presetId:'daily',title:'audit.html'}])assert.equal(ctx.isSkillOutput(artifact),false);
 });
 test('Skills badge counts only unread declared outputs while preserving failed and skipped run notices',()=>{
- const badge={},ctx=helpers({state:{skillsReadAt:10,artifacts:[output,...attachments.slice(0,2)],skillRuns:[]},$:()=>badge});
- const start=workspace.indexOf('  const unread=skillInboxCounts(state);'),end=workspace.indexOf('\n}',start),paint=workspace.slice(start,end);
- vm.runInContext(paint,ctx);assert.equal(badge.textContent,1);assert.equal(badge.hidden,false);
+ const badge={},document=new FakeDocument();document.elements.set('#skills-unread',badge);
+ const ctx=helpers({document,state:{skillsReadAt:10,artifacts:[output,...attachments.slice(0,2)],skillRuns:[],sessions:[]},inventory:{candidates:[]},renderTitlebarEditor(){},renderSnoozedAgents(){},updateTabDensity(){}}),paint=()=>ctx.renderLiveBar();
+ paint();assert.equal(badge.textContent,1);assert.equal(badge.hidden,false);
  ctx.state.skillRuns=[{at:25,outcome:'failed'},{at:26,outcome:'skipped'},{at:40,outcome:'succeeded'},{at:10,outcome:'failed'}];
  assert.equal(ctx.skillInboxCounts(ctx.state).outputs,1);assert.equal(ctx.skillInboxCounts(ctx.state).notices,2);assert.equal(ctx.skillInboxCounts(ctx.state).total,3);
  ctx.state.skillsReadAt=30;assert.equal(ctx.skillInboxCounts(ctx.state).total,0);
  // Re-evaluate the actual badge update in a fresh block, retaining the existing read timestamp semantics.
- vm.runInContext('{'+paint+'}',ctx);assert.equal(badge.hidden,true);assert.equal(badge.textContent,0);
+ paint();assert.equal(badge.hidden,true);assert.equal(badge.textContent,0);
  ctx.state.artifacts.push({id:'new-support',role:'attachment',presetId:'daily',at:100});assert.equal(ctx.skillInboxCounts(ctx.state).total,0);
 });
 function inboxFixture({disabled=false}={}){
  const calls=[],messages=[],button={disabled,attrs:{},getAttribute(key){return this.attrs[key]??null;},setAttribute(key,value){this.attrs[key]=value;},removeAttribute(key){delete this.attrs[key];}},other={disabled:true};let renders=0;
  const state={revision:'one',skillsReadAt:10,artifacts:[output,...attachments.slice(0,2)],sessions:[{id:'chat',title:'Before',hidden:false}]};
- const ctx=helpers({state,source:'all',$:()=>button,persist(){},render:()=>renders++,api:(path,args)=>new Promise((resolve,reject)=>calls.push({path,args,resolve,reject})),toast:message=>messages.push(message)});
- vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),ctx);
- vm.runInContext(app.slice(app.indexOf('async function presentLocalWrite('),app.indexOf('function workStatusLabel(')),ctx);
- const start=workspace.indexOf("$('#skills-inbox').onclick="),end=workspace.indexOf('function parseCSV(',start);vm.runInContext(workspace.slice(start,end),ctx);
+ const ctx=helpers({state,source:'all',document:{querySelector:()=>button},persist(){},render:()=>renders++,api:(path,args)=>new Promise((resolve,reject)=>calls.push({path,args,resolve,reject})),toast:message=>messages.push(message)},{elements:{'#skills-inbox':button}});
  return {ctx,calls,messages,button,other,get renders(){return renders;},click:()=>button.onclick()};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -59,8 +55,7 @@ test('Skills inbox reports rejected, unknown and accepted read/render failure ho
 class Node{constructor(tag,cls='',text=''){this.tagName=tag;this.className=cls;this.textContent=text;this.children=[];}append(...nodes){this.children.push(...nodes);}setAttribute(){}}
 function libraryFixture(source){
  const rendered=[],library={presets:[{id:'daily',title:'Daily',command:'/daily',description:'Fixture',agent:'claude',cwd:'/project',available:true}],artifacts:[output,...attachments]},state={sessions:[{id:'run',title:'Daily run',newsletterId:'daily',createdAt:1}]};
- const ctx=helpers({source,artifactLibrary:library,libraryError:'',state,artifactSessionFilter:'',newsletterOpening:false,el:(...args)=>new Node(...args),featureButton:(label)=>new Node('button','',label),Option:function(label,value){this.label=label;this.value=value;},libraryRow:artifact=>{rendered.push(artifact.id);return new Node('article','',artifact.title);},agentName:()=> 'Claude',dated:()=> 'Today',loadArtifactLibrary:()=>{}});
- vm.runInContext(newsletters.slice(newsletters.indexOf('function renderNewsletterView('),newsletters.indexOf('let artifactSessionFilter=')),ctx);
+ const ctx=helpers({source,artifactLibrary:library,libraryError:'',state,artifactSessionFilter:'',newsletterOpening:false,el:(...args)=>new Node(...args),featureButton:(label)=>new Node('button','',label),Option:function(label,value){this.label=label;this.value=value;},libraryRow:artifact=>{rendered.push(artifact.id);return new Node('article','',artifact.title);},dated:()=> 'Today',loadArtifactLibrary:()=>{}});
  return {ctx,rendered,list:new Node('main'),controls:new Node('div'),library};
 }
 test('legacy skill result cards use explicit ownership instead of shared chat or preset inference',()=>{
@@ -72,9 +67,7 @@ test('generic artifact library continues to expose supporting attachments and al
 
 test('Run skill uses the named command receipt and selects its exact chat without claiming completion',async()=>{
  const calls=[],selected=[],messages=[],button={disabled:false},record={id:'exact-chat'},fresh={sessions:[{id:'unrelated'},record]};
- const c=vm.createContext({source:'skills',selectedAgentKey:'',state:{sessions:[]},api:async(path,args)=>{calls.push({path,args});return path==='/api/commands/invoke'?{presetId:'fixture',recordId:'exact-chat',runId:'exact-run',status:'preview'}:fresh;},loadInventory:async()=>calls.push({path:'inventory'}),candidateForRecord:record=>({recordId:record.id}),selectAgent:(record,candidate)=>selected.push([record.id,candidate?.recordId||null]),toast:message=>messages.push(message)});
- vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),c);
- vm.runInContext(workspace.slice(workspace.indexOf('async function runSkill('),workspace.indexOf('function skillOutputs(')),c);
+ const c=helpers({source:'skills',selectedAgentKey:'',state:{sessions:[]},api:async(path,args)=>{calls.push({path,args});return path==='/api/commands/invoke'?{presetId:'fixture',recordId:'exact-chat',runId:'exact-run',status:'preview'}:fresh;},loadInventory:async()=>calls.push({path:'inventory'}),candidateForRecord:record=>({recordId:record.id}),selectAgent:(record,candidate)=>selected.push([record.id,candidate?.recordId||null]),toast:message=>messages.push(message)});
  await c.runSkill({id:'fixture'},button);assert.equal(button.disabled,false);assert.deepEqual(JSON.parse(JSON.stringify(calls[0])),{path:'/api/commands/invoke',args:{name:'skills.run',args:{presetId:'fixture'}}});assert.equal(calls[1].path,'/api/state');assert.deepEqual(selected,[['exact-chat',null]]);assert.match(messages[0],/Preview.*No agent was started/);
  c.api=async()=>{throw new Error('Launch failed');};await c.runSkill({id:'fixture'},button);assert.equal(button.disabled,false);assert.equal(selected.length,1);assert.equal(messages.at(-1),'Launch failed');
 });
@@ -82,14 +75,11 @@ test('Run skill uses the named command receipt and selects its exact chat withou
 test('Run skill retries stale state reads without losing metadata or claiming a missing chat',async()=>{
  for(const exhausted of [false,true]){
   const reads=[],selected=[],messages=[],button={disabled:false};let commandCalls=0,inventoryCalls=0;
-  const c=vm.createContext({source:'skills',selectedAgentKey:'',state:{revision:'fixture:1',sessions:[{id:'existing',title:'Before',hidden:false}]},api:async(path,payload)=>{
+  const c=helpers({source:'skills',selectedAgentKey:'',state:{revision:'fixture:1',sessions:[{id:'existing',title:'Before',hidden:false}]},api:async(path,payload)=>{
    if(path==='/api/state'){let resolve;const promise=new Promise(yes=>resolve=yes);reads.push({resolve});return promise;}
    if(payload.name==='skills.run'){commandCalls++;return {presetId:'fixture',recordId:'exact-chat',runId:'run',status:'launched'};}
    return {chat:{id:'existing',title:payload.args.title||'Before',hidden:payload.args.hidden??true,updatedAt:2}};
   },loadInventory:async()=>{inventoryCalls++;return {candidates:[{recordId:'exact-chat',host:'embedded',live:true}]};},candidateForRecord:record=>({recordId:record.id}),selectAgent:record=>selected.push(record.id),render(){},toast:message=>messages.push(message)});
-  vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),c);
-  vm.runInContext(app.slice(app.indexOf('async function mutateChatMetadata('),app.indexOf('function workStatusLabel(')),c);
-  vm.runInContext(workspace.slice(workspace.indexOf('async function runSkill('),workspace.indexOf('function skillOutputs(')),c);
   const pending=c.runSkill({id:'fixture'},button);await new Promise(resolve=>setImmediate(resolve));
   await c.mutateChatMetadata('chats.visibility',{id:'existing',hidden:true});
   reads[0].resolve({revision:'fixture:1',sessions:[{id:'existing',title:'Before',hidden:false}]});await new Promise(resolve=>setImmediate(resolve));
@@ -103,9 +93,8 @@ test('Run skill retries stale state reads without losing metadata or claiming a 
 });
 
 function libraryLoaderFixture(){
- const calls=[];const c=vm.createContext({Date,source:'all',selectedSession:null,api:()=>new Promise((resolve,reject)=>calls.push({resolve,reject})),render(){}});
- const source=fs.readFileSync('static/newsletters.js','utf8');vm.runInContext(source.slice(0,source.indexOf('function isSkillOutput(')),c);
- return {c,calls,load:force=>c.loadArtifactLibrary(force),library:()=>vm.runInContext('artifactLibrary',c),fetched:()=>vm.runInContext('libraryFetched',c)};
+ const calls=[];const c=helpers({Date,source:'all',selectedSession:null,api:()=>new Promise((resolve,reject)=>calls.push({resolve,reject})),render(){}});
+ return {c,calls,load:force=>c.loadArtifactLibrary(force),library:()=>c.artifactLibrary,fetched:()=>c.libraryFetched};
 }
 test('forced library invalidation during an older read joins one fresh followup and never commits old data',async()=>{
  const f=libraryLoaderFixture(),first=f.load(),forced=f.load(true),also=f.load(true);assert.equal(first,forced);assert.equal(forced,also);assert.equal(f.calls.length,1);
