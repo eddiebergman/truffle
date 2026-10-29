@@ -611,8 +611,7 @@ fn skill_reports_do_not_promote_supporting_attachments() {
         .transaction(|s| artifacts::save(&repo, s, &json!({"path":ledger})))
         .unwrap()["id"]
         .clone();
-    let state = repo.state.lock().unwrap();
-    let catalog = artifacts::catalog(&repo, &state).unwrap();
+    let catalog = artifacts::catalog(&repo, &repo.state.lock().unwrap()).unwrap();
     let entries = arr(&catalog["artifacts"]);
     let output = entries.iter().find(|e| e["id"] == report_id).unwrap();
     let supporting = entries.iter().find(|e| e["id"] == ledger_id).unwrap();
@@ -711,8 +710,7 @@ fn skill_reports_unique_folder_discovers_only_unregistered_outputs() {
             )
         })
         .unwrap();
-    let state = repo.state.lock().unwrap();
-    let catalog = artifacts::catalog(&repo, &state).unwrap();
+    let catalog = artifacts::catalog(&repo, &repo.state.lock().unwrap()).unwrap();
     let entries = arr(&catalog["artifacts"]);
     assert_eq!(entries.len(), 2);
     let registered = entries

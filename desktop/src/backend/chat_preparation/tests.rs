@@ -95,14 +95,13 @@ fn preparation_reused_requests_keep_all_original_aliases_and_latest_attached_met
     assert_eq!(second["reused"], true);
     assert_eq!(prepare(&repo, "attach", &args).unwrap(), first);
     assert_eq!(prepare(&repo, "attach", &second_args).unwrap(), second);
-    let state = repo.state.lock().unwrap();
-    let row = &state["sessions"][0];
+    let row = repo.state.lock().unwrap()["sessions"][0].clone();
     assert_eq!(row["title"], "Newer associated title");
     assert_eq!(row["cwd"], "/not-a-current-directory");
     assert_eq!(row["items"][0]["id"], "latest-link");
     assert_eq!(row["privateNs"]["keep"], true);
     assert_eq!(row["preparationRequests"]["privateNs"]["keep"], true);
-    assert_eq!(aliases(row).unwrap().len(), 2);
+    assert_eq!(aliases(&row).unwrap().len(), 2);
 }
 #[test]
 fn preparation_changed_intent_and_malformed_state_fail_without_effects() {

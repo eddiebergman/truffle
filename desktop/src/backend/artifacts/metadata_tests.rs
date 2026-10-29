@@ -62,8 +62,7 @@ fn artifact_metadata_field_cas_commutes_and_preserves_immutable_data_and_extensi
     );
     let final_links = update(&repo, &links, &json!({"sessionIds":[]})).unwrap();
     assert_eq!(final_links["artifact"]["title"], "New title");
-    let state = repo.state.lock().unwrap();
-    let artifact = &state["artifacts"][0];
+    let artifact = repo.state.lock().unwrap()["artifacts"][0].clone();
     assert_eq!(artifact["presetId"], "original-owner");
     assert_eq!(artifact["role"], "skill-output");
     assert_eq!(artifact["snapshot"], true);
@@ -138,8 +137,7 @@ fn artifact_metadata_discovery_read_does_not_register_and_materialization_checks
     let result=register_discovered(&repo,&json!({"id":id,"patch":{"title":"Registered title"},"expected":{"title":fresh["expected"]["title"]}})).unwrap();
     assert_eq!(result["materialized"], true);
     assert_eq!(result["origin"]["type"], "registered");
-    let state = repo.state.lock().unwrap();
-    let stored = &state["artifacts"][0];
+    let stored = repo.state.lock().unwrap()["artifacts"][0].clone();
     assert_eq!(stored["presetId"], "fixture-skill");
     assert_eq!(stored["role"], "skill-output");
     for key in ["available", "size", "discovered"] {

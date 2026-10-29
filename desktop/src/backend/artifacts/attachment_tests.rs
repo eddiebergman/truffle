@@ -53,9 +53,9 @@ fn attachment_identity_and_explicit_skill_provenance_survive_reattachment_and_le
     assert_eq!(reply["id"], second);
     assert_eq!(reply["artifactReceipt"]["artifactId"], result["artifactId"]);
     assert_eq!(reply["artifactReceipt"]["presetId"], "first");
-    let state = repo.state.lock().unwrap();
-    assert_eq!(arr(&state["artifacts"]).len(), 1);
-    let entry = &state["artifacts"][0];
+    let artifacts = repo.state.lock().unwrap()["artifacts"].clone();
+    assert_eq!(arr(&artifacts).len(), 1);
+    let entry = &artifacts[0];
     assert_eq!(arr(&entry["sessionIds"]).len(), 2);
     assert_eq!(
         std::fs::read(text(entry, "path")).unwrap(),

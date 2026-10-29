@@ -40,18 +40,13 @@ pub fn presets(repo: &Repository, state: &Value) -> Result<Vec<Value>> {
     Ok(result)
 }
 pub fn roots(repo: &Repository, state: &Value) -> Result<Vec<PathBuf>> {
-    let mut roots = presets(repo, state)?
+    let presets = presets(repo, state)?;
+    let sessions = arr(&state["sessions"]);
+    Ok(presets
         .iter()
         .map(|p| expand(text(p, "reports")))
-        .collect::<Vec<_>>();
-    roots.extend(
-        arr(&state["sessions"])
-            .iter()
-            .map(|s| expand(text(s, "cwd"))),
-    );
-    roots.push(repo.data.parent().unwrap().join("artifacts"));
-    Ok(roots
-        .into_iter()
+        .chain(sessions.iter().map(|s| expand(text(s, "cwd"))))
+        .chain([repo.data.parent().unwrap().join("artifacts")])
         .filter_map(|p| p.canonicalize().ok())
         .collect())
 }
@@ -397,15 +392,19 @@ pub fn metadata_read(repo: &Repository, args: &Value) -> Result<Value> {
     metadata_keys(args, &["id"])?;
     let id = metadata_id(&args["id"])?;
     metadata_exact(repo, id)?;
-    let basis = {
+    let registered = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        if let Some(index) = metadata_position(&state, id) {
-            return metadata_view(repo, &state["artifacts"][index], None);
-        }
-        discovery_basis(&state)
+        metadata_position(&state, id)
+            .map(|index| state["artifacts"][index].clone())
+            .ok_or_else(|| discovery_basis(&state))
     };
-    let (entry, fingerprint, _) = discovered_entry(repo, &basis, id)?;
-    metadata_view(repo, &entry, Some(&fingerprint))
+    match registered {
+        Ok(entry) => metadata_view(repo, &entry, None),
+        Err(basis) => {
+            let (entry, fingerprint, _) = discovered_entry(repo, &basis, id)?;
+            metadata_view(repo, &entry, Some(&fingerprint))
+        }
+    }
 }
 pub fn metadata_update(repo: &Repository, args: &Value) -> Result<Value> {
     let patch = metadata_patch(args)?;
@@ -478,6 +477,34 @@ pub(super) fn legacy_metadata_update(
     let index = metadata_position(state, id).ok_or_else(metadata_conflict)?;
     metadata_apply(repo, state, index, &patch, &args["expected"], None)
 }
+fn snapshot_entry(repo: &Repository, s: &Value, p: &Value) -> Result<Value> {
+    use std::os::unix::fs::PermissionsExt;
+    let path = file(text(p, "path"), &roots(repo, s)?)?;
+    let bytes = std::fs::read(&path)?;
+    if path.extension().is_some_and(|x| x == "json") {
+        validate_table(&serde_json::from_slice(&bytes)?)?;
+    }
+    let extension = path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+    let key = id(&format!(
+        "{}:{extension}:{:x}",
+        path.to_string_lossy(),
+        Sha256::digest(&bytes)
+    ));
+    let directory = repo.data.parent().unwrap().join("artifacts");
+    std::fs::create_dir_all(&directory)?;
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
+    let stored = directory.join(format!("{key}.{extension}"));
+    if !stored.exists() {
+        super::http::private_write(&stored, &bytes)?;
+    }
+    Ok(
+        json!({"id":key,"path":stored,"sourcePath":path,"at":now(),"format":extension,"snapshot":true}),
+    )
+}
 pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
     if p.get("id").is_some() {
         return Err(Error::new("Use artifacts.metadata.read and a captured metadata.update patch for an existing artifact."));
@@ -497,30 +524,7 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
         }
         json!({"id":id(&url),"url":url,"at":now(),"format":"link"})
     } else {
-        let path = file(text(p, "path"), &roots(repo, s)?)?;
-        let bytes = std::fs::read(&path)?;
-        if path.extension().is_some_and(|x| x == "json") {
-            validate_table(&serde_json::from_slice(&bytes)?)?;
-        }
-        let extension = path
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_lowercase();
-        let key = id(&format!(
-            "{}:{extension}:{:x}",
-            path.to_string_lossy(),
-            Sha256::digest(&bytes)
-        ));
-        let directory = repo.data.parent().unwrap().join("artifacts");
-        std::fs::create_dir_all(&directory)?;
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
-        let stored = directory.join(format!("{key}.{extension}"));
-        if !stored.exists() {
-            super::http::private_write(&stored, &bytes)?;
-        }
-        json!({"id":key,"path":stored,"sourcePath":path,"at":now(),"format":extension,"snapshot":true})
+        snapshot_entry(repo, s, p)?
     };
     let old = arr(&s["artifacts"])
         .into_iter()
@@ -637,7 +641,9 @@ pub fn read(repo: &Repository, id: &str) -> Result<(Vec<u8>, String)> {
         .into_iter()
         .find(|x| x["id"] == id)
         .ok_or_else(|| Error::new("Artifact unavailable."))?;
-    let path = file(text(&entry, "path"), &roots(repo, &s)?)?;
+    let roots = roots(repo, &s)?;
+    drop(s);
+    let path = file(text(&entry, "path"), &roots)?;
     let kind = kind(&path).unwrap().into();
     let bytes = std::fs::read(path)?;
     if bytes.len() > 10 * 1024 * 1024 {

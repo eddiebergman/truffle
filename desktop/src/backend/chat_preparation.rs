@@ -127,10 +127,7 @@ pub(super) fn lookup(
     request: Option<&Request>,
     state: &Value,
 ) -> Result<Option<Value>> {
-    match request {
-        Some(request) => request.lookup(repo, state),
-        None => Ok(None),
-    }
+    request.map_or(Ok(None), |request| request.lookup(repo, state))
 }
 pub(super) fn finish(
     repo: &Repository,

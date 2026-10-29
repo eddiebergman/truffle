@@ -64,7 +64,11 @@ fn zed_diff_uses_base_snapshots_and_live_worktree_files_without_changing_git() {
     let args = zed_arguments(&root, &temp.path().join("snapshots")).unwrap();
     assert_eq!(args.last().unwrap(), root.to_str().unwrap());
     assert_eq!(args.len(), 16);
-    let pairs = args[..args.len() - 1].chunks_exact(3).collect::<Vec<_>>();
+    let pairs = args[..args.len() - 1]
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .collect::<Vec<_>>();
     let a = pairs
         .iter()
         .find(|p| p[2] == root.join("a.txt").to_str().unwrap())

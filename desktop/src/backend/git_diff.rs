@@ -95,7 +95,7 @@ fn untracked_lines(path: &Path, budget: &mut u64) -> Result<Option<u64>> {
         return Ok(None);
     }
     Ok(Some(
-        bytes.iter().filter(|&&b| b == b'\n').count() as u64
+        bytes.iter().map(|&b| u64::from(b == b'\n')).sum::<u64>()
             + u64::from(!bytes.is_empty() && bytes.last() != Some(&b'\n')),
     ))
 }
@@ -177,8 +177,7 @@ fn overview(cwd: &Path) -> Result<Value> {
     )
 }
 fn session_directory(repo: &Repository, id: &str, requested: &str) -> Result<String> {
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    let record = arr(&state["sessions"])
+    let record = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"])
         .into_iter()
         .find(|s| s["id"] == id)
         .ok_or_else(|| Error::new("Agent session not found."))?;
@@ -210,10 +209,10 @@ pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value
     }
     let value = overview(Path::new(&cwd))?;
     cache.entry = Some((cwd, Instant::now(), value.clone()));
+    drop(cache);
     Ok(value)
 }
 pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Value> {
-    use std::os::unix::fs::MetadataExt;
     let cwd = session_directory(repo, id, requested)?;
     let identity = git(Path::new(&cwd), &["rev-parse", "--show-toplevel", "HEAD"])?;
     let root = PathBuf::from(
@@ -243,15 +242,7 @@ pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Va
             .get(3..)
             .ok_or_else(|| Error::new("Invalid Git status."))?;
         match fs::symlink_metadata(root.join(valid_path(path)?)) {
-            Ok(meta) => stamp.push_str(&format!(
-                "{}:{}:{}:{}:{}:{}",
-                meta.ino(),
-                meta.len(),
-                meta.mtime(),
-                meta.mtime_nsec(),
-                meta.ctime(),
-                meta.ctime_nsec()
-            )),
+            Ok(meta) => stamp.push_str(&metadata_stamp(&meta)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => stamp.push_str("deleted"),
             Err(error) => return Err(error.into()),
         }
@@ -261,19 +252,22 @@ pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Va
     }
     Ok(json!({"root":root,"version":context_kit::sha256(stamp.as_bytes())}))
 }
-pub fn review_file_stamp(root: &str, path: &str) -> Option<String> {
+fn metadata_stamp(m: &fs::Metadata) -> String {
     use std::os::unix::fs::MetadataExt;
+    format!(
+        "{}:{}:{}:{}:{}:{}",
+        m.ino(),
+        m.len(),
+        m.mtime(),
+        m.mtime_nsec(),
+        m.ctime(),
+        m.ctime_nsec()
+    )
+}
+pub fn review_file_stamp(root: &str, path: &str) -> Option<String> {
     let target = Path::new(root).join(valid_path(path).ok()?);
     match fs::symlink_metadata(target) {
-        Ok(m) => Some(format!(
-            "{}:{}:{}:{}:{}:{}",
-            m.ino(),
-            m.len(),
-            m.mtime(),
-            m.mtime_nsec(),
-            m.ctime(),
-            m.ctime_nsec()
-        )),
+        Ok(m) => Some(metadata_stamp(&m)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some("deleted".into()),
         Err(_) => None,
     }
@@ -461,6 +455,7 @@ fn working_file_bytes(
     .ok_or_else(|| Error::new("The diff file changed. Refresh its file list."))
 }
 fn snapshot_file(root: &Path, relative: &Path, bytes: &[u8]) -> Result<PathBuf> {
+    use std::io::Write;
     let directory = root
         .join(context_kit::sha256(bytes))
         .join(context_kit::sha256(relative.as_os_str().as_encoded_bytes()));
@@ -473,7 +468,6 @@ fn snapshot_file(root: &Path, relative: &Path, bytes: &[u8]) -> Result<PathBuf> 
             .file_name()
             .ok_or_else(|| Error::new("Invalid diff file name."))?,
     );
-    use std::io::Write;
     match fs::OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -511,34 +505,33 @@ pub fn zed_arguments(cwd: &Path, snapshots: &Path) -> Result<Vec<String>> {
             let relative = valid_path(&file.path)?;
             let target = comparison.root.join(&relative);
             let spec = format!("{}:{}", comparison.base, file.path);
-            let bytes = if file.untracked {
-                vec![]
-            } else if git(&comparison.root, &["cat-file", "-e", &spec]).is_err() {
-                vec![]
-            } else {
-                let size = git(&comparison.root, &["cat-file", "-s", &spec])?
-                    .trim()
-                    .parse::<u64>()
-                    .map_err(|_| Error::new("Invalid Git object size."))?;
-                if size > MAX_FILE_BYTES {
-                    return Err(Error::new(format!(
-                        "{} exceeds the 10 MiB diff limit.",
-                        file.path
-                    )));
-                }
-                terminal::run_bytes(
-                    "git",
-                    &[
-                        "-C".into(),
-                        comparison.root.to_string_lossy().into_owned(),
-                        "cat-file".into(),
-                        "blob".into(),
-                        spec,
-                    ],
-                    None,
-                    10,
-                )?
-            };
+            let bytes =
+                if file.untracked || git(&comparison.root, &["cat-file", "-e", &spec]).is_err() {
+                    vec![]
+                } else {
+                    let size = git(&comparison.root, &["cat-file", "-s", &spec])?
+                        .trim()
+                        .parse::<u64>()
+                        .map_err(|_| Error::new("Invalid Git object size."))?;
+                    if size > MAX_FILE_BYTES {
+                        return Err(Error::new(format!(
+                            "{} exceeds the 10 MiB diff limit.",
+                            file.path
+                        )));
+                    }
+                    terminal::run_bytes(
+                        "git",
+                        &[
+                            "-C".into(),
+                            comparison.root.to_string_lossy().into_owned(),
+                            "cat-file".into(),
+                            "blob".into(),
+                            spec,
+                        ],
+                        None,
+                        10,
+                    )?
+                };
             total += bytes.len();
             if total > 100 * 1024 * 1024 {
                 return Err(Error::new("The diff exceeds the 100 MiB snapshot limit."));
