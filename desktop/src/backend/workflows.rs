@@ -42,7 +42,9 @@ fn repo_name(item: &Value) -> String {
 }
 pub fn contexts(item: &Value) -> Vec<Value> {
     let mut result = vec![];
-    match text(item,"source"){"github"=>{let name=repo_name(item);result.push(json!({"key":format!("github:{}",name.to_lowercase()),"label":format!("GitHub repo {name}")}));},"linear"=>{let mut parent=&item["parent"];let mut top=Value::Null;for _ in 0..8 {if parent.is_null()||parent.as_object().is_none(){break;}top=parent.clone();parent=&parent["parent"];}if top.is_null()&&!arr(&item["children"]).is_empty(){top=item.clone();}if !top.is_null(){result.push(json!({"key":format!("linear-family:{}",text(&top,"id")),"label":format!("Issue family {}",text(&top,"reference"))}));}if !text(item,"projectId").is_empty(){let workspace=text(item,"url").split('/').nth(3).unwrap_or("");result.push(json!({"key":format!("linear-project:{workspace}:{}",text(item,"projectId")),"label":format!("Linear project {}",text(item,"project"))}));}},"sentry"=>result.push(json!({"key":format!("sentry-project:{}",text(item,"project")),"label":format!("Sentry project {}",text(item,"project"))})),_=>()}
+    match text(item,"source"){"github"=>{let name=repo_name(item);result.push(json!({"key":format!("github:{}",name.to_lowercase()),"label":format!("GitHub repo {name}")}));},"linear"=>{let mut parent=&item["parent"];let mut top=Value::Null;for _ in 0..8 {if parent.is_null()||parent.as_object().is_none(){break;}top=parent.clone();parent=&parent["parent"];}if top.is_null()&&!arr(&item["children"]).is_empty(){top=item.clone();}
+if !top.is_null(){result.push(json!({"key":format!("linear-family:{}",text(&top,"id")),"label":format!("Issue family {}",text(&top,"reference"))}));}
+if !text(item,"projectId").is_empty(){let workspace=text(item,"url").split('/').nth(3).unwrap_or("");result.push(json!({"key":format!("linear-project:{workspace}:{}",text(item,"projectId")),"label":format!("Linear project {}",text(item,"project"))}));}},"sentry"=>result.push(json!({"key":format!("sentry-project:{}",text(item,"project")),"label":format!("Sentry project {}",text(item,"project"))})),_=>()}
     if !text(item, "id").is_empty() {
         result
             .push(json!({"key":format!("item:{}",text(item,"id")),"label":"Only this work item"}));
@@ -167,14 +169,14 @@ fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Res
     if !text(p, "id").is_empty() && by_id.is_none() {
         return Err(Error::new("Session association no longer exists."));
     }
-    let old = by_id.map(|i| sessions[i].clone()).unwrap_or(json!({}));
+    let old = by_id.map_or_else(|| json!({}), |i| sessions[i].clone());
     let mut merged = old.clone();
     if !merged.is_object() {
         merged = json!({});
     }
     for (k, v) in p
         .as_object()
-        .ok_or(Error::new("Expected a session object."))?
+        .ok_or_else(|| Error::new("Expected a session object."))?
     {
         merged[k] = v.clone();
     }
@@ -200,6 +202,23 @@ fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Res
     {
         return Err(Error::new("Choose the embedded terminal or Codex desktop."));
     }
+    let items = link_session_items(s, p, &old, intent, &cwd)?;
+    let (sid_value, launch) = session_identity(&merged, &old, agent, by_id.is_none())?;
+    let id = old["id"].as_str().map_or_else(uuid, str::to_owned);
+    let mut session = old.clone();
+    for(k,v)in json!({"id":id,"agent":agent,"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
+    sessions.retain(|x| x["id"] != id);
+    sessions.push(session.clone());
+    s["sessions"] = json!(sessions);
+    Ok(session)
+}
+fn link_session_items(
+    s: &mut Value,
+    p: &Value,
+    old: &Value,
+    intent: SaveIntent,
+    cwd: &str,
+) -> Result<Vec<Value>> {
     let mut ids = p["itemIds"]
         .as_array()
         .cloned()
@@ -224,7 +243,7 @@ fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Res
         }
         let item = catalog
             .get(id.as_str().unwrap())
-            .ok_or(Error::new("A linked work item no longer exists."))?;
+            .ok_or_else(|| Error::new("A linked work item no longer exists."))?;
         items.push(domain::item_ref(item));
         if !text(item, "detail").is_empty() {
             s["itemArchive"][text(item, "id")] = item.clone();
@@ -238,35 +257,40 @@ fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Res
             s["itemSettings"][text(item, "id")]["cwd"] = json!(cwd);
         }
     }
+    Ok(items)
+}
+fn session_identity(
+    merged: &Value,
+    old: &Value,
+    agent: &str,
+    is_new: bool,
+) -> Result<(Option<String>, bool)> {
     let mut sid_value = merged["sessionId"]
         .as_str()
         .filter(|x| !x.is_empty())
         .map(sid)
         .transpose()?;
-    if !text(&old, "sessionId").is_empty()
-        && (sid_value.as_deref() != Some(text(&old, "sessionId")) || old["agent"] != agent)
+    if !text(old, "sessionId").is_empty()
+        && (sid_value.as_deref() != Some(text(old, "sessionId")) || old["agent"] != agent)
     {
         return Err(Error::new(
             "Remove the association before changing its conversation identity.",
         ));
     }
-    let mut launch = old["launchNew"].as_bool().unwrap_or(sid_value.is_none());
-    if sid_value.is_some() && text(&old, "sessionId").is_empty() {
-        launch = false;
-    }
-    if by_id.is_none() && sid_value.is_none() {
+    let mut launch = if sid_value.is_some() && text(old, "sessionId").is_empty() {
+        false
+    } else {
+        old["launchNew"]
+            .as_bool()
+            .unwrap_or_else(|| sid_value.is_none())
+    };
+    if is_new && sid_value.is_none() {
         launch = true;
         if agent == "claude" {
             sid_value = Some(uuid());
         }
     }
-    let id = old["id"].as_str().map_or_else(uuid, str::to_owned);
-    let mut session = old.clone();
-    for(k,v)in json!({"id":id,"agent":agent,"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
-    sessions.retain(|x| x["id"] != id);
-    sessions.push(session.clone());
-    s["sessions"] = json!(sessions);
-    Ok(session)
+    Ok((sid_value, launch))
 }
 #[derive(Clone, Copy, PartialEq)]
 enum PrepareIntent {
@@ -318,7 +342,10 @@ fn prepare_resolving(
         };
         imported.push(match cached {
             Some(v) => v,
-            None => resolve(url.as_str().ok_or(Error::new("Invalid source URL."))?)?,
+            None => resolve(
+                url.as_str()
+                    .ok_or_else(|| Error::new("Invalid source URL."))?,
+            )?,
         });
     }
     repo.transaction(|s| {
@@ -354,7 +381,7 @@ fn prepare_resolving(
         }
         let name = p["projectName"]
             .as_str()
-            .or(p["project"].as_str())
+            .or_else(|| p["project"].as_str())
             .unwrap_or("");
         if !name.trim().is_empty() {
             let project = arr(&s["notes"])
@@ -497,14 +524,19 @@ fn quick_in_root(
         ));
     }
     let mut created = None;
-    let result=repo.preparation_transaction(if review{"pr-review-prepare"}else{"quick-session"},3.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}let mut item=domain::catalog(s).get(text(p,"itemId")).cloned().unwrap_or(Value::Null);if !text(p,"itemId").is_empty()&&item.is_null(){return Err(Error::new("Work item unavailable."));}if item.is_null()&&p["scopeSource"]=="github"&&!text(p,"scope").is_empty(){item=arr(&s["items"]).into_iter().find(|i|i["source"]=="github"&&repo_name(i)==text(p,"scope")).unwrap_or(Value::Null);}
- if review{if item["source"]!="github"||item["kind"]!="Pull request"{return Err(Error::new("Choose a GitHub PR."));}if let Some(existing)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,existing.clone(),true);}}
+    let result=repo.preparation_transaction(if review{"pr-review-prepare"}else{"quick-session"},3.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}let mut item=domain::catalog(s).get(text(p,"itemId")).cloned().unwrap_or(Value::Null);if !text(p,"itemId").is_empty()&&item.is_null(){return Err(Error::new("Work item unavailable."));}
+if item.is_null()&&p["scopeSource"]=="github"&&!text(p,"scope").is_empty(){item=arr(&s["items"]).into_iter().find(|i|i["source"]=="github"&&repo_name(i)==text(p,"scope")).unwrap_or(Value::Null);}
+ if review{if item["source"]!="github"||item["kind"]!="Pull request"{return Err(Error::new("Choose a GitHub PR."));}
+if let Some(existing)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,existing.clone(),true);}}
  admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map_or("", |x|text(x,"key")));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
  let pr_label=format!("{}{}",repo_name(&item).split('/').next_back().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
  let ids=if text(p,"itemId").is_empty() {json!([])} else {json!([item["id"]])};
  let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});session_text(&payload)?;
  if new.is_some(){std::fs::create_dir_all(root)?;created=Some(CreatedQuickFolder::create(std::path::Path::new(&cwd))?);if created.as_ref().unwrap().identity.is_none(){return Err(Error::new("The new folder identity could not be verified."));}}
- let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});}if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
+ let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}
+if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}
+if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});}
+if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
  *s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)});
     complete_quick_preparation(result, &mut created)
 }
@@ -520,7 +552,8 @@ pub(super) fn review_with_request(
     if !["claude", "codex"].contains(&agent) {
         return Err(Error::new("Choose Claude or Codex."));
     }
-    repo.preparation_transaction("work-review",30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="work-review"&&x["agent"]==agent&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let mut record=save_session(s,&json!({"agent":agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}))?;record["workflow"]=json!("work-review");let mut times=json!({});for(source,info)in s["sources"].as_object().unwrap(){times[source]=info["lastSuccess"].clone();}record["reviewSourceTimes"]=times;*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
+    repo.preparation_transaction("work-review",30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
+if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="work-review"&&x["agent"]==agent&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let mut record=save_session(s,&json!({"agent":agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}))?;record["workflow"]=json!("work-review");let mut times=json!({});for(source,info)in s["sources"].as_object().unwrap(){times[source]=info["lastSuccess"].clone();}record["reviewSourceTimes"]=times;*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
 }
 pub fn newsletter(repo: &Repository, p: &Value) -> Result<Value> {
     newsletter_with_request(repo, p, None)
@@ -533,8 +566,9 @@ pub(super) fn newsletter_with_request(
     let preset = artifacts::presets(repo, &repo.state.lock().unwrap())?
         .into_iter()
         .find(|x| x["id"] == p["presetId"] && x["available"] == true)
-        .ok_or(Error::new("Newsletter skill or folder unavailable."))?;
-    repo.preparation_transaction(&format!("newsletter:{}",text(&preset,"id")),30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["newsletterId"]==preset["id"]&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(&preset,"skill"),text(&preset,"command"),text(&preset,"cwd"),text(&preset,"reports"));let mut record=save_session(s,&json!({"agent":preset["agent"],"title":format!("{} · {}",text(&preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}))?;record["workflow"]=json!("newsletter");record["newsletterId"]=preset["id"].clone();*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
+        .ok_or_else(|| Error::new("Newsletter skill or folder unavailable."))?;
+    repo.preparation_transaction(&format!("newsletter:{}",text(&preset,"id")),30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
+if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["newsletterId"]==preset["id"]&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(&preset,"skill"),text(&preset,"command"),text(&preset,"cwd"),text(&preset,"reports"));let mut record=save_session(s,&json!({"agent":preset["agent"],"title":format!("{} · {}",text(&preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}))?;record["workflow"]=json!("newsletter");record["newsletterId"]=preset["id"].clone();*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn worktree_metadata(cwd: &str) -> Option<Value> {
@@ -594,7 +628,7 @@ fn save_worktree_with_folders(
         .unwrap()
         .iter()
         .position(|x| x["id"] == id)
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let record = s["sessions"][index].clone();
     let linked = arr(&record["items"]);
     if ids
@@ -640,7 +674,9 @@ fn save_worktree_with_folders(
     }
     row["updatedAt"] = json!(now());
     for id in ids {
-        let key = id.as_str().ok_or(Error::new("Invalid work item ID."))?;
+        let key = id
+            .as_str()
+            .ok_or_else(|| Error::new("Invalid work item ID."))?;
         if folder_intent == FolderIntent::PreserveMapped
             && !text(&s["itemSettings"][key], "cwd").is_empty()
             && s["itemSettings"][key]["cwd"] != metadata["path"]
@@ -736,27 +772,30 @@ fn register_resolving(
     }
     if p["operation"] == "worktree" {
         let path = directory(text(p, "path"))?;
-        let metadata = worktree_metadata(&path).ok_or(Error::new(
-            "Choose an existing Git repository or worktree with a commit.",
-        ))?;
+        let metadata = worktree_metadata(&path).ok_or_else(|| {
+            Error::new("Choose an existing Git repository or worktree with a commit.")
+        })?;
         let state = repo.state.lock().unwrap().clone();
         let record = arr(&state["sessions"])
             .into_iter()
             .find(|x| x["id"] == p["id"])
-            .ok_or(Error::new("Session unavailable."))?;
+            .ok_or_else(|| Error::new("Session unavailable."))?;
         let mut ids = arr(&p["itemIds"]);
         let urls = arr(&p["urls"]);
         if ids.len() + urls.len() > 100 {
             return Err(Error::new("Link at most 100 work items at once."));
         }
         for url in &urls {
-            safe_url(url.as_str().ok_or(Error::new("Invalid work URL."))?)?;
+            safe_url(
+                url.as_str()
+                    .ok_or_else(|| Error::new("Invalid work URL."))?,
+            )?;
             let item = arr(&record["items"])
                 .into_iter()
                 .find(|x| x["url"] == *url)
-                .ok_or(Error::new(
-                    "Register this URL with the session before linking its worktree.",
-                ))?;
+                .ok_or_else(|| {
+                    Error::new("Register this URL with the session before linking its worktree.")
+                })?;
             if !ids.contains(&item["id"]) {
                 ids.push(item["id"].clone());
             }
@@ -779,7 +818,7 @@ fn register_resolving(
                 .unwrap()
                 .iter_mut()
                 .find(|x| x["id"] == p["id"])
-                .ok_or(Error::new("Session unavailable."))?;
+                .ok_or_else(|| Error::new("Session unavailable."))?;
             if p["event"] == "SessionStart" && !text(p, "sessionId").is_empty() {
                 let id = sid(text(p, "sessionId"))?;
                 if text(row, "sessionId").is_empty() {
@@ -818,7 +857,7 @@ fn register_resolving(
                 }
             }
             if let Some(counts) = p.get("backgroundCounts") {
-                let counts = counts.as_object().ok_or(Error::new("Invalid background activity counts."))?;
+                let counts = counts.as_object().ok_or_else(|| Error::new("Invalid background activity counts."))?;
                 if counts.len() > 100 || counts.iter().any(|(kind,count)|kind.is_empty() || kind.chars().count() > 40 || count.as_u64().is_none_or(|n|n>1000)) {
                     return Err(Error::new("Invalid background activity counts."));
                 }
@@ -872,7 +911,7 @@ fn register_resolving(
                 .unwrap()
                 .iter_mut()
                 .find(|x| x["id"] == p["id"])
-                .ok_or(Error::new("Session unavailable."))?;
+                .ok_or_else(|| Error::new("Session unavailable."))?;
             let reason = checked(p, "reason", 32, false)?;
             if !["", "ready", "finished", "question", "approval", "failed"]
                 .contains(&reason.as_str())
@@ -890,7 +929,7 @@ fn register_resolving(
             arr(&s["sessions"])
                 .into_iter()
                 .find(|x| x["id"] == p["id"])
-                .ok_or(Error::new("Session record no longer exists."))?
+                .ok_or_else(|| Error::new("Session record no longer exists."))?
         };
         if p["operation"] == "save-artifact" {
             let receipt = super::artifacts::attach_to_chat(repo, text(&record, "id"), p)?;
@@ -939,9 +978,9 @@ fn finish_registration(
         let latest = arr(&s["sessions"])
             .into_iter()
             .find(|row| row["id"] == record["id"])
-            .ok_or(Error::new(
-                "Session record was removed after registration. It was not recreated.",
-            ))?;
+            .ok_or_else(|| {
+                Error::new("Session record was removed after registration. It was not recreated.")
+            })?;
         // Git metadata belongs to the probed folder, not a later folder edit.
         if latest["cwd"] == record["cwd"] {
             let current_ids = ids
@@ -975,7 +1014,7 @@ fn finish_registration(
             .unwrap()
             .iter_mut()
             .find(|row| row["id"] == record["id"])
-            .ok_or(Error::new("Session record no longer exists."))?;
+            .ok_or_else(|| Error::new("Session record no longer exists."))?;
         row["launchNew"] = json!(false);
         Ok(row.clone())
     })
@@ -995,7 +1034,7 @@ pub(super) fn recover_with_request(
         let original = arr(&s["sessions"])
             .into_iter()
             .find(|x| x["id"] == p["id"])
-            .ok_or(Error::new("Original session unavailable."))?;
+            .ok_or_else(|| Error::new("Original session unavailable."))?;
         if let Some(pending) = arr(&s["sessions"])
             .iter()
             .rev()
@@ -1035,7 +1074,7 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
     let record = arr(&s["sessions"])
         .into_iter()
         .find(|x| x["id"] == id)
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let helper = super::agent_cli::helper(&repo.root)?;
     let register = format!(
         "{helper} register --record {} --agent {} --title {} --cwd {}{}",
@@ -1180,10 +1219,11 @@ fn open_chat_with(
     launch: impl FnOnce(&Value, &std::path::Path) -> Result<terminal::OpenOutcome>,
 ) -> Result<Value> {
     open_chat_observing(repo, args, launch, |record| {
-        match repo.embedded.inventory_checked() {
-            Ok(inventory) => terminal::existing_codex_runtime(record, &inventory, false),
-            Err(_) => terminal::RuntimeObservation::Unavailable,
-        }
+        repo.embedded
+            .inventory_checked()
+            .map_or(terminal::RuntimeObservation::Unavailable, |inventory| {
+                terminal::existing_codex_runtime(record, &inventory, false)
+            })
     })
 }
 fn open_chat_observing(
@@ -1194,7 +1234,7 @@ fn open_chat_observing(
 ) -> Result<Value> {
     let fields = args
         .as_object()
-        .ok_or(Error::new("Open arguments must be an object."))?;
+        .ok_or_else(|| Error::new("Open arguments must be an object."))?;
     if fields
         .keys()
         .any(|key| !["recordId", "target"].contains(&key.as_str()))
@@ -1205,15 +1245,13 @@ fn open_chat_observing(
     }
     let id = sid(args["recordId"]
         .as_str()
-        .ok_or(Error::new("Supply the saved chat ID."))?)?;
+        .ok_or_else(|| Error::new("Supply the saved chat ID."))?)?;
     let intent = match args.get("target") {
         None => "saved",
         Some(value) => value
             .as_str()
             .filter(|value| ["saved", "embedded"].contains(value))
-            .ok_or(Error::new(
-                "Choose the saved destination or embedded terminal.",
-            ))?,
+            .ok_or_else(|| Error::new("Choose the saved destination or embedded terminal."))?,
     };
     for value in [
         &id,
@@ -1263,7 +1301,7 @@ fn open_chat_observing(
         .as_array()
         .and_then(|rows| rows.iter().find(|row| row["id"] == id))
         .cloned()
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let target = if intent == "embedded" || record["destination"] != "desktop" {
         "embedded"
     } else {
@@ -1353,7 +1391,7 @@ fn open_chat_observing(
             let row = state["sessions"]
                 .as_array_mut()
                 .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
-                .ok_or(Error::new("The saved chat is no longer present."))?;
+                .ok_or_else(|| Error::new("The saved chat is no longer present."))?;
             row["launchNew"] = json!(false);
             row["lastOpenedAt"] = json!(now());
             if target == "embedded" && outcome == terminal::OpenOutcome::Accepted {

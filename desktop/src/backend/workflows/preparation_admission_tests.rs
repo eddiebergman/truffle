@@ -46,9 +46,9 @@ fn preparation_validation_failure_preserves_expired_admission_and_allows_immedia
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
     let result = prepare(&repo, "quick").unwrap();
-    assert!(!text(&result, "id").is_empty());
+    assert_ne!(text(&result, "id"), "");
     assert!(repo.cooldown.lock().unwrap()["quick-session"] > now());
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_failed_canonical_save_preserves_every_admission_and_corrected_retry_succeeds() {
@@ -78,7 +78,7 @@ fn preparation_failed_canonical_save_preserves_every_admission_and_corrected_ret
                 .len(),
             1
         );
-        assert!(repo.embedded.inventory().is_empty());
+        assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     }
 }
 #[test]
@@ -137,7 +137,7 @@ fn preparation_concurrent_requests_serialize_one_admission_and_preserve_review_r
                 results[1].as_ref().unwrap()["id"]
             );
         }
-        assert!(repo.embedded.inventory().is_empty());
+        assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     }
 }
 #[test]

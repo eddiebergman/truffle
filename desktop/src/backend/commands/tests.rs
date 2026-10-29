@@ -13,7 +13,7 @@ fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effec
                 {"id":"github:1","source":"github","url":"https://github.com/Owner/Repo/pull/1","project":"Wrong"},
                 {"id":"sentry:1","source":"sentry","project":"Observed"}
             ]);
-            state["overrides"]["linear:1"]=json!({"hidden":true});state["snoozed"]=json!({"linear:1":9999999999u64});
+            state["overrides"]["linear:1"]=json!({"hidden":true});state["snoozed"]=json!({"linear:1":9_999_999_999_u64});
             state["itemArchive"]=json!({"linear:archive":{"source":"linear","project":"Archive only"}});
             state["sessions"]=json!([{"items":[{"source":"linear","project":"Session only"}]}]);Ok(())
         }).unwrap();
@@ -65,7 +65,7 @@ fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effec
     assert_eq!(std::fs::read(&repo.data).unwrap(), core);
     assert_eq!(std::fs::read(&path).unwrap(), disk);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     let spec = specifications()
         .into_iter()
         .find(|entry| entry.id == CommandId::PagesScopesRead)
@@ -391,16 +391,17 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
         acknowledged,
         json!({"requestId":request_id,"status":"shown"})
     );
-    assert!(
+    assert_eq!(
         invoke(&repo, &json!({"name":"ui.presentations.read"}), true).unwrap()["pending"]
             .as_array()
             .unwrap()
-            .is_empty()
+            .as_slice(),
+        [] as [Value; 0]
     );
     let mut after = repo.state.lock().unwrap().clone();
     after.as_object_mut().unwrap().remove("uiPresentations");
     assert_eq!(after, before);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
@@ -588,7 +589,7 @@ fn skills_editor_commands_are_strict_user_writes_with_bounded_read_and_exact_rec
     assert_eq!(scheduled["saved"], true);
     assert_eq!(scheduled["schedule"]["enabled"], false);
     assert_eq!(scheduled.as_object().unwrap().len(), 5);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -632,7 +633,7 @@ fn saved_chat_open_command_is_strict_user_action_and_returns_only_bounded_receip
     assert_eq!(receipt.as_object().unwrap().len(), 6);
     assert!(!receipt.to_string().contains("private-open-marker"));
     assert!(!receipt.to_string().contains("Private title marker"));
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn artifact_metadata_commands_share_cas_owner_and_deny_discovery_registration_to_app_chat() {
@@ -738,7 +739,7 @@ fn changes_commands_are_strict_cached_routine_owners() {
         repo.state.lock().unwrap()["changes"][0]["privateNs"],
         "private-change-marker"
     );
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -780,7 +781,7 @@ fn project_folder_command_is_strict_read_only_and_available_to_the_assistant() {
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn projects_commands_are_strict_routine_metadata_with_bounded_owner_receipts() {
@@ -965,7 +966,10 @@ fn tracked_dispatch_v2_retires_creation_names_and_never_submits_unknown_ids() {
     for key in ["status", "finalized", "kind", "payloadHash", "generation"] {
         assert!(missing.get(key).is_none());
     }
-    assert!(arr(&repo.state.lock().unwrap()["sessionDispatch"]["entries"]).is_empty());
+    assert_eq!(
+        arr(&repo.state.lock().unwrap()["sessionDispatch"]["entries"]),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn chat_ci_command_is_strict_user_action_and_denies_before_admission() {
@@ -1333,10 +1337,10 @@ fn sentry_environment_read_is_cached_bounded_and_preserves_unknown_membership() 
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, false).unwrap();
     repo.transaction(|state| {
-            state["sources"]["sentry"]=json!({"disabled":true,"failures":2,"nextAttempt":9999999999u64,"lastSuccess":42,"error":"private-source-error"});
-            state["sentryEnvNextAttempt"]=json!(9999999998u64);
+            state["sources"]["sentry"]=json!({"disabled":true,"failures":2,"nextAttempt":9_999_999_999_u64,"lastSuccess":42,"error":"private-source-error"});
+            state["sentryEnvNextAttempt"]=json!(9_999_999_998_u64);
             state["sentryEnvironments"]=json!({
-                "production":{"itemIds":(0..205).map(|n|format!("sentry:qa:{n}")).collect::<Vec<_>>(),"running":true,"lastSuccess":40,"nextAttempt":9999999997u64,"error":"private-cache-error","failures":1,"extension":"private-extension"},
+                "production":{"itemIds":(0..205).map(|n|format!("sentry:qa:{n}")).collect::<Vec<_>>(),"running":true,"lastSuccess":40,"nextAttempt":9_999_999_997_u64,"error":"private-cache-error","failures":1,"extension":"private-extension"},
                 "pending":{"running":true},"empty":{"itemIds":[],"lastSuccess":41}});
             Ok(())
         }).unwrap();
@@ -1518,7 +1522,7 @@ fn preparation_commands_enforce_policy_and_exact_argument_shapes_before_effects(
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_command_receipts_are_local_only_and_recoverable_without_effects() {
@@ -1578,7 +1582,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
         false
     )
     .is_err());
-    let mut attach = args.clone();
+    let mut attach = args;
     attach["sessionId"] = json!(uuid());
     assert!(invoke(
         &repo,
@@ -1588,7 +1592,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
     .is_err());
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 
 #[test]
@@ -1660,7 +1664,7 @@ fn chat_metadata_commands_validate_and_enforce_the_user_action_boundary() {
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
@@ -1718,7 +1722,7 @@ fn chat_metadata_command_merges_current_unpatched_fields_and_conflicts_on_a_stal
     );
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 
 #[test]
@@ -1778,7 +1782,7 @@ fn every_preparation_command_delegates_its_owner_without_opening_an_agent() {
         );
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-        assert!(repo.embedded.inventory().is_empty());
+        assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     }
 }
 
@@ -1908,8 +1912,8 @@ fn chat_metadata_commands_are_reversible_allowed_and_return_only_updated_metadat
             assert_eq!(&state[key], value);
         }
     }
-    assert!(repo.embedded.inventory().is_empty());
-    assert!(repo.shells.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(repo.shells.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn chat_metadata_commands_reject_bad_targets_and_unknown_fields_without_writes() {
@@ -2058,7 +2062,7 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
         .any(|record| record["id"] == receipt["recordId"]
             && record["newsletterId"] == preset_id
             && record.get("runReceipt").is_none()));
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 
 #[test]
@@ -2539,7 +2543,7 @@ fn registry_schemas_use_only_the_validated_subset() {
                 .collect(),
             _ => panic!("Every schema must declare its type."),
         };
-        assert!(!types.is_empty());
+        assert_ne!(types, [] as [std::string::String; 0]);
         assert!(types.iter().all(|name| matches!(
             name.as_str(),
             "object" | "array" | "string" | "integer" | "boolean" | "null"
@@ -2553,7 +2557,7 @@ fn registry_schemas_use_only_the_validated_subset() {
             check(items);
         }
         if let Some(alternatives) = schema["oneOf"].as_array() {
-            assert!(!alternatives.is_empty());
+            assert_ne!(alternatives.as_slice(), [] as [Value; 0]);
             for alternative in alternatives {
                 check(alternative);
             }
@@ -2838,9 +2842,8 @@ fn assistant_denial_precedes_every_restricted_handler() {
         .filter(|s| s.assistant == AssistantPolicy::UserAction)
     {
         let result = invoke(&repo, &json!({"name":spec.name,"args":{}}), true);
-        let error = match result {
-            Err(error) => error,
-            Ok(_) => panic!("Restricted command was allowed."),
+        let Err(error) = result else {
+            panic!("Restricted command was allowed.")
         };
         assert_eq!(
             error.message,
@@ -2946,10 +2949,7 @@ fn diagnostics_log_tail_redacts_multiline_environment_suffixes_at_each_cut() {
         let retained = if sentinel.as_bytes()[cut - 1] == b'\n' {
             fragment
         } else {
-            fragment
-                .find('\n')
-                .map(|end| &fragment[end + 1..])
-                .unwrap_or("")
+            fragment.find('\n').map_or("", |end| &fragment[end + 1..])
         };
         let input = if retained.is_empty() {
             "Normal é line".to_owned()
@@ -2986,7 +2986,7 @@ fn diagnostics_log_buffer_redaction_precedes_multiline_record_splitting() {
     let sentinel = "benign-multiline\nprivate-sentinel";
     let contents = format!("Start {sentinel} end\nRoutine line");
     let rows = redacted_log_lines(&contents, "", 100, |value| {
-        *value = value.replace(sentinel, "[redacted]")
+        *value = value.replace(sentinel, "[redacted]");
     });
     assert_eq!(rows, vec!["Routine line", "Start [redacted] end"]);
     assert_eq!(

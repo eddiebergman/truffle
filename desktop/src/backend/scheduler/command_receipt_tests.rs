@@ -119,5 +119,5 @@ fn failed_skill_launch_error_identifies_the_exact_failed_run() {
         error.data["runReceipt"],
         json!({"presetId":preset["id"],"recordId":stored["sessionId"],"runId":run,"status":"failed"})
     );
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }

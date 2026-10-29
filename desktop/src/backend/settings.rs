@@ -72,7 +72,7 @@ pub fn validate(values: &Value) -> Result<()> {
     let base = defaults();
     let object = values
         .as_object()
-        .ok_or(Error::new("Settings must be an object."))?;
+        .ok_or_else(|| Error::new("Settings must be an object."))?;
     if object.keys().any(|k| base.get(k).is_none())
         || object.len() != base.as_object().unwrap().len()
     {
@@ -117,7 +117,7 @@ pub fn validate(values: &Value) -> Result<()> {
     for (key, prefix) in [("claudeReviewCommand", "/"), ("codexReviewCommand", "$")] {
         let s = values[key]
             .as_str()
-            .ok_or(Error::new("Review commands must be text."))?;
+            .ok_or_else(|| Error::new("Review commands must be text."))?;
         if !s.is_empty()
             && (!s.starts_with(prefix)
                 || s.len() > 100
@@ -133,7 +133,7 @@ pub fn validate(values: &Value) -> Result<()> {
     }
     let bindings = values["keybindings"]
         .as_object()
-        .ok_or(Error::new("Keybindings must be an object."))?;
+        .ok_or_else(|| Error::new("Keybindings must be an object."))?;
     if bindings.len() != commands().len()
         || bindings
             .keys()
@@ -143,7 +143,9 @@ pub fn validate(values: &Value) -> Result<()> {
     }
     let mut seen = BTreeSet::new();
     for chord in bindings.values() {
-        let chord = chord.as_str().ok_or(Error::new("Shortcut must be text."))?;
+        let chord = chord
+            .as_str()
+            .ok_or_else(|| Error::new("Shortcut must be text."))?;
         if !valid_chord(chord) {
             return Err(Error::new("Use Primary, optional Shift/Alt, and a letter, number, comma, period, slash or Enter."));
         }
@@ -169,7 +171,7 @@ pub fn validate(values: &Value) -> Result<()> {
     }
     let actions = values["quickActions"]
         .as_array()
-        .ok_or(Error::new("Quick actions must be an array."))?;
+        .ok_or_else(|| Error::new("Quick actions must be an array."))?;
     if actions.len() > 20 {
         return Err(Error::new("Save at most 20 quick actions."));
     }
@@ -177,7 +179,7 @@ pub fn validate(values: &Value) -> Result<()> {
     for action in actions {
         let a = action
             .as_object()
-            .ok_or(Error::new("Quick action must be an object."))?;
+            .ok_or_else(|| Error::new("Quick action must be an object."))?;
         if a.keys()
             .any(|k| !["id", "title", "command"].contains(&k.as_str()))
         {
@@ -213,11 +215,11 @@ fn normalize_document(document: &mut Value) -> Result<()> {
     }
     let values = document["values"]
         .as_object_mut()
-        .ok_or(Error::new("Settings values must be an object."))?;
+        .ok_or_else(|| Error::new("Settings values must be an object."))?;
     let bindings = values
         .get_mut("keybindings")
         .and_then(Value::as_object_mut)
-        .ok_or(Error::new("Keybindings must be an object."))?;
+        .ok_or_else(|| Error::new("Keybindings must be an object."))?;
     for command in commands() {
         let id = text(&command, "id");
         if !bindings.contains_key(id) {
@@ -284,7 +286,7 @@ impl Store {
                 .max(if values_changed {
                     revision
                         .checked_add(1)
-                        .ok_or(Error::new("Settings revision is exhausted."))?
+                        .ok_or_else(|| Error::new("Settings revision is exhausted."))?
                 } else {
                     revision
                 }));
@@ -325,7 +327,7 @@ impl Store {
             doc["categories"] = fields["categories"].clone();
             Ok(())
         })();
-        if let Some(e) = error.or(metadata.err()) {
+        if let Some(e) = error.or_else(|| metadata.err()) {
             doc["configError"] = json!(e.message);
         }
         match context_kit::read_bounded(&self.directory.join("workflows/agent-review.md"), 16000) {
@@ -359,7 +361,7 @@ impl Store {
         }
         let patch = p["patch"]
             .as_object()
-            .ok_or(Error::new("Supply a settings patch."))?;
+            .ok_or_else(|| Error::new("Supply a settings patch."))?;
         let mut values = doc["values"].clone();
         for (key, value) in patch {
             if agent && approval(key) == Approval::User && values[key] != *value {

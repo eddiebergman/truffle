@@ -97,7 +97,7 @@ fn saved_chat_open_import_failed_admission_never_opens_and_preeffect_error_clear
             })
             .is_err()
         );
-        assert_eq!(calls, if fail { 0 } else { 1 });
+        assert_eq!(calls, i32::from(!fail));
         let s = repo.sharing.lock().unwrap();
         assert!(s["entries"][&delivery]["openReceipt"].is_null());
         assert_eq!(s["entries"][&delivery]["privateNs"], "keep");
@@ -118,7 +118,7 @@ fn sharing_state_write_limit_matches_load_and_rejects_without_losing_import_iden
     })
     .unwrap();
     let baseline = repo.sharing.lock().unwrap().clone();
-    let mut persisted = baseline.clone();
+    let mut persisted = baseline;
     if config_path(&repo).is_file() {
         persisted.as_object_mut().unwrap().remove("config");
     }
@@ -462,7 +462,7 @@ fn recipient_discovery_uses_only_immediate_names_and_optional_display_names() {
         people.iter().map(|p| text(p, "id")).collect::<Vec<_>>(),
         ["alex", "eddie", "hidden", "sam"]
     );
-    assert!(arr(&view(&repo)["entries"]).is_empty());
+    assert_eq!(arr(&view(&repo)["entries"]), [] as [serde_json::Value; 0]);
     write(&root.join("directory.json"), &serde_json::to_vec(&json!({"format":"context-directory","version":"1.0","people":[{"id":"alex","name":"Alex Example","aliases":["secret"]},{"id":"hidden","active":false},{"id":"sam","name":"One"},{"id":"sam","name":"Two"},{"id":"new","name":"New Person"}]})).unwrap()).unwrap();
     refresh_once(&repo).unwrap();
     let people = arr(&view(&repo)["people"]);

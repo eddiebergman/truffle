@@ -22,7 +22,7 @@ const CSP:&str="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-
 pub fn private_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let name = path
         .file_name()
-        .ok_or(Error::new("Write target has no file name."))?;
+        .ok_or_else(|| Error::new("Write target has no file name."))?;
     let temp = path.with_file_name(format!(
         ".{}.{}.tmp",
         name.to_string_lossy(),
@@ -209,7 +209,7 @@ fn handle(
                             return Ok(json_response(404, json!({"error":"Not found."})));
                         }
                         let bytes = super::assets::asset(&format!("vendor/diffs/{name}"))
-                            .ok_or(Error::new("Asset unavailable."))?
+                            .ok_or_else(|| Error::new("Asset unavailable."))?
                             .to_vec();
                         return Ok(response(
                             200,
@@ -290,7 +290,7 @@ fn handle(
                     response(
                         200,
                         super::assets::asset(file)
-                            .ok_or(Error::new("Asset unavailable."))?
+                            .ok_or_else(|| Error::new("Asset unavailable."))?
                             .to_vec(),
                         kind,
                         false,
@@ -500,7 +500,7 @@ fn handle(
                 "/api/terminal/input" => {
                     let data = payload["data"]
                         .as_str()
-                        .ok_or(Error::new("Expected terminal input."))?;
+                        .ok_or_else(|| Error::new("Expected terminal input."))?;
                     repo.embedded.input(&id, data)?;
                     json!({})
                 }
@@ -508,12 +508,13 @@ fn handle(
                     let cols = payload["cols"]
                         .as_u64()
                         .filter(|n| *n <= 500)
-                        .ok_or(Error::new("Invalid columns."))?
+                        .ok_or_else(|| Error::new("Invalid columns."))?
                         as u16;
                     let rows = payload["rows"]
                         .as_u64()
                         .filter(|n| *n <= 200)
-                        .ok_or(Error::new("Invalid rows."))? as u16;
+                        .ok_or_else(|| Error::new("Invalid rows."))?
+                        as u16;
                     repo.embedded.resize(&id, cols, rows)?;
                     json!({})
                 }
@@ -569,7 +570,7 @@ fn handle(
             "/api/session/open" => {
                 let fields = payload
                     .as_object()
-                    .ok_or(Error::new("Open arguments must be an object."))?;
+                    .ok_or_else(|| Error::new("Open arguments must be an object."))?;
                 if fields
                     .keys()
                     .any(|key| !["id", "target"].contains(&key.as_str()))
@@ -791,7 +792,7 @@ pub fn serve(
             let record = arr(&repo.state.lock().unwrap()["sessions"])
                 .into_iter()
                 .find(|s| s["id"] == id)
-                .ok_or(Error::new("Preview terminal record unavailable."))?;
+                .ok_or_else(|| Error::new("Preview terminal record unavailable."))?;
             repo.embedded.open_demo(&record)?;
         }
     }

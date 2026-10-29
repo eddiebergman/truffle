@@ -9,7 +9,7 @@ pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
             let minutes = schedule["everyMinutes"]
                 .as_u64()
                 .filter(|n| (5..=10080).contains(n))
-                .ok_or(Error::new("Use an interval of 5 minutes to 7 days."))?;
+                .ok_or_else(|| Error::new("Use an interval of 5 minutes to 7 days."))?;
             Ok((minutes as f64).mul_add(60.0, after))
         }
         "daily" => {
@@ -57,7 +57,7 @@ fn editor_conflict() -> Error {
 fn editor_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let object = value
         .as_object()
-        .ok_or(Error::new("Skill editor input must be an object."))?;
+        .ok_or_else(|| Error::new("Skill editor input must be an object."))?;
     if object.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(Error::new("Unknown skill editor field."));
     }
@@ -161,9 +161,9 @@ fn editor_view(repo: &Repository, source: &PresetSource, state: &Value, id: &str
 fn checked_patch(patch: &Value, expected: &Value, fields: &[&str]) -> Result<()> {
     editor_keys(patch, fields)?;
     let patch = patch.as_object().unwrap();
-    let expected = expected.as_object().ok_or(Error::new(
-        "Supply captured tokens for exactly the changed skill fields.",
-    ))?;
+    let expected = expected.as_object().ok_or_else(|| {
+        Error::new("Supply captured tokens for exactly the changed skill fields.")
+    })?;
     if patch.is_empty()
         || expected.len() != patch.len()
         || patch.keys().any(|key| !expected.contains_key(key))
@@ -264,7 +264,7 @@ pub fn save_preset(repo: &Repository, args: &Value) -> Result<Value> {
         row["reports"] = json!("reports");
         state["skillPresets"]
             .as_array_mut()
-            .ok_or(Error::io())?
+            .ok_or_else(Error::io)?
             .push(row);
         validate_preset_count(&source, state)?;
         let mut view = editor_view(repo, &source, state, &id)?;
@@ -303,7 +303,7 @@ fn update_preset_from_source(
             }
         }
         if !changed.is_empty() {
-            let rows = state["skillPresets"].as_array_mut().ok_or(Error::io())?;
+            let rows = state["skillPresets"].as_array_mut().ok_or_else(Error::io)?;
             if let Some(existing) = rows.iter_mut().find(|row| row["id"] == id) {
                 *existing = row;
             } else {
@@ -375,7 +375,7 @@ fn list_identity(repo: &Repository, value: &Value) -> Result<Value> {
     let id = value
         .as_str()
         .filter(|id| !id.is_empty() && id.chars().count() <= 80)
-        .ok_or(Error::new("A saved skill identity is invalid."))?;
+        .ok_or_else(|| Error::new("A saved skill identity is invalid."))?;
     editor_exact(repo, id)?;
     Ok(json!(id))
 }

@@ -40,7 +40,7 @@ fn saved_chat_open_preeffect_failure_does_not_consume_admission() {
     })
     .unwrap();
     let key = format!("open:{id}");
-    repo.cooldown.lock().unwrap().insert(key.clone(), 1.0);
+    repo.cooldown.lock().unwrap().insert(key, 1.0);
     let before = repo.cooldown.lock().unwrap().clone();
     assert!(
         open_chat_with(&repo, &json!({"recordId":id}), |_, _| Err(Error::new(

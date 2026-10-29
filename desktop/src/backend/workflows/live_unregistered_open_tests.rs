@@ -36,7 +36,7 @@ fn saved_chat_open_observation_rechecks_canonical_identity_and_keeps_uncertainty
                         "sessionId" => s["sessions"][0][changed] = json!(uuid()),
                         "agent" => s["sessions"][0][changed] = json!("claude"),
                         _ => s["sessions"][0][changed] = json!("desktop"),
-                    };
+                    }
                     Ok(())
                 })
                 .unwrap();

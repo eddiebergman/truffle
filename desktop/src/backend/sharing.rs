@@ -130,7 +130,7 @@ fn base(repo: &Repository) -> PathBuf {
 }
 fn write(path: &Path, bytes: &[u8]) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::create_dir_all(path.parent().ok_or(Error::io())?)?;
+    fs::create_dir_all(path.parent().ok_or_else(Error::io)?)?;
     fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o700))?;
     let temp = path.with_extension(format!("{}.tmp", uuid()));
     super::http::private_write(&temp, bytes)?;
@@ -291,7 +291,7 @@ pub fn handle(value: &str) -> Result<String> {
     let v = value
         .trim()
         .strip_prefix('/')
-        .unwrap_or(value.trim())
+        .unwrap_or_else(|| value.trim())
         .to_ascii_lowercase();
     if v.is_empty()
         || v.len() > 64
@@ -309,7 +309,7 @@ pub fn handle(value: &str) -> Result<String> {
 fn gs(value: &str) -> Result<(String, String)> {
     let v = value
         .strip_prefix("gs://")
-        .ok_or(Error::new("Use a gs://bucket/prefix URI."))?;
+        .ok_or_else(|| Error::new("Use a gs://bucket/prefix URI."))?;
     let (bucket, key) = v.split_once('/').unwrap_or((v, ""));
     if bucket.is_empty()
         || !bucket
@@ -593,15 +593,17 @@ impl Store {
             let key=path.strip_prefix(root).map_err(|_|Error::new("Reference is outside the configured sharing folder. It remains an external link."))?;
             let key = key
                 .to_str()
-                .ok_or(Error::new("Folder reference is not UTF-8."))?;
+                .ok_or_else(|| Error::new("Folder reference is not UTF-8."))?;
             relative(key)?;
             return Ok(key.into());
         }
         let key = uri
             .strip_prefix(&(self.root.clone() + "/"))
-            .ok_or(Error::new(
+            .ok_or_else(|| {
+                Error::new(
                 "Reference is outside the configured sharing root. It remains an external link.",
-            ))?;
+            )
+            })?;
         relative(key)?;
         Ok(key.into())
     }
@@ -812,14 +814,14 @@ impl Store {
                     .as_str()
                     .unwrap_or("")
                     .strip_prefix(&(store_prefix.clone() + "/"))
-                    .ok_or(Error::new("Unexpected inbox prefix."))?);
+                    .ok_or_else(|| Error::new("Unexpected inbox prefix."))?);
             }
         }
         for entry in v["items"].as_array_mut().into_iter().flatten() {
             if !store_prefix.is_empty() {
                 entry["name"] = json!(text(entry, "name")
                     .strip_prefix(&(store_prefix.clone() + "/"))
-                    .ok_or(Error::new("Unexpected object prefix."))?);
+                    .ok_or_else(|| Error::new("Unexpected object prefix."))?);
             }
         }
         Ok(v)
@@ -944,7 +946,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
                 .as_object()
                 .cloned()
                 .map(Value::Object)
-                .ok_or(Error::new("Sharing job unavailable."))?;
+                .ok_or_else(|| Error::new("Sharing job unavailable."))?;
             if job["hasPreview"] == true {
                 job["preview"] = serde_json::from_slice(&kit(context_kit::read_bounded(
                     &base(repo).join("jobs").join(format!("{id}.preview.json")),
@@ -1006,7 +1008,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
                     revision: request
                         .revision
                         .checked_add(1)
-                        .ok_or(Error::new("Sharing revision exhausted."))?,
+                        .ok_or_else(|| Error::new("Sharing revision exhausted."))?,
                     handle: name.clone(),
                     transport,
                 };
@@ -1066,7 +1068,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
             let session = arr(&repo.state.lock().unwrap()["sessions"])
                 .into_iter()
                 .find(|s| s["id"] == id)
-                .ok_or(Error::new("Select a saved agent chat first."))?;
+                .ok_or_else(|| Error::new("Select a saved agent chat first."))?;
             if text(&session, "sessionId").is_empty() {
                 return Err(Error::new("The agent has not registered its conversation yet. Try again after its first reply."));
             }
@@ -1343,7 +1345,7 @@ fn refresh_people(repo: &Repository, store: &Store) -> Result<()> {
         let found = found.into_iter().map(Value::String).collect::<Vec<_>>();
         let mut visible = arr(&s["discoveredPeople"]);
         if page.is_empty() {
-            visible = found.clone();
+            visible.clone_from(&found);
         } else {
             visible.extend(found.clone());
             visible.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
@@ -1408,7 +1410,7 @@ fn refresh_once(repo: &Repository) -> Result<()> {
                 if item["size"]
                     .as_str()
                     .and_then(|s| s.parse::<u64>().ok())
-                    .or(item["size"].as_u64())
+                    .or_else(|| item["size"].as_u64())
                     .unwrap_or(MAX_RECORD + 1)
                     > MAX_RECORD
                 {
@@ -1416,7 +1418,7 @@ fn refresh_once(repo: &Repository) -> Result<()> {
                 }
                 let bytes = store
                     .read(key, MAX_RECORD, Some(text(&item, "generation")))?
-                    .ok_or(Error::new("Delivery disappeared while refreshing."))?;
+                    .ok_or_else(|| Error::new("Delivery disappeared while refreshing."))?;
                 let record: Value = serde_json::from_slice(&bytes)?;
                 validate_delivery(&record, id, &name, &store)?;
                 write(
@@ -1598,16 +1600,17 @@ fn recent_messages(path: &Path) -> Result<Vec<Value>> {
             continue;
         }
         let content = &message["content"];
-        let words = if let Some(t) = content.as_str() {
-            t.to_string()
-        } else {
-            arr(content)
-                .iter()
-                .filter(|b| ["text", "input_text", "output_text"].contains(&text(b, "type")))
-                .map(|b| text(b, "text"))
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
+        let words = content.as_str().map_or_else(
+            || {
+                arr(content)
+                    .iter()
+                    .filter(|b| ["text", "input_text", "output_text"].contains(&text(b, "type")))
+                    .map(|b| text(b, "text"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            },
+            |t| t.to_string(),
+        );
         if words.trim().is_empty()
             || [
                 "<task-notification>",
@@ -1770,7 +1773,7 @@ fn prepare(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
     let record = arr(&repo.state.lock().unwrap()["sessions"])
         .into_iter()
         .find(|r| r["id"] == p["recordId"])
-        .ok_or(Error::new("Chat unavailable."))?;
+        .ok_or_else(|| Error::new("Chat unavailable."))?;
     let dir = base(repo).join("drafts").join(id);
     fs::create_dir_all(&dir)?;
     let skill = include_str!("../../resources/handoff-context.md").to_owned();
@@ -1995,11 +1998,10 @@ fn kit_preview(raw: &Value) -> Value {
             json!(arr(refs)
                 .iter()
                 .take(10)
-                .map(|r| if let Some(uri) = r.as_str() {
-                    json!({"uri":uri.chars().take(1000).collect::<String>()})
-                } else {
-                    json!({"uri":short(r,"uri",1000),"title":short(r,"title",300)})
-                })
+                .map(|r| r.as_str().map_or_else(
+                    || json!({"uri":short(r,"uri",1000),"title":short(r,"title",300)}),
+                    |uri| json!({"uri":uri.chars().take(1000).collect::<String>()})
+                ))
                 .collect::<Vec<_>>()),
         );
     }
@@ -2115,7 +2117,7 @@ fn fetch_folder_resources(
             let key = store.object(&format!("{parent}{href}"))?;
             let bytes = store
                 .read(&key, size, None)?
-                .ok_or(Error::new("Shared folder attachment is unavailable."))?;
+                .ok_or_else(|| Error::new("Shared folder attachment is unavailable."))?;
             if bytes.len() as u64 != size
                 || context_kit::sha256(&bytes) != digest.to_ascii_lowercase()
             {
@@ -2175,7 +2177,7 @@ fn send(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
         .unwrap_or_default();
     let at = p["created_at"]
         .as_str()
-        .unwrap_or(text(&draft, "created_at"))
+        .unwrap_or_else(|| text(&draft, "created_at"))
         .to_string();
     for recipient in arr(&p["recipients"]) {
         let name = recipient.as_str().unwrap_or("");
@@ -2217,7 +2219,7 @@ fn entry(repo: &Repository, id: &str) -> Result<Value> {
         .as_object()
         .cloned()
         .map(Value::Object)
-        .ok_or(Error::new("Inbox entry unavailable."))
+        .ok_or_else(|| Error::new("Inbox entry unavailable."))
 }
 fn import_directory(repo: &Repository, config: &Value, delivery: &Value) -> Result<PathBuf> {
     let share = sid(text(delivery, "shareId"))?;
@@ -2247,7 +2249,7 @@ fn fetched_manifest(repo: &Repository, id: &str) -> Result<(Value, PathBuf, Stor
         Some(b) if context_kit::sha256(&b) == text(expected, "sha256") => b,
         _ => store
             .read(&store.object(text(expected, "uri"))?, MAX_MANIFEST, None)?
-            .ok_or(Error::new("Shared manifest is missing or inaccessible."))?,
+            .ok_or_else(|| Error::new("Shared manifest is missing or inaccessible."))?,
     };
     if bytes.len() as u64 != expected["size"].as_u64().unwrap_or(0)
         || context_kit::sha256(&bytes) != text(expected, "sha256")
@@ -2341,7 +2343,7 @@ fn import_session(
         }
         let record=workflows::save_session(state,&json!({"agent":payload["agent"],"cwd":payload["cwd"],"title":title,"instruction":instruction,"destination":"embedded","itemIds":[]}))?;
         let id=text(&record,"id").to_owned();
-        let saved=state["sessions"].as_array_mut().and_then(|sessions|sessions.iter_mut().find(|record|record["id"]==id)).ok_or(Error::new("Imported session could not be saved."))?;
+        let saved=state["sessions"].as_array_mut().and_then(|sessions|sessions.iter_mut().find(|record|record["id"]==id)).ok_or_else(|| Error::new("Imported session could not be saved."))?;
         saved["sharingImportJobId"]=json!(job_id);
         Ok(id)
     })
@@ -2389,12 +2391,13 @@ fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
         total += size;
         let bytes = if let Some(encoded) = resource["inline_base64"].as_str() {
             use base64::Engine;
-            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(encoded) {
-                Some(bytes)
-            } else {
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .ok();
+            if decoded.is_none() {
                 notices.push(json!("Invalid inline attachment encoding."));
-                None
             }
+            decoded
         } else if store.folder_extension()
             && text(resource, "href")
                 == format!("objects/{}", text(resource, "sha256").to_ascii_lowercase())

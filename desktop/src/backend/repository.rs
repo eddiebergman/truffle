@@ -178,7 +178,7 @@ impl Repository {
         let path = self
             .data
             .with_extension("session-dispatch-v1-recovery.json");
-        let parent = path.parent().ok_or(Error::io())?;
+        let parent = path.parent().ok_or_else(Error::io)?;
         let parent_metadata = std::fs::metadata(parent)?;
         if !parent_metadata.is_dir() || parent_metadata.mode() & 0o022 != 0 {
             return Err(Error::new(
@@ -496,7 +496,7 @@ impl Repository {
             let state = self.state.lock().map_err(|_| Error::io())?;
             let caches = state["sentryEnvironments"]
                 .as_object()
-                .ok_or(Error::new("Invalid stored environment caches."))?;
+                .ok_or_else(|| Error::new("Invalid stored environment caches."))?;
             if caches.len() > 20 {
                 return Err(Error::new("Too many stored environment caches."));
             }
