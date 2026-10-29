@@ -56,6 +56,7 @@ function sameSnapshot(previous,next) {
 
 // Commit inside the guarded continuation: callers must not assign a returned
 // snapshot after another await. Local immutable changes invalidate older reads.
+function invalidateSnapshot(){state={...state};}
 async function loadStateSnapshot({attempts=1}={}) {
   for(let attempt=0;attempt<attempts;attempt++){
     const baseline=state,next=await api('/api/state');
@@ -82,10 +83,10 @@ async function refresh() {
 }
 async function presentLocalWrite(write) {
   try { await write(); }
-  catch(error){const kind=[400,401,403,404,409].includes(error.status)?'rejected':'unknown';if(kind==='unknown')state={...state};return {kind,error:error.message||'The local write could not be confirmed.'};}
+  catch(error){const kind=[400,401,403,404,409].includes(error.status)?'rejected':'unknown';if(kind==='unknown')invalidateSnapshot();return {kind,error:error.message||'The local write could not be confirmed.'};}
   // Invalidate reads that started before this accepted write. The POST body is
   // never a snapshot commit source; only the guarded state reader can commit it.
-  state={...state};
+  invalidateSnapshot();
   try{const snapshot=await loadStateSnapshot({attempts:2});if(!snapshot.accepted)throw new Error('The dashboard changed while refreshing.');render();return {kind:'accepted',presentation:'ready'};}
   catch(error){return {kind:'accepted',presentation:'pending',error:error.message||'The dashboard could not refresh.'};}
 }

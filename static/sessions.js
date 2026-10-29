@@ -269,7 +269,7 @@ function adoptSavedSessionOpen(receipt,id){
  const narrowed=savedSessionOpenReceipt(receipt,id);if(!narrowed)return null;
  let entry=savedSessionOpens.get(id);if(entry?.receipt)return entry;
  if(!entry){if(savedSessionOpens.size>=64){const completed=[...savedSessionOpens].find(([,value])=>value.resolved);if(!completed)return null;savedSessionOpens.delete(completed[0]);}entry={pending:false,checking:false,resolved:false};savedSessionOpens.set(id,entry);}
- entry.receipt=narrowed;state={...state};return entry;
+ entry.receipt=narrowed;invalidateSnapshot();return entry;
 }
 function savedSessionOpenAction(entry){return entry?.receipt?.target==='desktop'?'Check open status':'Check terminal';}
 function savedSessionOpenMessage(entry){

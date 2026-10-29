@@ -46,7 +46,7 @@ if(typeof document!=='undefined')(()=>{
     try{
       if(!frozen){frozen={...workViewRequest(visibleWorkItems,metadata(),question.value),requestId:crypto.randomUUID(),agent:agent.value,folderPath:folder.value||automatic};
         if(new TextEncoder().encode(JSON.stringify(frozen)).length>120*1024){frozen=null;throw new Error('This view is too large. Narrow the filters and try again.');}}
-      if(!prepared){const result=await api('/api/session/from-view',frozen);state=result;prepared=state.sessions.find(s=>s.id===result.savedSessionId);if(!prepared)throw new Error('The saved view session is unavailable.');}
+      if(!prepared){const {savedSessionId}=await api('/api/session/from-view',frozen);invalidateSnapshot();await loadStateSnapshot({attempts:2});prepared=state.sessions.find(s=>s.id===savedSessionId);if(!prepared)throw new Error('The saved view session is unavailable.');}
       open=false;update();
       if(state.demo){source='sessions';persist();render();toast('Preview saved with '+frozen.itemIds.length+' items · no agent launched');}
       else await openSavedSession(prepared);
