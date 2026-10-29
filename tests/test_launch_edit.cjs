@@ -130,7 +130,7 @@ function fixture({
   form.elements.agent.value = "codex";
   actions.append(save);
   form.append(actions);
-  let mode = { connection: "attach", scope: "existing" };
+  const mode = { connection: "attach", scope: "existing" };
   f.c.registerRenderHook = () => {};
   loadMore(
     f,

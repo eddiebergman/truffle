@@ -5,7 +5,8 @@ function artifactCSV(rows) {
       .map((row) =>
         row
           .map((value) => {
-            const text = value == null ? "" : String(value);
+            const text =
+              value === null || value === undefined ? "" : String(value);
             return /[",\r\n]/.test(text)
               ? '"' + text.replace(/"/g, '""') + '"'
               : text;

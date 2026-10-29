@@ -1847,7 +1847,7 @@ test("saved-view sidebar keyboard activation and later redraw retain the exact v
     );
   mine.focus();
   mine.onclick();
-  let replacement = f.host.children.find(
+  const replacement = f.host.children.find(
     (button) => button.dataset.savedViewId === "github-mine",
   );
   assert.notEqual(replacement, mine);

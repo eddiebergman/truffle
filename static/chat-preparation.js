@@ -875,8 +875,8 @@ async function prepareSavedChat(
   } = {},
 ) {
   const context = capturePreparationContext(isCurrent);
-  let attempt = chatPreparations.get(target),
-    fresh = !attempt;
+  let attempt = chatPreparations.get(target);
+  const fresh = !attempt;
   if (chatPreparationStorageError) {
     attempt = {
       target: "invalid-storage",

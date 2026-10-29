@@ -157,7 +157,6 @@ test("saved-view header Close uses the same cancellation policy as Escape", asyn
   assert.equal(f.dialog.closed, 1);
 });
 function themeFixture() {
-  let document;
   const nodes = [],
     calls = [],
     notices = [],
@@ -251,7 +250,7 @@ function themeFixture() {
     }
   }
   const body = new Node("body");
-  document = {
+  const document = {
     body,
     activeElement: body,
     querySelector: (selector) =>

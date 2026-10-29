@@ -560,7 +560,7 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
         ({ "#agent-workspace": pane, "#work-list": body })[selector];
       f.c.render = () => f.c.renderAgentWorkspace();
       f.c.render();
-      let details = context
+      const details = context
         .querySelectorAll(".inline-attach")
         .find((node) => node.dataset.attachKind === kind);
       details.open = true;

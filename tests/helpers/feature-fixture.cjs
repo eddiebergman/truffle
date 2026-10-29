@@ -37,9 +37,7 @@ function loadMore(f, files, { drop = [], elements = {}, keepHost = [] } = {}) {
 function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
   const { MutationObserver, recordOpenChange } =
     require("./dialog-mutations.cjs")();
-  let document,
-    c,
-    serial = 0,
+  let serial = 0,
     renders = 0;
   const nodes = new Map(),
     calls = [],
@@ -195,7 +193,7 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       for (const fn of this.events.close || []) fn();
     }
   }
-  document = {
+  const document = {
     body: new Node("body"),
     activeElement: null,
     createElement: (tag) => new Node(tag),
@@ -331,7 +329,7 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       );
     return clone(canonical);
   };
-  c = browserContext({
+  const c = browserContext({
     settingsOpenGeneration: 0,
     document,
     localStorage: {

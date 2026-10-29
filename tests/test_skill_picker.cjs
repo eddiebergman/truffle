@@ -161,7 +161,7 @@ test("empty searches keep compatible agent ordering and the result limit", () =>
 });
 
 function installedPickerFixture(catalog, { load } = {}) {
-  let observer, active, body;
+  let observer, active;
   class Element {
     constructor(tag = "div", className = "", text = "") {
       this.tagName = tag.toUpperCase();
@@ -219,7 +219,7 @@ function installedPickerFixture(catalog, { load } = {}) {
       ]);
     }
   }
-  body = new Element("body");
+  const body = new Element("body");
   const grid = new Element(),
     heading = new Element(),
     hint = new Element(),

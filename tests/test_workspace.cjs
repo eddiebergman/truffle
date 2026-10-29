@@ -733,7 +733,6 @@ test("Skills Add delegates to the shared initializer without resetting a separat
 });
 
 function liveBarFixture() {
-  let document;
   const nodes = new Map(),
     actions = [];
   const matches = (node, selector) =>
@@ -853,7 +852,7 @@ function liveBarFixture() {
     }
     setCustomValidity() {}
   }
-  document = {
+  const document = {
     body: null,
     activeElement: null,
     querySelector: (selector) => {

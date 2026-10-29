@@ -349,7 +349,6 @@ test("pending open deduplicates requests and late completion never focuses or pa
   assert.equal(f.panel().dataset.shellId, "shell-a");
 });
 test("captured restart stays on A across delayed close while B is selected and never steals B focus", async () => {
-  let closing;
   const f = fixture({
     api: async (path, args) => {
       if (path.endsWith("/close")) return closing.promise;
@@ -358,7 +357,7 @@ test("captured restart stays on A across delayed close while B is selected and n
   });
   await f.toggle();
   f.flush();
-  closing = deferred();
+  const closing = deferred();
   const restart = f
     .panel()
     .querySelectorAll("button")

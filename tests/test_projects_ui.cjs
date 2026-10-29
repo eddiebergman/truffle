@@ -16,7 +16,6 @@ function deferred() {
 }
 const fields = ["title", "detail", "url", "status", "cwd"];
 function fixture({ handler } = {}) {
-  let document, c;
   const calls = [],
     messages = [];
   let renders = 0;
@@ -136,7 +135,7 @@ function fixture({ handler } = {}) {
       }
     }
   }
-  document = { body: new Node("body"), activeElement: null };
+  const document = { body: new Node("body"), activeElement: null };
   const ids = new Map();
   const node = (id, tag = "div", cls = "") => {
     const value = new Node(tag, cls);
@@ -204,7 +203,7 @@ function fixture({ handler } = {}) {
       expected: { ...expected },
       scope: "local",
     });
-  c = browserContext({
+  const c = browserContext({
     document,
     Event,
     source: "notes",

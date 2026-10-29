@@ -50,8 +50,7 @@ test("provider visibility keeps all, none and selected project meanings distinct
 function dialogFixture({ fail = false } = {}) {
   const calls = [],
     nodes = [];
-  let document,
-    nativeFocusDrops = 0,
+  let nativeFocusDrops = 0,
     nativeHiddenDrops = 0;
   class Node {
     constructor(tag, cls = "", text = "") {
@@ -169,7 +168,7 @@ function dialogFixture({ fail = false } = {}) {
     }
   }
   const body = new Node("body");
-  document = {
+  const document = {
     body,
     activeElement: body,
     querySelectorAll: (selector) =>

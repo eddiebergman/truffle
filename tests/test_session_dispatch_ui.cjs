@@ -212,8 +212,7 @@ async function click(host, label) {
   await tick();
 }
 test("preparation sends no input and the server identity is persisted before lookup-only submit", async () => {
-  let f;
-  f = fixture({
+  const f = fixture({
     handler: async (name, args) => {
       if (name === "chats.dispatch.read") return { operations: [] };
       if (name === "review.send.prepare") {

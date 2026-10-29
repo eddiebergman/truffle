@@ -150,8 +150,8 @@ function itemFolderContexts(item) {
   if (item.source === "sentry") result.push("sentry-project:" + item.project);
   if (item.source === "linear") {
     let parent = item.parent,
-      top = null,
-      seen = new Set();
+      top = null;
+    const seen = new Set();
     while (parent && !seen.has(parent.id) && seen.size < 8) {
       seen.add(parent.id);
       top = parent;

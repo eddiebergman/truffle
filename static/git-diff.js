@@ -103,14 +103,26 @@ function gitChangeCounts(additions, deletions) {
   const counts = el("span", "git-change-counts");
   counts.setAttribute(
     "aria-label",
-    additions == null
+    additions === null || additions === undefined
       ? "Binary file"
       : additions + " added, " + deletions + " removed",
   );
   counts.append(
-    el("span", "git-added", additions == null ? "—" : String(additions)),
-    el("span", "git-count-separator", additions == null ? "" : "/"),
-    el("span", "git-deleted", deletions == null ? "" : String(deletions)),
+    el(
+      "span",
+      "git-added",
+      additions === null || additions === undefined ? "—" : String(additions),
+    ),
+    el(
+      "span",
+      "git-count-separator",
+      additions === null || additions === undefined ? "" : "/",
+    ),
+    el(
+      "span",
+      "git-deleted",
+      deletions === null || deletions === undefined ? "" : String(deletions),
+    ),
   );
   return counts;
 }

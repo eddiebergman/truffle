@@ -176,6 +176,9 @@ const sharedGlobalsAreUsed = {
 
 const rules = {
   ...js.configs.recommended.rules,
+  eqeqeq: "error",
+  "no-var": "error",
+  "prefer-const": "error",
 };
 
 export default [

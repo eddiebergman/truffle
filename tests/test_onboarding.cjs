@@ -1526,7 +1526,7 @@ test("rejected company prose transfer preserves source, existing draft and open 
     "Remove attachments first.",
   ]) {
     const f = onboardingHostFixture({ step: "company" });
-    let existing = "Keep this existing draft";
+    const existing = "Keep this existing draft";
     f.c.window.prepareAppChatMessage = () => {
       throw new Error(reason);
     };

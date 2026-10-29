@@ -141,7 +141,6 @@ test("write status alone classifies known rejection versus unknown and never ret
   }
 });
 function visibilityFixture() {
-  let document;
   class Node {
     constructor() {
       this.children = [];
@@ -165,7 +164,7 @@ function visibilityFixture() {
       if (!nodes.has(id)) nodes.set(id, new Node());
       return nodes.get(id);
     };
-  document = {
+  const document = {
     body: new Node(),
     activeElement: null,
     createElementNS: () => new Node(),

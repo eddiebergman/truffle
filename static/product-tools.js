@@ -222,7 +222,9 @@ async function refreshActionOutput() {
           job.command,
           job.cwd,
           job.state,
-          job.exitCode == null ? null : "Exit " + job.exitCode,
+          job.exitCode === null || job.exitCode === undefined
+            ? null
+            : "Exit " + job.exitCode,
           job.message,
         ]
           .filter(Boolean)

@@ -408,7 +408,7 @@ $("#snooze-form").onsubmit = async (event) => {
     current = featureForms.get($("#snooze-dialog"));
   if (!featureFormMutable(current)) return;
   const choice = form.elements.duration.value;
-  let payload = {
+  const payload = {
     action: "snooze",
     id: current.target,
     mode: choice === "change" ? "change" : "until",

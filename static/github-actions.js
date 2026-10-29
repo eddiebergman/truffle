@@ -19,7 +19,10 @@ function githubUnreadReviews(data, items) {
   );
   return Object.entries(data?.githubReviewInbox || {})
     .filter(
-      ([id, event]) => ready.has(id) && event.active && event.seenAt == null,
+      ([id, event]) =>
+        ready.has(id) &&
+        event.active &&
+        (event.seenAt === null || event.seenAt === undefined),
     )
     .map(([id, event]) => ({ id, version: event.version }));
 }
@@ -334,7 +337,8 @@ function openGithubReviewPanel(initial, anchor) {
     item.reviewerUpdatedAt || state?.sources?.github?.lastSuccess || 0;
   if (
     Array.isArray(item.requestedReviewers) &&
-    item.canUpdate != null &&
+    item.canUpdate !== null &&
+    item.canUpdate !== undefined &&
     Date.now() / 1000 - observed < 300
   )
     paint();

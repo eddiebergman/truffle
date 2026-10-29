@@ -499,7 +499,7 @@ function launchFixture(options = {}) {
   save.type = "submit";
   form.append(close, save);
   form.elements = { agent: { value: "claude" } };
-  let values = {
+  const values = {
     id: "",
     connection: "new",
     scope: "new",

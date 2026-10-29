@@ -781,7 +781,6 @@ test("review highlighting keeps original CRLF and trailing newline when tokeniza
 });
 
 function reviewFocusFixture() {
-  let document;
   const nodes = new Map(),
     requests = [];
   const matches = (node, selector) =>
@@ -904,7 +903,7 @@ function reviewFocusFixture() {
       return this.attrs[key] ?? null;
     }
   }
-  document = {
+  const document = {
     body: null,
     activeElement: null,
     querySelectorAll: (selector) => document.body.querySelectorAll(selector),

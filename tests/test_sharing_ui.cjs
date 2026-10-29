@@ -2,7 +2,6 @@ const { test } = require("node:test"),
   assert = require("node:assert/strict");
 const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
 function fixture() {
-  let document;
   const calls = [],
     hooks = new Map(),
     intervals = [],
@@ -117,7 +116,7 @@ function fixture() {
       this.onfocus?.();
     }
   }
-  document = {
+  const document = {
     body: new Node("body"),
     hidden: false,
     activeElement: null,

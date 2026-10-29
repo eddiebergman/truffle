@@ -551,11 +551,11 @@ if (typeof document !== "undefined")
       timer = null,
       lastMessages = "",
       request = null,
-      handled = new Set(),
       deferred = [],
       assistant = null,
       jobAssistant = null,
       assistantChecked = false;
+    const handled = new Set();
     function snapshot() {
       const dialog = [...document.querySelectorAll("dialog[open]")].at(-1),
         review =

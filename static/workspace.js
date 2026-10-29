@@ -1335,8 +1335,8 @@ function linkedWorkCI(record, item) {
 }
 function renderAgentWorkspace() {
   const live = visibleAgentCandidates();
-  let candidate = live.find((c) => candidateKey(c) === selectedAgentKey);
-  let record = selectedAgentKey.startsWith("record:")
+  const candidate = live.find((c) => candidateKey(c) === selectedAgentKey);
+  const record = selectedAgentKey.startsWith("record:")
     ? state.sessions.find((s) => s.id === selectedAgentKey.slice(7))
     : candidate
       ? recordForCandidate(candidate)

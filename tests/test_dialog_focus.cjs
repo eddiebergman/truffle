@@ -7,7 +7,7 @@ const {
 } = require("./helpers/static-script.cjs");
 function fixture() {
   const queued = [];
-  let document;
+
   const matches = (node, selector) =>
     selector.split(",").some((part) => {
       part = part.trim();
@@ -171,7 +171,7 @@ function fixture() {
       });
     }
   }
-  document = {
+  const document = {
     body: null,
     activeElement: null,
     hidden: false,

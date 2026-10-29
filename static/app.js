@@ -501,8 +501,8 @@ function appendLinearTree(container, items) {
     node.item = item;
     node.ref = item;
     let child = node,
-      parent = item.parent,
-      seen = new Set([item.id]);
+      parent = item.parent;
+    const seen = new Set([item.id]);
     while (parent && !seen.has(parent.id) && seen.size < 9) {
       seen.add(parent.id);
       const ancestor = ensure(parent);
@@ -613,7 +613,7 @@ function updateGroupingControl() {
     }
     option.textContent = source === "github" ? "Group: Repo" : "Group: Project";
   } else option?.remove();
-  let stack = select.querySelector('[value="stack"]');
+  const stack = select.querySelector('[value="stack"]');
   if (source === "github") {
     if (!stack) select.add(new Option("Group: Stack", "stack"));
   } else stack?.remove();
