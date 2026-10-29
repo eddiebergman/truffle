@@ -35,9 +35,9 @@ fn malformed_settings_containers_fail_safely_on_load_and_refresh_without_writes(
             "refresh must report malformed {level}"
         );
         assert_eq!(current["values"], baseline["values"]);
-        let patch = json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}});
-        assert!(store.preview(&patch, false).is_err());
-        assert!(store.apply(&patch, false).is_err());
+        let settings_patch = json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}});
+        assert!(store.preview(&settings_patch, false).is_err());
+        assert!(store.apply(&settings_patch, false).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
 }

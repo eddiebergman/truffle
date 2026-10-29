@@ -131,6 +131,10 @@ pub fn validate(values: &Value) -> Result<()> {
             ));
         }
     }
+    validate_keybindings(values)?;
+    validate_quick_actions(values)
+}
+fn validate_keybindings(values: &Value) -> Result<()> {
     let bindings = values["keybindings"]
         .as_object()
         .ok_or_else(|| Error::new("Keybindings must be an object."))?;
@@ -169,6 +173,9 @@ pub fn validate(values: &Value) -> Result<()> {
             ));
         }
     }
+    Ok(())
+}
+fn validate_quick_actions(values: &Value) -> Result<()> {
     let actions = values["quickActions"]
         .as_array()
         .ok_or_else(|| Error::new("Quick actions must be an array."))?;
@@ -293,6 +300,7 @@ impl Store {
         if external != *doc {
             *doc = external;
         }
+        drop(doc);
         Ok(())
     }
     pub fn values(&self) -> Value {
@@ -387,7 +395,10 @@ impl Store {
         self.refresh()?;
         let doc = self.document.lock().map_err(|_| Error::io())?;
         let values = self.proposed_values(&doc, p, agent)?;
-        Ok(json!({"revision":doc["revision"],"contentHash":document_hash(&doc)?,"values":values}))
+        let view =
+            json!({"revision":doc["revision"],"contentHash":document_hash(&doc)?,"values":values});
+        drop(doc);
+        Ok(view)
     }
     pub fn apply(&self, p: &Value, agent: bool) -> Result<Value> {
         self.refresh()?;

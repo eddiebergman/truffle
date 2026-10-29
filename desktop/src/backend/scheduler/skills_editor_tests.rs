@@ -19,16 +19,16 @@ fn tokens(view: &Value, patch: &Value, schedule: bool) -> Value {
     }
     expected
 }
-fn patch(repo: &Repository, view: &Value, patch: Value) -> Result<Value> {
+fn patch(repo: &Repository, view: &Value, patch: &Value) -> Result<Value> {
     update_preset(
         repo,
-        &json!({"presetId":view["presetId"],"expected":tokens(view,&patch,false),"patch":patch}),
+        &json!({"presetId":view["presetId"],"expected":tokens(view,patch,false),"patch":patch}),
     )
 }
-fn schedule(repo: &Repository, view: &Value, patch: Value) -> Result<Value> {
+fn schedule(repo: &Repository, view: &Value, patch: &Value) -> Result<Value> {
     save_schedule(
         repo,
-        &json!({"presetId":view["presetId"],"expected":tokens(view,&patch,true),"patch":patch}),
+        &json!({"presetId":view["presetId"],"expected":tokens(view,patch,true),"patch":patch}),
     )
 }
 fn read(repo: &Repository, id: &Value) -> Value {
@@ -94,18 +94,18 @@ fn skills_editor_preset_field_updates_commute_preserve_raw_metadata_and_reject_s
     assert!(!baseline.to_string().contains("private-editor-marker"));
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.state.lock().unwrap(), before);
-    patch(&repo, &baseline, json!({"title":"New title"})).unwrap();
+    patch(&repo, &baseline, &json!({"title":"New title"})).unwrap();
     let result = patch(
         &repo,
         &baseline,
-        json!({"description":"Independent description"}),
+        &json!({"description":"Independent description"}),
     )
     .unwrap();
     assert_eq!(result["preset"]["title"], "New title");
     assert_eq!(result["preset"]["description"], "Independent description");
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        patch(&repo, &baseline, json!({"title":"Stale title"}))
+        patch(&repo, &baseline, &json!({"title":"Stale title"}))
             .unwrap_err()
             .status,
         409
@@ -128,7 +128,7 @@ fn skills_editor_configured_materialization_preserves_relative_paths_and_unknown
     .unwrap();
     let baseline = read(&repo, &json!("configured-fixture"));
     assert_eq!(baseline["origin"]["type"], "configured");
-    patch(&repo, &baseline, json!({"title":"Edited configured"})).unwrap();
+    patch(&repo, &baseline, &json!({"title":"Edited configured"})).unwrap();
     let stored = arr(&repo.state.lock().unwrap()["skillPresets"])
         .into_iter()
         .find(|row| row["id"] == "configured-fixture")
@@ -144,8 +144,8 @@ fn skills_editor_config_hash_is_checked_after_waiting_for_canonical_transaction(
     let source = skill_presets::load(&repo).unwrap();
     let path = repo.data.parent().unwrap().join("config/skills.json");
     let baseline = created.clone();
-    let patch = json!({"title":"Must conflict"});
-    let args = json!({"presetId":created["presetId"],"expected":tokens(&baseline,&patch,false),"patch":patch});
+    let title_patch = json!({"title":"Must conflict"});
+    let args = json!({"presetId":created["presetId"],"expected":tokens(&baseline,&title_patch,false),"patch":title_patch});
     let lock = repo.state.lock().unwrap();
     let before = lock.clone();
     let bytes = std::fs::read(&repo.data).unwrap();
@@ -173,7 +173,7 @@ fn skills_editor_schedule_preserves_claimed_next_run_and_inactive_edits_then_rec
     schedule(
         &repo,
         &created,
-        json!({"mode":"interval","everyMinutes":5,"enabled":true}),
+        &json!({"mode":"interval","everyMinutes":5,"enabled":true}),
     )
     .unwrap();
     repo.transaction(|s| {
@@ -188,20 +188,20 @@ fn skills_editor_schedule_preserves_claimed_next_run_and_inactive_edits_then_rec
         Ok(())
     })
     .unwrap();
-    let result = schedule(&repo, &baseline, json!({"missed":"skip"})).unwrap();
+    let result = schedule(&repo, &baseline, &json!({"missed":"skip"})).unwrap();
     assert_eq!(result["schedule"]["nextRun"], 1300.0);
     assert!(result["schedule"].get("privateNs").is_none());
     let baseline = read(&repo, id);
-    schedule(&repo, &baseline, json!({"time":"10:00"})).unwrap();
+    schedule(&repo, &baseline, &json!({"time":"10:00"})).unwrap();
     assert_eq!(read(&repo, id)["schedule"]["nextRun"], 1300.0);
     let baseline = read(&repo, id);
-    schedule(&repo, &baseline, json!({"enabled":false})).unwrap();
+    schedule(&repo, &baseline, &json!({"enabled":false})).unwrap();
     let baseline = read(&repo, id);
-    schedule(&repo, &baseline, json!({"everyMinutes":10})).unwrap();
+    schedule(&repo, &baseline, &json!({"everyMinutes":10})).unwrap();
     assert_eq!(read(&repo, id)["schedule"]["nextRun"], 1300.0);
     let baseline = read(&repo, id);
     let before = now();
-    schedule(&repo, &baseline, json!({"enabled":true})).unwrap();
+    schedule(&repo, &baseline, &json!({"enabled":true})).unwrap();
     let next = read(&repo, id)["schedule"]["nextRun"].as_f64().unwrap();
     assert!(next >= before + 600.0 && next <= now() + 600.0);
     assert_eq!(
@@ -210,17 +210,17 @@ fn skills_editor_schedule_preserves_claimed_next_run_and_inactive_edits_then_rec
     );
     let baseline = read(&repo, id);
     let before = now();
-    schedule(&repo, &baseline, json!({"everyMinutes":15})).unwrap();
+    schedule(&repo, &baseline, &json!({"everyMinutes":15})).unwrap();
     let next = read(&repo, id)["schedule"]["nextRun"].as_f64().unwrap();
     assert!(next >= before + 900.0 && next <= now() + 900.0);
     let baseline = read(&repo, id);
     let bytes = std::fs::read(&repo.data).unwrap();
-    schedule(&repo, &baseline, json!({"missed":"skip"})).unwrap();
+    schedule(&repo, &baseline, &json!({"missed":"skip"})).unwrap();
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     patch(
         &repo,
         &baseline,
-        json!({"title":"Renamed without reschedule"}),
+        &json!({"title":"Renamed without reschedule"}),
     )
     .unwrap();
     assert_eq!(read(&repo, id)["schedule"]["nextRun"], next);
@@ -228,19 +228,19 @@ fn skills_editor_schedule_preserves_claimed_next_run_and_inactive_edits_then_rec
 #[test]
 fn skills_editor_schedule_rejects_stale_fields_absence_and_changed_executable() {
     let (_temp, repo, created) = fixture();
-    schedule(&repo, &created, json!({"enabled":false})).unwrap();
+    schedule(&repo, &created, &json!({"enabled":false})).unwrap();
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        schedule(&repo, &created, json!({"enabled":true}))
+        schedule(&repo, &created, &json!({"enabled":true}))
             .unwrap_err()
             .status,
         409
     );
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     let baseline = read(&repo, &created["presetId"]);
-    patch(&repo, &baseline, json!({"command":"$new-command"})).unwrap();
+    patch(&repo, &baseline, &json!({"command":"$new-command"})).unwrap();
     assert_eq!(
-        schedule(&repo, &baseline, json!({"enabled":true}))
+        schedule(&repo, &baseline, &json!({"enabled":true}))
             .unwrap_err()
             .status,
         409
@@ -301,17 +301,17 @@ fn skills_editor_validation_and_failed_commit_preserve_state_and_allow_exact_ret
         &json!({"presetId":id,"mode":"interval","everyMinutes":5,"missed":"latest","enabled":true})
     )
     .is_err());
-    assert!(schedule(&repo, &created, json!({"enabled":"true"})).is_err());
+    assert!(schedule(&repo, &created, &json!({"enabled":"true"})).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.state.lock().unwrap(), state);
-    let tmp = repo.data.with_extension("tmp");
-    std::fs::create_dir(&tmp).unwrap();
-    assert!(patch(&repo, &created, json!({"title":"Retry title"})).is_err());
+    let blocking_dir = repo.data.with_extension("tmp");
+    std::fs::create_dir(&blocking_dir).unwrap();
+    assert!(patch(&repo, &created, &json!({"title":"Retry title"})).is_err());
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    std::fs::remove_dir(tmp).unwrap();
+    std::fs::remove_dir(blocking_dir).unwrap();
     assert_eq!(
-        patch(&repo, &created, json!({"title":"Retry title"})).unwrap()["preset"]["title"],
+        patch(&repo, &created, &json!({"title":"Retry title"})).unwrap()["preset"]["title"],
         "Retry title"
     );
 }

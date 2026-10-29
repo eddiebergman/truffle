@@ -3,14 +3,16 @@ use super::{
     arr, checked, directory, expand, json, now, text, uuid, Error, Repository, Result, Value,
 };
 use super::{artifacts, workflows};
+use std::time::Duration;
 pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
     match text(schedule, "mode") {
         "interval" => {
             let minutes = schedule["everyMinutes"]
                 .as_u64()
                 .filter(|n| (5..=10080).contains(n))
+                .and_then(|n| u32::try_from(n).ok())
                 .ok_or_else(|| Error::new("Use an interval of 5 minutes to 7 days."))?;
-            Ok((minutes as f64).mul_add(60.0, after))
+            Ok(f64::from(minutes).mul_add(60.0, after))
         }
         "daily" => {
             let raw = text(schedule, "time");
@@ -22,22 +24,33 @@ pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
             if parts.len() != 2 || !(0..24).contains(&parts[0]) || !(0..60).contains(&parts[1]) {
                 return Err(Error::new("Use a valid daily time."));
             }
-            let seconds = after as libc::time_t;
+            let seconds = Duration::try_from_secs_f64(after)
+                .ok()
+                .and_then(|elapsed| libc::time_t::try_from(elapsed.as_secs()).ok())
+                .ok_or_else(|| Error::new("Invalid schedule time."))?;
             let mut local: libc::tm = unsafe { std::mem::zeroed() };
             unsafe { libc::localtime_r(&raw const seconds, &raw mut local) };
             local.tm_hour = parts[0];
             local.tm_min = parts[1];
             local.tm_sec = 0;
             local.tm_isdst = -1;
-            let mut result = unsafe { libc::mktime(&raw mut local) } as f64;
+            let mut result = epoch_seconds(unsafe { libc::mktime(&raw mut local) });
             if result <= after {
                 local.tm_mday += 1;
                 local.tm_isdst = -1;
-                result = unsafe { libc::mktime(&raw mut local) } as f64;
+                result = epoch_seconds(unsafe { libc::mktime(&raw mut local) });
             }
             Ok(result)
         }
         _ => Err(Error::new("Choose daily or interval.")),
+    }
+}
+fn epoch_seconds(time: libc::time_t) -> f64 {
+    let magnitude = Duration::from_secs(time.unsigned_abs()).as_secs_f64();
+    if time < 0 {
+        -magnitude
+    } else {
+        magnitude
     }
 }
 const EDITABLE_PRESET: [&str; 6] = ["title", "cwd", "skill", "command", "agent", "description"];

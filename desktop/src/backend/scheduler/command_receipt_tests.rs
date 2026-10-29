@@ -111,8 +111,7 @@ fn failed_skill_launch_error_identifies_the_exact_failed_run() {
         |_, _, _| Err(Error::new("Fixture launch failed")),
     )
     .unwrap_err();
-    let state = repo.state.lock().unwrap();
-    let rows = arr(&state["skillRuns"]);
+    let rows = arr(&repo.state.lock().unwrap()["skillRuns"]);
     let stored = rows.iter().find(|row| row["id"] == run).unwrap();
     assert_eq!(stored["outcome"], "failed");
     assert_eq!(
