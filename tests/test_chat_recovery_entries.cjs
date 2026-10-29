@@ -1,13 +1,16 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),Module=require('node:module');
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),Module=require('node:module');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
 const shared=new Module(__filename);shared._compile(fs.readFileSync('tests/test_feature_writes.cjs','utf8').split('\ntest(')[0]+'\nmodule.exports={fixture};',__filename);const {fixture:base}=shared.exports;
-const workspace=fs.readFileSync('static/workspace.js','utf8'),palette=fs.readFileSync('static/command-palette.js','utf8');
 function fixture(context={availability:'available',total:2}){
  const f=base(),opened=[];let current=context;
  Object.assign(f.c,{source:'sessions',historyArchived:true,currentAgentRecord:()=>null,candidateForRecord:()=>null,workSummary:()=>'',savedSessionOpenState:()=>null,chatPreparationContext:()=>current,shortcutLabel:value=>value||'',setting:(key,fallback)=>fallback,openSettings(){},liveCandidates:()=>[],snoozedAgentTabs:{},closedAgentTabs:[],leftSidebarCollapsed:false,agentSidebarCollapsed:false,openChatRecovery:()=>{opened.push('recovery');const dialog=f.$('#chat-recovery-list');dialog.tagName='dialog';dialog.showModal();dialog.focus();},prepareSavedChat:()=>assert.fail('entry must not prepare'),openSavedSession:()=>assert.fail('entry must not open a saved chat'),api:()=>assert.fail('entry must not make requests')});
  f.$('#search').value='Scoped search';f.c.scopePrefs={sessions:'preserved'};f.c.state.sessions=[];
- vm.runInContext(workspace.slice(workspace.indexOf('function renderHistory('),workspace.indexOf('function editSchedule(')),f.c);
- vm.runInContext(palette.slice(palette.indexOf('function commandEntries('),palette.indexOf('function openCommands(')),f.c);
- return {...f,opened,setContext:value=>current=value,historyButton:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='recovery'),archive:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='archive'),entry:()=>f.c.commandEntries().find(entry=>entry.title==='open: chat recovery')};
+ // The shared fixture omits the earlier page scripts, so stub what workspace.js reads while it loads.
+ // The palette close handler that command-palette.js attaches also clears attributes.
+ f.Node.prototype.removeAttribute=function(key){delete this.attrs[key];};
+ Object.assign(f.c,{prefs:{},itemSessionChip(){},registerRenderHook(){}});loadScripts(f.c,['static/workspace.js','static/command-palette.js']);
+ const c=browserContext(f.c);
+ return {...f,c,opened,setContext:value=>current=value,historyButton:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='recovery'),archive:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='archive'),entry:()=>c.commandEntries().find(entry=>entry.title==='open: chat recovery')};
 }
 function assertContext(f){assert.equal(f.c.source,'sessions');assert.equal(f.$('#search').value,'Scoped search');assert.equal(f.c.historyArchived,true);assert.equal(f.c.scopePrefs.sessions,'preserved');assert.equal(f.calls.length,0);}
 test('loaded History header exposes bounded pending count or unavailable state and only navigates',()=>{
@@ -23,5 +26,5 @@ test('History unrelated-modal veto reports owner error without closing or inspec
  const f=fixture(),modal=f.$('#unrelated');modal.tagName='dialog';modal.showModal();f.c.openChatRecovery=()=>{throw Error('Close the current dialog before opening chat recovery.');};f.c.renderHistory();f.historyButton().onclick();assert.equal(modal.open,true);assert.deepEqual(f.messages,['Close the current dialog before opening chat recovery.']);assert.deepEqual(f.opened,[]);assertContext(f);
 });
 test('exact recovery palette command has no shortcut and closes its own palette before pure navigation',async()=>{
- for(const context of [{availability:'available',total:1},{availability:'unavailable'}]){const f=fixture(context),dialog=f.$('#action-palette');dialog.tagName='dialog';dialog.showModal();f.c.openChatRecovery=()=>{assert.equal(dialog.open,false);f.opened.push('recovery');};const entry=f.entry();assert.ok(entry);assert.equal(entry.shortcut,undefined);assert.match(entry.detail,context.total?/1 pending local chat request/:/status unavailable/);vm.runInContext('let actionEntries=commandEntries();\n'+palette.slice(palette.indexOf('async function runPaletteCommand('),palette.indexOf("$('#action-query').oninput=")),f.c);const index=vm.runInContext("actionEntries.findIndex(entry=>entry.title==='open: chat recovery')",f.c);await f.c.runPaletteCommand(index);assert.deepEqual(f.opened,['recovery']);assertContext(f);}
+ for(const context of [{availability:'available',total:1},{availability:'unavailable'}]){const f=fixture(context),dialog=f.$('#action-palette');dialog.tagName='dialog';dialog.showModal();f.c.openChatRecovery=()=>{assert.equal(dialog.open,false);f.opened.push('recovery');};const entry=f.entry();assert.ok(entry);assert.equal(entry.shortcut,undefined);assert.match(entry.detail,context.total?/1 pending local chat request/:/status unavailable/);evaluate(f.c,'actionEntries=commandEntries()');const index=evaluate(f.c,"actionEntries.findIndex(entry=>entry.title==='open: chat recovery')");await f.c.runPaletteCommand(index);assert.deepEqual(f.opened,['recovery']);assertContext(f);}
 });
