@@ -1,12 +1,11 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('static/sessions.js','utf8'),tick=()=>new Promise(resolve=>setImmediate(resolve));
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
  const nodes=new Map(),calls=[],pending=[],outside={name:'untouched focus'};
  const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',title:'',value:'claude',children:[],dataset:{},attrs:{},open:false,isConnected:true,setAttribute(key,value){this.attrs[key]=value;},append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});return nodes.get(id);};
- const c=vm.createContext({source:'notes',currentItem:null,state:{itemSettings:{},folderMappings:{},sessions:[]},inventory:{workRoot:'/work',folders:[],directories:[]},quickStarting:false,$:node,el:(tag,cls,text)=>Object.assign({tag,className:cls,textContent:text},node(Symbol(tag))),linkedSessions:()=>[],sessionCard(){},agentName:value=>value==='claude'?'Claude':'Codex',itemFolderContexts:item=>['item:'+item.id],api:async(path,args)=>{calls.push({path,...args});return new Promise((resolve,reject)=>pending.push({resolve,reject}));},document:{activeElement:outside},quickStart(){throw Error('Preview must never launch.');},changeProjectStatus(){},openNote(){},mutate(){throw Error('Preview must never mutate.');}});
- vm.runInContext(source.slice(source.indexOf('function folderHint('),source.indexOf('function renderFolderSelector(')),c);
- vm.runInContext(source.slice(source.indexOf('function itemSessionChip('),source.indexOf('function sessionCard(')),c);
- vm.runInContext(source.slice(source.indexOf('function renderItemSessions('),source.indexOf('function setRadio(')),c);
+ const c=browserContext({source:'notes',currentItem:null,state:{itemSettings:{},folderMappings:{},sessions:[]},inventory:{workRoot:'/work',folders:[],directories:[]},quickStarting:false,el:(tag,cls,text)=>Object.assign({tag,className:cls,textContent:text},node(Symbol(tag))),linkedSessions:()=>[],sessionCard(){},itemFolderContexts:item=>['item:'+item.id],api:async(path,args)=>{calls.push({path,...args});return new Promise((resolve,reject)=>pending.push({resolve,reject}));},document:{activeElement:outside,querySelector:node},quickStart(){throw Error('Preview must never launch.');},changeProjectStatus(){},openNote(){},mutate(){throw Error('Preview must never mutate.');}});
+ loadScripts(c,['static/client.js','static/app.js','static/sessions.js']);
  const open=item=>{c.currentItem=item;c.renderItemSessions(item);node('#item-dialog').open=true;};
  return {c,calls,pending,node,outside,open,label:node('#item-folder-path'),dialog:node('#item-dialog')};
 }
