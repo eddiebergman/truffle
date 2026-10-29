@@ -1,5 +1,5 @@
 use super::{
-    arr, commands, draft, json, position, summary_identity, summary_time, text, Error, Repository,
+    arr, commands, draft, json, sessions, summary_identity, summary_time, text, Error, Repository,
     Result, Value,
 };
 
@@ -142,7 +142,7 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     summary_identity(repo, &json!(id), 80)?;
     let record = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        state["sessions"][position(&state, id)?].clone()
+        sessions::get(&state, id)?.clone()
     };
     if let Some(history_id) = args.get("historyId") {
         summary_identity(repo, history_id, 80)?;
@@ -169,7 +169,7 @@ pub fn history(repo: &Repository, args: &Value) -> Result<Value> {
     summary_identity(repo, &json!(id), 80)?;
     let record = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        state["sessions"][position(&state, id)?].clone()
+        sessions::get(&state, id)?.clone()
     };
     let mut rounds = vec![];
     let mut ids = std::collections::HashSet::new();
@@ -201,8 +201,7 @@ pub fn update_note(repo: &Repository, args: &Value) -> Result<Value> {
         .ok_or_else(|| Error::new("Supply the current review revision."))?;
     summary_identity(repo, &json!(id), 80)?;
     repo.transaction(|state| {
-        let index = position(state, id)?;
-        let mut review = draft(&state["sessions"][index]);
+        let mut review = draft(sessions::get(state, id)?);
         if revision(&review)? != expected || args["noteToken"] != note_token(id, &review)? {
             let mut error =
                 Error::new("The review changed. Read it again before editing the note.");
@@ -216,7 +215,7 @@ pub fn update_note(repo: &Repository, args: &Value) -> Result<Value> {
         }
         let next = revision(&review)?;
         if changed {
-            state["sessions"][index]["reviewDraft"] = review;
+            sessions::get_mut(state, id)?["reviewDraft"] = review;
         }
         Ok(json!({"id":id,"revision":next,"changed":changed}))
     })

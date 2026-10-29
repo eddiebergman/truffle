@@ -1,5 +1,7 @@
 //! Conservative tracked submission over the existing, generation-unfenced PTY transport.
-use super::{arr, checked, domain, json, now, sid, text, uuid, Error, Repository, Result, Value};
+use super::{
+    arr, checked, domain, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value,
+};
 const JOURNAL: &str = "sessionDispatch";
 const LEGACY_MAX_ENTRIES: usize = 1024;
 const MAX_UNRESOLVED: usize = 128;
@@ -208,12 +210,6 @@ fn store_entries(state: &mut Value, mut all: Vec<Value>, compact: bool) -> Resul
     entries(state)?;
     Ok(())
 }
-fn record(state: &Value, id: &str) -> Result<Value> {
-    arr(&state["sessions"])
-        .into_iter()
-        .find(|record| record["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))
-}
 fn public(entry: &Value) -> Value {
     let status = match text(entry, "status") {
         "prepared" => "prepared",
@@ -281,7 +277,7 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     let id = sid(text(args, "recordId"))?;
     let journal = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        record(&state, &id)?;
+        sessions::get(&state, &id)?;
         entries(&state)?
     };
     let mut all = journal
@@ -643,7 +639,7 @@ fn prepare_with(
     };
     let previous = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        record(&state, &id)?;
+        sessions::get(&state, &id)?;
         scope(&entries(&state)?, &id, kind, &item)
     };
     if let Some(entry) = previous {
@@ -675,7 +671,7 @@ fn prepare_with(
             let migrated=state[JOURNAL]["version"]!=2;migrate_owned(repo,state)?;let mut all=entries(state)?;if let Some(entry)=scope(&all,&id,kind,&item){return Ok(entry);}
             if all.iter().filter(|entry|!closed(entry)).count()>=MAX_UNRESOLVED{return Err(Error::new("Too many unresolved dispatch requests. Resolve an earlier request; no input was sent."));}
             let ticket=decimal(&state[JOURNAL]["nextTicket"])?;let next=ticket.checked_add(1).ok_or_else(|| Error::new("Dispatch ticket capacity is exhausted. Existing requests remain recoverable."))?;let operation=allocate();sid(&operation)?;if all.iter().any(|entry|entry["operationId"]==operation){return Err(Error::new("Dispatch identity allocation collided. No input was sent."));}
-            let record=record(state,&id)?;let draft=super::reviews::draft(&record);
+            let record=sessions::get(state,&id)?.clone();let draft=super::reviews::draft(&record);
             if kind!=Kind::CiInvestigation&&expected_revision!=draft["revision"].as_u64(){return Err(Error::new("The review changed. Reload it before submitting."));}
             let (prompt,ack)=match kind{
                 Kind::ReviewRequest=>{let review=super::reviews::reserve_request(state,&id,&operation,expected_revision.unwrap(),&baseline)?;(request_prompt(repo,&record,&review["run"],&settings)?,Value::Null)},
@@ -711,7 +707,7 @@ fn submit_with(
     ensure_migrated(repo)?;
     let all = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        record(&state, &id)?;
+        sessions::get(&state, &id)?;
         entries(&state)?
     };
     let Some(prepared) = all

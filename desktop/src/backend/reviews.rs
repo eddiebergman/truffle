@@ -1,14 +1,9 @@
-use super::{arr, commands, json, now, sid, text, uuid, Error, Repository, Result, Value};
+use super::{
+    arr, commands, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value,
+};
 mod access;
 pub use access::{history, read, update_note};
 
-fn position(state: &Value, id: &str) -> Result<usize> {
-    sid(id)?;
-    arr(&state["sessions"])
-        .iter()
-        .position(|r| r["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))
-}
 pub(super) fn draft(record: &Value) -> Value {
     if record["reviewDraft"].is_object() {
         record["reviewDraft"].clone()
@@ -26,7 +21,7 @@ fn valid_pass(pass: &str) -> bool {
 pub(super) fn versions(repo: &Repository, id: &str) -> Result<Value> {
     let record = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        state["sessions"][position(&state, id)?].clone()
+        sessions::get(&state, id)?.clone()
     };
     let roots = std::iter::once(text(&record, "cwd").to_owned())
         .chain(
@@ -129,7 +124,7 @@ pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
     summary_identity(repo, &json!(id), 80)?;
     let review = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        draft(&state["sessions"][position(&state, &id)?])
+        draft(sessions::get(&state, &id)?)
     };
     if arr(&review["comments"]).len() > 100 || arr(&review["assessments"]).len() > 100 {
         return Err(Error::new(
@@ -236,8 +231,7 @@ pub(super) fn reserve_request(
     revision: u64,
     baseline: &Value,
 ) -> Result<Value> {
-    let index = position(state, id)?;
-    let mut review = draft(&state["sessions"][index]);
+    let mut review = draft(sessions::get(state, id)?);
     if review["revision"] != revision {
         return Err(Error::new(
             "The review changed. Reload it before requesting a review.",
@@ -248,15 +242,15 @@ pub(super) fn reserve_request(
     if review != before {
         review["revision"] = json!(revision + 1);
     }
-    state["sessions"][index]["reviewDraft"] = review.clone();
+    sessions::get_mut(state, id)?["reviewDraft"] = review.clone();
     Ok(review)
 }
 pub(super) fn acknowledge_dispatch(state: &mut Value, id: &str, ack: &Value) -> Result<()> {
-    let index = position(state, id)?;
-    if ack["historyId"] != state["sessions"][index]["reviewHistory"]["entries"][0]["id"] {
+    let record = sessions::get(state, id)?;
+    if ack["historyId"] != record["reviewHistory"]["entries"][0]["id"] {
         return Ok(());
     }
-    let mut review = draft(&state["sessions"][index]);
+    let mut review = draft(record);
     let before = review.clone();
     let mut saved = arr(&review["comments"]);
     let mut exact = ack.clone();
@@ -277,20 +271,19 @@ pub(super) fn acknowledge_dispatch(state: &mut Value, id: &str, ack: &Value) -> 
     if review != before {
         review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
     }
-    state["sessions"][index]["reviewDraft"] = review;
+    sessions::get_mut(state, id)?["reviewDraft"] = review;
     super::guidance::complete(state, "review.pending-comments");
     Ok(())
 }
 pub(super) fn cancel_dispatch(state: &mut Value, id: &str, operation: &str) -> Result<()> {
-    let index = position(state, id)?;
-    let mut review = draft(&state["sessions"][index]);
+    let mut review = draft(sessions::get(state, id)?);
     if review["run"]["id"] == operation
         && ["requested", "reviewing"].contains(&text(&review["run"], "state"))
     {
         review["run"]["state"] = json!("cancelled");
         review["run"]["updatedAt"] = json!(now());
         review["revision"] = json!(review["revision"].as_u64().unwrap_or(0) + 1);
-        state["sessions"][index]["reviewDraft"] = review;
+        sessions::get_mut(state, id)?["reviewDraft"] = review;
     }
     Ok(())
 }
@@ -536,7 +529,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
     if operation == "history" {
         let history = {
             let state = repo.state.lock().map_err(|_| Error::io())?;
-            state["sessions"][position(&state, id)?]["reviewHistory"].clone()
+            sessions::get(&state, id)?["reviewHistory"].clone()
         };
         if !history.is_null() && history["version"] != 1 {
             return Err(Error::new("Unsupported review history version."));
@@ -545,7 +538,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
     }
     if operation == "read" || operation == "check" {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        let review = draft(&state["sessions"][position(&state, id)?]);
+        let review = draft(sessions::get(&state, id)?);
         drop(state);
         return if operation == "check" {
             check(repo, id, review)
@@ -565,8 +558,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
         anchor_comments(repo, id, p, &mut comments)?;
     }
     repo.transaction(|state| {
-        let index = position(state, id)?;
-        let mut review = draft(&state["sessions"][index]);
+        let mut review = draft(sessions::get(state, id)?);
         let before = review.clone();
         let mut saved = arr(&review["comments"]);
         if operation == "status" || p.get("requestId").is_some() && operation == "append" {
@@ -584,7 +576,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
         }
         match operation {
             "new" => {
-                archive_review(&mut state["sessions"][index], &review, &saved, p)?;
+                archive_review(sessions::get_mut(state, id)?, &review, &saved, p)?;
                 review = json!({"comments":[],"note":"","revision":before["revision"]});
                 saved.clear();
             }
@@ -620,7 +612,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
         if review != before {
             review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
         }
-        state["sessions"][index]["reviewDraft"] = review.clone();
+        sessions::get_mut(state, id)?["reviewDraft"] = review.clone();
         complete_guidance(state, operation, p, &review);
         Ok(json!({"id":id,"review":review}))
     })

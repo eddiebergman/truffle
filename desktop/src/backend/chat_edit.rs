@@ -1,7 +1,7 @@
 //! Captured-field edits of an existing saved chat; never opens an agent.
 use super::{
-    arr, checked, commands, directory, domain, json, now, safe_url, sid, text, Error, Repository,
-    Result, Value,
+    arr, checked, commands, directory, domain, json, now, safe_url, sessions, sid, text, Error,
+    Repository, Result, Value,
 };
 const FIELDS: [&str; 6] = [
     "title",
@@ -38,12 +38,6 @@ fn exact(repo: &Repository, value: &str) -> Result<()> {
         ));
     }
     Ok(())
-}
-fn position(state: &Value, id: &str) -> Result<usize> {
-    state["sessions"]
-        .as_array()
-        .and_then(|rows| rows.iter().position(|row| row["id"] == id))
-        .ok_or_else(|| Error::new("Saved chat no longer exists."))
 }
 fn ids(row: &Value) -> Result<Vec<String>> {
     let items = row["items"]
@@ -146,10 +140,7 @@ fn view(repo: &Repository, row: &Value) -> Result<Value> {
 pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     commands::validate_chat_metadata_arguments("read", args)?;
     let state = repo.state.lock().map_err(|_| Error::io())?;
-    view(
-        repo,
-        &state["sessions"][position(&state, text(args, "recordId"))?],
-    )
+    view(repo, sessions::get(&state, text(args, "recordId"))?)
 }
 fn validate(repo: &Repository, args: &Value) -> Result<Value> {
     commands::validate_chat_metadata_arguments("update", args)?;
@@ -250,11 +241,12 @@ fn association(state: &Value, current: &Value, patch: &Value, repo: &Repository)
             ));
         }
         if !text(patch, "sessionId").is_empty()
-            && arr(&state["sessions"]).iter().any(|row| {
+            && sessions::find(state, |row| {
                 row["id"] != current["id"]
                     && row["agent"] == current["agent"]
                     && row["sessionId"] == *value
             })
+            .is_some()
         {
             return Err(conflict(
                 "This conversation is already associated with another saved chat.",
@@ -277,8 +269,7 @@ fn apply(
     patch: &Value,
     imported: &[Value],
 ) -> Result<Value> {
-    let index = position(state, text(args, "recordId"))?;
-    let current = state["sessions"][index].clone();
+    let current = sessions::get(state, text(args, "recordId"))?.clone();
     identity(repo, &current)?;
     check_tokens(&current, args)?;
     association(state, &current, patch, repo)?;
@@ -352,7 +343,7 @@ fn apply(
     }
     identity(repo, &next)?;
     let expected = tokens(repo, &next)?;
-    state["sessions"][index] = next;
+    *sessions::get_mut(state, text(args, "recordId"))? = next;
     Ok(json!({"recordId":current["id"],"saved":true,"changedFields":changed,"expected":expected}))
 }
 pub fn update(repo: &Repository, args: &Value) -> Result<Value> {
@@ -387,7 +378,7 @@ fn update_with(
     repo.transaction_if_changed(|state| apply(repo, state, args, &patch, &imported))
 }
 fn check_current(repo: &Repository, state: &Value, args: &Value, patch: &Value) -> Result<()> {
-    let row = &state["sessions"][position(state, text(args, "recordId"))?];
+    let row = sessions::get(state, text(args, "recordId"))?;
     identity(repo, row)?;
     check_tokens(row, args)?;
     association(state, row, patch, repo)
@@ -397,9 +388,10 @@ pub(super) fn reject_unchecked_association(state: &Value, args: &Value) -> Resul
         return Err(Error::new("Invalid saved chat ID."));
     }
     if !text(args, "sessionId").is_empty()
-        && arr(&state["sessions"])
-            .iter()
-            .any(|row| row["agent"] == args["agent"] && row["sessionId"] == args["sessionId"])
+        && sessions::find(state, |row| {
+            row["agent"] == args["agent"] && row["sessionId"] == args["sessionId"]
+        })
+        .is_some()
     {
         return Err(conflict(
             "This conversation is already saved. Reopen Manage to capture current chat fields.",
@@ -423,7 +415,7 @@ pub(super) fn legacy(repo: &Repository, args: &Value) -> Result<Value> {
     let request = json!({"recordId":args["id"],"patch":args["patch"],"expected":args["expected"],"urls":args.get("urls").cloned().unwrap_or(json!([]))});
     update(repo, &request)?;
     let state = repo.state.lock().map_err(|_| Error::io())?;
-    Ok(state["sessions"][position(&state, text(args, "id"))?].clone())
+    Ok(sessions::get(&state, text(args, "id"))?.clone())
 }
 
 #[cfg(test)]

@@ -1,17 +1,10 @@
 use super::{
-    arr, checked, directory, domain, json, now, safe_url, sid, text, workflows, Error, Repository,
-    Result, Value,
+    arr, checked, directory, domain, json, now, safe_url, sessions, sid, text, workflows, Error,
+    Repository, Result, Value,
 };
 
-fn index(s: &Value, id: &str) -> Result<usize> {
-    sid(id)?;
-    arr(&s["sessions"])
-        .iter()
-        .position(|r| r["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))
-}
 fn snapshot(s: &Value, id: &str) -> Result<Value> {
-    let record = &s["sessions"][index(s, id)?];
+    let record = sessions::get(s, id)?;
     let mut value = json!({
         "resources": arr(&record["resources"]),
         "worktrees": arr(&record["worktrees"]),
@@ -23,7 +16,7 @@ fn snapshot(s: &Value, id: &str) -> Result<Value> {
 }
 pub fn read(repo: &Repository, id: &str) -> Result<Value> {
     let s = repo.state.lock().map_err(|_| Error::io())?;
-    let record = &s["sessions"][index(&s, id)?];
+    let record = sessions::get(&s, id)?;
     let value = json!({"id":id,"items":record["items"],"context":snapshot(&s,id)?});
     drop(s);
     Ok(value)
@@ -50,7 +43,7 @@ fn append_work(
     requested: &[Value],
     imported: Option<Value>,
 ) -> Result<Value> {
-    let position = index(s, id)?;
+    sessions::get(s, id)?;
     let mut catalog = domain::catalog(s);
     if let Some(item) = imported {
         let key = text(&item, "id").to_owned();
@@ -61,7 +54,7 @@ fn append_work(
             item
         });
     }
-    let mut items = arr(&s["sessions"][position]["items"]);
+    let mut items = arr(&sessions::get(s, id)?["items"]);
     let mut ids = vec![];
     let mut added = vec![];
     for item_id in requested {
@@ -80,8 +73,9 @@ fn append_work(
     if items.len() > 100 {
         return Err(Error::new("Choose up to 100 linked work items."));
     }
-    s["sessions"][position]["items"] = json!(items);
-    s["sessions"][position]["updatedAt"] = json!(now());
+    let record = sessions::get_mut(s, id)?;
+    record["items"] = json!(items);
+    record["updatedAt"] = json!(now());
     Ok(
         json!({"recordId":id,"itemIds":ids,"addedItemIds":added,"revision":snapshot(s,id)?["revision"],"saved":true,"scope":"local"}),
     )
@@ -143,7 +137,7 @@ fn link_work_url_with(
     }
     let cached = {
         let s = repo.state.lock().map_err(|_| Error::io())?;
-        index(&s, &id)?;
+        sessions::get(&s, &id)?;
         domain::catalog(&s)
             .into_values()
             .find(|item| item["url"] == url)
@@ -201,8 +195,8 @@ fn worktrees(trees: &[Value]) -> Result<Vec<Worktree>> {
     }
     Ok(trees)
 }
-fn replace_items(s: &mut Value, position: usize, ids: &[Value]) -> Result<()> {
-    let current = arr(&s["sessions"][position]["items"]);
+fn replace_items(s: &mut Value, id: &str, ids: &[Value]) -> Result<()> {
+    let current = arr(&sessions::get(s, id)?["items"]);
     let catalog = domain::catalog(s);
     let mut selected = vec![];
     for id in ids {
@@ -219,12 +213,9 @@ fn replace_items(s: &mut Value, position: usize, ids: &[Value]) -> Result<()> {
             selected.push(item);
         }
     }
-    s["sessions"][position]["items"] = json!(selected);
-    for tree in s["sessions"][position]["worktrees"]
-        .as_array_mut()
-        .into_iter()
-        .flatten()
-    {
+    let record = sessions::get_mut(s, id)?;
+    record["items"] = json!(selected);
+    for tree in record["worktrees"].as_array_mut().into_iter().flatten() {
         tree["itemIds"] = json!(arr(&tree["itemIds"])
             .into_iter()
             .filter(|x| ids.contains(x))
@@ -284,7 +275,7 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
     // Git inspection stays outside the state lock. All record changes commit together below.
     let metadata = trees.map(Vec::as_slice).map(worktrees).transpose()?;
     repo.transaction(|s| {
-        let position = index(s, id)?;
+        sessions::get(s, id)?;
         if revision != snapshot(s, id)?["revision"].as_str().unwrap() {
             let mut error =
                 Error::new("Session context changed. Read it again before replacing it.");
@@ -292,13 +283,13 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
             return Err(error);
         }
         if let Some(ids) = item_ids {
-            replace_items(s, position, ids)?;
+            replace_items(s, id, ids)?;
         }
         if let Some(entries) = resources {
             super::resources::replace_entries(s, id, &json!(entries))?;
         }
         if let Some(trees) = &metadata {
-            s["sessions"][position]["worktrees"] = json!([]);
+            sessions::get_mut(s, id)?["worktrees"] = json!([]);
             for (meta, ids, primary) in trees {
                 workflows::save_worktree(s, id, meta, ids, *primary)?;
             }
@@ -306,11 +297,9 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
         if let Some(ids) = artifact_ids {
             replace_artifacts(s, id, ids)?;
         }
-        s["sessions"][position]["updatedAt"] = json!(now());
-        Ok((
-            s["sessions"][position].clone(),
-            snapshot(s, id)?["revision"].clone(),
-        ))
+        let record = sessions::get_mut(s, id)?;
+        record["updatedAt"] = json!(now());
+        Ok((record.clone(), snapshot(s, id)?["revision"].clone()))
     })
 }
 
