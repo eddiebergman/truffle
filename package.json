@@ -1,0 +1,13 @@
+{
+  "name": "truffle-static",
+  "private": true,
+  "scripts": {
+    "lint:css": "stylelint \"static/*.css\" && prettier --check \"static/*.css\"",
+    "format:css": "prettier --write \"static/*.css\" && stylelint --fix \"static/*.css\""
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "stylelint": "17.16.0",
+    "stylelint-config-standard": "40.0.0"
+  }
+}

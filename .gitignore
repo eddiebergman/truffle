@@ -11,3 +11,4 @@ __pycache__/
 desktop/target/
 desktop/node_modules/
 desktop/gen/
+node_modules/
