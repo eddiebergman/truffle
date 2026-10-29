@@ -138,159 +138,19 @@ fn choose_with(
     error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').next_back().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
     Err(error)
 }
-fn session_text(fields: &Value) -> Result<(String, String)> {
-    let title = checked(fields, "title", 180, true)?;
-    if title.chars().any(char::is_control) {
-        return Err(Error::new(
-            "Session names cannot contain control characters.",
-        ));
-    }
-    Ok((title, checked(fields, "instruction", 8000, false)?))
-}
 #[derive(Clone, Copy, PartialEq)]
 enum SaveIntent {
     Replace,
     Register,
 }
 pub fn save_session(s: &mut Value, p: &Value) -> Result<Value> {
-    save_session_with_intent(s, p, SaveIntent::Replace)
+    super::sessions::save(s, p)
 }
 fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Result<Value> {
-    let mut sessions = arr(&s["sessions"]);
-    let by_id = if text(p, "id").is_empty() {
-        sessions.iter().position(|x| {
-            !text(p, "sessionId").is_empty()
-                && x["sessionId"] == p["sessionId"]
-                && x["agent"] == p["agent"]
-        })
-    } else {
-        sessions.iter().position(|x| x["id"] == p["id"])
-    };
-    if !text(p, "id").is_empty() && by_id.is_none() {
-        return Err(Error::new("Session association no longer exists."));
+    match intent {
+        SaveIntent::Replace => super::sessions::save(s, p),
+        SaveIntent::Register => super::sessions::register(s, p),
     }
-    let old = by_id.map_or_else(|| json!({}), |i| sessions[i].clone());
-    let mut merged = old.clone();
-    if !merged.is_object() {
-        merged = json!({});
-    }
-    for (k, v) in p
-        .as_object()
-        .ok_or_else(|| Error::new("Expected a session object."))?
-    {
-        merged[k] = v.clone();
-    }
-    if intent == SaveIntent::Register && text(p, "title").trim().is_empty() {
-        merged["title"] = if old.is_object() && !text(&old, "title").is_empty() {
-            old["title"].clone()
-        } else {
-            json!("Agent session")
-        };
-    }
-    let agent = text(&merged, "agent");
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
-    }
-    let (title, instruction) = session_text(&merged)?;
-    let cwd = directory(text(&merged, "cwd"))?;
-    let destination = match merged["destination"].as_str().unwrap_or("embedded") {
-        "cmux" => "embedded",
-        other => other,
-    };
-    if !["embedded", "desktop"].contains(&destination)
-        || (agent == "claude" && destination == "desktop")
-    {
-        return Err(Error::new("Choose the embedded terminal or Codex desktop."));
-    }
-    let items = link_session_items(s, p, &old, intent, &cwd)?;
-    let (sid_value, launch) = session_identity(&merged, &old, agent, by_id.is_none())?;
-    let id = old["id"].as_str().map_or_else(uuid, str::to_owned);
-    let mut session = old.clone();
-    for(k,v)in json!({"id":id,"agent":agent,"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
-    sessions.retain(|x| x["id"] != id);
-    sessions.push(session.clone());
-    s["sessions"] = json!(sessions);
-    Ok(session)
-}
-fn link_session_items(
-    s: &mut Value,
-    p: &Value,
-    old: &Value,
-    intent: SaveIntent,
-    cwd: &str,
-) -> Result<Vec<Value>> {
-    let mut ids = p["itemIds"]
-        .as_array()
-        .cloned()
-        .unwrap_or_else(|| arr(&old["items"]).iter().map(|x| x["id"].clone()).collect());
-    if (intent == SaveIntent::Register || text(p, "id").is_empty()) && !old.is_null() {
-        ids.extend(arr(&old["items"]).iter().map(|x| x["id"].clone()));
-    }
-    ids.sort_by_key(Value::to_string);
-    ids.dedup();
-    if ids.len() > 100 || ids.iter().any(|x| !x.is_string()) {
-        return Err(Error::new("Choose up to 100 linked work items."));
-    }
-    let catalog = domain::catalog(s);
-    let mut items = if intent == SaveIntent::Register {
-        arr(&old["items"])
-    } else {
-        vec![]
-    };
-    for id in ids {
-        if intent == SaveIntent::Register && items.iter().any(|item| item["id"] == id) {
-            continue;
-        }
-        let item = catalog
-            .get(id.as_str().unwrap())
-            .ok_or_else(|| Error::new("A linked work item no longer exists."))?;
-        items.push(domain::item_ref(item));
-        if !text(item, "detail").is_empty() {
-            s["itemArchive"][text(item, "id")] = item.clone();
-        }
-        if !s["itemSettings"][text(item, "id")].is_object() {
-            s["itemSettings"][text(item, "id")] = json!({});
-        }
-        if p["preserveItemFolders"] != true
-            || text(&s["itemSettings"][text(item, "id")], "cwd").is_empty()
-        {
-            s["itemSettings"][text(item, "id")]["cwd"] = json!(cwd);
-        }
-    }
-    Ok(items)
-}
-fn session_identity(
-    merged: &Value,
-    old: &Value,
-    agent: &str,
-    is_new: bool,
-) -> Result<(Option<String>, bool)> {
-    let mut sid_value = merged["sessionId"]
-        .as_str()
-        .filter(|x| !x.is_empty())
-        .map(sid)
-        .transpose()?;
-    if !text(old, "sessionId").is_empty()
-        && (sid_value.as_deref() != Some(text(old, "sessionId")) || old["agent"] != agent)
-    {
-        return Err(Error::new(
-            "Remove the association before changing its conversation identity.",
-        ));
-    }
-    let mut launch = if sid_value.is_some() && text(old, "sessionId").is_empty() {
-        false
-    } else {
-        old["launchNew"]
-            .as_bool()
-            .unwrap_or_else(|| sid_value.is_none())
-    };
-    if is_new && sid_value.is_none() {
-        launch = true;
-        if agent == "claude" {
-            sid_value = Some(uuid());
-        }
-    }
-    Ok((sid_value, launch))
 }
 #[derive(Clone, Copy, PartialEq)]
 enum PrepareIntent {
@@ -531,7 +391,7 @@ if let Some(existing)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="p
  admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map_or("", |x|text(x,"key")));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
  let pr_label=format!("{}{}",repo_name(&item).split('/').next_back().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
  let ids=if text(p,"itemId").is_empty() {json!([])} else {json!([item["id"]])};
- let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});session_text(&payload)?;
+ let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});super::sessions::validate_text(&payload)?;
  if new.is_some(){std::fs::create_dir_all(root)?;created=Some(CreatedQuickFolder::create(std::path::Path::new(&cwd))?);if created.as_ref().unwrap().identity.is_none(){return Err(Error::new("The new folder identity could not be verified."));}}
  let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}
 if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}

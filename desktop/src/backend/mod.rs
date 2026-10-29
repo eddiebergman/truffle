@@ -41,6 +41,7 @@ pub mod scheduler;
 pub mod session_ci;
 pub mod session_context;
 pub mod session_dispatch;
+pub mod sessions;
 pub mod sharing;
 pub mod skill_presets;
 pub mod terminal;

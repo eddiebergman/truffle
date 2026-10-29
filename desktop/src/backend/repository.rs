@@ -1,6 +1,6 @@
 //! Sole writer of the canonical JSON state. UI projections never write layout into records.
 use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
-use super::{connections::ProviderHost, domain};
+use super::{connections::ProviderHost, domain, sessions};
 use fs2::FileExt;
 use std::{
     collections::{BTreeSet, HashSet},
@@ -371,12 +371,9 @@ impl Repository {
         v.as_object_mut().unwrap().remove("sessionDispatch");
         v.as_object_mut().unwrap().remove("uiPresentations");
         let catalog = domain::catalog(s);
-        for session in v["sessions"].as_array_mut().unwrap() {
+        for session in sessions::all_mut(&mut v) {
             if !export {
-                let fields = session.as_object_mut().unwrap();
-                fields.remove("reviewDraft");
-                fields.remove("reviewHistory");
-                fields.remove("preparationRequests");
+                sessions::public(session);
             }
             session["items"] = json!(arr(&session["items"])
                 .iter()
