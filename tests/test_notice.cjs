@@ -1,7 +1,7 @@
-const {test}=require('node:test'),readCompactCss=require('./helpers/compact-css.cjs'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const app=fs.readFileSync('static/app.js','utf8'),renderSync=app.slice(app.indexOf('function renderSync()'),app.indexOf('const projectEditableFields='));
+const {test}=require('node:test'),readCompactCss=require('./helpers/compact-css.cjs'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
 function fixture(){
- const nodes=new Map(),storage=new Map(),calls=[],document={activeElement:null};
+ const nodes=new Map(),storage=new Map(),calls=[],document={activeElement:null,querySelector:id=>$(id)};
  class Element{
   constructor(tag='div',cls='',text=''){this.tagName=tag.toUpperCase();this.className=cls;this.textContent=text;this.children=[];this.dataset={};this.attrs={};this.classList={add:cls=>this.className+=' '+cls,toggle(){}};}
   contains(node){return this===node||this.children.some(child=>child.contains(node));}
@@ -11,7 +11,7 @@ function fixture(){
   setAttribute(key,value){this.attrs[key]=value;}
  }
  const $=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
- const c=vm.createContext({$,document,state:{sources:{github:{lastSuccess:1,nextAttempt:0,error:'Retry later.'},linear:{lastSuccess:1,nextAttempt:0,error:null},sentry:{disabled:true}},syncing:[],demo:false},sourceNames:{github:'GitHub',linear:'Linear',sentry:'Sentry'},Date,relative:()=> 'just now',localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},el:(...args)=>new Element(...args),openSettings:()=>calls.push('settings:appearance'),settingsCategory:'appearance',openPreferences:({category})=>{c.settingsCategory=category;calls.push('settings:'+category);return true;},source:'agents',persist:()=>calls.push('persist'),render:()=>calls.push('render')});const pageSettings=fs.readFileSync('static/page-settings.js','utf8');vm.runInContext(pageSettings.slice(pageSettings.indexOf('async function openPageSettingsCategory('),pageSettings.indexOf('function pageSettingsButton(')),c);vm.runInContext(renderSync,c);
+ const c=browserContext({document,state:{sources:{github:{lastSuccess:1,nextAttempt:0,error:'Retry later.'},linear:{lastSuccess:1,nextAttempt:0,error:null},sentry:{disabled:true}},syncing:[],demo:false},Date,relative:()=> 'just now',localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},el:(...args)=>new Element(...args),openSettings:()=>calls.push('settings:appearance'),settingsCategory:'appearance',openPreferences:({category})=>{c.settingsCategory=category;calls.push('settings:'+category);return true;},source:'agents',persist:()=>calls.push('persist'),render:()=>calls.push('render')});loadScripts(c,['static/client.js','static/app.js','static/page-settings.js']);
  return {c,$,storage,calls,document,render:()=>c.renderSync(),get notice(){return $('#connection-notice');}};
 }
 test('connection warning separates title, safe multiline body, named dismiss and shared action controls',()=>{
