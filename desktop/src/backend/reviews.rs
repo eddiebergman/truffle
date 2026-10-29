@@ -1,5 +1,4 @@
 use super::*;
-#[path = "review_access.rs"]
 mod access;
 pub use access::{history, read, update_note};
 
