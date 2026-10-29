@@ -195,4 +195,5 @@ if(typeof document!=='undefined')(()=>{
   window.addEventListener('truffle-service-restarted',()=>{if(open)poll();});
   registerRenderHook('app-chat:context',updateContext,{order:50});
   update();
+  if(typeof module!=='undefined')module.exports.appChatPanel={snapshot,stamp,displayContext,apply,draw,poll,placeChat,get deferred(){return deferred;},get pending(){return pending;},get open(){return open;},get assistant(){return assistant;},get jobAssistant(){return jobAssistant;}};
 })();
