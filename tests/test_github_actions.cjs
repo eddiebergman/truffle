@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {githubUnreadReviews,githubReviewerLabel}=require('../static/github-actions.js');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
 test('unread attention excludes drafts, closed PRs, authorship-only and seen cycles',()=>{
   const base={source:'github',kind:'Pull request',status:'needs-review',isDraft:false,relations:['reviews']};
   const items=[{...base,id:'ready'},{...base,id:'draft',isDraft:true},{...base,id:'done',status:'done'},{...base,id:'mine',relations:['authored']},{...base,id:'seen'}];
@@ -36,7 +37,6 @@ test('normal GitHub ordering keeps entire stacks together ahead of standalone PR
   assert.deepEqual(orderedGithubItems([tip,solo],[base,tip,solo]).map(i=>i.id),['2','3']);
 });
 
-const fs=require('node:fs'),vm=require('node:vm');
 function reviewPanelFixture(){
  const calls=[],messages=[],requests=[],document={activeElement:null};let renders=0;
  class Element{
@@ -50,11 +50,10 @@ function reviewPanelFixture(){
   removeAttribute(key){delete this.attrs[key];}
   focus(){if(this.isConnected&&!this.disabled)document.activeElement=this;}
  }
- const body=new Element('body'),anchor=new Element('button','github-reviewer-chip','Reviewers'),fallback=new Element('button','','Activity');anchor.dataset.focusKey='github:PR_A:reviewers';anchor.getBoundingClientRect=()=>({bottom:30,right:300});body.append(anchor,fallback);document.body=body;document.activeElement=anchor;document.querySelectorAll=()=>all().filter(node=>node.className.includes('github-reviewer-chip'));
+ const body=new Element('body'),anchor=new Element('button','github-reviewer-chip','Reviewers'),fallback=new Element('button','','Activity');anchor.dataset.focusKey='github:PR_A:reviewers';anchor.getBoundingClientRect=()=>({bottom:30,right:300});body.append(anchor,fallback);document.body=body;document.activeElement=anchor;document.querySelector=()=>fallback;document.querySelectorAll=()=>all().filter(node=>node.className.includes('github-reviewer-chip'));
  const item=(id='github:PR_A',extra={})=>({id,source:'github',kind:'Pull request',reference:'#'+id.slice(-1),requestedReviewers:[],reviewerUpdatedAt:Date.now()/1000,canUpdate:true,isDraft:false,status:'needs-review',githubState:'OPEN',...extra});
- const initial=item(),c=vm.createContext({document,$:()=>fallback,window:{innerWidth:1000,innerHeight:700},Date,state:{revision:'one',items:[initial],sources:{github:{lastSuccess:Date.now()/1000}}},el:(...args)=>new Element(...args),featureButton:(label,onclick,cls)=>Object.assign(new Element('button',cls,label),{onclick}),Option:class extends Element{constructor(text,value){super('option','',text);this.value=value;}},workReference:row=>row.reference,api:(path,args)=>{calls.push({path,args});return new Promise((resolve,reject)=>requests.push({path,args,resolve,reject}));},toast:message=>messages.push(message),render:()=>renders++});
- const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),c);
- const github=fs.readFileSync('static/github-actions.js','utf8');vm.runInContext('let githubReviewPanel=null;\n'+github.slice(github.indexOf('function openGithubReviewPanel('),github.indexOf("if(typeof document!==")),c);
+ const initial=item(),c=browserContext({document,window:{innerWidth:1000,innerHeight:700},Date,state:{revision:'one',items:[initial],sources:{github:{lastSuccess:Date.now()/1000}}},el:(...args)=>new Element(...args),featureButton:(label,onclick,cls)=>Object.assign(new Element('button',cls,label),{onclick}),Option:class extends Element{constructor(text,value){super('option','',text);this.value=value;}},workReference:row=>row.reference,api:(path,args)=>{calls.push({path,args});return new Promise((resolve,reject)=>requests.push({path,args,resolve,reject}));},toast:message=>messages.push(message),render:()=>renders++});
+ loadScripts(c,['static/client.js','static/app.js','static/github-actions.js']);
  const all=(node=body)=>node.children.flatMap(child=>[child,...all(child)]),panel=()=>body.children.find(node=>node.className==='github-review-panel'),button=text=>all().find(node=>node.tagName==='BUTTON'&&node.textContent===text);
  return {c,body,anchor,fallback,document,Element,item,initial,calls,messages,requests,panel,button,all,open:(row=initial)=>c.openGithubReviewPanel(row,anchor),get renders(){return renders;}};
 }
@@ -102,8 +101,8 @@ test('preflight errors without an uncertainty receipt remain editable and never 
 });
 test('review acknowledgement ignores its old response snapshot and commits only a guarded current read',async()=>{
  const requests=[],calls=[],hook={},item={id:'github:PR_A',source:'github',kind:'Pull request',status:'needs-review',relations:['reviews'],isDraft:false};let renders=0;
- const c=vm.createContext({state:{revision:'one',items:[item],githubReviewInbox:{[item.id]:{active:true,version:'cycle',seenAt:null}}},source:'github',githubUnreadReviews,allItems:()=>[item],$:()=>({setAttribute(){}}),document:{querySelectorAll:()=>[{dataset:{workId:item.id}}],addEventListener(){}},registerRenderHook:(name,run)=>hook[name]=run,api:(path,args)=>{calls.push({path,args});return new Promise((resolve,reject)=>requests.push({path,resolve,reject}));},render:()=>renders++});
- const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),c);const github=fs.readFileSync('static/github-actions.js','utf8');vm.runInContext(github.slice(github.indexOf("if(typeof document!=="),github.indexOf('// Dependencies are branch targets')),c);hook['github:review-attention']();assert.equal(requests[0].path,'/api/github/reviews/seen');
+ const c=browserContext({state:{revision:'one',items:[item],githubReviewInbox:{[item.id]:{active:true,version:'cycle',seenAt:null}}},source:'github',allItems:()=>[item],document:{querySelector:()=>({setAttribute(){}}),querySelectorAll:()=>[{dataset:{workId:item.id}}],addEventListener(){}},registerRenderHook:(name,run)=>hook[name]=run,api:(path,args)=>{calls.push({path,args});return new Promise((resolve,reject)=>requests.push({path,resolve,reject}));},render:()=>renders++});
+ loadScripts(c,['static/client.js','static/app.js']);loadScripts(c,'static/github-actions.js',{keepHost:['document']});hook['github:review-attention']();assert.equal(requests[0].path,'/api/github/reviews/seen');
  const newer={...c.state,revision:'two',localChange:'keep'};c.state=newer;requests[0].resolve({...newer,revision:'old-response',localChange:'lost'});await settle();assert.equal(c.state,newer);assert.equal(requests[1].path,'/api/state');
  const newest={...newer,revision:'three',localChange:'newest'};c.state=newest;requests[1].resolve({...newer,revision:'stale-get'});await settle();assert.equal(c.state,newest);assert.equal(requests[2].path,'/api/state');requests[2].resolve({...newest,githubReviewInbox:{[item.id]:{active:true,version:'cycle',seenAt:123}}});await settle();assert.equal(c.state.localChange,'newest');assert.equal(c.state.githubReviewInbox[item.id].seenAt,123);assert.equal(renders,1);assert.equal(calls.filter(call=>call.path==='/api/github/reviews/seen').length,1);
 });
