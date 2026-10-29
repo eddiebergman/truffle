@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),Module=require('node:module');
-const {loadScripts,evaluate}=require('./helpers/static-script.cjs'),{FakeDocument}=require('./helpers/fake-dom.cjs');
+// test_saved_session_open.cjs compiles this header under its own module, so resolve helpers from __dirname.
+const {loadScripts,evaluate}=require(__dirname+'/helpers/static-script.cjs'),{FakeDocument}=require(__dirname+'/helpers/fake-dom.cjs');
 const shared=new Module(__filename);shared._compile(fs.readFileSync('tests/test_feature_writes.cjs','utf8').split('\ntest(')[0]+'\nmodule.exports={fixture,deferred,tick};',__filename);const {fixture:base,deferred,tick}=shared.exports;
 // Reads and writes reach top-level let and const bindings of the loaded scripts, as with browserContext.
 function scriptScope(raw){
