@@ -434,33 +434,32 @@ fn artifact_paths_cannot_escape_and_links_are_reversible() {
         [] as [serde_json::Value; 0]
     );
 }
-#[test]
-fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders() {
+fn run_git(cwd: &std::path::Path, args: &[&str]) {
     use std::process::Command;
-    let (temp, repo) = fixture();
-    let main = temp.path().join("main-repo");
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+/// Creates a repository with two linked worktrees on branches `feature-one` and `feature-two`.
+fn linked_checkouts(root: &std::path::Path) -> (PathBuf, PathBuf, PathBuf) {
+    let main = root.join("main-repo");
     std::fs::create_dir(&main).unwrap();
-    let git = |cwd: &std::path::Path, args: &[&str]| {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(cwd)
-            .args([
-                "-c",
-                "core.hooksPath=/dev/null",
-                "-c",
-                "commit.gpgsign=false",
-            ])
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
-    git(&main, &["init", "--quiet", "-b", "main"]);
-    git(
+    run_git(&main, &["init", "--quiet", "-b", "main"]);
+    run_git(
         &main,
         &[
             "-c",
@@ -474,9 +473,9 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
             "fixture",
         ],
     );
-    let first = temp.path().join("checkout-one");
-    let second = temp.path().join("checkout-two");
-    git(
+    let first = root.join("checkout-one");
+    let second = root.join("checkout-two");
+    run_git(
         &main,
         &[
             "worktree",
@@ -487,7 +486,7 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
             first.to_str().unwrap(),
         ],
     );
-    git(
+    run_git(
         &main,
         &[
             "worktree",
@@ -498,6 +497,12 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
             second.to_str().unwrap(),
         ],
     );
+    (main, first, second)
+}
+#[test]
+fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders() {
+    let (temp, repo) = fixture();
+    let (main, first, second) = linked_checkouts(temp.path());
     repo.edit(&json!({"action":"save-note","title":"A","status":"todo"}))
         .unwrap();
     repo.edit(&json!({"action":"save-note","title":"B","status":"todo"}))

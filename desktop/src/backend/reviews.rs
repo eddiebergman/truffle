@@ -127,14 +127,14 @@ pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
         .as_str()
         .ok_or_else(|| Error::new("Supply the saved chat ID."))?)?;
     summary_identity(repo, &json!(id), 80)?;
-    {
+    let review = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        let review = draft(&state["sessions"][position(&state, &id)?]);
-        if arr(&review["comments"]).len() > 100 || arr(&review["assessments"]).len() > 100 {
-            return Err(Error::new(
-                "Review freshness summaries support up to 100 comments and 100 assessments.",
-            ));
-        }
+        draft(&state["sessions"][position(&state, &id)?])
+    };
+    if arr(&review["comments"]).len() > 100 || arr(&review["assessments"]).len() > 100 {
+        return Err(Error::new(
+            "Review freshness summaries support up to 100 comments and 100 assessments.",
+        ));
     }
     let checked = action(repo, &json!({"id":id,"action":"check"}))?;
     let review = &checked["review"];
@@ -294,12 +294,250 @@ pub(super) fn cancel_dispatch(state: &mut Value, id: &str, operation: &str) -> R
     }
     Ok(())
 }
+fn anchor_comments(repo: &Repository, id: &str, p: &Value, comments: &mut [Value]) -> Result<()> {
+    if (comments.is_empty() && !p["overall"].is_object())
+        || comments.len() > 100
+        || serde_json::to_vec(p)?.len() > 96 * 1024
+    {
+        return Err(Error::new(
+            "Supply comments or an overall assessment within 96 KiB.",
+        ));
+    }
+    let mut files = std::collections::HashMap::new();
+    for comment in comments.iter_mut() {
+        let key = (
+            text(comment, "root").to_owned(),
+            text(comment, "path").to_owned(),
+        );
+        let file = if let Some(file) = files.get(&key) {
+            file
+        } else {
+            let file = super::git_diff::file_for_session(repo, id, &key.1, &key.0)?;
+            files.entry(key).or_insert(file)
+        };
+        let side = text(comment, "side");
+        let content = match side {
+            "additions" => text(file, "newContent"),
+            "deletions" => text(file, "oldContent"),
+            _ => return Err(Error::new("Comment side must be additions or deletions.")),
+        };
+        let start = comment["start"].as_u64().unwrap_or(0);
+        let end = comment["end"].as_u64().unwrap_or(start);
+        let lines = usize::try_from(start)
+            .ok()
+            .zip(usize::try_from(end).ok())
+            .filter(|&(first, last)| {
+                first != 0 && first <= last && last <= content.lines().count()
+            });
+        let Some((first, last)) = lines.filter(|_| {
+            !text(comment, "text").trim().is_empty() && text(comment, "text").len() <= 4000
+        }) else {
+            return Err(Error::new(
+                "Select valid lines and supply a comment of at most 4000 bytes.",
+            ));
+        };
+        if !text(comment, "fingerprint").is_empty() && comment["fingerprint"] != file["fingerprint"]
+        {
+            return Err(Error::new(
+                "The file changed. Reload the diff before adding this comment.",
+            ));
+        }
+        let key = text(comment, "id").to_owned();
+        if key.len() > 120
+            || !key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        {
+            return Err(Error::new("Invalid comment ID."));
+        }
+        let author = text(comment, "author").trim();
+        if author.len() > 120 {
+            return Err(Error::new("Comment author exceeds 120 bytes."));
+        }
+        let stamp = super::git_diff::review_file_stamp(text(file, "root"), text(file, "path"));
+        *comment = json!({"id":if key.is_empty(){uuid()}else{key},"author":if author.is_empty(){"You"}else{author},"createdAt":now(),"fileStamp":stamp,"requestId":p["requestId"],"path":file["path"],"root":file["root"],"side":side,"start":start,"end":end,"text":text(comment,"text").trim(),"baseCommit":file["baseCommit"],"fingerprint":file["fingerprint"],"excerpt":content.split('\n').skip(first-1).take((last-first+1).min(20)).collect::<Vec<_>>().join("\n")});
+    }
+    Ok(())
+}
+fn add_overall(review: &mut Value, p: &Value) -> Result<()> {
+    let pass = text(p, "pass");
+    let overall = &p["overall"];
+    if !valid_pass(pass)
+        || text(p, "requestId").is_empty()
+        || text(overall, "author").trim().is_empty()
+        || text(overall, "author").len() > 120
+        || text(overall, "text").trim().is_empty()
+        || text(overall, "text").len() > 8000
+    {
+        return Err(Error::new("An overall assessment needs a current request, review pass, author and text of at most 8000 bytes."));
+    }
+    let key = format!("{}-{pass}", text(p, "requestId"));
+    let mut assessments = arr(&review["assessments"]);
+    if let Some(existing) = assessments.iter().find(|a| a["id"] == key) {
+        if text(existing, "author") != text(overall, "author").trim()
+            || text(existing, "text") != text(overall, "text").trim()
+        {
+            return Err(Error::new(
+                "This reviewer already submitted a different assessment.",
+            ));
+        }
+    } else {
+        assessments.push(json!({"id":key,"requestId":p["requestId"],"pass":pass,"author":text(overall,"author").trim(),"text":text(overall,"text").trim(),"root":review["run"]["root"],"baseCommit":review["run"]["baseCommit"],"versions":review["run"]["versions"],"createdAt":now()}));
+    }
+    review["assessments"] = json!(assessments);
+    Ok(())
+}
+fn apply_status(review: &mut Value, saved: &mut [Value], p: &Value) -> Result<()> {
+    let status = text(p, "state");
+    let pass = text(p, "pass");
+    if !status.is_empty()
+        && (if pass.is_empty() {
+            text(&review["run"], "state") != status
+        } else {
+            text(&review["run"]["passes"], pass) != status
+        })
+    {
+        if !["reviewing", "complete", "failed", "cancelled"].contains(&status) {
+            return Err(Error::new("Invalid review state."));
+        }
+        if pass.is_empty() {
+            if status == "complete" {
+                let receipt = p.get("reviewedRevision");
+                if receipt.is_some() && receipt != review.get("revision") {
+                    return Err(Error::new("Review feedback changed. Read the draft again before completing this round."));
+                }
+                let inputs = arr(&review["run"]["inputCommentIds"]);
+                for comment in saved.iter_mut() {
+                    if receipt.is_some()
+                        || inputs.contains(&comment["id"])
+                        || comment["requestId"] == review["run"]["id"]
+                    {
+                        comment["reviewedAt"] = json!(now());
+                    }
+                }
+                let mut assessments = arr(&review["assessments"]);
+                for assessment in &mut assessments {
+                    if receipt.is_some() || assessment["requestId"] == review["run"]["id"] {
+                        assessment["reviewedAt"] = json!(now());
+                    }
+                }
+                review["assessments"] = json!(assessments);
+                if receipt.is_some() || review["note"] == review["run"]["inputNote"] {
+                    review["reviewedNote"] = review["note"].clone();
+                }
+                review["run"]["completedAt"] = json!(now());
+            }
+            review["run"]["state"] = json!(status);
+        } else {
+            if !valid_pass(pass) {
+                return Err(Error::new("Invalid review pass."));
+            }
+            review["run"]["passes"][pass] = json!(status);
+            review["run"]["state"] = json!("reviewing");
+        }
+        review["run"]["updatedAt"] = json!(now());
+    }
+    Ok(())
+}
+fn archive_review(session: &mut Value, review: &Value, saved: &[Value], p: &Value) -> Result<()> {
+    if p["revision"].as_u64().is_none() || p["revision"] != review["revision"] {
+        return Err(Error::new(
+            "The review changed. Reload it before starting a new review.",
+        ));
+    }
+    if ["requested", "reviewing"].contains(&text(&review["run"], "state")) {
+        return Err(Error::new(
+            "Finish or cancel the active review before starting a new review.",
+        ));
+    }
+    let history = &session["reviewHistory"];
+    if !history.is_null() && history["version"] != 1 {
+        return Err(Error::new("Unsupported review history version."));
+    }
+    let mut entries = arr(&history["entries"]);
+    if !saved.is_empty()
+        || !text(review, "note").is_empty()
+        || !arr(&review["assessments"]).is_empty()
+        || review["run"].is_object()
+    {
+        entries.insert(0, json!({"id":uuid(),"archivedAt":now(),"review":review}));
+    }
+    entries.truncate(20);
+    while serde_json::to_vec(&entries)?.len() > 1024 * 1024 {
+        entries.pop();
+    }
+    session["reviewHistory"] = json!({"version":1,"entries":entries});
+    Ok(())
+}
+fn merge_comments(saved: &mut Vec<Value>, comments: Vec<Value>) -> Result<()> {
+    for comment in comments {
+        if let Some(existing) = saved.iter().find(|c| c["id"] == comment["id"]) {
+            for field in [
+                "author",
+                "path",
+                "root",
+                "side",
+                "start",
+                "end",
+                "text",
+                "fingerprint",
+            ] {
+                if existing[field] != comment[field] {
+                    return Err(Error::new(
+                        "Comment ID already exists with different content.",
+                    ));
+                }
+            }
+        } else {
+            saved.push(comment);
+        }
+    }
+    if saved.len() > 100 {
+        return Err(Error::new(
+            "Send or remove comments before adding more. A draft holds 100 comments.",
+        ));
+    }
+    Ok(())
+}
+fn set_note(review: &mut Value, p: &Value) -> Result<()> {
+    let note = p["note"]
+        .as_str()
+        .ok_or_else(|| Error::new("Expected review note."))?;
+    if note.len() > 8000 {
+        return Err(Error::new("Review note exceeds 8000 bytes."));
+    }
+    if p["previousNote"] != review["note"] {
+        return Err(Error::new(
+            "The review note changed. Reload it before editing.",
+        ));
+    }
+    review["note"] = json!(note);
+    Ok(())
+}
+fn complete_guidance(state: &mut Value, operation: &str, p: &Value, review: &Value) {
+    if operation == "append"
+        && arr(&review["comments"])
+            .iter()
+            .any(|c| c["author"] == "You")
+    {
+        super::guidance::complete(state, "review.comment-selection");
+    }
+    if operation == "ack" {
+        super::guidance::complete(state, "review.pending-comments");
+    }
+    if operation == "status" && ["reviewing", "complete"].contains(&text(p, "state")) {
+        super::guidance::complete(state, "review.agent-scope");
+        super::guidance::complete(state, "review.pending-comments");
+    }
+}
 pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
     let id = text(p, "id");
     let operation = text(p, "action");
     if operation == "history" {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        let history = &state["sessions"][position(&state, id)?]["reviewHistory"];
+        let history = {
+            let state = repo.state.lock().map_err(|_| Error::io())?;
+            state["sessions"][position(&state, id)?]["reviewHistory"].clone()
+        };
         if !history.is_null() && history["version"] != 1 {
             return Err(Error::new("Unsupported review history version."));
         }
@@ -324,176 +562,66 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
     };
     let mut comments = arr(&p["comments"]);
     if operation == "append" {
-        if (comments.is_empty() && !p["overall"].is_object())
-            || comments.len() > 100
-            || serde_json::to_vec(p)?.len() > 96 * 1024
-        {
-            return Err(Error::new(
-                "Supply comments or an overall assessment within 96 KiB.",
-            ));
-        }
-        let mut files = std::collections::HashMap::new();
-        for comment in &mut comments {
-            let key = (
-                text(comment, "root").to_owned(),
-                text(comment, "path").to_owned(),
-            );
-            let file = if let Some(file) = files.get(&key) {
-                file
-            } else {
-                let file = super::git_diff::file_for_session(repo, id, &key.1, &key.0)?;
-                files.entry(key).or_insert(file)
-            };
-            let side = text(comment, "side");
-            let content = match side {
-                "additions" => text(file, "newContent"),
-                "deletions" => text(file, "oldContent"),
-                _ => return Err(Error::new("Comment side must be additions or deletions.")),
-            };
-            let start = comment["start"].as_u64().unwrap_or(0);
-            let end = comment["end"].as_u64().unwrap_or(start);
-            if start == 0
-                || end < start
-                || end as usize > content.lines().count()
-                || text(comment, "text").trim().is_empty()
-                || text(comment, "text").len() > 4000
-            {
-                return Err(Error::new(
-                    "Select valid lines and supply a comment of at most 4000 bytes.",
-                ));
-            }
-            if !text(comment, "fingerprint").is_empty()
-                && comment["fingerprint"] != file["fingerprint"]
-            {
-                return Err(Error::new(
-                    "The file changed. Reload the diff before adding this comment.",
-                ));
-            }
-            let key = text(comment, "id").to_owned();
-            if key.len() > 120
-                || !key
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-            {
-                return Err(Error::new("Invalid comment ID."));
-            }
-            let author = text(comment, "author").trim();
-            if author.len() > 120 {
-                return Err(Error::new("Comment author exceeds 120 bytes."));
-            }
-            let stamp = super::git_diff::review_file_stamp(text(file, "root"), text(file, "path"));
-            *comment = json!({"id":if key.is_empty(){uuid()}else{key},"author":if author.is_empty(){"You"}else{author},"createdAt":now(),"fileStamp":stamp,"requestId":p["requestId"],"path":file["path"],"root":file["root"],"side":side,"start":start,"end":end,"text":text(comment,"text").trim(),"baseCommit":file["baseCommit"],"fingerprint":file["fingerprint"],"excerpt":content.split('\n').skip(start as usize-1).take((end-start+1).min(20) as usize).collect::<Vec<_>>().join("\n")});
-        }
+        anchor_comments(repo, id, p, &mut comments)?;
     }
     repo.transaction(|state| {
-        let index = position(state,id)?;
+        let index = position(state, id)?;
         let mut review = draft(&state["sessions"][index]);
         let before = review.clone();
         let mut saved = arr(&review["comments"]);
         if operation == "status" || p.get("requestId").is_some() && operation == "append" {
-            if text(p,"requestId").is_empty() || review["run"]["id"] != p["requestId"] {
-                return Err(Error::new("This review request is no longer current. Read its draft before updating it."));
+            if text(p, "requestId").is_empty() || review["run"]["id"] != p["requestId"] {
+                return Err(Error::new(
+                    "This review request is no longer current. Read its draft before updating it.",
+                ));
             }
-            if !["requested","reviewing"].contains(&text(&review["run"],"state")) {
+            if !["requested", "reviewing"].contains(&text(&review["run"], "state")) {
                 return Err(Error::new("This review request has already finished."));
             }
         }
         if operation == "append" && p.get("overall").is_some() {
-            let pass = text(p,"pass");
-            let overall = &p["overall"];
-            if !valid_pass(pass)
-                || text(p,"requestId").is_empty()
-                || text(overall,"author").trim().is_empty()
-                || text(overall,"author").len() > 120
-                || text(overall,"text").trim().is_empty()
-                || text(overall,"text").len() > 8000 {
-                return Err(Error::new("An overall assessment needs a current request, review pass, author and text of at most 8000 bytes."));
-            }
-            let key = format!("{}-{pass}",text(p,"requestId"));
-            let mut assessments=arr(&review["assessments"]);
-            if let Some(existing)=assessments.iter().find(|a| a["id"] == key) {
-                if text(existing,"author") != text(overall,"author").trim() || text(existing,"text") != text(overall,"text").trim() {
-                    return Err(Error::new("This reviewer already submitted a different assessment."));
-                }
-            } else {
-                assessments.push(json!({"id":key,"requestId":p["requestId"],"pass":pass,"author":text(overall,"author").trim(),"text":text(overall,"text").trim(),"root":review["run"]["root"],"baseCommit":review["run"]["baseCommit"],"versions":review["run"]["versions"],"createdAt":now()}));
-            }
-            review["assessments"]=json!(assessments);
+            add_overall(&mut review, p)?;
         }
         match operation {
             "new" => {
-                if p["revision"].as_u64().is_none() || p["revision"] != review["revision"] {
-                    return Err(Error::new("The review changed. Reload it before starting a new review."));
-                }
-                if ["requested","reviewing"].contains(&text(&review["run"],"state")) {
-                    return Err(Error::new("Finish or cancel the active review before starting a new review."));
-                }
-                let history = &state["sessions"][index]["reviewHistory"];
-                if !history.is_null() && history["version"] != 1 { return Err(Error::new("Unsupported review history version.")); }
-                let mut entries = arr(&history["entries"]);
-                if !saved.is_empty() || !text(&review,"note").is_empty() || !arr(&review["assessments"]).is_empty() || review["run"].is_object() {
-                    entries.insert(0,json!({"id":uuid(),"archivedAt":now(),"review":review}));
-                }
-                entries.truncate(20);
-                while serde_json::to_vec(&entries)?.len() > 1024*1024 { entries.pop(); }
-                state["sessions"][index]["reviewHistory"] = json!({"version":1,"entries":entries});
+                archive_review(&mut state["sessions"][index], &review, &saved, p)?;
                 review = json!({"comments":[],"note":"","revision":before["revision"]});
                 saved.clear();
             }
-            "request" => { set_request(&mut review,text(p,"requestId"),baseline.as_ref().unwrap())?; }
-            "status" => {if review["run"]["state"]=="requested" {if let Some(versions)=&baseline{review["run"]["versions"]=versions.clone();}}}
-
-            "append" => {
-                for comment in comments {
-                    if let Some(existing) = saved.iter().find(|c| c["id"] == comment["id"]) {
-                        for field in ["author","path","root","side","start","end","text","fingerprint"] {
-                            if existing[field] != comment[field] { return Err(Error::new("Comment ID already exists with different content.")); }
-                        }
-                    } else { saved.push(comment); }
+            "request" => {
+                set_request(
+                    &mut review,
+                    text(p, "requestId"),
+                    baseline.as_ref().unwrap(),
+                )?;
+            }
+            "status" => {
+                if review["run"]["state"] == "requested" {
+                    if let Some(versions) = &baseline {
+                        review["run"]["versions"] = versions.clone();
+                    }
                 }
-                if saved.len() > 100 { return Err(Error::new("Send or remove comments before adding more. A draft holds 100 comments.")); }
             }
-            "remove" | "ack" => {remove_or_ack(&mut review,&mut saved,p,operation);}
-            "note" => {
-                let note = p["note"].as_str().ok_or_else(|| Error::new("Expected review note."))?;
-                if note.len() > 8000 { return Err(Error::new("Review note exceeds 8000 bytes.")); }
-                if p["previousNote"] != review["note"] { return Err(Error::new("The review note changed. Reload it before editing.")); }
-                review["note"] = json!(note);
+
+            "append" => merge_comments(&mut saved, comments)?,
+            "remove" | "ack" => {
+                remove_or_ack(&mut review, &mut saved, p, operation);
             }
+            "note" => set_note(&mut review, p)?,
             _ => return Err(Error::new("Unknown review action.")),
         }
         if operation == "status" || operation == "append" && p.get("requestId").is_some() {
-            let status=text(p,"state");
-            let pass=text(p,"pass");
-            if !status.is_empty() && (if pass.is_empty(){text(&review["run"],"state")!=status}else{text(&review["run"]["passes"],pass)!=status}) {
-                if !["reviewing","complete","failed","cancelled"].contains(&status) { return Err(Error::new("Invalid review state.")); }
-                if pass.is_empty() {
-                    if status=="complete" {
-                        let receipt=p.get("reviewedRevision");
-                        if receipt.is_some()&&receipt!=review.get("revision"){return Err(Error::new("Review feedback changed. Read the draft again before completing this round."));}
-                        let inputs=arr(&review["run"]["inputCommentIds"]);
-                        for comment in &mut saved {if receipt.is_some()||inputs.contains(&comment["id"])||comment["requestId"]==review["run"]["id"]{comment["reviewedAt"]=json!(now());}}
-                        let mut assessments=arr(&review["assessments"]);for assessment in &mut assessments{if receipt.is_some()||assessment["requestId"]==review["run"]["id"]{assessment["reviewedAt"]=json!(now());}}review["assessments"]=json!(assessments);
-                        if receipt.is_some()||review["note"]==review["run"]["inputNote"]{review["reviewedNote"]=review["note"].clone();}
-                        review["run"]["completedAt"]=json!(now());
-                    }
-                    review["run"]["state"]=json!(status);
-                }
-                else {
-                    if !valid_pass(pass) { return Err(Error::new("Invalid review pass.")); }
-                    review["run"]["passes"][pass]=json!(status);
-                    review["run"]["state"]=json!("reviewing");
-                }
-                review["run"]["updatedAt"]=json!(now());
-            }
+            apply_status(&mut review, &mut saved, p)?;
         }
         review["comments"] = json!(saved);
-        if serde_json::to_vec(&review)?.len() > 256*1024 { return Err(Error::new("Review draft exceeds 256 KiB.")); }
-        if review != before { review["revision"] = json!(before["revision"].as_u64().unwrap_or(0)+1); }
+        if serde_json::to_vec(&review)?.len() > 256 * 1024 {
+            return Err(Error::new("Review draft exceeds 256 KiB."));
+        }
+        if review != before {
+            review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
+        }
         state["sessions"][index]["reviewDraft"] = review.clone();
-        if operation == "append" && arr(&review["comments"]).iter().any(|c| c["author"] == "You") { super::guidance::complete(state,"review.comment-selection"); }
-        if operation == "ack" { super::guidance::complete(state,"review.pending-comments"); }
-        if operation == "status" && ["reviewing","complete"].contains(&text(p,"state")) { super::guidance::complete(state,"review.agent-scope"); super::guidance::complete(state,"review.pending-comments"); }
+        complete_guidance(state, operation, p, &review);
         Ok(json!({"id":id,"review":review}))
     })
 }

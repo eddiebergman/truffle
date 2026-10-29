@@ -157,8 +157,7 @@ fn failed_selected_assistant_does_not_retry_with_another_installed_provider() {
     assert_eq!(repo.state.lock().unwrap()["fixtureModelCalls"], 1);
 }
 #[test]
-fn codex_command_uses_proven_disable_flags_native_auth_allowlist_and_private_image_lifetime() {
-    use std::os::unix::fs::PermissionsExt;
+fn codex_environment_keeps_only_the_native_auth_allowlist() {
     let values = [
         "HOME",
         "CODEX_HOME",
@@ -193,6 +192,10 @@ fn codex_command_uses_proven_disable_flags_native_auth_allowlist_and_private_ima
     assert_eq!(text.lines().count(), 1);
     assert!(text.contains("CODEX_API_KEY=native-fixture"));
     assert!(!text.contains("integration-fixture"));
+}
+#[test]
+fn codex_command_uses_proven_disable_flags_and_private_image_lifetime() {
+    use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().unwrap();
     let path;
     {
@@ -225,56 +228,7 @@ fn codex_command_uses_proven_disable_flags_native_auth_allowlist_and_private_ima
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
-        assert_eq!(args[0..2], ["--no-daemon", "exec"]);
-        for option in [
-            "--ignore-user-config",
-            "--ignore-rules",
-            "--ephemeral",
-            "--skip-git-repo-check",
-            "--json",
-        ] {
-            assert!(args.contains(&option.to_owned()));
-        }
-        for flag in [
-            "goals",
-            "collaboration_modes",
-            "default_mode_request_user_input",
-            "hooks",
-            "memories",
-            "skill_search",
-            "shell_snapshot",
-            "request_permissions_tool",
-            "shell_tool",
-            "apps",
-            "plugins",
-            "multi_agent",
-            "browser_use",
-            "computer_use",
-            "view_image",
-            "code_mode",
-            "code_mode_host",
-            "enable_request_compression",
-        ] {
-            assert!(
-                args.windows(2).any(|pair| pair == ["--disable", flag]),
-                "missing protection: {flag}"
-            );
-        }
-        for value in [
-            "web_search=\"disabled\"",
-            "skills.include_instructions=false",
-            "skills.bundled.enabled=false",
-            "project_doc_max_bytes=0",
-        ] {
-            assert!(args.windows(2).any(|pair| pair == ["-c", value]));
-        }
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--sandbox", "read-only"]));
-        assert!(!args.iter().any(|arg| arg == "-m" || arg == "--model"));
-        assert!(!args.iter().any(|arg| arg.contains("model_provider=")
-            || arg.contains("cli_auth_credentials_store")
-            || arg.contains("model_catalog_json")));
+        assert_codex_protections(&args);
         let at = args.iter().position(|arg| arg == "--image").unwrap();
         assert_eq!(
             args[at + 1],
@@ -288,6 +242,58 @@ fn codex_command_uses_proven_disable_flags_native_auth_allowlist_and_private_ima
         assert_eq!(std::fs::read(&paths[0]).unwrap(), b"\x89PNG\r\n\x1a\n");
     }
     assert!(!path.exists());
+}
+fn assert_codex_protections(args: &[String]) {
+    assert_eq!(args[0..2], ["--no-daemon", "exec"]);
+    for option in [
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "--json",
+    ] {
+        assert!(args.contains(&option.to_owned()));
+    }
+    for flag in [
+        "goals",
+        "collaboration_modes",
+        "default_mode_request_user_input",
+        "hooks",
+        "memories",
+        "skill_search",
+        "shell_snapshot",
+        "request_permissions_tool",
+        "shell_tool",
+        "apps",
+        "plugins",
+        "multi_agent",
+        "browser_use",
+        "computer_use",
+        "view_image",
+        "code_mode",
+        "code_mode_host",
+        "enable_request_compression",
+    ] {
+        assert!(
+            args.windows(2).any(|pair| pair == ["--disable", flag]),
+            "missing protection: {flag}"
+        );
+    }
+    for value in [
+        "web_search=\"disabled\"",
+        "skills.include_instructions=false",
+        "skills.bundled.enabled=false",
+        "project_doc_max_bytes=0",
+    ] {
+        assert!(args.windows(2).any(|pair| pair == ["-c", value]));
+    }
+    assert!(args
+        .windows(2)
+        .any(|pair| pair == ["--sandbox", "read-only"]));
+    assert!(!args.iter().any(|arg| arg == "-m" || arg == "--model"));
+    assert!(!args.iter().any(|arg| arg.contains("model_provider=")
+        || arg.contains("cli_auth_credentials_store")
+        || arg.contains("model_catalog_json")));
 }
 #[test]
 fn codex_contract_is_explicit_developer_argument_and_reference_context_stays_on_stdin() {

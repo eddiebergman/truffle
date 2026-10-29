@@ -670,43 +670,10 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
         uuid,
     )
     .unwrap();
-    let completed = submit_with(
-        &repo,
-        &first,
-        || Ok(inventory(&prepare_args, &generation)),
-        |_, _| {
-            writes.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        },
-        || Ok(()),
-    )
-    .unwrap();
-    assert_eq!(completed["finalized"], true);
+    let completed = complete_counted(&repo, &first, &prepare_args, &generation, &writes);
     assert_eq!(completed["ticket"], "2");
-    super::super::session_ci::investigation(&repo,&json!({"id":other,"itemId":"github:pr","requestId":first["operationId"],"state":"complete"})).unwrap();
-    let seeded_completed = 1030u64;
-    repo.transaction(|state| {
-        let mut all = entries(state)?;
-        let template = all
-            .iter()
-            .find(|entry| entry["operationId"] == first["operationId"])
-            .unwrap()
-            .clone();
-        let at = template["finalizedAt"].as_f64().unwrap();
-        all.retain(|entry| entry["operationId"] != first["operationId"]);
-        for ticket in 2..=seeded_completed + 1 {
-            let mut entry = template.clone();
-            if ticket != 2 {
-                entry["operationId"] = json!(uuid());
-            }
-            entry["ticket"] = json!(ticket.to_string());
-            entry["finalizedAt"] = json!(at - (seeded_completed + 2 - ticket) as f64);
-            all.push(entry);
-        }
-        state[JOURNAL]["nextTicket"] = json!((seeded_completed + 2).to_string());
-        store(state, all)
-    })
-    .unwrap();
+    let seeded_completed = 1030u32;
+    seed_completed_history(&repo, &first, seeded_completed);
     for cycle in 0..3 {
         let prepared = prepare_with(
             &repo,
@@ -720,30 +687,18 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
             prepared["ticket"],
             (seeded_completed + 2 + cycle).to_string()
         );
-        let done = submit_with(
-            &repo,
-            &prepared,
-            || Ok(inventory(&prepare_args, &generation)),
-            |_, _| {
-                writes.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            },
-            || Ok(()),
-        )
-        .unwrap();
-        assert_eq!(done["finalized"], true);
+        complete_counted(&repo, &prepared, &prepare_args, &generation, &writes);
         assert_eq!(
             locate(&repo, &other, text(&prepared, "operationId")).unwrap()["finalized"],
             true
         );
-        super::super::session_ci::investigation(&repo,&json!({"id":other,"itemId":"github:pr","requestId":prepared["operationId"],"state":"complete"})).unwrap();
     }
     assert_eq!(writes.load(Ordering::SeqCst), 4);
     let state = repo.state.lock().unwrap().clone();
     assert_eq!(entries(&state).unwrap().len(), RECENT_COMPLETED + 1);
     assert_eq!(
         decimal(&state[JOURNAL]["retiredThrough"]).unwrap(),
-        seeded_completed + 4 - RECENT_COMPLETED as u64
+        u64::from(seeded_completed + 4) - RECENT_COMPLETED as u64
     );
     assert_eq!(
         state[JOURNAL]["nextTicket"],
@@ -774,10 +729,44 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
     assert!(retired.get("status").is_none());
     assert!(text(&retired, "message").contains("Prior delivery may have occurred"));
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
+    assert_unresolved_becomes_uncertain(&repo, &unresolved, &args, &generation, &writes);
+    assert_eq!(writes.load(Ordering::SeqCst), 5);
+}
+fn seed_completed_history(repo: &Repository, first: &Value, seeded_completed: u32) {
+    repo.transaction(|state| {
+        let mut all = entries(state)?;
+        let template = all
+            .iter()
+            .find(|entry| entry["operationId"] == first["operationId"])
+            .unwrap()
+            .clone();
+        let at = template["finalizedAt"].as_f64().unwrap();
+        all.retain(|entry| entry["operationId"] != first["operationId"]);
+        for ticket in 2..=seeded_completed + 1 {
+            let mut entry = template.clone();
+            if ticket != 2 {
+                entry["operationId"] = json!(uuid());
+            }
+            entry["ticket"] = json!(ticket.to_string());
+            entry["finalizedAt"] = json!(at - f64::from(seeded_completed + 2 - ticket));
+            all.push(entry);
+        }
+        state[JOURNAL]["nextTicket"] = json!((seeded_completed + 2).to_string());
+        store(state, all)
+    })
+    .unwrap();
+}
+fn assert_unresolved_becomes_uncertain(
+    repo: &Repository,
+    unresolved: &Value,
+    args: &Value,
+    generation: &str,
+    writes: &AtomicUsize,
+) {
     let still_live = submit_with(
-        &repo,
-        &unresolved,
-        || Ok(inventory(&args, &generation)),
+        repo,
+        unresolved,
+        || Ok(inventory(args, generation)),
         |_, _| {
             writes.fetch_add(1, Ordering::SeqCst);
             Err(Error::new("Unknown acknowledgement"))
@@ -789,8 +778,8 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
     assert_eq!(still_live["operationId"], unresolved["operationId"]);
     assert_eq!(
         submit_with(
-            &repo,
-            &unresolved,
+            repo,
+            unresolved,
             || panic!("uncertain operation must not inspect terminal"),
             |_, _| panic!("uncertain operation must not replay"),
             || Ok(())
@@ -798,7 +787,29 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
         .unwrap(),
         still_live
     );
-    assert_eq!(writes.load(Ordering::SeqCst), 5);
+}
+/// Submits a prepared CI investigation, counting the write, and marks the investigation complete.
+fn complete_counted(
+    repo: &Repository,
+    prepared: &Value,
+    args: &Value,
+    generation: &str,
+    writes: &AtomicUsize,
+) -> Value {
+    let done = submit_with(
+        repo,
+        prepared,
+        || Ok(inventory(args, generation)),
+        |_, _| {
+            writes.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+        || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(done["finalized"], true);
+    super::super::session_ci::investigation(repo,&json!({"id":args["recordId"],"itemId":"github:pr","requestId":prepared["operationId"],"state":"complete"})).unwrap();
+    done
 }
 fn legacy_fixture() -> (tempfile::TempDir, Arc<Repository>, Value, String, Value) {
     let (temp, repo, args, generation) = fixture();
@@ -1059,7 +1070,7 @@ fn dispatch_v2_small_compaction_keeps_old_live_and_newly_completed_receipts() {
             entry["ticket"] = json!(index.to_string());
             entry["status"] = json!("written");
             entry["finalized"] = json!(true);
-            entry["finalizedAt"] = json!(index as f64);
+            entry["finalizedAt"] = json!(f64::from(u32::try_from(index).unwrap()));
             all.push(entry);
         }
         s[JOURNAL]["nextTicket"] = json!((RECENT_COMPLETED + 3).to_string());

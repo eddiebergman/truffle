@@ -279,9 +279,12 @@ fn matching(
 }
 pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     let id = sid(text(args, "recordId"))?;
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    record(&state, &id)?;
-    let mut all = entries(&state)?
+    let journal = {
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        record(&state, &id)?;
+        entries(&state)?
+    };
+    let mut all = journal
         .into_iter()
         .rev()
         .filter(|entry| entry["recordId"] == id)
@@ -706,21 +709,22 @@ fn submit_with(
     let id = sid(text(args, "recordId"))?;
     let operation = sid(text(args, "operationId"))?;
     ensure_migrated(repo)?;
-    let prepared = {
+    let all = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
         record(&state, &id)?;
-        let all = entries(&state)?;
-        if let Some(entry) = all.iter().find(|entry| entry["operationId"] == operation) {
-            if entry["recordId"] != id {
-                return Err(Error::new(
-                    "This dispatch operation belongs to another chat.",
-                ));
-            }
-            entry.clone()
-        } else {
-            return Ok(expired(&id, &operation));
-        }
+        entries(&state)?
     };
+    let Some(prepared) = all
+        .into_iter()
+        .find(|entry| entry["operationId"] == operation)
+    else {
+        return Ok(expired(&id, &operation));
+    };
+    if prepared["recordId"] != id {
+        return Err(Error::new(
+            "This dispatch operation belongs to another chat.",
+        ));
+    }
     if prepared["resolution"] == "user-abandoned" {
         return Ok(public(&prepared));
     }
@@ -764,20 +768,17 @@ fn submit_with(
         .unwrap_or_else(|_| sending.unwrap());
         return Ok(public(&entry));
     }
-    let written = match mutate(repo, &id, &operation, |entry| {
+    let Ok(written) = mutate(repo, &id, &operation, |entry| {
         if entry["resolved"] == true || entry["status"] != "sending" {
             return Err(Error::new("Dispatch resolution changed."));
         }
         entry["status"] = json!("written");
         entry["writtenAt"] = json!(now());
         Ok(())
-    }) {
-        Ok(entry) => entry,
-        Err(_) => {
-            return Ok(public(
-                &locate(repo, &id, &operation).unwrap_or_else(|_| sending.unwrap()),
-            ))
-        }
+    }) else {
+        return Ok(public(
+            &locate(repo, &id, &operation).unwrap_or_else(|_| sending.unwrap()),
+        ));
     };
     if after_written().is_err() {
         return Ok(public(&written));
