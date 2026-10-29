@@ -1778,7 +1778,7 @@ function renderAgentWorkspace() {
   }
 
   if (record && directory) {
-    context.append(agentGitSection(record, directory));
+    context.append(agentGitSection(record));
   }
   const commands = agentCommandSection(record);
   if (commands) {
@@ -1904,7 +1904,8 @@ function agentCommandSection(record) {
   }
   return collapsibleContextSection(section, "agentCommands", commands.length);
 }
-function collapsibleContextSection(section, key, count) {
+function collapsibleContextSection(section, key, initialCount) {
+  let count = initialCount;
   const heading = $("h3", section),
     head = heading.parentElement,
     body = el("div", "context-section-body");

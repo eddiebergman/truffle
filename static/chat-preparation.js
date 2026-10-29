@@ -800,7 +800,8 @@ function focusPreparedTerminal(record, candidate, returnFocus) {
   }
   view.terminal.focus();
 }
-async function openPreparedChat(attempt, ui, record = null) {
+async function openPreparedChat(attempt, ui, preparedRecord = null) {
+  let record = preparedRecord;
   if (
     ui.options.unavailable ||
     chatPreparationStorageError ||

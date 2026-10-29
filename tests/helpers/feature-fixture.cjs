@@ -49,8 +49,8 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     messages = [],
     opened = [],
     pendingClose = [];
-  const match = (node, selector) => {
-    selector = selector.trim();
+  const match = (node, rawSelector) => {
+    const selector = rawSelector.trim();
     if (selector.startsWith("#")) {
       return node.id === selector.slice(1);
     }

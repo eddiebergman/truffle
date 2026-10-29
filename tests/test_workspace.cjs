@@ -751,8 +751,8 @@ function liveBarFixture() {
   const nodes = new Map(),
     actions = [];
   const matches = (node, selector) =>
-    selector.split(",").some((part) => {
-      part = part.trim();
+    selector.split(",").some((rawPart) => {
+      const part = rawPart.trim();
       if (part === "[hidden]") {
         return node.hidden;
       }

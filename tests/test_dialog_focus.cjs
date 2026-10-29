@@ -9,8 +9,8 @@ function fixture() {
   const queued = [];
 
   const matches = (node, selector) =>
-    selector.split(",").some((part) => {
-      part = part.trim();
+    selector.split(",").some((rawPart) => {
+      let part = rawPart.trim();
       if (part === "[hidden]") {
         return node.hidden;
       }

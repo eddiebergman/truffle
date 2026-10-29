@@ -795,8 +795,8 @@ function reviewFocusFixture() {
   const nodes = new Map(),
     requests = [];
   const matches = (node, selector) =>
-    selector.split(",").some((part) => {
-      part = part.trim();
+    selector.split(",").some((rawPart) => {
+      const part = rawPart.trim();
       if (part === "a[href]") {
         return node.tag === "a" && node.attrs.href !== undefined;
       }

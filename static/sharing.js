@@ -36,9 +36,9 @@ function sharingTransport(config) {
     ? { kind: "gcs", root: config.root }
     : { kind: "folder", root: "" };
 }
-function sharingProfile(kind, root, handle) {
+function sharingProfile(kind, rootInput, handle) {
   const name = normalizeShareHandle(handle);
-  root = String(root).trim().replace(/\/+$/, "");
+  const root = String(rootInput).trim().replace(/\/+$/, "");
   if (!name) {
     throw new Error(
       "Choose a receiving handle using letters, numbers, underscore or hyphen.",

@@ -180,8 +180,8 @@ class FakeElement extends FakeEventTarget {
   after(...nodes) {
     this.parentElement?.insertBefore(nodes, this, 1);
   }
-  insertBefore(nodes, reference, offset = 0) {
-    nodes = [nodes].flat();
+  insertBefore(inserted, reference, offset = 0) {
+    const nodes = [inserted].flat();
     for (const node of nodes) {
       if (node instanceof FakeElement) {
         node.remove();

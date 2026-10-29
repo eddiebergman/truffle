@@ -146,7 +146,6 @@ function renderSettingsProfilePreview(
       } catch {
         throw new Error("Enter valid JSON from an exported settings profile.");
       }
-      raw = "";
       await validate(profile);
     } catch (error) {
       if (!disposed) {

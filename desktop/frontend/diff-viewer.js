@@ -80,7 +80,8 @@ export async function highlightReviewCode(root, path) {
     }),
   );
 }
-export function createDiffReview(root, style, renderComments) {
+export function createDiffReview(root, initialStyle, renderComments) {
+  let style = initialStyle;
   const virtualizer = new Virtualizer();
   virtualizer.setup(root);
   const views = new Map();

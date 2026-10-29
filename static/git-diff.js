@@ -284,8 +284,8 @@ function paintGitDiff(body, view) {
     }
   }
 }
-function agentGitSection(record, directory) {
-  directory = selectedGitDirectory(record);
+function agentGitSection(record) {
+  const directory = selectedGitDirectory(record);
   const key = `${record.id}\0${directory}`;
   let view = gitDiffViews.get(key);
   if (!view) {
