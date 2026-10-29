@@ -1036,7 +1036,7 @@ fn link_work_commands_have_strict_schemas_and_deny_url_resolution_before_owner()
     let chat = repo
         .transaction(|s| {
             s["items"] = json!([{"id":"known","title":"Known"}]);
-            super::super::workflows::save_session(
+            super::super::sessions::save(
                 s,
                 &json!({"agent":"codex","title":"Chat","cwd":temp.path(),"itemIds":[]}),
             )
@@ -1856,7 +1856,7 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
 fn chat_metadata_commands_are_reversible_allowed_and_return_only_updated_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let chat = repo.transaction(|state| super::super::workflows::save_session(state, &json!({"agent":"codex","title":"Original","cwd":temp.path(),"itemIds":[],"instruction":"fixture-private-instructions"}))).unwrap();
+    let chat = repo.transaction(|state| super::super::sessions::save(state, &json!({"agent":"codex","title":"Original","cwd":temp.path(),"itemIds":[],"instruction":"fixture-private-instructions"}))).unwrap();
     let id = text(&chat, "id").to_owned();
     repo.transaction(|state| {
         state["sessions"][0]["privateExtension"] = json!({"value":"fixture-private-extension"});
@@ -1925,7 +1925,7 @@ fn chat_metadata_commands_reject_bad_targets_and_unknown_fields_without_writes()
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let chat = repo
         .transaction(|state| {
-            super::super::workflows::save_session(
+            super::super::sessions::save(
                 state,
                 &json!({"agent":"codex","title":"Original","cwd":temp.path(),"itemIds":[]}),
             )

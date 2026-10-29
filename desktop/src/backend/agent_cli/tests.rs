@@ -1,5 +1,6 @@
 use super::*;
-use crate::backend::{arr, workflows, Repository};
+use crate::backend::sessions;
+use crate::backend::{arr, Repository};
 fn options(args: &[&str]) -> Options {
     Options::parse(
         &args
@@ -87,7 +88,7 @@ fn context_show_prints_the_owner_context_for_direct_edit_and_resubmit() {
     let repo = Repository::open(temp.path().to_path_buf(), None, true).unwrap();
     let record = repo
         .transaction(|state| {
-            super::super::workflows::save_session(
+            super::super::sessions::save(
                 state,
                 &json!({"agent":"codex","title":"Context fixture","cwd":temp.path(),"itemIds":[]}),
             )
@@ -260,7 +261,7 @@ fn signed_inbox_roundtrip_preserves_unicode_and_nested_replies_and_hooks_need_no
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","cwd":temp.path(),"title":"日本語 · café"}),
             )

@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::sessions;
 use crate::backend::workflows;
 use std::path::PathBuf;
 fn fixture() -> (
@@ -35,7 +36,7 @@ fn fixture() -> (
     let repo = Repository::open(temp.path().to_path_buf(), None, true).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","cwd":root,"title":"Review fixture","itemIds":[]}),
             )

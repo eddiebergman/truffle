@@ -270,7 +270,7 @@ fn routine_snapshots_omit_review_bodies_without_changing_exports_or_history() {
     let repo = Repository::open(temp.path().to_path_buf(), None, true).unwrap();
     let record = repo
         .transaction(|state| {
-            let record = super::super::workflows::save_session(
+            let record = super::super::sessions::save(
                 state,
                 &json!({
                     "agent":"claude", "cwd":temp.path(), "title":"Review snapshot", "itemIds":[]

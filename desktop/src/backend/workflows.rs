@@ -3,7 +3,7 @@ use super::{
     arr, checked, commands, directory, expand, home, json, now, safe_url, sid, text, uuid, Error,
     PathBuf, Repository, Result, Value,
 };
-use super::{artifacts, domain, terminal};
+use super::{artifacts, domain, sessions, terminal};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
     std::env::var("TRUFFLE_WORKDIR").map_or_else(|_| home().join("code"), |s| expand(&s))
@@ -139,20 +139,6 @@ fn choose_with(
     Err(error)
 }
 #[derive(Clone, Copy, PartialEq)]
-enum SaveIntent {
-    Replace,
-    Register,
-}
-pub fn save_session(s: &mut Value, p: &Value) -> Result<Value> {
-    super::sessions::save(s, p)
-}
-fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Result<Value> {
-    match intent {
-        SaveIntent::Replace => super::sessions::save(s, p),
-        SaveIntent::Register => super::sessions::register(s, p),
-    }
-}
-#[derive(Clone, Copy, PartialEq)]
 enum PrepareIntent {
     LegacyForm,
     Internal,
@@ -266,15 +252,11 @@ fn prepare_resolving(
                 name
             });
         }
-        let record = save_session_with_intent(
-            s,
-            &payload,
-            if intent == PrepareIntent::Register {
-                SaveIntent::Register
-            } else {
-                SaveIntent::Replace
-            },
-        )?;
+        let record = if intent == PrepareIntent::Register {
+            sessions::register(s, &payload)?
+        } else {
+            sessions::save(s, &payload)?
+        };
         chat_preparation::finish(repo, request, s, record, false)
     })
 }
@@ -387,17 +369,17 @@ fn quick_in_root(
     let result=repo.preparation_transaction(if review{"pr-review-prepare"}else{"quick-session"},3.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}let mut item=domain::catalog(s).get(text(p,"itemId")).cloned().unwrap_or(Value::Null);if !text(p,"itemId").is_empty()&&item.is_null(){return Err(Error::new("Work item unavailable."));}
 if item.is_null()&&p["scopeSource"]=="github"&&!text(p,"scope").is_empty(){item=arr(&s["items"]).into_iter().find(|i|i["source"]=="github"&&repo_name(i)==text(p,"scope")).unwrap_or(Value::Null);}
  if review{if item["source"]!="github"||item["kind"]!="Pull request"{return Err(Error::new("Choose a GitHub PR."));}
-if let Some(existing)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,existing.clone(),true);}}
+if let Some(existing)=sessions::latest(s,|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,existing,true);}}
  admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map_or("", |x|text(x,"key")));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
  let pr_label=format!("{}{}",repo_name(&item).split('/').next_back().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
  let ids=if text(p,"itemId").is_empty() {json!([])} else {json!([item["id"]])};
  let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});super::sessions::validate_text(&payload)?;
  if new.is_some(){std::fs::create_dir_all(root)?;created=Some(CreatedQuickFolder::create(std::path::Path::new(&cwd))?);if created.as_ref().unwrap().identity.is_none(){return Err(Error::new("The new folder identity could not be verified."));}}
- let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}
-if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}
+ let record=sessions::save_with(s,&payload,|record|{if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}
+if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}})?;
 if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});}
 if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
- *s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)});
+ chat_preparation::finish(repo,request,s,record,false)});
     complete_quick_preparation(result, &mut created)
 }
 pub fn review(repo: &Repository, p: &Value) -> Result<Value> {
@@ -413,7 +395,7 @@ pub(super) fn review_with_request(
         return Err(Error::new("Choose Claude or Codex."));
     }
     repo.preparation_transaction("work-review",30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
-if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="work-review"&&x["agent"]==agent&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let mut record=save_session(s,&json!({"agent":agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}))?;record["workflow"]=json!("work-review");let mut times=json!({});for(source,info)in s["sources"].as_object().unwrap(){times[source]=info["lastSuccess"].clone();}record["reviewSourceTimes"]=times;*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
+if let Some(x)=sessions::latest(s,|x|x["workflow"]=="work-review"&&x["agent"]==agent&&x["launchNew"]==true&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,x,true);}admit()?;let mut times=json!({});for(source,info)in s["sources"].as_object().unwrap(){times[source]=info["lastSuccess"].clone();}let record=sessions::save_with(s,&json!({"agent":agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}),|record|{record["workflow"]=json!("work-review");record["reviewSourceTimes"]=times;})?;chat_preparation::finish(repo,request,s,record,false)})
 }
 pub fn newsletter(repo: &Repository, p: &Value) -> Result<Value> {
     newsletter_with_request(repo, p, None)
@@ -428,7 +410,7 @@ pub(super) fn newsletter_with_request(
         .find(|x| x["id"] == p["presetId"] && x["available"] == true)
         .ok_or_else(|| Error::new("Newsletter skill or folder unavailable."))?;
     repo.preparation_transaction(&format!("newsletter:{}",text(&preset,"id")),30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
-if let Some(x)=arr(&s["sessions"]).iter().rev().find(|x|x["newsletterId"]==preset["id"]&&x["launchNew"]==true&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,x.clone(),true);}admit()?;let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(&preset,"skill"),text(&preset,"command"),text(&preset,"cwd"),text(&preset,"reports"));let mut record=save_session(s,&json!({"agent":preset["agent"],"title":format!("{} · {}",text(&preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}))?;record["workflow"]=json!("newsletter");record["newsletterId"]=preset["id"].clone();*s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)})
+if let Some(x)=sessions::latest(s,|x|x["newsletterId"]==preset["id"]&&x["launchNew"]==true&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,x,true);}admit()?;let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(&preset,"skill"),text(&preset,"command"),text(&preset,"cwd"),text(&preset,"reports"));let record=sessions::save_with(s,&json!({"agent":preset["agent"],"title":format!("{} · {}",text(&preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}),|record|{record["workflow"]=json!("newsletter");record["newsletterId"]=preset["id"].clone();})?;chat_preparation::finish(repo,request,s,record,false)})
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn worktree_metadata(cwd: &str) -> Option<Value> {
@@ -1001,17 +983,17 @@ pub(super) fn recover_with_request(
             .iter()
             .map(|i| i["id"].clone())
             .collect::<Vec<_>>());
-        let mut record = save_session(s, &payload)?;
-        for k in [
-            "workflow",
-            "reviewItemId",
-            "newsletterId",
-            "reviewSourceTimes",
-        ] {
-            record[k] = original[k].clone();
-        }
-        record["recoveryOf"] = original["id"].clone();
-        *s["sessions"].as_array_mut().unwrap().last_mut().unwrap() = record.clone();
+        let record = sessions::save_with(s, &payload, |record| {
+            for k in [
+                "workflow",
+                "reviewItemId",
+                "newsletterId",
+                "reviewSourceTimes",
+            ] {
+                record[k] = original[k].clone();
+            }
+            record["recoveryOf"] = original["id"].clone();
+        })?;
         chat_preparation::finish(repo, request, s, record, false)
     })
 }

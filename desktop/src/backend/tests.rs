@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::sessions;
 use std::sync::Mutex;
 static ENV: Mutex<()> = Mutex::new(());
 fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>) {
@@ -137,7 +138,7 @@ fn registered_tables_are_validated_and_snapshotted() {
     std::fs::create_dir(&folder).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"title":"Table","agent":"claude","cwd":folder,"itemIds":[]}),
             )
@@ -165,7 +166,7 @@ fn hook_events_deduplicate_subagents_and_register_real_conversation() {
     let (_temp, repo) = fixture();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"codex","title":"Hook test","cwd":"/tmp","itemIds":[]}),
             )
@@ -199,7 +200,7 @@ fn hook_events_deduplicate_subagents_and_register_real_conversation() {
 fn rename_session_changes_only_its_display_title_and_timestamp() {
     let mut state = json!({"version":1});
     domain::initialize(&mut state).unwrap();
-    let record = workflows::save_session(
+    let record = sessions::save(
         &mut state,
         &json!({"agent":"claude","title":"Before","cwd":"/tmp","itemIds":[]}),
     )
@@ -227,7 +228,7 @@ fn background_snapshots_keep_shells_monitors_and_timers_out_of_attention_state()
     let (_temp, repo) = fixture();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","title":"Background work","cwd":"/tmp","itemIds":[]}),
             )
@@ -398,7 +399,7 @@ fn artifact_paths_cannot_escape_and_links_are_reversible() {
     std::fs::create_dir(&folder).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","title":"Report","cwd":folder,"itemIds":[]}),
             )
@@ -573,7 +574,7 @@ fn python_artifacts_are_immutable_plain_text_without_running_the_script() {
     std::fs::create_dir(&folder).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"title":"Python artifact","agent":"claude","cwd":folder,"itemIds":[]}),
             )

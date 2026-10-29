@@ -440,7 +440,7 @@ impl Repository {
         self.transaction(|s| match text(p, "action") {
             "save-session" => {
                 super::chat_edit::reject_unchecked_association(s, p)?;
-                super::workflows::save_session(s, p)?;
+                super::sessions::save(s, p)?;
                 Ok(())
             }
             "save-artifact" => {

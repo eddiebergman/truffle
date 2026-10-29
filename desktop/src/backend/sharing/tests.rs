@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::sessions;
 #[test]
 fn saved_chat_open_import_receipt_projection_is_bounded_and_mismatch_stays_unknown() {
     let (_temp, repo) = fixture();
@@ -166,7 +167,7 @@ fn preparation_carries_attached_results_and_keeps_large_previews_off_the_poll_pa
         b"Context Bundle 1.0 test fixture",
     )
     .unwrap();
-    let record=repo.transaction(|s|workflows::save_session(s,&json!({"agent":"claude","cwd":repo.root,"title":"Attached results","destination":"embedded","itemIds":[]}))).unwrap();
+    let record=repo.transaction(|s|sessions::save(s,&json!({"agent":"claude","cwd":repo.root,"title":"Attached results","destination":"embedded","itemIds":[]}))).unwrap();
     let csv = repo.root.join("measurements.csv");
     write(&csv, b"metric,value\np50,12\n").unwrap();
     repo.transaction(|s| {
@@ -258,7 +259,7 @@ fn preparation_reuses_only_matching_conversation_options_without_starting_work()
             // Independent fixtures avoid the owner's deliberate per-action cooldown.
             let (_temp, repo) = fixture();
             let record = repo.transaction(|state| {
-                    let record = workflows::save_session(state, &json!({"agent":"claude","cwd":repo.root,"title":"Registered conversation","destination":"embedded","itemIds":[]}))?;
+                    let record = sessions::save(state, &json!({"agent":"claude","cwd":repo.root,"title":"Registered conversation","destination":"embedded","itemIds":[]}))?;
                     let saved = state["sessions"].as_array_mut().unwrap().iter_mut().find(|saved| saved["id"] == record["id"]).unwrap();
                     saved["sessionId"] = json!(uuid());
                     Ok(saved.clone())

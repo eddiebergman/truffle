@@ -1,8 +1,8 @@
 //! App adapter for the portable Context Bundle / Inbox protocol. No UI layout in storage.
 use super::local_files::{directory as folder_directory, read as folder_read};
 use super::{
-    arr, artifacts, checked, directory, expand, home, json, now, sid, text, uuid, workflows, Error,
-    PathBuf, Repository, Result, Value,
+    arr, artifacts, checked, directory, expand, home, json, now, sessions, sid, text, uuid,
+    workflows, Error, PathBuf, Repository, Result, Value,
 };
 use context_kit::{Bundle, MAX_MANIFEST, MAX_RESOURCE, MAX_TOTAL};
 use reqwest::{blocking::Client, Url};
@@ -2407,14 +2407,11 @@ fn import_session(
 ) -> Result<String> {
     let job_id = sid(job_id)?;
     repo.transaction(|state| {
-        if let Some(record)=arr(&state["sessions"]).into_iter().find(|record|record["sharingImportJobId"]==job_id) {
-            return Ok(text(&record,"id").to_owned());
+        if let Some(record)=sessions::find(state,|record|record["sharingImportJobId"]==job_id) {
+            return Ok(text(record,"id").to_owned());
         }
-        let record=workflows::save_session(state,&json!({"agent":payload["agent"],"cwd":payload["cwd"],"title":title,"instruction":instruction,"destination":"embedded","itemIds":[]}))?;
-        let id=text(&record,"id").to_owned();
-        let saved=state["sessions"].as_array_mut().and_then(|sessions|sessions.iter_mut().find(|record|record["id"]==id)).ok_or_else(|| Error::new("Imported session could not be saved."))?;
-        saved["sharingImportJobId"]=json!(job_id);
-        Ok(id)
+        let record=sessions::save_with(state,&json!({"agent":payload["agent"],"cwd":payload["cwd"],"title":title,"instruction":instruction,"destination":"embedded","itemIds":[]}),|record|record["sharingImportJobId"]=json!(job_id))?;
+        Ok(text(&record,"id").to_owned())
     })
 }
 fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::sessions;
 use crate::backend::workflows;
 #[test]
 fn resources_keep_open_metadata_and_update_without_erasing_other_resources() {
@@ -6,7 +7,7 @@ fn resources_keep_open_metadata_and_update_without_erasing_other_resources() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","title":"Resource test","cwd":temp.path(),"itemIds":[]}),
             )
@@ -33,7 +34,7 @@ fn bad_resource_reports_do_not_partially_modify_sessions() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"codex","title":"Resources","cwd":temp.path()}),
             )
@@ -48,7 +49,7 @@ fn bad_resource_reports_do_not_partially_modify_sessions() {
 fn replacement_fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>, String) {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let record=repo.transaction(|s|workflows::save_session(s,&json!({"agent":"claude","title":"Replacement fixture","cwd":temp.path(),"itemIds":[]}))).unwrap();
+    let record=repo.transaction(|s|sessions::save(s,&json!({"agent":"claude","title":"Replacement fixture","cwd":temp.path(),"itemIds":[]}))).unwrap();
     let id = text(&record, "id").to_owned();
     apply(&repo,&id,&json!({"resources":[{"id":"A","provider":"local","kind":"monitor","purpose":"Keep history"}]})).unwrap();
     (temp, repo, id)
@@ -253,7 +254,7 @@ fn staged_reports_import_once_and_new_state_does_not_inherit_old_observation() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let record = repo
         .transaction(|s| {
-            workflows::save_session(
+            sessions::save(
                 s,
                 &json!({"agent":"claude","title":"Imported resources","cwd":temp.path()}),
             )
