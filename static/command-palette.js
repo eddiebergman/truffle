@@ -112,26 +112,29 @@ function commandEntries() {
         () => viewArtifact(result),
       );
     }
+    const addResourceLink = (resource, ref) => {
+      try {
+        const url = new URL(ref.value);
+        if (
+          !["https:", "http:"].includes(url.protocol) ||
+          url.username ||
+          url.password
+        ) {
+          return;
+        }
+        add(
+          "open",
+          `resource · ${resource.name || resource.id} · ${ref.category}`,
+          resource.state || "Unknown",
+          () => openCommandLink(url.href),
+        );
+      } catch {
+        // Not a URL; offer no link for this reference.
+      }
+    };
     for (const resource of record.resources || []) {
       for (const ref of resourceLinks(resource)) {
-        try {
-          const url = new URL(ref.value);
-          if (
-            !["https:", "http:"].includes(url.protocol) ||
-            url.username ||
-            url.password
-          ) {
-            continue;
-          }
-          add(
-            "open",
-            `resource · ${resource.name || resource.id} · ${ref.category}`,
-            resource.state || "Unknown",
-            () => openCommandLink(url.href),
-          );
-        } catch {
-          // Not a URL; offer no link for this reference.
-        }
+        addResourceLink(resource, ref);
       }
     }
     add("copy", "work links", record.title, () =>

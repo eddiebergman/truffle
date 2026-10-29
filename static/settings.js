@@ -293,15 +293,18 @@ async function loadAppSettings({ canApply = () => true } = {}) {
     if (themes) {
       window.truffleThemeCatalog = themes;
     }
+    const rollback = () => {
+      appSettings = identity;
+      if (themes && window.truffleThemeCatalog === themes) {
+        window.truffleThemeCatalog = catalog;
+      }
+    };
     if (changed) {
       try {
         applyAppSettings();
       } catch (error) {
         if (appSettings === next) {
-          appSettings = identity;
-          if (themes && window.truffleThemeCatalog === themes) {
-            window.truffleThemeCatalog = catalog;
-          }
+          rollback();
         }
         throw error;
       }

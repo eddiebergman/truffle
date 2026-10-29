@@ -186,6 +186,7 @@ const rules = {
   "object-shorthand": "error",
   "prefer-template": "error",
   radix: "error",
+  "max-depth": ["error", 4],
   "no-param-reassign": "error",
   "no-shadow": "error",
   // Functions run after the whole script has loaded, so they may use later

@@ -175,6 +175,16 @@ briefingMarkdown.core.ruler.after(
             .map((x) => x.attrGet("href"))
             .filter(Boolean),
         );
+      // A reference links only when the first index that knows it has one URL.
+      const uniqueTarget = (key) => {
+        for (const index of [local, report, catalog]) {
+          if (index.has(key)) {
+            const candidates = index.get(key);
+            return candidates.size === 1 ? [...candidates][0] : null;
+          }
+        }
+        return null;
+      };
       let linkDepth = 0;
       const output = [];
       for (const token of children) {
@@ -192,16 +202,7 @@ briefingMarkdown.core.ruler.after(
         for (const match of token.content.matchAll(workReferencePattern)) {
           const reference = match[2],
             key = reference.toLowerCase();
-          let target = null;
-          for (const index of [local, report, catalog]) {
-            if (index.has(key)) {
-              const candidates = index.get(key);
-              if (candidates.size === 1) {
-                target = [...candidates][0];
-              }
-              break;
-            }
-          }
+          const target = uniqueTarget(key);
           if (!target) {
             continue;
           }

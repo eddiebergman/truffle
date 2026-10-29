@@ -948,16 +948,16 @@ if (typeof document !== "undefined") {
               const notes = document.createElement("details"),
                 heading = document.createElement("summary");
               heading.textContent = `Preparation notes (${draft.notices.length})`;
-              notes.append(heading);
-              for (const note of draft.notices) {
-                notes.append(
+              notes.append(
+                heading,
+                ...draft.notices.map((note) =>
                   el(
                     "p",
                     "sharing-note",
                     typeof note === "string" ? note : JSON.stringify(note),
                   ),
-                );
-              }
+                ),
+              );
               target.append(notes);
             }
           } else {

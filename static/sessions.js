@@ -1183,6 +1183,20 @@ async function openSavedSession(
     button.disabled = true;
     button.textContent = entry.receipt ? "Checking terminal…" : "Opening…";
   }
+  const rejectOpen = (error) => {
+    savedSessionOpens.delete(id);
+    if (current()) {
+      showSessionRecovery(
+        state.sessions.find((row) => row.id === id) || session,
+        error.message,
+      );
+    }
+    return {
+      status: "rejected",
+      presentation: "pending",
+      error: error.message,
+    };
+  };
   try {
     if (!entry.receipt) {
       try {
@@ -1195,18 +1209,7 @@ async function openSavedSession(
         }
       } catch (error) {
         if ([400, 401, 403, 404, 409].includes(error.status)) {
-          savedSessionOpens.delete(id);
-          if (current()) {
-            showSessionRecovery(
-              state.sessions.find((row) => row.id === id) || session,
-              error.message,
-            );
-          }
-          return {
-            status: "rejected",
-            presentation: "pending",
-            error: error.message,
-          };
+          return rejectOpen(error);
         }
         entry.receipt = {
           status: "unknown",

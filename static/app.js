@@ -809,6 +809,20 @@ function visibilityButton(record, session = false) {
       hidden = Boolean(record.hidden),
       text = hidden ? "Shown again." : "Hidden.";
     let result;
+    const refreshDialogItem = () => {
+      try {
+        const item = allItems().find((x) => x.id === dialogItem.id);
+        if (item) {
+          renderItemSessions(item);
+        }
+      } catch (error) {
+        result = {
+          kind: "accepted",
+          presentation: "pending",
+          error: error.message || "The item view could not refresh.",
+        };
+      }
+    };
     try {
       result = session
         ? (await mutateChatMetadata("chats.visibility", {
@@ -830,18 +844,7 @@ function visibilityButton(record, session = false) {
           currentItem === dialogItem &&
           dialogItem
         ) {
-          try {
-            const item = allItems().find((x) => x.id === dialogItem.id);
-            if (item) {
-              renderItemSessions(item);
-            }
-          } catch (error) {
-            result = {
-              kind: "accepted",
-              presentation: "pending",
-              error: error.message || "The item view could not refresh.",
-            };
-          }
+          refreshDialogItem();
         }
         const undo =
           result.presentation === "ready"
