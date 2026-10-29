@@ -1,11 +1,7 @@
-use super::{arr, domain, json, now, sid, text, Error, Repository, Result, Value};
+use super::{arr, domain, json, now, sessions, sid, text, Error, Repository, Result, Value};
 
 fn linked_prs(state: &Value, id: &str) -> Result<Vec<Value>> {
-    sid(id)?;
-    let session = arr(&state["sessions"])
-        .into_iter()
-        .find(|s| s["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))?;
+    let session = sessions::get(state, id)?;
     let ids = arr(&session["items"])
         .iter()
         .map(|i| text(i, "id").to_owned())
@@ -84,7 +80,7 @@ fn apply(state: &mut Value, changed: &[Value]) {
             *row = new.clone();
         }
         state["itemArchive"][id] = new.clone();
-        for session in state["sessions"].as_array_mut().unwrap() {
+        for session in sessions::all_mut(state) {
             for item in session["items"].as_array_mut().unwrap() {
                 if item["id"] == id {
                     *item = domain::item_ref(new);
@@ -278,12 +274,7 @@ pub(super) fn investigation_in_state(state: &mut Value, p: &Value) -> Result<Val
     if !linked_prs(state, id)?.iter().any(|pr| pr["id"] == item) {
         return Err(Error::new("This PR is not linked to the chat."));
     }
-    let session = state["sessions"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|s| s["id"] == id)
-        .unwrap();
+    let session = sessions::get_mut(state, id)?;
     if !session["ciInvestigations"].is_object() {
         session["ciInvestigations"] = json!({});
     }
@@ -322,13 +313,7 @@ pub(super) fn cancel_dispatch(
     item: &str,
     operation: &str,
 ) -> Result<()> {
-    let index = state["sessions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .position(|record| record["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))?;
-    let progress = &mut state["sessions"][index]["ciInvestigations"][item];
+    let progress = &mut sessions::get_mut(state, id)?["ciInvestigations"][item];
     if progress["id"] == operation && ["queued", "investigating"].contains(&text(progress, "state"))
     {
         progress["state"] = json!("cancelled");

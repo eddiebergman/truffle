@@ -1,5 +1,5 @@
 //! Agent-reported resource metadata. Reporting never provisions, polls or stops cloud resources.
-use super::{arr, checked, json, repository, sid, text, Error, Repository, Result, Value};
+use super::{arr, checked, json, repository, sessions, text, Error, Repository, Result, Value};
 fn short(v: &Value, key: &str, max: usize) -> String {
     text(v, key).chars().take(max).collect()
 }
@@ -43,7 +43,7 @@ pub(super) fn replace_entries(s: &mut Value, id: &str, entries: &Value) -> Resul
     save_mode(s, id, &json!({"resources":entries}), SaveMode::Replace)
 }
 fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<Value> {
-    sid(id)?;
+    let stored = arr(&sessions::get(s, id)?["resources"]);
     if serde_json::to_vec(report)?.len() > 64 * 1024 {
         return Err(Error::new("Resource report exceeds 64 KiB."));
     }
@@ -59,13 +59,9 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
                 "Report up to {limit} resources as a resources array."
             ))
         })?;
-    let index = arr(&s["sessions"])
-        .iter()
-        .position(|r| r["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))?;
     let mut resources = match mode {
         SaveMode::Replace => vec![],
-        SaveMode::Merge => arr(&s["sessions"][index]["resources"]),
+        SaveMode::Merge => stored,
     };
     for entry in entries {
         if !entry.is_object() {
@@ -142,8 +138,9 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
             "This conversation already tracks 128 resources.",
         ));
     }
-    s["sessions"][index]["resources"] = json!(resources);
-    Ok(s["sessions"][index].clone())
+    let record = sessions::get_mut(s, id)?;
+    record["resources"] = json!(resources);
+    Ok(record.clone())
 }
 /// Seed reports collected from existing agents without editing a live service's state file.
 pub fn import_pending(repo: &Repository) {

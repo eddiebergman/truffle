@@ -202,9 +202,10 @@ fn prepare_resolving(
             return Ok(existing);
         }
         if request.is_some_and(|request| request.kind == "attach") {
-            if let Some(existing) = arr(&s["sessions"])
-                .into_iter()
-                .find(|row| row["agent"] == p["agent"] && row["sessionId"] == p["sessionId"])
+            if let Some(existing) = sessions::find(s, |row| {
+                row["agent"] == p["agent"] && row["sessionId"] == p["sessionId"]
+            })
+            .cloned()
             {
                 return chat_preparation::finish(repo, request, s, existing, true);
             }
@@ -465,13 +466,7 @@ fn save_worktree_with_folders(
     primary: bool,
     folder_intent: FolderIntent,
 ) -> Result<Value> {
-    let index = s["sessions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .position(|x| x["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))?;
-    let record = s["sessions"][index].clone();
+    let record = sessions::get(s, id)?.clone();
     let linked = arr(&record["items"]);
     if ids
         .iter()
@@ -509,7 +504,7 @@ fn save_worktree_with_folders(
         return Err(Error::new("A session can link at most 64 worktrees."));
     }
     trees.push(entry);
-    let row = &mut s["sessions"][index];
+    let row = sessions::get_mut(s, id)?;
     row["worktrees"] = json!(trees);
     if primary {
         row["cwd"] = metadata["path"].clone();
@@ -531,7 +526,7 @@ fn save_worktree_with_folders(
         s["itemSettings"][key]["cwd"] = metadata["path"].clone();
         s["itemSettings"][key]["explicit"] = json!(true);
     }
-    Ok(s["sessions"][index].clone())
+    Ok(sessions::get(s, id)?.clone())
 }
 pub fn registration_reply(record: &Value) -> Value {
     if !record["commandResult"].is_null() {
@@ -591,11 +586,7 @@ fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
     let metadata = worktree_metadata(&path).ok_or_else(|| {
         Error::new("Choose an existing Git repository or worktree with a commit.")
     })?;
-    let state = repo.state.lock().unwrap().clone();
-    let record = arr(&state["sessions"])
-        .into_iter()
-        .find(|x| x["id"] == p["id"])
-        .ok_or_else(|| Error::new("Session unavailable."))?;
+    let record = sessions::get(&repo.state.lock().unwrap(), text(p, "id"))?.clone();
     let mut ids = arr(&p["itemIds"]);
     let urls = arr(&p["urls"]);
     if ids.len() + urls.len() > 100 {
@@ -692,12 +683,7 @@ fn complete_skill_runs(s: &mut Value, session_id: &Value) {
     }
 }
 fn apply_runtime_event(s: &mut Value, p: &Value) -> Result<Value> {
-    let row = s["sessions"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|x| x["id"] == p["id"])
-        .ok_or_else(|| Error::new("Session unavailable."))?;
+    let row = sessions::get_mut(s, text(p, "id"))?;
     if p["event"] == "SessionStart" && !text(p, "sessionId").is_empty() {
         let id = sid(text(p, "sessionId"))?;
         if text(row, "sessionId").is_empty() {
@@ -757,12 +743,7 @@ fn register_runtime(repo: &Repository, p: &Value) -> Result<Value> {
         return Err(Error::new("Subagent count must be 0–1000."));
     }
     repo.transaction(|s| {
-        let row = s["sessions"]
-            .as_array_mut()
-            .unwrap()
-            .iter_mut()
-            .find(|x| x["id"] == p["id"])
-            .ok_or_else(|| Error::new("Session unavailable."))?;
+        let row = sessions::get_mut(s, text(p, "id"))?;
         let reason = checked(p, "reason", 32, false)?;
         if !["", "ready", "finished", "question", "approval", "failed"].contains(&reason.as_str()) {
             return Err(Error::new("Invalid attention reason."));
@@ -773,13 +754,7 @@ fn register_runtime(repo: &Repository, p: &Value) -> Result<Value> {
     })
 }
 fn save_session_output(repo: &Repository, p: &Value) -> Result<Value> {
-    let record = {
-        let s = repo.state.lock().unwrap();
-        arr(&s["sessions"])
-            .into_iter()
-            .find(|x| x["id"] == p["id"])
-            .ok_or_else(|| Error::new("Session record no longer exists."))?
-    };
+    let record = sessions::get(&repo.state.lock().unwrap(), text(p, "id"))?.clone();
     if p["operation"] == "save-artifact" {
         let receipt = super::artifacts::attach_to_chat(repo, text(&record, "id"), p)?;
         let mut reply = record;
@@ -802,12 +777,9 @@ fn agent_command(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
     let id = sid(text(p, "id"))?;
     let entry = json!({"id": uuid(), "name": name, "at": now()});
     repo.transaction(|s| {
-        let record = s["sessions"]
-            .as_array_mut()
-            .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
-            .ok_or_else(|| {
-                Error::new("Pass this chat's --record ID so the chat can show the command.")
-            })?;
+        let record = sessions::get_mut(s, &id).map_err(|_| {
+            Error::new("Pass this chat's --record ID so the chat can show the command.")
+        })?;
         let mut log = arr(&record["agentCommands"]);
         log.push(entry.clone());
         let excess = log.len().saturating_sub(AGENT_COMMAND_LOG);
@@ -819,9 +791,8 @@ fn agent_command(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
     let ok = result.is_ok();
     // The command already ran; failing to store its outcome must not report it as failed.
     let _ = repo.transaction(|s| {
-        if let Some(logged) = s["sessions"]
-            .as_array_mut()
-            .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
+        if let Some(logged) = sessions::get_mut(s, &id)
+            .ok()
             .and_then(|record| record["agentCommands"].as_array_mut())
             .and_then(|log| log.iter_mut().find(|row| row["id"] == entry["id"]))
         {
@@ -906,12 +877,7 @@ fn finish_registration(
         .map(|x| x["id"].clone())
         .collect::<Vec<_>>();
     repo.transaction(|s| {
-        let latest = arr(&s["sessions"])
-            .into_iter()
-            .find(|row| row["id"] == record["id"])
-            .ok_or_else(|| {
-                Error::new("Session record was removed after registration. It was not recreated.")
-            })?;
+        let latest = sessions::get(s, text(record, "id"))?.clone();
         // Git metadata belongs to the probed folder, not a later folder edit.
         if latest["cwd"] == record["cwd"] {
             let current_ids = ids
@@ -940,12 +906,7 @@ fn finish_registration(
                 }
             }
         }
-        let row = s["sessions"]
-            .as_array_mut()
-            .unwrap()
-            .iter_mut()
-            .find(|row| row["id"] == record["id"])
-            .ok_or_else(|| Error::new("Session record no longer exists."))?;
+        let row = sessions::get_mut(s, text(record, "id"))?;
         row["launchNew"] = json!(false);
         Ok(row.clone())
     })
@@ -962,16 +923,13 @@ pub(super) fn recover_with_request(
         if let Some(existing) = chat_preparation::lookup(repo, request, s)? {
             return Ok(existing);
         }
-        let original = arr(&s["sessions"])
-            .into_iter()
-            .find(|x| x["id"] == p["id"])
-            .ok_or_else(|| Error::new("Original session unavailable."))?;
-        if let Some(pending) = arr(&s["sessions"])
-            .iter()
-            .rev()
-            .find(|x| x["recoveryOf"] == original["id"] && x["launchNew"] == true)
+        let original = sessions::get(s, text(p, "id"))?.clone();
+        if let Some(pending) = sessions::latest(s, |x| {
+            x["recoveryOf"] == original["id"] && x["launchNew"] == true
+        })
+        .cloned()
         {
-            return chat_preparation::finish(repo, request, s, pending.clone(), true);
+            return chat_preparation::finish(repo, request, s, pending, true);
         }
         let mut payload = original.clone();
         payload.as_object_mut().unwrap().remove("id");
@@ -1002,24 +960,21 @@ pub fn context(repo: &Repository, id: &str) -> Result<String> {
     context_from_state(repo, id, &snapshot)
 }
 fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> {
-    let record = arr(&s["sessions"])
-        .into_iter()
-        .find(|x| x["id"] == id)
-        .ok_or_else(|| Error::new("Session unavailable."))?;
+    let record = sessions::get(s, id)?;
     let helper = super::agent_cli::helper(&repo.root)?;
     let register = format!(
         "{helper} register --record {} --agent {} --title {} --cwd {}{}",
         sid(id)?,
-        text(&record, "agent"),
-        terminal::quote(text(&record, "title")),
-        terminal::quote(text(&record, "cwd")),
-        if text(&record, "sessionId").is_empty() {
+        text(record, "agent"),
+        terminal::quote(text(record, "title")),
+        terminal::quote(text(record, "cwd")),
+        if text(record, "sessionId").is_empty() {
             String::new()
         } else {
-            format!(" --session {}", sid(text(&record, "sessionId"))?)
+            format!(" --session {}", sid(text(record, "sessionId"))?)
         }
     );
-    let mut sections=vec![format!("# {}\n\n## Your instruction\n{}\n\n## Working directory\n{}\n\n## Dashboard registration\nBefore your first reply, register this conversation with truffle. Do not create a placeholder project.\n{register}\nThe helper reads CODEX_THREAD_ID or CLAUDE_CODE_SESSION_ID. If unavailable, ask for the exact UUID. Do not guess.\nRegister again with the same --record and --url when related work is supplied or created. Keep existing links. Register the actual selected worktree cwd.\nDo not start or resume another conversation to register.\n\n## Handoff notes\nSave a short checkpoint JSON with done, blocked, and next.\n{helper} checkpoint --record {id} --file /absolute/path/checkpoint.json\n\n## Save artifacts\nAttach each final display output; this does not upload the file.\n{helper} artifact --record {id} --file /absolute/path/report.md --title 'Review report'\nUse --url for an existing HTTPS artifact. Never invent a URL. Prefer saving reports as Markdown, tables as UTF-8 CSV with headers (or truffle.table/v1 JSON), and plots as PNG/WebP. Python scripts can be attached directly as .py artifacts for a read-only code preview; do not wrap them in Markdown merely to attach them. Register every finished result so it renders in the agent workspace; do not make the user read large tables in the terminal. Local outputs are snapshotted.\n",text(&record,"title"),text(&record,"instruction"),text(&record,"cwd"))];
+    let mut sections=vec![format!("# {}\n\n## Your instruction\n{}\n\n## Working directory\n{}\n\n## Dashboard registration\nBefore your first reply, register this conversation with truffle. Do not create a placeholder project.\n{register}\nThe helper reads CODEX_THREAD_ID or CLAUDE_CODE_SESSION_ID. If unavailable, ask for the exact UUID. Do not guess.\nRegister again with the same --record and --url when related work is supplied or created. Keep existing links. Register the actual selected worktree cwd.\nDo not start or resume another conversation to register.\n\n## Handoff notes\nSave a short checkpoint JSON with done, blocked, and next.\n{helper} checkpoint --record {id} --file /absolute/path/checkpoint.json\n\n## Save artifacts\nAttach each final display output; this does not upload the file.\n{helper} artifact --record {id} --file /absolute/path/report.md --title 'Review report'\nUse --url for an existing HTTPS artifact. Never invent a URL. Prefer saving reports as Markdown, tables as UTF-8 CSV with headers (or truffle.table/v1 JSON), and plots as PNG/WebP. Python scripts can be attached directly as .py artifacts for a read-only code preview; do not wrap them in Markdown merely to attach them. Register every finished result so it renders in the agent workspace; do not make the user read large tables in the terminal. Local outputs are snapshotted.\n",text(record,"title"),text(record,"instruction"),text(record,"cwd"))];
     sections.push(format!("\n## Worktree reporting\nRead {} for the truffle reporting protocol. After creating, selecting, or switching a worktree, immediately re-run registration with this same record/conversation UUID and --cwd set to the actual worktree. Include its ticket/PR URLs. This records the branch, main repository, worktree and work-item associations and makes Continue use that directory. Reuse an existing matching worktree under ~/code/<repo> before creating ~/code/<repo>/.worktrees/<task>. Do not move existing worktrees. For additional worktrees in this conversation, register their work URLs first, then use: {helper} worktree --record {id} --path /absolute/worktree --url https://verified-work-url [--primary]. Omit --primary for secondary worktrees; it changes the resume directory when supplied. Do not guess links or create worktrees just for registration.\n",repo.data.parent().unwrap().join("runtime-docs/truffle.md").display()));
     sections.push(format!("\n## Resource reporting\nWhen you create, reuse, resize, stop or learn the status of a VM, GPU pool, dev environment, deploy job, or monitor, report it to this session. Read the resource section of {}. Write a JSON object with a resources array, each with provider, kind, id, state and useful purpose, uris, cleanup and observedAt metadata, then run: {helper} resource --record {id} --file /absolute/path/resources.json. Use exact known identifiers. Report unknown or stale state honestly; do not perform expensive checks merely for reporting. Update meaningful lifecycle changes. Reporting never authorizes provisioning or cleanup, and closing a terminal does not stop its cloud resources.\n",repo.data.parent().unwrap().join("runtime-docs/truffle.md").display()));
     sections.push(format!("\n## Replace stale dashboard context\nRegistration adds links. To replace or remove stale resources, worktree links, work links, or artifact links, read the context section of the truffle skill. Use {helper} context --record {id} --show, then keep the exact captured revision and submit a JSON file with that revision plus only the arrays to replace using context --record {id} --file /absolute/path/context.json. The revision is required; missing, invalid or stale revisions fail without changing context. Read again and reapply the intended edits after a conflict. Omitted arrays stay unchanged; empty arrays clear their dashboard links. These operations never delete resources, files, worktrees, or conversations.\n"));
@@ -1064,8 +1019,8 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
                 related.extend(ids.iter().filter_map(|i| i.as_str().map(str::to_owned)));
             }
         }
-        let mut handoffs = arr(&s["sessions"])
-            .into_iter()
+        let mut handoffs = sessions::all(s)
+            .iter()
             .filter(|row| {
                 row["id"] != id
                     && row["archivedAt"].is_null()
@@ -1210,7 +1165,7 @@ fn open_unregistered_codex(
 ) -> Result<Value> {
     match observation {
         terminal::RuntimeObservation::Observed(generation)=>{
-            let eligible=arr(&repo.state.lock().map_err(|_|Error::io())?["sessions"]).into_iter().any(|row|row["id"]==id&&row["agent"]=="codex"&&row["launchNew"]==false&&(row["sessionId"].is_null()||row["sessionId"]=="")&&(intent=="embedded"||row["destination"]!="desktop"));
+            let eligible=sessions::get(&*repo.state.lock().map_err(|_|Error::io())?,id).is_ok_and(|row|row["agent"]=="codex"&&row["launchNew"]==false&&(row["sessionId"].is_null()||row["sessionId"]=="")&&(intent=="embedded"||row["destination"]!="desktop"));
             if !eligible{return Ok(open_receipt(id,"embedded","unknown",false));}
             let mut projected=generation.clone();commands::redact_text(repo,&mut projected);if projected!=generation{return Err(Error::new("Terminal generation cannot be safely projected."));}let mut receipt=open_receipt(id,"embedded","accepted",true);receipt["terminal"]=json!({"state":"observed","generation":generation});receipt["message"]=json!("Existing terminal found. No new open request was sent.");Ok(receipt)},
         terminal::RuntimeObservation::Unavailable=>Ok(open_receipt(id,"embedded","unknown",false)),
@@ -1265,10 +1220,7 @@ fn open_chat_observing(
     {
         let saved_desktop = {
             let state = repo.state.lock().map_err(|_| Error::io())?;
-            state["sessions"]
-                .as_array()
-                .and_then(|rows| rows.iter().find(|row| row["id"] == id))
-                .is_some_and(|row| row["destination"] == "desktop")
+            sessions::get(&state, &id).is_ok_and(|row| row["destination"] == "desktop")
         };
         let target = if intent == "embedded" || !saved_desktop {
             "embedded"
@@ -1282,11 +1234,7 @@ fn open_chat_observing(
         id: id.clone(),
     };
     let (snapshot, public) = repo.capture_for_open()?;
-    let mut record = snapshot["sessions"]
-        .as_array()
-        .and_then(|rows| rows.iter().find(|row| row["id"] == id))
-        .cloned()
-        .ok_or_else(|| Error::new("Session unavailable."))?;
+    let mut record = sessions::get(&snapshot, &id)?.clone();
     let target = if intent == "embedded" || record["destination"] != "desktop" {
         "embedded"
     } else {
@@ -1342,10 +1290,7 @@ fn open_chat_observing(
     // context is never replayed over newer metadata or work links.
     let saved = repo
         .transaction_if_changed(|state| {
-            let row = state["sessions"]
-                .as_array_mut()
-                .and_then(|rows| rows.iter_mut().find(|row| row["id"] == id))
-                .ok_or_else(|| Error::new("The saved chat is no longer present."))?;
+            let row = sessions::get_mut(state, &id)?;
             row["launchNew"] = json!(false);
             row["lastOpenedAt"] = json!(now());
             if target == "embedded" && outcome == terminal::OpenOutcome::Accepted {

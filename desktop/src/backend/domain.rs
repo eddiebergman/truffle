@@ -108,7 +108,7 @@ pub fn catalog(s: &Value) -> BTreeMap<String, Value> {
         .into_iter()
         .flat_map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())))
         .collect();
-    for session in arr(&s["sessions"]) {
+    for session in super::sessions::all(s) {
         for i in arr(&session["items"]) {
             result.entry(text(&i, "id").into()).or_insert(i);
         }
@@ -183,8 +183,8 @@ pub fn bundles(s: &Value) -> Value {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    for session in arr(&s["sessions"]) {
-        if !["work-review", "newsletter"].contains(&text(&session, "workflow")) {
+    for session in super::sessions::all(s) {
+        if !["work-review", "newsletter"].contains(&text(session, "workflow")) {
             edges.push(
                 arr(&session["items"])
                     .iter()
@@ -410,12 +410,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
     match action {
         "rename-session" => {
             let title = checked(p, "title", 180, true)?;
-            let row = s["sessions"]
-                .as_array_mut()
-                .unwrap()
-                .iter_mut()
-                .find(|row| row["id"] == key)
-                .ok_or_else(|| Error::new("Session unavailable."))?;
+            let row = super::sessions::get_mut(s, key)?;
             row["title"] = json!(title);
             row["updatedAt"] = json!(now());
         }
@@ -434,17 +429,16 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 .collect::<Vec<_>>());
         }
         "archive-project" | "archive-session" | "hide-session" => {
-            let collection = if action == "archive-project" {
-                "notes"
+            let row = if action == "archive-project" {
+                s["notes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|x| x["id"] == key)
+                    .ok_or_else(|| Error::new("Record no longer exists."))?
             } else {
-                "sessions"
+                super::sessions::get_mut(s, key)?
             };
-            let row = s[collection]
-                .as_array_mut()
-                .unwrap()
-                .iter_mut()
-                .find(|x| x["id"] == key)
-                .ok_or_else(|| Error::new("Record no longer exists."))?;
             if action == "hide-session" {
                 if !p["hidden"].is_boolean() {
                     return Err(Error::new("Choose a visibility setting."));
@@ -473,18 +467,13 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
         }
         "checkpoint" => {
             let value = json!({"done":checked(p,"done",4000,false)?,"blocked":checked(p,"blocked",4000,false)?,"next":checked(p,"next",4000,false)?,"at":now()});
-            let session = s["sessions"]
-                .as_array_mut()
-                .unwrap()
-                .iter_mut()
-                .find(|x| x["id"] == key)
-                .ok_or_else(|| Error::new("Session no longer exists."))?;
-            session["checkpoint"] = value;
+            super::sessions::get_mut(s, key)?["checkpoint"] = value;
         }
         "save-briefing" => {
-            let session = arr(&s["sessions"])
-                .into_iter()
-                .find(|x| x["id"] == key && x["workflow"] == "work-review")
+            let session = super::sessions::get(s, key)
+                .ok()
+                .filter(|x| x["workflow"] == "work-review")
+                .cloned()
                 .ok_or_else(|| Error::new("Choose a Work review session."))?;
             let body = checked(p, "body", 24000, true)?;
             let mut reports = arr(&s["briefings"]);
