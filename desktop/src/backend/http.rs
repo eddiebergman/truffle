@@ -7,6 +7,7 @@ use super::{artifacts, workflows};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{
+    fmt::Write as _,
     fs::OpenOptions,
     io::{Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
@@ -69,10 +70,11 @@ fn claim_sentry_environment(repo: &Repository, environment: &str) -> Result<bool
         Ok(true)
     })
 }
-fn json_response(status: u16, value: Value) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+type Reply = tiny_http::Response<std::io::Cursor<Vec<u8>>>;
+fn json_response(status: u16, value: &Value) -> Reply {
     response(
         status,
-        serde_json::to_vec(&value).unwrap_or_default(),
+        serde_json::to_vec(value).unwrap_or_default(),
         "application/json",
         false,
     )
@@ -128,178 +130,15 @@ fn handle(
 ) {
     let result = (|| -> Result<tiny_http::Response<std::io::Cursor<Vec<u8>>>> {
         if header(&req, "Host") != authority {
-            return Ok(json_response(403, json!({"error":"Invalid host."})));
+            return Ok(json_response(403, &json!({"error":"Invalid host."})));
         }
         let path = req.url().split('?').next().unwrap_or("").to_string();
         let origin = format!("http://{authority}");
         if req.method() == &tiny_http::Method::Get {
-            return Ok(match path.as_str() {
-                "/api/health" => json_response(
-                    200,
-                    json!({"service":"truffle","apiVersion":1,"storageVersion":1,"backend":"rust"}),
-                ),
-                "/api/state" => {
-                    let mut state = repo.snapshot(false);
-                    state["csrf"] = json!(csrf);
-                    json_response(200, state)
-                }
-                "/api/app-chat" => json_response(200, repo.app_chat.view(repo)),
-                "/api/app-chat/skill" => json_response(200, super::app_chat::guide()),
-                "/api/themes" => json_response(200, repo.settings.themes()?),
-                "/api/settings" => json_response(200, repo.settings.view()),
-                "/api/config-status" => json_response(200, super::config_status::view(repo)),
-                "/api/quick-actions" => json_response(200, repo.quick_actions.view()),
-                "/api/export" => json_response(200, repo.snapshot(true)),
-                "/api/agents" => json_response(200, repo.inventory()),
-                "/api/gcp-auth" => json_response(200, repo.gcp_auth.view()),
-                "/api/views" => json_response(200, super::views::view(repo)?),
-                "/api/page-settings" => json_response(200, super::page_settings::view(repo)?),
-                "/api/feedback" => json_response(200, super::feedback::view(repo)?),
-                "/api/guidance" => json_response(200, super::guidance::view(repo)?),
-                "/api/onboarding" => json_response(200, super::onboarding::view(repo)),
-                "/api/commands" => json_response(200, super::commands::catalog()),
-                "/api/logs" => json_response(200, repo.logs()),
-                "/api/sharing" => json_response(200, super::sharing::view(repo)),
-                "/api/library" => {
-                    let s = repo.state.lock().unwrap();
-                    json_response(200, artifacts::catalog(repo, &s)?)
-                }
-                p if p.starts_with("/artifacts/") => {
-                    let (bytes, kind) = artifacts::read(repo, p.trim_start_matches("/artifacts/"))?;
-                    response(200, bytes, &kind, true)
-                }
-                p if p.starts_with("/linear/") => {
-                    let id = p.trim_start_matches("/linear/");
-                    if !regex::Regex::new(r"^[A-Z][A-Z0-9]*-[0-9]+$")
-                        .unwrap()
-                        .is_match(id)
-                    {
-                        return Err(Error::new("Invalid Linear identifier."));
-                    }
-                    let cached = {
-                        let s = repo.state.lock().unwrap();
-                        domain::catalog(&s)
-                            .values()
-                            .find(|x| x["source"] == "linear" && x["reference"] == id)
-                            .map(|x| text(x, "url").to_owned())
-                            .or_else(|| s["linearLinks"][id].as_str().map(str::to_owned))
-                    };
-                    let url = if let Some(v) = cached {
-                        v
-                    } else {
-                        let v = repo.providers.linear_url(id)?;
-                        repo.transaction(|s| {
-                            s["linearLinks"][id] = json!(v);
-                            Ok(())
-                        })?;
-                        v
-                    };
-                    let mut response = response(302, vec![], "text/plain", false);
-                    response.add_header(tiny_http::Header::from_bytes("Location", url).unwrap());
-                    response
-                }
-                "/favicon.ico" => response(204, vec![], "image/x-icon", false),
-                p => {
-                    if let Some(name) = p.strip_prefix("/vendor/diffs/") {
-                        if !name.ends_with(".js")
-                            || !name
-                                .chars()
-                                .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-                        {
-                            return Ok(json_response(404, json!({"error":"Not found."})));
-                        }
-                        let bytes = super::assets::asset(&format!("vendor/diffs/{name}"))
-                            .ok_or_else(|| Error::new("Asset unavailable."))?
-                            .to_vec();
-                        return Ok(response(
-                            200,
-                            bytes,
-                            "text/javascript; charset=utf-8",
-                            false,
-                        ));
-                    }
-                    let file = match p {
-                        "/" | "/index.html" => "index.html",
-                        "/app.js" => "app.js",
-                        "/settings.js" => "settings.js",
-                        "/configuration.js" => "configuration.js",
-                        "/settings-profile.js" => "settings-profile.js",
-                        "/settings-profile.css" => "settings-profile.css",
-                        "/product-tools.js" => "product-tools.js",
-                        "/product-tools.css" => "product-tools.css",
-                        "/onboarding.js" => "onboarding.js",
-                        "/guidance.js" => "guidance.js",
-                        "/page-settings.js" => "page-settings.js",
-                        "/page-settings.css" => "page-settings.css",
-                        "/views.js" => "views.js",
-                        "/views.css" => "views.css",
-                        "/feedback.js" => "feedback.js",
-                        "/chat-attachments.js" => "chat-attachments.js",
-                        "/chat-results.js" => "chat-results.js",
-                        "/chat-results.css" => "chat-results.css",
-                        "/guidance.css" => "guidance.css",
-                        "/onboarding.css" => "onboarding.css",
-                        "/presentation.js" => "presentation.js",
-                        "/app-chat.js" => "app-chat.js",
-                        "/skill-picker.js" => "skill-picker.js",
-                        "/skill-picker.css" => "skill-picker.css",
-                        "/app-chat.css" => "app-chat.css",
-                        "/settings.css" => "settings.css",
-                        "/connection-setup.js" => "connection-setup.js",
-                        "/connection-setup.css" => "connection-setup.css",
-                        "/ui-controls.css" => "ui-controls.css",
-                        "/command-palette.css" => "command-palette.css",
-                        "/client.js" => "client.js",
-                        "/desktop.js" => "desktop.js",
-                        "/performance.js" => "performance.js",
-                        "/workspace.js" => "workspace.js",
-                        "/resources.js" => "resources.js",
-                        "/artifact-copy.js" => "artifact-copy.js",
-                        "/sharing.js" => "sharing.js",
-                        "/gcp-auth.js" => "gcp-auth.js",
-                        "/restart.js" => "restart.js",
-                        "/view-agent.js" => "view-agent.js",
-                        "/github-actions.js" => "github-actions.js",
-                        "/git-diff.js" => "git-diff.js",
-                        "/ux.js" => "ux.js",
-                        "/command-palette.js" => "command-palette.js",
-                        "/session-dispatch.js" => "session-dispatch.js",
-                        "/skills-editor.js" => "skills-editor.js",
-                        "/chat-preparation.js" => "chat-preparation.js",
-                        "/chat-preparation.css" => "chat-preparation.css",
-                        "/diff-review.js" => "diff-review.js",
-                        "/workspace.css" => "workspace.css",
-                        "/vendor/xterm.js" => "vendor/xterm.js",
-                        "/vendor/addon-fit.js" => "vendor/addon-fit.js",
-                        "/vendor/xterm.css" => "vendor/xterm.css",
-                        "/sessions.js" => "sessions.js",
-                        "/features.js" => "features.js",
-                        "/newsletters.js" => "newsletters.js",
-                        "/markdown.js" => "markdown.js",
-                        "/vendor/markdown-it.min.js" => "vendor/markdown-it.min.js",
-                        "/style.css" => "style.css",
-                        _ => return Ok(json_response(404, json!({"error":"Not found."}))),
-                    };
-                    let kind = if file.ends_with(".html") {
-                        "text/html; charset=utf-8"
-                    } else if file.ends_with(".css") {
-                        "text/css"
-                    } else {
-                        "text/javascript; charset=utf-8"
-                    };
-                    response(
-                        200,
-                        super::assets::asset(file)
-                            .ok_or_else(|| Error::new("Asset unavailable."))?
-                            .to_vec(),
-                        kind,
-                        false,
-                    )
-                }
-            });
+            return get_route(repo, &path, csrf);
         }
         if req.method() != &tiny_http::Method::Post {
-            return Ok(json_response(405, json!({"error":"Method not allowed."})));
+            return Ok(json_response(405, &json!({"error":"Method not allowed."})));
         }
         let bridge = path == "/api/agent/register";
         let authorized = if bridge {
@@ -311,7 +150,7 @@ fn handle(
         if !authorized || header(&req, "Content-Type") != "application/json" {
             return Ok(json_response(
                 403,
-                json!({"error":"Request rejected. Reload this dashboard and try again."}),
+                &json!({"error":"Request rejected. Reload this dashboard and try again."}),
             ));
         }
         let body_limit = if path == "/api/app-chat/send" {
@@ -320,7 +159,7 @@ fn handle(
             MAX_BODY
         };
         if req.body_length().is_some_and(|n| n > body_limit) {
-            return Ok(json_response(413, json!({"error":"Request too large."})));
+            return Ok(json_response(413, &json!({"error":"Request too large."})));
         }
         let mut bytes = vec![];
         req.as_reader()
@@ -329,331 +168,14 @@ fn handle(
         if bytes.len() > body_limit || bytes.is_empty() {
             return Ok(json_response(
                 413,
-                json!({"error":"Request too large or empty."}),
+                &json!({"error":"Request too large or empty."}),
             ));
         }
         let payload: Value = serde_json::from_slice(&bytes)?;
         if !payload.is_object() {
             return Err(Error::new("Expected a JSON object."));
         }
-        if path == "/api/connections/reload" {
-            return Ok(json_response(
-                200,
-                super::commands::invoke(
-                    repo,
-                    &json!({"name":"connections.reload","args":payload}),
-                    false,
-                )?,
-            ));
-        }
-        if path == "/api/views" {
-            return Ok(json_response(200, super::views::update(repo, &payload)?));
-        }
-        if path == "/api/page-settings" {
-            return Ok(json_response(
-                200,
-                super::page_settings::update(repo, &payload)?,
-            ));
-        }
-        if path == "/api/feedback" {
-            return Ok(json_response(200, super::feedback::update(repo, &payload)?));
-        }
-        if path == "/api/guidance" {
-            return Ok(json_response(200, super::guidance::update(repo, &payload)?));
-        }
-        if path == "/api/onboarding" {
-            return Ok(json_response(
-                200,
-                super::onboarding::update(repo, &payload)?,
-            ));
-        }
-        if path.starts_with("/api/shell-terminal/") {
-            return Ok(json_response(
-                200,
-                super::chat_terminal::action(repo, &path, &payload)?,
-            ));
-        }
-        if path == "/api/commands/invoke" {
-            return Ok(json_response(
-                200,
-                super::commands::invoke(repo, &payload, false)?,
-            ));
-        }
-        if path == "/api/skills/catalog" {
-            let mut projects = Vec::new();
-            if !text(&payload, "cwd").is_empty() {
-                let p = PathBuf::from(text(&payload, "cwd"));
-                if p.is_absolute() && p.is_dir() {
-                    projects.push(p);
-                }
-            }
-            let state = repo.state.lock().map_err(|_| Error::io())?;
-            for row in arr(&state["sessions"]) {
-                let p = PathBuf::from(text(&row, "cwd"));
-                if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
-                    projects.push(p);
-                }
-                for tree in arr(&row["worktrees"]) {
-                    let p = PathBuf::from(text(&tree, "path"));
-                    if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
-                        projects.push(p);
-                    }
-                }
-                if projects.len() >= 20 {
-                    break;
-                }
-            }
-            drop(state);
-            return Ok(json_response(
-                200,
-                super::skills_catalog::discover(
-                    &home(),
-                    &projects,
-                    &repo.settings.config_directory().join("skills"),
-                ),
-            ));
-        }
-        if path == "/api/app-chat/send" {
-            return Ok(json_response(200, repo.app_chat.start(repo, &payload)?));
-        }
-        if path == "/api/app-chat/new" {
-            return Ok(json_response(200, repo.app_chat.new_chat(repo)?));
-        }
-        if path == "/api/app-chat/cancel" {
-            return Ok(json_response(200, repo.app_chat.cancel()));
-        }
-        if path == "/api/settings/preview" {
-            return Ok(json_response(200, repo.settings.preview(&payload, false)?));
-        }
-        if path == "/api/settings" {
-            return Ok(json_response(200, repo.settings.apply(&payload, false)?));
-        }
-        if path == "/api/quick-actions/run" {
-            return Ok(json_response(
-                200,
-                repo.quick_actions.start(repo, &payload)?,
-            ));
-        }
-        let mut extra = json!({});
-        if path.starts_with("/api/sharing/") {
-            return Ok(json_response(
-                200,
-                super::sharing::action(repo, &path, &payload)?,
-            ));
-        }
-        if path == "/api/session/links" {
-            if let Some(context) = payload.get("context") {
-                return Ok(json_response(
-                    200,
-                    super::session_context::replace_receipt(repo, text(&payload, "id"), context)?,
-                ));
-            }
-            return Ok(json_response(
-                200,
-                super::session_context::read(repo, text(&payload, "id"))?,
-            ));
-        }
-        if path == "/api/session/review-draft" {
-            return Ok(json_response(200, super::reviews::action(repo, &payload)?));
-        }
-        if path == "/api/session/ci-investigation" {
-            return Ok(json_response(
-                200,
-                super::session_ci::investigation(repo, &payload)?,
-            ));
-        }
-        if path == "/api/session/ci-refresh" {
-            return Ok(json_response(
-                200,
-                super::session_ci::refresh(repo, text(&payload, "id"))?,
-            ));
-        }
-        if path == "/api/session/git-file" {
-            return Ok(json_response(
-                200,
-                super::git_diff::file_for_session(
-                    repo,
-                    text(&payload, "id"),
-                    text(&payload, "path"),
-                    text(&payload, "cwd"),
-                )?,
-            ));
-        }
-        if path == "/api/session/git-diff" {
-            return Ok(json_response(
-                200,
-                super::git_diff::for_session(repo, text(&payload, "id"), text(&payload, "cwd"))?,
-            ));
-        }
-        if path.starts_with("/api/terminal/") {
-            let id = sid(text(&payload, "id"))?;
-            let reply = match path.as_str() {
-                "/api/terminal/poll" => repo.embedded.poll(
-                    &id,
-                    payload["cursor"].as_u64().unwrap_or(0),
-                    text(&payload, "generation"),
-                )?,
-                "/api/terminal/close" => {
-                    repo.embedded.close(&id, text(&payload, "generation"))?;
-                    json!({"message":"Terminal closed. The saved conversation remains in History."})
-                }
-                "/api/terminal/input" => {
-                    let data = payload["data"]
-                        .as_str()
-                        .ok_or_else(|| Error::new("Expected terminal input."))?;
-                    repo.embedded.input(&id, data)?;
-                    json!({})
-                }
-                "/api/terminal/resize" => {
-                    let cols = payload["cols"]
-                        .as_u64()
-                        .filter(|n| *n <= 500)
-                        .ok_or_else(|| Error::new("Invalid columns."))?
-                        as u16;
-                    let rows = payload["rows"]
-                        .as_u64()
-                        .filter(|n| *n <= 200)
-                        .ok_or_else(|| Error::new("Invalid rows."))?
-                        as u16;
-                    repo.embedded.resize(&id, cols, rows)?;
-                    json!({})
-                }
-                _ => return Err(Error::new("Terminal operation unavailable.")),
-            };
-            return Ok(json_response(200, reply));
-        }
-        let saved = match path.as_str() {
-            "/api/agent/register" => {
-                let record = workflows::register(repo, &payload)?;
-                return Ok(json_response(200, workflows::registration_reply(&record)));
-            }
-            "/api/edit" => {
-                repo.edit(&payload)?;
-                None
-            }
-            "/api/github/pr" => {
-                super::github::action(repo, &payload)?;
-                None
-            }
-            "/api/github/reviews/seen" => {
-                super::github::seen(repo, &payload)?;
-                None
-            }
-            "/api/session/prepare" => Some(workflows::prepare(repo, &payload)?),
-            "/api/session/from-view" => Some(super::view_context::prepare(repo, &payload)?),
-            "/api/session/quick" => Some(workflows::quick(repo, &payload, false)?),
-            "/api/session/pr-review" => Some(workflows::quick(repo, &payload, true)?),
-            "/api/session/review" => Some(workflows::review(repo, &payload)?),
-            "/api/session/newsletter" => Some(workflows::newsletter(repo, &payload)?),
-            "/api/skills/run" => Some(super::scheduler::execute(
-                repo,
-                text(&payload, "presetId"),
-                false,
-                None,
-            )?),
-            "/api/skills/preset" => {
-                super::scheduler::save_preset(repo, &payload)?;
-                None
-            }
-            "/api/skills/schedule" => {
-                super::scheduler::save_schedule(repo, &payload)?;
-                None
-            }
-            "/api/skills/read" => {
-                repo.transaction(|s| {
-                    s["skillsReadAt"] = json!(now());
-                    Ok(())
-                })?;
-                None
-            }
-            "/api/session/recover" => Some(workflows::recover(repo, &payload)?),
-            "/api/session/open" => {
-                let fields = payload
-                    .as_object()
-                    .ok_or_else(|| Error::new("Open arguments must be an object."))?;
-                if fields
-                    .keys()
-                    .any(|key| !["id", "target"].contains(&key.as_str()))
-                {
-                    return Err(Error::new(
-                        "Open accepts only a saved chat ID and destination intent.",
-                    ));
-                }
-                let mut args = json!({"recordId":payload["id"]});
-                if let Some(target) = payload.get("target") {
-                    args["target"] = target.clone();
-                }
-                let receipt = workflows::open_chat(repo, &args)?;
-                extra["message"] = receipt["message"].clone();
-                if receipt["status"] == "accepted" && receipt["target"] == "embedded" {
-                    extra["embedded"] = json!(true);
-                }
-                if receipt["status"] == "preview" {
-                    extra["preview"] = json!(true);
-                }
-                extra["openReceipt"] = receipt;
-                None
-            }
-            "/api/session/context" => {
-                return Ok(json_response(
-                    200,
-                    json!({"context":workflows::context(repo,text(&payload,"id"))?}),
-                ))
-            }
-            "/api/gcp-auth/start" => {
-                return Ok(json_response(200, repo.gcp_auth.start(repo.demo)?))
-            }
-            "/api/gcp-auth/cancel" => return Ok(json_response(200, repo.gcp_auth.cancel())),
-            "/api/sync" => {
-                let receipt = repo.refresh_sources(payload["force"] == true)?;
-                extra["message"] = receipt["message"].clone();
-                extra["refreshReceipt"] = receipt;
-                None
-            }
-            "/api/sentry/environment" => {
-                let environment = checked(&payload, "environment", 100, true)?;
-                if !environment
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
-                {
-                    return Err(Error::new("Use a single environment name."));
-                }
-                if !repo.demo && !repo.providers.sentry_configured() {
-                    return Err(Error::new("Configure Sentry first."));
-                }
-                let should_start = claim_sentry_environment(repo, &environment)?;
-                if should_start {
-                    let repository = repo.clone();
-                    std::thread::spawn(move || {
-                        let result = repository.providers.fetch("sentry", Some(&environment));
-                        let _ = repository.transaction(|s| {
-                            let cache = &mut s["sentryEnvironments"][&environment];
-                            match result {
-                                Ok(items) => *cache = json!({"running":false,"itemIds":items.iter().map(|x|x["id"].clone()).collect::<Vec<_>>(),"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0}),
-                                Err(e) => {
-                                    let failures = cache["failures"].as_u64().unwrap_or(0)+1;
-                                    cache["running"] = json!(false);
-                                    cache["error"] = json!(e.message);
-                                    cache["failures"] = json!(failures);
-                                    cache["nextAttempt"] = json!(now()+(300.0*2.0f64.powi((failures-1).min(4) as i32)).min(3600.0).max(e.retry));
-                                }
-                            }
-                            Ok(())
-                        });
-                    });
-                }
-                None
-            }
-            _ => return Ok(json_response(404, json!({"error":"Not found."}))),
-        };
-        let mut state = repo.snapshot(false);
-        if let Some(record) = saved {
-            state["savedSessionId"] = record["id"].clone();
-        }
-        for (k, v) in extra.as_object().unwrap() {
-            state[k] = v.clone();
-        }
-        Ok(json_response(200, state))
+        post_route(repo, &path, &payload)
     })();
     let response = match result {
         Ok(r) => r,
@@ -663,10 +185,457 @@ fn handle(
                 data = json!({});
             }
             data["error"] = json!(e.message);
-            json_response(e.status, data)
+            json_response(e.status, &data)
         }
     };
     let _ = req.respond(response);
+}
+fn get_route(repo: &Arc<Repository>, path: &str, csrf: &str) -> Result<Reply> {
+    Ok(match path {
+        "/api/health" => json_response(
+            200,
+            &json!({"service":"truffle","apiVersion":1,"storageVersion":1,"backend":"rust"}),
+        ),
+        "/api/state" => {
+            let mut state = repo.snapshot(false);
+            state["csrf"] = json!(csrf);
+            json_response(200, &state)
+        }
+        "/api/app-chat" => json_response(200, &repo.app_chat.view(repo)),
+        "/api/app-chat/skill" => json_response(200, &super::app_chat::guide()),
+        "/api/themes" => json_response(200, &repo.settings.themes()?),
+        "/api/settings" => json_response(200, &repo.settings.view()),
+        "/api/config-status" => json_response(200, &super::config_status::view(repo)),
+        "/api/quick-actions" => json_response(200, &repo.quick_actions.view()),
+        "/api/export" => json_response(200, &repo.snapshot(true)),
+        "/api/agents" => json_response(200, &repo.inventory()),
+        "/api/gcp-auth" => json_response(200, &repo.gcp_auth.view()),
+        "/api/views" => json_response(200, &super::views::view(repo)?),
+        "/api/page-settings" => json_response(200, &super::page_settings::view(repo)?),
+        "/api/feedback" => json_response(200, &super::feedback::view(repo)?),
+        "/api/guidance" => json_response(200, &super::guidance::view(repo)?),
+        "/api/onboarding" => json_response(200, &super::onboarding::view(repo)),
+        "/api/commands" => json_response(200, &super::commands::catalog()),
+        "/api/logs" => json_response(200, &repo.logs()),
+        "/api/sharing" => json_response(200, &super::sharing::view(repo)),
+        "/api/library" => {
+            let s = repo.state.lock().unwrap();
+            json_response(200, &artifacts::catalog(repo, &s)?)
+        }
+        p if p.starts_with("/artifacts/") => {
+            let (bytes, kind) = artifacts::read(repo, p.trim_start_matches("/artifacts/"))?;
+            response(200, bytes, &kind, true)
+        }
+        p if p.starts_with("/linear/") => linear_redirect(repo, p.trim_start_matches("/linear/"))?,
+        "/favicon.ico" => response(204, vec![], "image/x-icon", false),
+        p => static_asset(p)?,
+    })
+}
+fn linear_redirect(repo: &Repository, id: &str) -> Result<Reply> {
+    if !regex::Regex::new(r"^[A-Z][A-Z0-9]*-[0-9]+$")
+        .unwrap()
+        .is_match(id)
+    {
+        return Err(Error::new("Invalid Linear identifier."));
+    }
+    let cached = {
+        let s = repo.state.lock().unwrap();
+        domain::catalog(&s)
+            .values()
+            .find(|x| x["source"] == "linear" && x["reference"] == id)
+            .map(|x| text(x, "url").to_owned())
+            .or_else(|| s["linearLinks"][id].as_str().map(str::to_owned))
+    };
+    let url = if let Some(v) = cached {
+        v
+    } else {
+        let v = repo.providers.linear_url(id)?;
+        repo.transaction(|s| {
+            s["linearLinks"][id] = json!(v);
+            Ok(())
+        })?;
+        v
+    };
+    let mut response = response(302, vec![], "text/plain", false);
+    response.add_header(tiny_http::Header::from_bytes("Location", url).unwrap());
+    Ok(response)
+}
+fn static_asset(p: &str) -> Result<Reply> {
+    if let Some(name) = p.strip_prefix("/vendor/diffs/") {
+        if !has_extension(name, "js")
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        {
+            return Ok(json_response(404, &json!({"error":"Not found."})));
+        }
+        let bytes = super::assets::asset(&format!("vendor/diffs/{name}"))
+            .ok_or_else(|| Error::new("Asset unavailable."))?
+            .to_vec();
+        return Ok(response(
+            200,
+            bytes,
+            "text/javascript; charset=utf-8",
+            false,
+        ));
+    }
+    let Some(file) = asset_file(p) else {
+        return Ok(json_response(404, &json!({"error":"Not found."})));
+    };
+    let kind = if has_extension(file, "html") {
+        "text/html; charset=utf-8"
+    } else if has_extension(file, "css") {
+        "text/css"
+    } else {
+        "text/javascript; charset=utf-8"
+    };
+    Ok(response(
+        200,
+        super::assets::asset(file)
+            .ok_or_else(|| Error::new("Asset unavailable."))?
+            .to_vec(),
+        kind,
+        false,
+    ))
+}
+fn asset_file(path: &str) -> Option<&'static str> {
+    Some(match path {
+        "/" | "/index.html" => "index.html",
+        "/app.js" => "app.js",
+        "/settings.js" => "settings.js",
+        "/configuration.js" => "configuration.js",
+        "/settings-profile.js" => "settings-profile.js",
+        "/settings-profile.css" => "settings-profile.css",
+        "/product-tools.js" => "product-tools.js",
+        "/product-tools.css" => "product-tools.css",
+        "/onboarding.js" => "onboarding.js",
+        "/guidance.js" => "guidance.js",
+        "/page-settings.js" => "page-settings.js",
+        "/page-settings.css" => "page-settings.css",
+        "/views.js" => "views.js",
+        "/views.css" => "views.css",
+        "/feedback.js" => "feedback.js",
+        "/chat-attachments.js" => "chat-attachments.js",
+        "/chat-results.js" => "chat-results.js",
+        "/chat-results.css" => "chat-results.css",
+        "/guidance.css" => "guidance.css",
+        "/onboarding.css" => "onboarding.css",
+        "/presentation.js" => "presentation.js",
+        "/app-chat.js" => "app-chat.js",
+        "/skill-picker.js" => "skill-picker.js",
+        "/skill-picker.css" => "skill-picker.css",
+        "/app-chat.css" => "app-chat.css",
+        "/settings.css" => "settings.css",
+        "/connection-setup.js" => "connection-setup.js",
+        "/connection-setup.css" => "connection-setup.css",
+        "/ui-controls.css" => "ui-controls.css",
+        "/command-palette.css" => "command-palette.css",
+        "/client.js" => "client.js",
+        "/desktop.js" => "desktop.js",
+        "/performance.js" => "performance.js",
+        "/workspace.js" => "workspace.js",
+        "/resources.js" => "resources.js",
+        "/artifact-copy.js" => "artifact-copy.js",
+        "/sharing.js" => "sharing.js",
+        "/gcp-auth.js" => "gcp-auth.js",
+        "/restart.js" => "restart.js",
+        "/view-agent.js" => "view-agent.js",
+        "/github-actions.js" => "github-actions.js",
+        "/git-diff.js" => "git-diff.js",
+        "/ux.js" => "ux.js",
+        "/command-palette.js" => "command-palette.js",
+        "/session-dispatch.js" => "session-dispatch.js",
+        "/skills-editor.js" => "skills-editor.js",
+        "/chat-preparation.js" => "chat-preparation.js",
+        "/chat-preparation.css" => "chat-preparation.css",
+        "/diff-review.js" => "diff-review.js",
+        "/workspace.css" => "workspace.css",
+        "/vendor/xterm.js" => "vendor/xterm.js",
+        "/vendor/addon-fit.js" => "vendor/addon-fit.js",
+        "/vendor/xterm.css" => "vendor/xterm.css",
+        "/sessions.js" => "sessions.js",
+        "/features.js" => "features.js",
+        "/newsletters.js" => "newsletters.js",
+        "/markdown.js" => "markdown.js",
+        "/vendor/markdown-it.min.js" => "vendor/markdown-it.min.js",
+        "/style.css" => "style.css",
+        _ => return None,
+    })
+}
+fn post_route(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Reply> {
+    if let Some(value) = service_post(repo, path, payload)? {
+        return Ok(json_response(200, &value));
+    }
+    if let Some(value) = session_post(repo, path, payload)? {
+        return Ok(json_response(200, &value));
+    }
+    if path.starts_with("/api/terminal/") {
+        return Ok(json_response(200, &terminal_post(repo, path, payload)?));
+    }
+    state_post(repo, path, payload)
+}
+fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Option<Value>> {
+    Ok(Some(match path {
+        "/api/connections/reload" => super::commands::invoke(
+            repo,
+            &json!({"name":"connections.reload","args":payload}),
+            false,
+        )?,
+        "/api/views" => super::views::update(repo, payload)?,
+        "/api/page-settings" => super::page_settings::update(repo, payload)?,
+        "/api/feedback" => super::feedback::update(repo, payload)?,
+        "/api/guidance" => super::guidance::update(repo, payload)?,
+        "/api/onboarding" => super::onboarding::update(repo, payload)?,
+        p if p.starts_with("/api/shell-terminal/") => {
+            super::chat_terminal::action(repo, p, payload)?
+        }
+        "/api/commands/invoke" => super::commands::invoke(repo, payload, false)?,
+        "/api/skills/catalog" => skills_catalog(repo, payload)?,
+        "/api/app-chat/send" => repo.app_chat.start(repo, payload)?,
+        "/api/app-chat/new" => repo.app_chat.new_chat(repo)?,
+        "/api/app-chat/cancel" => repo.app_chat.cancel(),
+        "/api/settings/preview" => repo.settings.preview(payload, false)?,
+        "/api/settings" => repo.settings.apply(payload, false)?,
+        "/api/quick-actions/run" => repo.quick_actions.start(repo, payload)?,
+        _ => return Ok(None),
+    }))
+}
+fn skills_catalog(repo: &Repository, payload: &Value) -> Result<Value> {
+    let mut projects = Vec::new();
+    if !text(payload, "cwd").is_empty() {
+        let p = PathBuf::from(text(payload, "cwd"));
+        if p.is_absolute() && p.is_dir() {
+            projects.push(p);
+        }
+    }
+    let sessions = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"]);
+    for row in sessions {
+        let p = PathBuf::from(text(&row, "cwd"));
+        if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
+            projects.push(p);
+        }
+        for tree in arr(&row["worktrees"]) {
+            let p = PathBuf::from(text(&tree, "path"));
+            if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
+                projects.push(p);
+            }
+        }
+        if projects.len() >= 20 {
+            break;
+        }
+    }
+    Ok(super::skills_catalog::discover(
+        &home(),
+        &projects,
+        &repo.settings.config_directory().join("skills"),
+    ))
+}
+fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Option<Value>> {
+    Ok(Some(match path {
+        p if p.starts_with("/api/sharing/") => super::sharing::action(repo, p, payload)?,
+        "/api/session/links" => {
+            if let Some(context) = payload.get("context") {
+                super::session_context::replace_receipt(repo, text(payload, "id"), context)?
+            } else {
+                super::session_context::read(repo, text(payload, "id"))?
+            }
+        }
+        "/api/session/review-draft" => super::reviews::action(repo, payload)?,
+        "/api/session/ci-investigation" => super::session_ci::investigation(repo, payload)?,
+        "/api/session/ci-refresh" => super::session_ci::refresh(repo, text(payload, "id"))?,
+        "/api/session/git-file" => super::git_diff::file_for_session(
+            repo,
+            text(payload, "id"),
+            text(payload, "path"),
+            text(payload, "cwd"),
+        )?,
+        "/api/session/git-diff" => {
+            super::git_diff::for_session(repo, text(payload, "id"), text(payload, "cwd"))?
+        }
+        _ => return Ok(None),
+    }))
+}
+fn terminal_post(repo: &Repository, path: &str, payload: &Value) -> Result<Value> {
+    let id = sid(text(payload, "id"))?;
+    Ok(match path {
+        "/api/terminal/poll" => repo.embedded.poll(
+            &id,
+            payload["cursor"].as_u64().unwrap_or(0),
+            text(payload, "generation"),
+        )?,
+        "/api/terminal/close" => {
+            repo.embedded.close(&id, text(payload, "generation"))?;
+            json!({"message":"Terminal closed. The saved conversation remains in History."})
+        }
+        "/api/terminal/input" => {
+            let data = payload["data"]
+                .as_str()
+                .ok_or_else(|| Error::new("Expected terminal input."))?;
+            repo.embedded.input(&id, data)?;
+            json!({})
+        }
+        "/api/terminal/resize" => {
+            let cols = payload["cols"]
+                .as_u64()
+                .filter(|n| *n <= 500)
+                .and_then(|n| u16::try_from(n).ok())
+                .ok_or_else(|| Error::new("Invalid columns."))?;
+            let rows = payload["rows"]
+                .as_u64()
+                .filter(|n| *n <= 200)
+                .and_then(|n| u16::try_from(n).ok())
+                .ok_or_else(|| Error::new("Invalid rows."))?;
+            repo.embedded.resize(&id, cols, rows)?;
+            json!({})
+        }
+        _ => return Err(Error::new("Terminal operation unavailable.")),
+    })
+}
+fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Reply> {
+    let mut extra = json!({});
+    let saved = match path {
+        "/api/agent/register" => {
+            let record = workflows::register(repo, payload)?;
+            return Ok(json_response(200, &workflows::registration_reply(&record)));
+        }
+        "/api/edit" => {
+            repo.edit(payload)?;
+            None
+        }
+        "/api/github/pr" => {
+            super::github::action(repo, payload)?;
+            None
+        }
+        "/api/github/reviews/seen" => {
+            super::github::seen(repo, payload)?;
+            None
+        }
+        "/api/session/prepare" => Some(workflows::prepare(repo, payload)?),
+        "/api/session/from-view" => Some(super::view_context::prepare(repo, payload)?),
+        "/api/session/quick" => Some(workflows::quick(repo, payload, false)?),
+        "/api/session/pr-review" => Some(workflows::quick(repo, payload, true)?),
+        "/api/session/review" => Some(workflows::review(repo, payload)?),
+        "/api/session/newsletter" => Some(workflows::newsletter(repo, payload)?),
+        "/api/skills/run" => Some(super::scheduler::execute(
+            repo,
+            text(payload, "presetId"),
+            false,
+            None,
+        )?),
+        "/api/skills/preset" => {
+            super::scheduler::save_preset(repo, payload)?;
+            None
+        }
+        "/api/skills/schedule" => {
+            super::scheduler::save_schedule(repo, payload)?;
+            None
+        }
+        "/api/skills/read" => {
+            repo.transaction(|s| {
+                s["skillsReadAt"] = json!(now());
+                Ok(())
+            })?;
+            None
+        }
+        "/api/session/recover" => Some(workflows::recover(repo, payload)?),
+        "/api/session/open" => {
+            open_session(repo, payload, &mut extra)?;
+            None
+        }
+        "/api/session/context" => {
+            return Ok(json_response(
+                200,
+                &json!({"context":workflows::context(repo,text(payload,"id"))?}),
+            ))
+        }
+        "/api/gcp-auth/start" => return Ok(json_response(200, &repo.gcp_auth.start(repo.demo)?)),
+        "/api/gcp-auth/cancel" => return Ok(json_response(200, &repo.gcp_auth.cancel())),
+        "/api/sync" => {
+            let receipt = repo.refresh_sources(payload["force"] == true)?;
+            extra["message"] = receipt["message"].clone();
+            extra["refreshReceipt"] = receipt;
+            None
+        }
+        "/api/sentry/environment" => {
+            start_sentry_environment(repo, payload)?;
+            None
+        }
+        _ => return Ok(json_response(404, &json!({"error":"Not found."}))),
+    };
+    let mut state = repo.snapshot(false);
+    if let Some(record) = saved {
+        state["savedSessionId"] = record["id"].clone();
+    }
+    for (k, v) in extra.as_object().unwrap() {
+        state[k] = v.clone();
+    }
+    Ok(json_response(200, &state))
+}
+fn open_session(repo: &Arc<Repository>, payload: &Value, extra: &mut Value) -> Result<()> {
+    let fields = payload
+        .as_object()
+        .ok_or_else(|| Error::new("Open arguments must be an object."))?;
+    if fields
+        .keys()
+        .any(|key| !["id", "target"].contains(&key.as_str()))
+    {
+        return Err(Error::new(
+            "Open accepts only a saved chat ID and destination intent.",
+        ));
+    }
+    let mut args = json!({"recordId":payload["id"]});
+    if let Some(target) = payload.get("target") {
+        args["target"] = target.clone();
+    }
+    let receipt = workflows::open_chat(repo, &args)?;
+    extra["message"] = receipt["message"].clone();
+    if receipt["status"] == "accepted" && receipt["target"] == "embedded" {
+        extra["embedded"] = json!(true);
+    }
+    if receipt["status"] == "preview" {
+        extra["preview"] = json!(true);
+    }
+    extra["openReceipt"] = receipt;
+    Ok(())
+}
+fn start_sentry_environment(repo: &Arc<Repository>, payload: &Value) -> Result<()> {
+    let environment = checked(payload, "environment", 100, true)?;
+    if !environment
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+    {
+        return Err(Error::new("Use a single environment name."));
+    }
+    if !repo.demo && !repo.providers.sentry_configured() {
+        return Err(Error::new("Configure Sentry first."));
+    }
+    let should_start = claim_sentry_environment(repo, &environment)?;
+    if should_start {
+        let repository = repo.clone();
+        std::thread::spawn(move || {
+            let result = repository.providers.fetch("sentry", Some(&environment));
+            let _ = repository.transaction(|s| {
+                let cache = &mut s["sentryEnvironments"][&environment];
+                match result {
+                    Ok(items) => *cache = json!({"running":false,"itemIds":items.iter().map(|x|x["id"].clone()).collect::<Vec<_>>(),"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0}),
+                    Err(e) => {
+                        let failures = cache["failures"].as_u64().unwrap_or(0)+1;
+                        cache["running"] = json!(false);
+                        cache["error"] = json!(e.message);
+                        cache["failures"] = json!(failures);
+                        cache["nextAttempt"] = json!(now()+(300.0*2.0f64.powi((failures-1).min(4) as i32)).min(3600.0).max(e.retry));
+                    }
+                }
+                Ok(())
+            });
+        });
+    }
+    Ok(())
+}
+/// Same as `name.ends_with(".{extension}")`, including for a bare `.{extension}` name.
+fn has_extension(name: &str, extension: &str) -> bool {
+    name.rsplit_once('.')
+        .is_some_and(|(_, found)| found == extension)
 }
 fn ascii_json_string(value: &str) -> String {
     let encoded = serde_json::to_string(value).unwrap();
@@ -675,7 +644,7 @@ fn ascii_json_string(value: &str) -> String {
         if c as u32 > 127 {
             let mut units = [0u16; 2];
             for unit in c.encode_utf16(&mut units) {
-                result.push_str(&format!("\\u{unit:04x}"));
+                let _ = write!(result, "\\u{unit:04x}");
             }
         } else {
             result.push(c);
@@ -711,7 +680,7 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
     for entry in entries.filter_map(std::result::Result::ok).take(100) {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.ends_with(".result.json") || name.ends_with(".tmp") {
+        if name.ends_with(".result.json") || has_extension(&name, "tmp") {
             if std::fs::symlink_metadata(&path)
                 .ok()
                 .and_then(|m| m.modified().ok())
@@ -850,7 +819,7 @@ pub fn serve(
         if active.load(Ordering::Relaxed) >= 32 {
             let _ = request.respond(json_response(
                 429,
-                json!({"error":"Too many local requests. Retry shortly."}),
+                &json!({"error":"Too many local requests. Retry shortly."}),
             ));
             continue;
         }
