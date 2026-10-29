@@ -1,16 +1,14 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),Module=require('node:module');
-const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
-const shared=new Module(__filename);shared._compile(fs.readFileSync('tests/test_feature_writes.cjs','utf8').split('\ntest(')[0]+'\nmodule.exports={fixture};',__filename);const {fixture:base}=shared.exports;
+const {test}=require('node:test'),assert=require('node:assert/strict'),{join}=require('node:path');
+const {evaluate}=require(join(__dirname,'helpers/static-script.cjs')),{scriptFixture:base,loadMore}=require(join(__dirname,'helpers/feature-fixture.cjs'));
 function fixture(context={availability:'available',total:2}){
  const f=base(),opened=[];let current=context;
  Object.assign(f.c,{source:'sessions',historyArchived:true,currentAgentRecord:()=>null,candidateForRecord:()=>null,workSummary:()=>'',savedSessionOpenState:()=>null,chatPreparationContext:()=>current,shortcutLabel:value=>value||'',setting:(key,fallback)=>fallback,openSettings(){},liveCandidates:()=>[],snoozedAgentTabs:{},closedAgentTabs:[],leftSidebarCollapsed:false,agentSidebarCollapsed:false,openChatRecovery:()=>{opened.push('recovery');const dialog=f.$('#chat-recovery-list');dialog.tagName='dialog';dialog.showModal();dialog.focus();},prepareSavedChat:()=>assert.fail('entry must not prepare'),openSavedSession:()=>assert.fail('entry must not open a saved chat'),api:()=>assert.fail('entry must not make requests')});
- f.$('#search').value='Scoped search';f.c.scopePrefs={sessions:'preserved'};f.c.state.sessions=[];
- // The shared fixture omits the earlier page scripts, so stub what workspace.js reads while it loads.
+ f.$('#search').value='Scoped search';f.c.scopePrefs.sessions='preserved';f.c.state.sessions=[];
+ // The fixture omits sessions.js, so stub what workspace.js reads from it.
  // The palette close handler that command-palette.js attaches also clears attributes.
  f.Node.prototype.removeAttribute=function(key){delete this.attrs[key];};
- Object.assign(f.c,{prefs:{},itemSessionChip(){},registerRenderHook(){}});loadScripts(f.c,['static/workspace.js','static/command-palette.js']);
- const c=browserContext(f.c);
- return {...f,c,opened,setContext:value=>current=value,historyButton:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='recovery'),archive:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='archive'),entry:()=>c.commandEntries().find(entry=>entry.title==='open: chat recovery')};
+ Object.assign(f.c,{prefs:{},itemSessionChip(){}});loadMore(f,['static/workspace.js','static/command-palette.js']);
+ return {...f,opened,setContext:value=>current=value,historyButton:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='recovery'),archive:()=>f.$('#feature-controls').querySelectorAll('button').find(node=>node.dataset.historyAction==='archive'),entry:()=>f.c.commandEntries().find(entry=>entry.title==='open: chat recovery')};
 }
 function assertContext(f){assert.equal(f.c.source,'sessions');assert.equal(f.$('#search').value,'Scoped search');assert.equal(f.c.historyArchived,true);assert.equal(f.c.scopePrefs.sessions,'preserved');assert.equal(f.calls.length,0);}
 test('loaded History header exposes bounded pending count or unavailable state and only navigates',()=>{
