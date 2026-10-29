@@ -1,15 +1,21 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
 const source=fs.readFileSync('static/settings.js','utf8');
-test('keyboard chords match saved command syntax across modifiers',()=>{const c=vm.createContext({});vm.runInContext(source.slice(source.indexOf('function chordFromEvent('),source.indexOf('function recordedShortcut(')),c);assert.equal(c.chordFromEvent({metaKey:true,key:'k'}),'Primary+K');assert.equal(c.chordFromEvent({ctrlKey:true,shiftKey:true,key:'Enter'}),'Primary+Shift+Enter');assert.equal(c.chordFromEvent({metaKey:true,altKey:true,key:'l'}),'Primary+Alt+L');assert.equal(c.chordFromEvent({key:'x'}),'');assert.equal(c.chordFromEvent({metaKey:true,key:'k',isComposing:true}),'');});
-test('configured navigation changes the view and clears provider scopes consistently',()=>{let renders=0,saved=0;const c=vm.createContext({$:()=>({open:false}),settingsDirty:false,settingsSaving:false,document:{querySelector:()=>null},source:'agents',scopePrefs:{linear:'old'},githubView:'mine',persist:()=>saved++,render:()=>renders++});vm.runInContext(source.slice(source.indexOf('function runConfiguredCommand('),source.indexOf("document.addEventListener('keydown'",source.indexOf('function runConfiguredCommand('))),c);c.runConfiguredCommand('view-linear');assert.equal(c.source,'linear');assert.equal(c.scopePrefs.linear,'');c.runConfiguredCommand('view-github');assert.equal(c.githubView,'all');assert.equal(renders,2);assert.equal(saved,2);});
-test('unsaved preferences block configured commands without discarding edits',()=>{let opens=0;const error={textContent:''},c=vm.createContext({$:id=>id==='#settings-dialog'?{open:true}:error,settingsDirty:true,settingsSaving:false,openCommands:()=>opens++});vm.runInContext(source.slice(source.indexOf('function runConfiguredCommand('),source.indexOf("document.addEventListener('keydown'",source.indexOf('function runConfiguredCommand('))),c);c.runConfiguredCommand('commands');assert.equal(opens,0);assert.match(error.textContent,/Save your changes/);});
+// Static scripts in index.html order, up to and with settings.js.
+const pageScripts=[...fs.readFileSync('static/index.html','utf8').matchAll(/<script src="\/([^"]+)"/g)].map(match=>'static/'+match[1]).filter(file=>!file.startsWith('static/vendor/xterm')&&file!=='static/vendor/addon-fit.js');
+const settingsScripts=pageScripts.slice(0,pageScripts.findIndex(name=>name==='static/settings.js')+1);
+// Run listeners in order until one stops immediate propagation.
+function dispatch(listeners,event){let stopped=false;const stop=event.stopImmediatePropagation;event.stopImmediatePropagation=()=>{stopped=true;stop?.call(event);};for(const listener of listeners||[]){listener(event);if(stopped)break;}}
+test('keyboard chords match saved command syntax across modifiers',()=>{const c=browserContext({});loadScripts(c,settingsScripts);assert.equal(c.chordFromEvent({metaKey:true,key:'k'}),'Primary+K');assert.equal(c.chordFromEvent({ctrlKey:true,shiftKey:true,key:'Enter'}),'Primary+Shift+Enter');assert.equal(c.chordFromEvent({metaKey:true,altKey:true,key:'l'}),'Primary+Alt+L');assert.equal(c.chordFromEvent({key:'x'}),'');assert.equal(c.chordFromEvent({metaKey:true,key:'k',isComposing:true}),'');});
+test('configured navigation changes the view and clears provider scopes consistently',()=>{let renders=0,saved=0;const c=browserContext({settingsDirty:false,settingsSaving:false,document:{querySelector:selector=>selector==='dialog[open]'?null:{open:false}},source:'agents',githubView:'mine',persist:()=>saved++,render:()=>renders++});loadScripts(c,settingsScripts);c.scopePrefs.linear='old';c.runConfiguredCommand('view-linear');assert.equal(c.source,'linear');assert.equal(c.scopePrefs.linear,'');c.runConfiguredCommand('view-github');assert.equal(c.githubView,'all');assert.equal(renders,2);assert.equal(saved,2);});
+test('unsaved preferences block configured commands without discarding edits',()=>{let opens=0;const error={textContent:''},c=browserContext({document:{querySelector:id=>id==='#settings-dialog'?{open:true}:error},settingsDirty:true,settingsSaving:false,openCommands:()=>opens++});loadScripts(c,settingsScripts);c.runConfiguredCommand('commands');assert.equal(opens,0);assert.match(error.textContent,/Save your changes/);});
 
-test('shortcut recorder accepts physical punctuation and rejects reserved or unsupported input',()=>{const c=vm.createContext({});vm.runInContext(source.slice(source.indexOf('function chordFromEvent('),source.indexOf('async function finishShortcutRecording(')),c);assert.equal(c.recordedShortcut({metaKey:true,shiftKey:true,key:'?',code:'Slash'}),'Primary+Shift+/');assert.equal(c.recordedShortcut({key:'Shift',shiftKey:true}),'');assert.equal(c.recordedShortcut({metaKey:true,altKey:true,key:'˚',code:'KeyK'}),'Primary+Alt+K');assert.throws(()=>c.recordedShortcut({metaKey:true,key:'q'}),/reserved/);assert.throws(()=>c.recordedShortcut({key:'a'}),/Command/);assert.throws(()=>c.recordedShortcut({metaKey:true,key:'F5'}),/Command/);});
+test('shortcut recorder accepts physical punctuation and rejects reserved or unsupported input',()=>{const c=browserContext({});loadScripts(c,settingsScripts);assert.equal(c.recordedShortcut({metaKey:true,shiftKey:true,key:'?',code:'Slash'}),'Primary+Shift+/');assert.equal(c.recordedShortcut({key:'Shift',shiftKey:true}),'');assert.equal(c.recordedShortcut({metaKey:true,altKey:true,key:'˚',code:'KeyK'}),'Primary+Alt+K');assert.throws(()=>c.recordedShortcut({metaKey:true,key:'q'}),/reserved/);assert.throws(()=>c.recordedShortcut({key:'a'}),/Command/);assert.throws(()=>c.recordedShortcut({metaKey:true,key:'F5'}),/Command/);});
 
 test('typed shortcuts normalize modifiers and expose reserved and duplicate assignments',()=>{
- const c=vm.createContext({settingsDraft:{keybindings:{commands:'Primary+K',search:'Primary+F'}},appSettings:{commands:[{id:'commands',label:'Command menu'},{id:'search',label:'Search'}]}});
- vm.runInContext(source.slice(source.indexOf('function canonicalShortcut('),source.indexOf('function recordedShortcut(')),c);
+ const c=browserContext({settingsDraft:{keybindings:{commands:'Primary+K',search:'Primary+F'}},appSettings:{commands:[{id:'commands',label:'Command menu'},{id:'search',label:'Search'}]}});
+ loadScripts(c,settingsScripts);
  assert.equal(c.canonicalShortcut(' primary+alt+shift+k '),'Primary+Shift+Alt+K');
  assert.equal(c.canonicalShortcut(''), '');
  for(const value of ['Primary+Primary+K','Primary+Shift+Shift+K','Control+K','Primary+F5','Primary++'])assert.equal(c.canonicalShortcut(value),null,value);
@@ -21,9 +27,9 @@ test('typed shortcuts normalize modifiers and expose reserved and duplicate assi
 });
 
 function recorderContext({desktop=false,invoke=async()=>{}}={}){
- const listeners={},status={textContent:''},error={textContent:''};
- const c=vm.createContext({Promise,shortcutRecording:null,shortcutRecordingSync:Promise.resolve(),settingsDirty:false,settingsSaving:false,settingsDraft:{keybindings:{commands:'Primary+K',search:'Primary+F'}},appSettings:{commands:[{id:'commands',label:'Commands'},{id:'search',label:'Search'}]},serviceClient:{isDesktop:desktop},window:{__TAURI__:{core:{invoke}},addEventListener:(name,fn)=>listeners[name]=fn},$:id=>id==='#settings-error'?error:status,updateSettingsDirty:()=>{},filterSettings(){}});
- vm.runInContext(source.slice(source.indexOf('function chordFromEvent('),source.indexOf('function runConfiguredCommand(')),c);
+ const status={textContent:''},error={textContent:''};
+ const c=browserContext({Promise,shortcutRecording:null,shortcutRecordingSync:Promise.resolve(),settingsDirty:false,settingsSaving:false,settingsDraft:{keybindings:{commands:'Primary+K',search:'Primary+F'}},appSettings:{commands:[{id:'commands',label:'Commands'},{id:'search',label:'Search'}]},window:{__TAURI__:{core:{invoke}}},document:{querySelector:id=>id==='#settings-error'?error:status},updateSettingsDirty:()=>{},filterSettings(){}});
+ const host=loadScripts(c,settingsScripts);c.serviceClient.isDesktop=desktop;const listeners={keydown:event=>dispatch(host.window.listeners.keydown,event)};
  const button={textContent:'Record',attributes:{},setAttribute(name,value){this.attributes[name]=value;}},input={value:'Primary+K',readOnly:false,focus(){}};
  const key=(key,extra={})=>({key,preventDefault(){this.prevented=true;},stopImmediatePropagation(){this.stopped=true;},...extra});
  return {c,listeners,status,error,button,input,key};
@@ -64,8 +70,8 @@ test('native recording failures restore editable input and report the failure',a
 
 test('shortcut hints follow configured assignments and clear stale accessibility shortcuts',()=>{
  const attrs={'aria-keyshortcuts':'Meta+G'},hint={};let binding='Primary+Alt+G';
- const context=vm.createContext({navigator:{platform:'MacIntel'},setting:()=>({'view-github':binding}),shortcutLabel:chord=>chord.replace('Primary+','⌘').replace('Alt+','⌥')});
- const code=fs.readFileSync('static/settings.js','utf8');vm.runInContext(code.slice(code.indexOf('function applyShortcutHint('),code.indexOf('function applyAppSettings(')),context);
+ const context=browserContext({navigator:{platform:'MacIntel'},setting:()=>({'view-github':binding}),shortcutLabel:chord=>chord.replace('Primary+','⌘').replace('Alt+','⌥')});
+ loadScripts(context,settingsScripts);
  const button={querySelector:()=>hint,setAttribute:(key,value)=>attrs[key]=value,removeAttribute:key=>delete attrs[key]};
  context.applyShortcutHint(button,'view-github');assert.equal(hint.textContent,'⌘⌥G');assert.equal(hint.hidden,false);assert.equal(attrs['aria-keyshortcuts'],'Meta+Alt+G');
  binding='';context.applyShortcutHint(button,'view-github');assert.equal(hint.hidden,true);assert.equal(hint.textContent,'');assert.equal(attrs['aria-keyshortcuts'],undefined);
@@ -74,10 +80,8 @@ test('shortcut hints follow configured assignments and clear stale accessibility
 function profileImportContext(profile){
  const draft={theme:'midnight',density:'compact',uiScale:115,keybindings:{commands:'Primary+J',search:'Primary+G'},quickActions:[{id:'current',title:'Current',command:'printf current'}]};
  const error={textContent:''};let paints=0,dirty=0;
- const c=vm.createContext({structuredClone,settingsSaving:false,appSettings:{revision:7,contentHash:'a'.repeat(64)},settingsBaseline:{revision:7,contentHash:'a'.repeat(64)},api:async(path,payload)=>{assert.equal(path,'/api/settings/preview');assert.equal(payload.revision,7);assert.equal(payload.contentHash,'a'.repeat(64));return {};},settingsDraft:structuredClone(draft),file:{files:[{size:100,text:async()=>typeof profile==='string'?profile:JSON.stringify(profile)}],value:'selected'},$:()=>error,paintSettingsBody:()=>paints++,updateSettingsDirty:()=>dirty++});
- vm.runInContext(source.slice(source.indexOf('function mergeSettingsProfile('),source.indexOf('function exportSettingsProfile(')),c);
- const start=source.indexOf('file.onchange=async()=>');
- vm.runInContext(source.slice(start,source.indexOf('oldDialog.append(file)',start)),c);
+ const c=browserContext({structuredClone,settingsSaving:false,appSettings:{revision:7,contentHash:'a'.repeat(64)},settingsBaseline:{revision:7,contentHash:'a'.repeat(64)},api:async(path,payload)=>{assert.equal(path,'/api/settings/preview');assert.equal(payload.revision,7);assert.equal(payload.contentHash,'a'.repeat(64));return {};},settingsDraft:structuredClone(draft),document:{querySelector:()=>error},paintSettingsBody:()=>paints++,updateSettingsDirty:()=>dirty++});
+ loadScripts(c,settingsScripts);Object.assign(c.file,{files:[{size:100,text:async()=>typeof profile==='string'?profile:JSON.stringify(profile)}],value:'selected'});
  return {c,draft,error,counts:()=>({paints,dirty})};
 }
 test('partial profile patches the unsaved draft and merges only supplied keyboard assignments',async()=>{
@@ -119,13 +123,13 @@ test('edits made while preview is pending are retained and the imported draft is
 
 test('saving a draft uses its captured identity, preserves conflicts and serializes repeated clicks',async()=>{
  const nodes=new Map(),calls=[];let release;const gate=new Promise(resolve=>release=resolve),baseline={revision:7,contentHash:'a'.repeat(64),values:{theme:'light',keybindings:{}}};
- const c=vm.createContext({structuredClone,settingsSaving:false,settingsDirty:false,settingsBaseline:null,settingsDraft:null,appSettings:baseline,document:{activeElement:null,body:{}},$:id=>{if(!nodes.has(id))nodes.set(id,{textContent:''});return nodes.get(id);},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,finishShortcutRecording:()=>gate,updateSettingsDirty(){},applyAppSettings(){assert.fail('Conflict must not apply');},paintSettingsBody(){assert.fail('Conflict must not repaint');},api:async(path,payload)=>{calls.push(payload);throw new Error('Settings changed elsewhere. Reload before saving.');}});
- vm.runInContext(source.slice(source.indexOf('function resetSettingsDraft('),source.indexOf('function mergeSettingsProfile(')),c);c.resetSettingsDraft(baseline);c.settingsDraft.theme='midnight';c.appSettings={...baseline,revision:9,contentHash:'b'.repeat(64)};
+ const c=browserContext({structuredClone,settingsSaving:false,settingsDirty:false,settingsBaseline:null,settingsDraft:null,appSettings:baseline,document:{activeElement:null,body:{},querySelector:id=>{if(!nodes.has(id))nodes.set(id,{textContent:''});return nodes.get(id);}},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,finishShortcutRecording:()=>gate,updateSettingsDirty(){},applyAppSettings(){assert.fail('Conflict must not apply');},paintSettingsBody(){assert.fail('Conflict must not repaint');},api:async(path,payload)=>{calls.push(payload);throw new Error('Settings changed elsewhere. Reload before saving.');}});
+ loadScripts(c,settingsScripts);c.resetSettingsDraft(baseline);c.settingsDraft.theme='midnight';c.appSettings={...baseline,revision:9,contentHash:'b'.repeat(64)};
  const first=c.savePreferences();await c.savePreferences();release();await first;assert.equal(calls.length,1);assert.equal(calls[0].revision,7);assert.equal(calls[0].contentHash,'a'.repeat(64));assert.equal(c.settingsDraft.theme,'midnight');assert.match(nodes.get('#settings-error').textContent,/changed elsewhere/);assert.equal(c.settingsSaving,false);
 });
 test('quick-action execution keeps the identity captured when its command was displayed',async()=>{
- const calls=[],c=vm.createContext({currentAgentRecord:()=>null,appSettings:{revision:9,contentHash:'b'.repeat(64)},api:async(path,payload)=>{calls.push(payload);throw new Error('Command changed. Review it again.');},toast:message=>calls.push(message),openActionOutput(){assert.fail('A changed command must not run');}});
- vm.runInContext(source.slice(source.indexOf('async function chooseQuickAction('),source.indexOf('async function loadQuickActionRuns(')),c);
+ const calls=[],c=browserContext({currentAgentRecord:()=>null,appSettings:{revision:9,contentHash:'b'.repeat(64)},api:async(path,payload)=>{calls.push(payload);throw new Error('Command changed. Review it again.');},toast:message=>calls.push(message),openActionOutput(){assert.fail('A changed command must not run');}});
+ loadScripts(c,settingsScripts);
  await c.chooseQuickAction({id:'test',command:'printf fixture'},{revision:7,contentHash:'a'.repeat(64)});assert.equal(calls[0].args.revision,7);assert.equal(calls[0].args.contentHash,'a'.repeat(64));assert.match(calls[1],/Review it again/);
 });
 
@@ -151,20 +155,22 @@ function settingsSaveFixture(){
  }
  document.querySelectorAll=selector=>nodes.filter(node=>node.isConnected&&(selector==='#settings-dialog [data-settings-draft-control]'?node.dataset.settingsDraftControl:selector==='.shortcut-input'?node.className.includes('shortcut-input'):selector==='[data-settings-reset]'?node.dataset.settingsReset:false));
  document.getElementById=id=>nodes.find(node=>node.isConnected&&node.id===id)||null;
+ document.querySelector=id=>footer.get(id);
  const dialog=new Node('dialog');dialog.open=true;footer.set('#settings-dialog',dialog);
  for(const id of ['settings-error','settings-status','settings-save']){const node=new Node('button');node.id=id;footer.set('#'+id,node);}
  const values={theme:'light',keybindings:{commands:'Primary+K'},quickActions:[{id:'one',title:'One',command:'printf one'}]},baseline={revision:7,contentHash:'a'.repeat(64),values};let apiHandler=async()=>baseline,loadHandler=async()=>baseline;
- const c=vm.createContext({structuredClone,queueMicrotask,document,settingsSaving:false,settingsDirty:false,settingsDraft:null,settingsBaseline:null,appSettings:{...baseline,commands:[{id:'commands',label:'Commands'}],defaults:structuredClone(values),fields:[]},shortcutRecording:null,$:id=>footer.get(id),el:(...args)=>new Node(...args),settingsButton:(label,run,cls)=>Object.assign(new Node('button',cls,label),{onclick:run}),Option:function(text,value){this.text=text;this.value=value;},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,finishShortcutRecording:async()=>{},filterSettings(){},applyAppSettings(){},api:async(path,payload)=>{calls.push({path,payload});return apiHandler(path,payload);},loadAppSettings:async(options)=>{const next=await loadHandler(options);return !options||options.canApply()?next:null;},paintSettingsBody:()=>draw()});
- vm.runInContext(source.slice(source.indexOf('function settingsReset('),source.indexOf('function paintSettingsBody(')),c);
- vm.runInContext(source.slice(source.indexOf('function resetSettingsDraft('),source.indexOf('function mergeSettingsProfile(')),c);
- vm.runInContext(source.slice(source.indexOf('function mergeSettingsProfile('),source.indexOf('function exportSettingsProfile(')),c);
- const quick=source.indexOf(' for(const action of settingsDraft.quickActions){');vm.runInContext('function drawQuick(panel){'+source.slice(quick,source.indexOf("const output=el('div');output.id='quick-action-runs'",quick))+'}',c);
+ const c=browserContext({structuredClone,queueMicrotask,document,settingsSaving:false,settingsDirty:false,settingsDraft:null,settingsBaseline:null,appSettings:{...baseline,commands:[{id:'commands',label:'Commands'}],defaults:structuredClone(values),fields:[]},shortcutRecording:null,el:(...args)=>new Node(...args),settingsButton:(label,run,cls)=>Object.assign(new Node('button',cls,label),{onclick:run}),Option:function(text,value){this.text=text;this.value=value;},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,applyAppSettings(){},api:async(path,payload)=>{calls.push({path,payload});return apiHandler(path,payload);},loadAppSettings:async(options)=>{const next=await loadHandler(options);return !options||options.canApply()?next:null;},paintSettingsBody:()=>draw()});
+ loadScripts(c,settingsScripts);
+ // Later fixtures restore these actual functions over the stubs.
+ const actual={filterSettings:c.filterSettings,finishShortcutRecording:c.finishShortcutRecording};Object.assign(c,{filterSettings(){},finishShortcutRecording:async()=>{}});
+ const quick=source.indexOf(' for(const action of settingsDraft.quickActions){');evaluate(c,'function drawQuick(panel){'+source.slice(quick,source.indexOf("const output=el('div');output.id='quick-action-runs'",quick))+'}');
  c.resetSettingsDraft(baseline);let routine,shortcut,quickPanel;
  function draw(){for(const node of nodes)if(node.draftNode)node.isConnected=false;const start=nodes.length;routine=c.settingInput(['appearance','theme','Theme','text','']);shortcut=c.shortcutInput({id:'commands',label:'Commands'});quickPanel=new Node('section');c.drawQuick(quickPanel);for(const node of nodes.slice(start))node.draftNode=true;}
- draw();const file=new Node('input');file.dataset.settingsDraftControl='true';file.files=[];c.file=file;const importStart=source.indexOf('file.onchange=async()=>');vm.runInContext(source.slice(importStart,source.indexOf('oldDialog.append(file)',importStart)),c);
+ // The actual import control is a draft control in this fixture's connected document.
+ draw();const file=c.file;Object.defineProperty(file,'isConnected',{value:true});nodes.push(file);file.files=[];
  const independent=new Node('input');independent.id='sharing-independent';
  const all=node=>[node,...node.children.flatMap(child=>child instanceof Node?all(child):[])];
- return {c,calls,document,dialog,independent,file,Node,nodes,node:id=>document.getElementById(id),error:()=>footer.get('#settings-error').textContent,api(handler){apiHandler=handler;},load(handler){loadHandler=handler;},quickInputs:()=>all(quickPanel).filter(node=>['INPUT','TEXTAREA'].includes(node.tagName)),quickButton:label=>all(quickPanel).find(node=>node.textContent===label),edit(value){const input=document.getElementById('preference-theme');input.value=value;input.oninput();},reset:()=>all(routine).find(node=>node.dataset.settingsReset),draw};
+ return {c,actual,calls,document,dialog,independent,file,Node,nodes,node:id=>document.getElementById(id),error:()=>footer.get('#settings-error').textContent,api(handler){apiHandler=handler;},load(handler){loadHandler=handler;},quickInputs:()=>all(quickPanel).filter(node=>['INPUT','TEXTAREA'].includes(node.tagName)),quickButton:label=>all(quickPanel).find(node=>node.textContent===label),edit(value){const input=document.getElementById('preference-theme');input.value=value;input.oninput();},reset:()=>all(routine).find(node=>node.dataset.settingsReset),draw};
 }
 
 test('deferred Settings Save freezes only its own draft controls and guards all edit handlers',{timeout:1000},async()=>{
@@ -211,10 +217,10 @@ test('Settings Save blocks shortcut capture and recording finalization never cha
 
 
 function settingsModifiedFixture(){
- const f=settingsSaveFixture(),originalQuery=f.document.querySelectorAll,originalDollar=f.c.$;f.c.settingsCategory='appearance';
- f.c.$=selector=>f.document.getElementById(selector.slice(1))||originalDollar(selector);
+ const f=settingsSaveFixture(),originalQuery=f.document.querySelectorAll,originalDollar=f.document.querySelector;f.c.settingsCategory='appearance';
+ f.document.querySelector=selector=>f.document.getElementById(selector.slice(1))||originalDollar(selector);
  f.document.querySelectorAll=selector=>selector==='.preferences-panel'?f.nodes.filter(node=>node.isConnected&&node.className==='preferences-panel'):selector==='[data-settings-category]'?f.nodes.filter(node=>node.isConnected&&node.dataset.settingsCategory):originalQuery(selector);
- vm.runInContext(source.slice(source.indexOf('function resetSettingsFilter('),source.indexOf('function resetSettingsDraft(')),f.c);
+ f.c.filterSettings=f.actual.filterSettings;
  const search=new f.Node('input');search.id='settings-search';const controls=f.c.settingsFilterControls(search),head=new f.Node('div');head.append(...controls);const modified=f.node('settings-modified');
  const operational=new f.Node('section','preferences-panel');operational.dataset.category='sharing';operational.append(f.independent);f.independent.value='Unsaved sharing draft';
  const draw=f.c.paintSettingsBody;
@@ -239,7 +245,7 @@ test('Modified filter retains active edits until blur and Reset hands owned focu
 });
 
 test('Modified filter preserves actual shortcut recording ownership until native recording ends',async()=>{
- const f=settingsModifiedFixture();f.c.syncNativeShortcutRecording=async()=>{};vm.runInContext(source.slice(source.indexOf('async function finishShortcutRecording('),source.indexOf("window.addEventListener('keydown'")),f.c);const input=f.node('shortcut-commands'),record=input.parentElement.children.find(node=>node.className.includes('shortcut-record'));input.value='Primary+J';input.oninput();f.toggle();await f.c.startShortcutRecording(record,input,'commands');assert.equal(f.c.shortcutRecording.input,input);input.value='Primary+K';input.oninput();assert.equal(f.row(input.id).hidden,false);
+ const f=settingsModifiedFixture();f.c.syncNativeShortcutRecording=async()=>{};f.c.finishShortcutRecording=f.actual.finishShortcutRecording;const input=f.node('shortcut-commands'),record=input.parentElement.children.find(node=>node.className.includes('shortcut-record'));input.value='Primary+J';input.oninput();f.toggle();await f.c.startShortcutRecording(record,input,'commands');assert.equal(f.c.shortcutRecording.input,input);input.value='Primary+K';input.oninput();assert.equal(f.row(input.id).hidden,false);
  f.independent.focus();await f.flush();assert.equal(f.row(input.id).hidden,false);await f.c.finishShortcutRecording();assert.equal(f.row(input.id).hidden,true);assert.equal(f.document.activeElement,f.independent);assert.equal(input.readOnly,false);assert.equal(f.independent.value,'Unsaved sharing draft');
 });
 
@@ -253,25 +259,25 @@ test('Modified filtering recomputes through actual save, profile import and disc
 test('Reset updates only its existing input and preserves independent forms without painting or disposal',async()=>{
  const f=settingsModifiedFixture();f.edit('dark');f.toggle();const input=f.node('preference-theme'),sharing=f.independent,sharingPanel=f.operational,shortcut=f.node('shortcut-commands'),reset=f.reset();let disposals=0,paints=0;const connection=new f.Node('section','connection-setup'),token=new f.Node('input');token.value='private unsaved fixture';connection.disposeConnectionSetup=()=>disposals++;connection.append(token);sharingPanel.append(connection);f.c.paintSettingsBody=()=>{paints++;connection.disposeConnectionSetup();};
  reset.focus();reset.onclick();assert.equal(paints,0);assert.equal(disposals,0);assert.equal(f.node('preference-theme'),input);assert.equal(input.value,'light');assert.equal(f.node('shortcut-commands'),shortcut);assert.equal(f.independent,sharing);assert.equal(sharing.value,'Unsaved sharing draft');assert.equal(sharingPanel.children.includes(connection),true);assert.equal(token.value,'private unsaved fixture');assert.equal(f.document.activeElement,f.modified);await f.flush();assert.equal(f.row(input.id).hidden,true);
- f.c.settingsDraft.keybindings.commands='Primary+J';shortcut.value='Primary+J';f.c.syncNativeShortcutRecording=async()=>{};vm.runInContext(source.slice(source.indexOf('async function finishShortcutRecording('),source.indexOf("window.addEventListener('keydown'")),f.c);f.c.shortcutRecording={id:'other-command',input:token,button:new f.Node('button')};const other=f.c.shortcutRecording;sharing.focus();f.row('shortcut-commands').children[1].children.find(node=>node.dataset.shortcutReset).onclick();assert.equal(f.c.shortcutRecording,other);assert.equal(shortcut.value,'Primary+K');assert.equal(f.document.activeElement,sharing);assert.equal(paints,0);assert.equal(disposals,0);
+ f.c.settingsDraft.keybindings.commands='Primary+J';shortcut.value='Primary+J';f.c.syncNativeShortcutRecording=async()=>{};f.c.finishShortcutRecording=f.actual.finishShortcutRecording;f.c.shortcutRecording={id:'other-command',input:token,button:new f.Node('button')};const other=f.c.shortcutRecording;sharing.focus();f.row('shortcut-commands').children[1].children.find(node=>node.dataset.shortcutReset).onclick();assert.equal(f.c.shortcutRecording,other);assert.equal(shortcut.value,'Primary+K');assert.equal(f.document.activeElement,sharing);assert.equal(paints,0);assert.equal(disposals,0);
 });
 
 test('Reset ends only matching shortcut recording and updates existing checkbox state',async()=>{
- const f=settingsModifiedFixture();f.c.syncNativeShortcutRecording=async()=>{};vm.runInContext(source.slice(source.indexOf('async function finishShortcutRecording('),source.indexOf("window.addEventListener('keydown'")),f.c);const input=f.node('shortcut-commands'),record=input.parentElement.children.find(node=>node.className.includes('shortcut-record'));input.value='Primary+J';input.oninput();await f.c.startShortcutRecording(record,input,'commands');const reset=input.parentElement.children.find(node=>node.dataset.shortcutReset);reset.onclick();assert.equal(f.c.shortcutRecording,null);assert.equal(input.readOnly,false);assert.equal(input.value,'Primary+K');assert.equal(f.node(input.id),input);
+ const f=settingsModifiedFixture();f.c.syncNativeShortcutRecording=async()=>{};f.c.finishShortcutRecording=f.actual.finishShortcutRecording;const input=f.node('shortcut-commands'),record=input.parentElement.children.find(node=>node.className.includes('shortcut-record'));input.value='Primary+J';input.oninput();await f.c.startShortcutRecording(record,input,'commands');const reset=input.parentElement.children.find(node=>node.dataset.shortcutReset);reset.onclick();assert.equal(f.c.shortcutRecording,null);assert.equal(input.readOnly,false);assert.equal(input.value,'Primary+K');assert.equal(f.node(input.id),input);
  f.c.appSettings.defaults.nativeNotifications=false;f.c.settingsDraft.nativeNotifications=true;const row=f.c.settingInput(['appearance','nativeNotifications','Notifications','checkbox']),checkbox=row.children[1].children[0];assert.equal(checkbox.checked,true);row.children[1].children.find(node=>node.dataset.settingsReset).onclick();assert.equal(checkbox.checked,false);assert.equal(f.c.settingsDraft.nativeNotifications,false);
 });
 
 
 test('Settings filter context bounds Unicode and reads only search, toggle and the preference dirty flag',()=>{
- const search={value:'😀'.repeat(200)+'界private-tail'},modified={getAttribute:key=>key==='aria-pressed'?'true':null},selectors=[],c=vm.createContext({settingsDirty:true,$:selector=>{selectors.push(selector);if(selector==='#settings-search')return search;if(selector==='#settings-modified')return modified;throw Error('Private form control must not be read');}});c.settingsDraft=new Proxy({},{get(){throw Error('Private preferences must not be read');}});
- vm.runInContext(source.slice(source.indexOf('function settingsFilterContext('),source.indexOf('function resetSettingsFilter(')),c);let value=c.settingsFilterContext();assert.deepEqual(JSON.parse(JSON.stringify(value)),{query:'😀'.repeat(200),queryTruncated:true,modifiedOnly:true,preferencesDirty:true});assert.equal(new TextEncoder().encode(value.query).length,800);assert.deepEqual(selectors,['#settings-search','#settings-modified']);assert.equal(JSON.stringify(value).includes('private-tail'),false);
+ const search={value:'😀'.repeat(200)+'界private-tail'},modified={getAttribute:key=>key==='aria-pressed'?'true':null},selectors=[],document={querySelector:selector=>{selectors.push(selector);if(selector==='#settings-search')return search;if(selector==='#settings-modified')return modified;throw Error('Private form control must not be read');}},c=browserContext({settingsDirty:true,document});loadScripts(c,settingsScripts);c.settingsDraft=new Proxy({},{get(){throw Error('Private preferences must not be read');}});
+ let value=c.settingsFilterContext();assert.deepEqual(JSON.parse(JSON.stringify(value)),{query:'😀'.repeat(200),queryTruncated:true,modifiedOnly:true,preferencesDirty:true});assert.equal(new TextEncoder().encode(value.query).length,800);assert.deepEqual(selectors,['#settings-search','#settings-modified']);assert.equal(JSON.stringify(value).includes('private-tail'),false);
  search.value='😀'.repeat(200);c.settingsDirty=false;value=c.settingsFilterContext();assert.equal(value.queryTruncated,false);assert.equal(value.preferencesDirty,false);search.value='';assert.equal(c.settingsFilterContext().query,'');
- modified.getAttribute=()=> 'false';assert.equal(c.settingsFilterContext().modifiedOnly,false);modified.getAttribute=()=>null;assert.equal(c.settingsFilterContext(),null);c.$=()=>null;assert.equal(c.settingsFilterContext(),null);
+ modified.getAttribute=()=> 'false';assert.equal(c.settingsFilterContext().modifiedOnly,false);modified.getAttribute=()=>null;assert.equal(c.settingsFilterContext(),null);document.querySelector=()=>null;assert.equal(c.settingsFilterContext(),null);
 });
 
 test('Settings context iteration stops after 201 code points rather than materializing an unlimited query',()=>{
- const c=vm.createContext({settingsDirty:false,$:selector=>selector==='#settings-search'?{value:'unlimited query'}:{getAttribute:()=> 'false'},steps:0});vm.runInContext(source.slice(source.indexOf('function settingsFilterContext('),source.indexOf('function resetSettingsFilter(')),c);
- vm.runInContext("String.prototype[Symbol.iterator]=function(){return {next(){steps++;if(steps>201)throw Error('Unbounded Settings search iteration');return {value:'😀',done:false};},[Symbol.iterator](){return this;}}};",c);const value=c.settingsFilterContext();assert.equal(c.steps,201);assert.equal(value.query,'😀'.repeat(200));assert.equal(value.queryTruncated,true);
+ const c=browserContext({settingsDirty:false,document:{querySelector:selector=>selector==='#settings-search'?{value:'unlimited query'}:{getAttribute:()=> 'false'}},steps:0});loadScripts(c,settingsScripts);
+ evaluate(c,"String.prototype[Symbol.iterator]=function(){return {next(){steps++;if(steps>201)throw Error('Unbounded Settings search iteration');return {value:'😀',done:false};},[Symbol.iterator](){return this;}}};");const value=c.settingsFilterContext();assert.equal(c.steps,201);assert.equal(value.query,'😀'.repeat(200));assert.equal(value.queryTruncated,true);
 });
 
 function reviewSkillFixture(){
@@ -282,7 +288,6 @@ function reviewSkillFixture(){
  for(const key of ['claudeReviewCommand','codexReviewCommand']){f.c.settingsDraft[key]='';f.c.appSettings.defaults[key]='';f.c.settingsBaseline.values[key]='';const panel=new f.Node('section','preferences-panel');panel.dataset.category='agents';panel.append(f.c.settingInput(['agents',key,key,'text','']));}
  f.c.settingsCategory='agents';f.c.currentAgentRecord=()=>null;f.c.skillPickerMatches=skills=>skills;f.c.paintSettingsBody=()=>{paints++;disposals++;};
  const connection=new f.Node('section','connection-setup'),token=new f.Node('input');token.value='private unsaved token';connection.disposeConnectionSetup=()=>disposals++;connection.append(token);f.operational.append(connection);
- vm.runInContext(source.slice(source.indexOf('async function browseReviewSkill('),source.indexOf('async function chooseQuickAction(')),f.c);
  const pending=deferredSave();f.api(()=>pending.promise);const catalog={skills:[{name:'Review',commandName:'team-review',path:'/fixture/review',description:'Review changes',agents:['claude','codex']}]};
  return {...f,picker,form,pending,catalog,connection,token,counts:()=>({paints,disposals}),results:()=>f.nodes.filter(n=>n.isConnected&&n.className==='skill-picker-result'),start:(key='claudeReviewCommand')=>f.c.browseReviewSkill(key)};
 }
