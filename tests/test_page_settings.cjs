@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
+const readCompactCss=require('./helpers/compact-css.cjs');
 test('provider visibility keeps all, none and selected project meanings distinct',()=>{
  const source=fs.readFileSync('static/page-settings.js','utf8').replace('void loadPageSettings();','');
  const context=vm.createContext({scopeKey:item=>item.project});vm.runInContext(source,context);
@@ -59,7 +60,7 @@ test('visibility load failure retains grouped secondary Close without a broken S
  assert.deepEqual(group.children.map(node=>node.textContent),['Open Connections settings','Close']);assert.ok(group.children.every(node=>node.dataset.variant==='secondary'));assert.equal(dialog.children.find(node=>node.className.includes('page-settings-error')).textContent,'Fixture load failed');group.children.at(-1).onclick();assert.equal(dialog.removed,true);
 });
 test('the shared action-group primitive owns spacing, wrapping and control heights for dialog reuse',()=>{
- const css=fs.readFileSync('static/ui-controls.css','utf8'),pageCSS=fs.readFileSync('static/page-settings.css','utf8');
+ const css=readCompactCss('static/ui-controls.css'),pageCSS=readCompactCss('static/page-settings.css');
  assert.match(css,/\.ui-actiongroup,\.dialog-actions\{[^}]*display:flex[^}]*flex-wrap:wrap[^}]*gap:10px[^}]*padding:4px/);assert.match(css,/\.ui-actiongroup>[^}]*min-height:var\(--control-height\)/);assert.ok(!pageCSS.includes('.page-settings-dialog>.text-button'));
 });
 

@@ -1,4 +1,4 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const {test}=require('node:test'),readCompactCss=require('./helpers/compact-css.cjs'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const app=fs.readFileSync('static/app.js','utf8'),renderSync=app.slice(app.indexOf('function renderSync()'),app.indexOf('const projectEditableFields='));
 function fixture(){
  const nodes=new Map(),storage=new Map(),calls=[],document={activeElement:null};
@@ -36,7 +36,7 @@ test('all loaded styles leave connection notice layout to the shared header and 
  // Inspect every shipped stylesheet in its actual document order. This asserts
  // selector ownership, not simulated browser layout or a partial CSS cascade.
  const html=fs.readFileSync('static/index.html','utf8');
- const styles=[...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map(match=>({path:'static'+match[1],css:fs.readFileSync('static'+match[1],'utf8')}));
+ const styles=[...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map(match=>({path:'static'+match[1],css:readCompactCss('static'+match[1])}));
  assert.ok(styles.some(style=>style.path==='static/product-tools.css'));assert.ok(styles.some(style=>style.path==='static/ui-controls.css'));
  const rules=styles.flatMap(style=>[...style.css.replace(/\/\*[\s\S]*?\*\//g,'').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match=>({path:style.path,selector:match[1].trim(),body:match[2]})));
  for(const rule of rules.filter(rule=>/(?:\.|#)connection-notice(?:-dismiss)?\b/.test(rule.selector))){

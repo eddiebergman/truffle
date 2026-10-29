@@ -1,4 +1,4 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const {test}=require('node:test'),readCompactCss=require('./helpers/compact-css.cjs'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const app=fs.readFileSync('static/app.js','utf8'),views=fs.readFileSync('static/views.js','utf8');
 const helper=app.slice(app.indexOf('function requestDialogClose('),app.indexOf("for (const button of document.querySelectorAll('.close-dialog'))"));
 class Dialog extends EventTarget{
@@ -167,7 +167,7 @@ test('settings loader does not overwrite a newer document while awaiting themes 
  const failed=deferred();f.c.api=()=>failed.promise;f.settingsDialog.open=true;f.settingsError.textContent='current error';const failure=f.c.loadAppSettings();f.c.appSettings={...latest};failed.reject(Error('obsolete failure'));await failure;assert.equal(f.settingsError.textContent,'current error');
 });
 test('normal App chat width remains inside scaled viewport gutters according to its actual CSS constraint',()=>{
- const css=fs.readFileSync('static/app-chat.css','utf8'),block=css.slice(css.indexOf('.app-chat-panel{'),css.indexOf('}',css.indexOf('.app-chat-panel{'))),width=block.split(';').find(value=>value.startsWith('width:'));
+ const css=readCompactCss('static/app-chat.css'),block=css.slice(css.indexOf('.app-chat-panel{'),css.indexOf('}',css.indexOf('.app-chat-panel{'))),width=block.split(';').find(value=>value.startsWith('width:'));
  const [,cap,calc]=width.match(/width:min\(([\d.]+)px,calc\((.*)\)\)/),right=Number(block.match(/right:([\d.]+)px/)[1]);
  for(const viewport of [280,500,800])for(const scale of [1,1.25,1.5,2]){
   const expression=calc.replace('100vw',String(viewport)).replace('var(--ui-scale,1)',String(scale)).replace(/px/g,'');assert.match(expression,/^[\d.\s+\-*/()]+$/);
