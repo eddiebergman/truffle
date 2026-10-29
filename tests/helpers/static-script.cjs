@@ -22,12 +22,12 @@ function rawContext(c){return raws.get(c)||c;}
 // Read a global the way script code sees it: a top-level let/const/class wins over a property.
 function readGlobal(raw,name){
  try{return expression(`typeof ${name}==='undefined'?undefined:${name}`).runInContext(raw);}
- catch(error){if(error instanceof ReferenceError)return undefined;throw error;}
+ catch(error){if(error?.name==='ReferenceError')return undefined;throw error;}
 }
 function writeGlobal(raw,name,value){
  raw[slot]=value;
  try{expression(`${name}=${slot}`).runInContext(raw);}
- catch(error){if(error instanceof TypeError)throw new TypeError(`Cannot replace const ${name} declared by a static script`);throw error;}
+ catch(error){if(error?.name==='TypeError')throw new TypeError(`Cannot replace const ${name} declared by a static script`);throw error;}
  finally{delete raw[slot];}
 }
 
