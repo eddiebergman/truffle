@@ -25,6 +25,7 @@ fn registration_resolution_merges_latest_links_and_omitted_title_without_overwri
     let state = repo.state.lock().unwrap();
     assert_eq!(state["itemSettings"]["note:old"]["cwd"], "existing folder");
     assert!(state["itemSettings"].get("note:concurrent").is_none());
+    drop(state);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
