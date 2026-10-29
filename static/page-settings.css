@@ -15,15 +15,6 @@
   background: var(--overlay);
 }
 
-.page-settings-dialog {
-  width: min(520px, calc(100vw - 40px));
-  padding: 20px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-
 .page-settings-header {
   display: flex;
   align-items: center;
@@ -74,6 +65,12 @@
 }
 
 .page-settings-dialog {
+  width: min(520px, calc(100vw - 40px));
+  padding: 20px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   max-height: calc(100dvh - 40px);
   overflow: auto;
 }
