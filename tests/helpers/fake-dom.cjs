@@ -32,6 +32,7 @@ class FakeElement extends FakeEventTarget{
  }
  get isConnected(){return Boolean(this.parentElement?.isConnected);}
  get firstChild(){return this.children[0]||null;}
+ get lastChild(){return this.children.at(-1)||null;}
  get firstElementChild(){return this.children[0]||null;}
  get lastElementChild(){return this.children.at(-1)||null;}
  get childElementCount(){return this.children.length;}
