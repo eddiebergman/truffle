@@ -226,7 +226,8 @@ impl Providers {
             &["api".into(), "graphql".into(), "--input".into(), "-".into()],
             Some(&json!({"query":query}).to_string()),
             35,
-        )?;
+        )
+        .map_err(gh_server_error)?;
         let body: Value = serde_json::from_str(&output)?;
         if body.get("errors").is_some() {
             return Err(Error::new(
@@ -550,7 +551,9 @@ impl Providers {
             return Err(Error::new("Too many linked items need refresh."));
         }
         let mut result = vec![];
-        for batch in refs.chunks(100) {
+        // GitHub times out with HTTP 502 on about 50 or more full PR nodes per query.
+        let size = if source == "github" { 25 } else { 100 };
+        for batch in refs.chunks(size) {
             match source {
                 "github" => {
                     let ids = arr(&json!(batch))
@@ -647,6 +650,13 @@ pub fn ci(n: &Value) -> Value {
 }
 // This stage is reached only after a mutation request is attempted. A transport
 // failure or missing result cannot establish that GitHub left the PR unchanged.
+fn gh_server_error(mut e: Error) -> Error {
+    let status = e.data["stderr"].as_str().and_then(|x| x.strip_prefix("gh: HTTP ")).unwrap_or("");
+    if status.starts_with('5') {
+        e.message = format!("GitHub server error (HTTP {status}). Cached data remains available.");
+    }
+    e
+}
 fn github_mutation_result(result:Result<Value>,mutation:&str)->Result<Value>{
     let data=result.map_err(|mut error|{
         error.message="GitHub did not confirm this change. Refresh the PR before retrying; check repository permissions and token write access.".into();
@@ -807,6 +817,13 @@ mod query_tests {
         assert_eq!(second_output, "benign-first-profile / [redacted]");
     }
 
+    #[test]
+    fn gh_server_errors_name_the_http_status(){
+        let run=|stderr:&str|gh_server_error(super::super::terminal::run("/bin/sh",&["-c".into(),format!("echo '{stderr}' >&2; echo detail >&2; exit 1")],None,5).unwrap_err());
+        let error=run("gh: HTTP 502");
+        assert_eq!(error.message,"GitHub server error (HTTP 502). Cached data remains available.");assert_eq!(error.data["stderr"],"gh: HTTP 502");
+        assert!(run("gh: HTTP 401").message.starts_with("Local command failed"));
+    }
     #[test]
     fn github_post_dispatch_failures_mark_unknown_confirmation_without_private_error_data(){
         let mut failure=Error::new("fixture transport failed");failure.data=json!({"private":"private-provider-marker"});failure.retry=15.0;

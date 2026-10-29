@@ -52,11 +52,14 @@ pub fn run_bytes(program: &str, args: &[String], input: Option<&str>, seconds: u
         return Err(e);
     }
     let stdout = output.join().unwrap_or_default();
-    let _stderr = errors.join().unwrap_or_default();
+    let stderr = errors.join().unwrap_or_default();
     if !status.unwrap().success() {
-        return Err(Error::new(
+        let mut e = Error::new(
             "Local command failed. Check account access or the selected command.",
-        ));
+        );
+        let line = String::from_utf8_lossy(&stderr).lines().next().unwrap_or("").chars().take(200).collect::<String>();
+        e.data = json!({"kind":"exit","transport":"local-cli","stderr":line});
+        return Err(e);
     }
     Ok(stdout)
 }
