@@ -84,11 +84,6 @@
   padding: 0 24px;
 }
 
-.onboarding-progress {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .onboarding-result {
   display: block;
   text-align: left;

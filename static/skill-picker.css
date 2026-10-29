@@ -38,11 +38,6 @@
   white-space: nowrap;
 }
 
-.skill-picker-source {
-  font-size: 10px;
-  color: var(--muted);
-}
-
 .skill-picker-description,
 .skill-picker-path {
   grid-column: 1/-1;

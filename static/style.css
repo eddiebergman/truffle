@@ -280,11 +280,6 @@ main {
   color: #464b55;
 }
 
-.topbar-right {
-  font-size: 11px;
-  color: #626a75;
-}
-
 .content {
   margin: auto;
 }
@@ -459,20 +454,6 @@ select {
   font-size: 11px;
   color: #b1b7c0;
   background: #181a1e;
-}
-
-.list-heading {
-  display: flex;
-  justify-content: space-between;
-  color: #727a85;
-  font-size: 9px;
-  letter-spacing: 1px;
-}
-
-.list-heading span + span {
-  font-size: 10px;
-  letter-spacing: 0;
-  color: #636b76;
 }
 
 .group-header {
@@ -907,10 +888,6 @@ dialog .optional {
     font-size: 9px;
   }
 
-  .list-heading span + span {
-    display: none;
-  }
-
   .status-pill {
     font-size: 9px;
   }
@@ -969,10 +946,6 @@ dialog .optional {
 
   .topbar {
     padding: 0 20px;
-  }
-
-  .topbar-right {
-    display: none;
   }
 
   h1 {
@@ -1242,31 +1215,9 @@ a.ci-check-name:hover {
   color: #c6a596;
 }
 
-.agent-link.add-agent-link {
-  border-color: transparent;
-  background: transparent;
-  color: #737d89;
-  padding: 0;
-}
-
-.row:hover .add-agent-link {
-  color: #b0cdb9;
-}
-
 .session-card {
   border: 1px solid #30373f;
   background: #171b1f;
-}
-
-.session-card-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.session-card-main {
-  flex: 1;
-  min-width: 0;
 }
 
 .session-card-title {
@@ -1280,14 +1231,6 @@ a.ci-check-name:hover {
 
 .session-card-title:hover {
   color: var(--green);
-}
-
-.session-card-meta {
-  font-size: 10px;
-  color: #7f8b97;
-  line-height: 1.7;
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
 }
 
 .runtime-pill {
@@ -1316,45 +1259,6 @@ a.ci-check-name:hover {
   color: #8d99a7;
   background: #20262c;
   border-color: #353e48;
-}
-
-.session-work-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 15px 0 16px;
-}
-
-.work-tag {
-  font-size: 10px;
-  color: #acb6c3;
-  background: #20262c;
-  border: 1px solid #313944;
-  padding: 3px 7px;
-  border-radius: 4px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.work-tag.completed {
-  color: #91b29d;
-}
-
-.session-card-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid #2b3239;
-  padding-top: 13px;
-}
-
-.session-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
 }
 
 .form-hint {
@@ -1505,19 +1409,6 @@ a.ci-check-name:hover {
   font-size: 12px;
 }
 
-.item-sessions .session-card-meta {
-  font-size: 9px;
-}
-
-.item-sessions .session-card-bottom > .form-hint {
-  display: none;
-}
-
-.item-sessions .session-card-actions {
-  width: 100%;
-  justify-content: space-between;
-}
-
 .project-controls {
   display: flex;
   gap: 8px;
@@ -1627,33 +1518,14 @@ a.ci-check-name:hover {
     margin: 13px 5px;
   }
 
-  .launch-menu {
-    width: 250px;
-  }
-
   .form-grid {
     grid-template-columns: 1fr;
     gap: 0;
   }
 
-  .session-card-top {
-    gap: 9px;
-  }
-
   .runtime-pill {
     font-size: 8px;
     padding: 3px 5px;
-  }
-
-  .session-card-bottom {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 9px;
-  }
-
-  .session-card-actions {
-    width: 100%;
-    justify-content: space-between;
   }
 
   .item-agent-links {
@@ -1666,12 +1538,6 @@ a.ci-check-name:hover {
 
   .item-agent-links .agent-link {
     font-size: 8px;
-  }
-
-  .session-card-top > .agent-icon {
-    width: 28px;
-    height: 28px;
-    font-size: 18px;
   }
 
   .session-filter-bar {
@@ -1783,10 +1649,6 @@ a.ci-check-name:hover {
 
 .view-controls select {
   padding: 4px 8px;
-}
-
-.list-heading {
-  margin: 12px 1px 4px;
 }
 
 .group {
@@ -2261,38 +2123,6 @@ a.ci-check-name:hover {
   gap: 1px;
 }
 
-.role-code {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 25px;
-  padding: 0;
-  font:
-    600 10px/1 ui-monospace,
-    SFMono-Regular,
-    monospace;
-  border: 0;
-  text-decoration: none;
-  color: #82909e;
-  cursor: help;
-}
-
-.role-code.mine {
-  color: #a2cfb2;
-}
-
-.role-code.review {
-  color: #b7a4e4;
-}
-
-.role-code.assigned {
-  color: #9db8d2;
-}
-
-.role-code.linked {
-  color: #7e8d9a;
-}
-
 .row.mixed-source {
   grid-template-columns: 44px minmax(0, 1fr);
 }
@@ -2451,11 +2281,6 @@ a.ci-check-name:hover {
 
   .row-codes {
     grid-template-columns: 15px;
-  }
-
-  .role-code {
-    width: 15px;
-    font-size: 9px;
   }
 
   .row.mixed-source {
@@ -2770,11 +2595,6 @@ a.ci-check-name:hover {
 
 .change-row {
   border-bottom: 1px solid var(--line);
-}
-
-.change-message {
-  color: var(--green);
-  font-size: 11px;
 }
 
 .change-row time {
