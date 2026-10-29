@@ -405,11 +405,10 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
-#[test]
-fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validate_args() {
+/// A dirty checkout whose clean filter writes the returned marker when git runs it.
+fn checkout_with_clean_filter(home: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("checkout");
+    let root = home.join("checkout");
     std::fs::create_dir(&root).unwrap();
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
@@ -418,7 +417,7 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
             .args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("HOME", temp.path())
+            .env("HOME", home)
             .output()
             .unwrap();
         assert!(
@@ -439,8 +438,8 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
         "-m",
         "fixture",
     ]);
-    let marker = temp.path().join("helper-called");
-    let script = temp.path().join("clean.sh");
+    let marker = home.join("helper-called");
+    let script = home.join("clean.sh");
     std::fs::write(
         &script,
         format!(
@@ -465,6 +464,12 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
     )
     .unwrap();
     std::fs::write(root.join("code.txt"), "changed\n").unwrap();
+    (root, marker)
+}
+#[test]
+fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validate_args() {
+    let temp = tempfile::tempdir().unwrap();
+    let (root, marker) = checkout_with_clean_filter(temp.path());
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
     let id = uuid();
     repo.transaction(|s| {
@@ -1876,8 +1881,7 @@ fn chat_metadata_commands_are_reversible_allowed_and_return_only_updated_metadat
         assert_eq!(spec.effect, Effect::Write);
         assert_eq!(spec.assistant, AssistantPolicy::Allowed);
         let result = invoke(&repo, &json!({"name":name,"args":args}), true).unwrap();
-        let state = repo.state.lock().unwrap();
-        let row = &state["sessions"][0];
+        let row = repo.state.lock().unwrap()["sessions"][0].clone();
         assert_eq!(result.as_object().unwrap().len(), 2);
         assert_eq!(result["chat"].as_object().unwrap().len(), 5);
         assert_eq!(result["scope"], "local");
@@ -1958,12 +1962,7 @@ fn chat_metadata_commands_reject_bad_targets_and_unknown_fields_without_writes()
     }
 }
 
-#[test]
-fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
-    std::fs::write(temp.path().join("SKILL.md"), "Fixture skill").unwrap();
-    let preset = json!({"title":"Fixture","cwd":temp.path(),"skill":"SKILL.md","command":"$fixture","agent":"codex"});
+fn assert_assistant_cannot_write_skills(repo: &Arc<Repository>, preset: &Value) {
     let before = repo.state.lock().unwrap().clone();
     for (name, args) in [
         ("skills.save", preset.clone()),
@@ -1973,11 +1972,19 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
         ),
         ("skills.run", json!({"presetId":"fixture"})),
     ] {
-        let error = invoke(&repo, &json!({"name":name,"args":args}), true).unwrap_err();
+        let error = invoke(repo, &json!({"name":name,"args":args}), true).unwrap_err();
         assert!(error.message.contains("requires a user action"));
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert!(repo.cooldown.lock().unwrap().is_empty());
     }
+}
+#[test]
+fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+    std::fs::write(temp.path().join("SKILL.md"), "Fixture skill").unwrap();
+    let preset = json!({"title":"Fixture","cwd":temp.path(),"skill":"SKILL.md","command":"$fixture","agent":"codex"});
+    assert_assistant_cannot_write_skills(&repo, &preset);
     let saved = invoke(&repo, &json!({"name":"skills.save","args":preset}), false).unwrap();
     assert_eq!(saved["saved"], true);
     assert_eq!(saved["presetId"], saved["preset"]["id"]);
@@ -2062,6 +2069,7 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
         .any(|record| record["id"] == receipt["recordId"]
             && record["newsletterId"] == preset_id
             && record.get("runReceipt").is_none()));
+    drop(state);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 
@@ -2346,6 +2354,36 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
     }
 }
 
+fn assert_strict_read_only_command(
+    repo: &Arc<Repository>,
+    catalog: &Value,
+    name: &str,
+    id: CommandId,
+) {
+    let spec = specifications()
+        .into_iter()
+        .find(|spec| spec.id == id)
+        .unwrap();
+    assert_eq!(spec.effect, Effect::Read);
+    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    let row = arr(&catalog["commands"])
+        .into_iter()
+        .find(|row| row["name"] == name)
+        .unwrap();
+    assert_eq!(row["readOnly"], true);
+    assert_eq!(row["appChat"], true);
+    let request = json!({"name":name,"args":{}});
+    assert_eq!(
+        invoke(repo, &request, false).unwrap(),
+        invoke(repo, &request, true).unwrap()
+    );
+    assert!(invoke(
+        repo,
+        &json!({"name":name,"args":{"path":"/not-accepted"}}),
+        true
+    )
+    .is_err());
+}
 #[test]
 fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only() {
     let temp = tempfile::tempdir().unwrap();
@@ -2364,29 +2402,7 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
         ("themes.list", CommandId::ThemesList),
         ("config.status", CommandId::ConfigStatus),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.id == id)
-            .unwrap();
-        assert_eq!(spec.effect, Effect::Read);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
-        let row = arr(&catalog["commands"])
-            .into_iter()
-            .find(|row| row["name"] == name)
-            .unwrap();
-        assert_eq!(row["readOnly"], true);
-        assert_eq!(row["appChat"], true);
-        let request = json!({"name":name,"args":{}});
-        assert_eq!(
-            invoke(&repo, &request, false).unwrap(),
-            invoke(&repo, &request, true).unwrap()
-        );
-        assert!(invoke(
-            &repo,
-            &json!({"name":name,"args":{"path":"/not-accepted"}}),
-            true
-        )
-        .is_err());
+        assert_strict_read_only_command(&repo, &catalog, name, id);
     }
     let result = invoke(&repo, &json!({"name":"themes.list","args":{}}), true).unwrap();
     let rows = arr(&result["themes"]);
@@ -2572,12 +2588,8 @@ fn registry_schemas_use_only_the_validated_subset() {
     assert!(validate_arguments(&json!({"type":"object","oneOf":[]}), &json!({}), "args").is_err());
 }
 
-#[test]
-fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let before = repo.state.lock().unwrap().clone();
-    for (name, args) in [
+fn invalid_command_arguments(repo: &Repository) -> Vec<(&'static str, Value)> {
+    vec![
         ("commands.list", json!({"unknown":true})),
         ("connections.reload", json!({"provider":"unknown"})),
         (
@@ -2654,7 +2666,14 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
             "skills.schedule",
             json!({"presetId":"missing","mode":"daily","missed":"skip","time":"noon"}),
         ),
-    ] {
+    ]
+}
+#[test]
+fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = Repository::open(temp.path().into(), None, true).unwrap();
+    let before = repo.state.lock().unwrap().clone();
+    for (name, args) in invalid_command_arguments(&repo) {
         let error = invoke(&repo, &json!({"name":name,"args":args}), false)
             .err()
             .unwrap();
