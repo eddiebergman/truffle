@@ -1,7 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
-const source=fs.readFileSync('static/settings.js','utf8');
 // Static scripts in index.html order, up to and with settings.js.
 const pageScripts=[...fs.readFileSync('static/index.html','utf8').matchAll(/<script src="\/([^"]+)"/g)].map(match=>'static/'+match[1]).filter(file=>!file.startsWith('static/vendor/xterm')&&file!=='static/vendor/addon-fit.js');
 const settingsScripts=pageScripts.slice(0,pageScripts.findIndex(name=>name==='static/settings.js')+1);
@@ -139,6 +138,8 @@ function settingsSaveFixture(){
  class Node{
   constructor(tag,cls='',text=''){this.tagName=tag.toUpperCase();this.className=cls;this.textContent=text;this.children=[];this.dataset={};this.attrs={};this.value='';this.isConnected=true;nodes.push(this);this.classList={add:()=>{}};}
   append(...children){this.children.push(...children);for(const child of children)child.parentElement=this;}
+  prepend(...children){this.children.unshift(...children);for(const child of children)child.parentElement=this;}
+  replaceChildren(...children){this.children=[];this.append(...children);}
   contains(node){return this===node||this.children.some(child=>child.contains?.(node));}
   closest(selector){for(let node=this;node;node=node.parentElement)if(selector==='[hidden]'&&node.hidden)return node;return null;}
   setAttribute(key,value){this.attrs[key]=value;}
@@ -158,14 +159,15 @@ function settingsSaveFixture(){
  document.querySelector=id=>footer.get(id);
  const dialog=new Node('dialog');dialog.open=true;footer.set('#settings-dialog',dialog);
  for(const id of ['settings-error','settings-status','settings-save']){const node=new Node('button');node.id=id;footer.set('#'+id,node);}
+ const settingsBody=new Node('div');footer.set('#settings-body',settingsBody);footer.set('.preferences-nav',new Node('nav'));
  const values={theme:'light',keybindings:{commands:'Primary+K'},quickActions:[{id:'one',title:'One',command:'printf one'}]},baseline={revision:7,contentHash:'a'.repeat(64),values};let apiHandler=async()=>baseline,loadHandler=async()=>baseline;
- const c=browserContext({structuredClone,queueMicrotask,document,settingsSaving:false,settingsDirty:false,settingsDraft:null,settingsBaseline:null,appSettings:{...baseline,commands:[{id:'commands',label:'Commands'}],defaults:structuredClone(values),fields:[]},shortcutRecording:null,el:(...args)=>new Node(...args),settingsButton:(label,run,cls)=>Object.assign(new Node('button',cls,label),{onclick:run}),Option:function(text,value){this.text=text;this.value=value;},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,applyAppSettings(){},api:async(path,payload)=>{calls.push({path,payload});return apiHandler(path,payload);},loadAppSettings:async(options)=>{const next=await loadHandler(options);return !options||options.canApply()?next:null;},paintSettingsBody:()=>draw()});
+ const c=browserContext({structuredClone,queueMicrotask,clearTimeout,document,settingsSaving:false,settingsDirty:false,settingsDraft:null,settingsBaseline:null,appSettings:{...baseline,commands:[{id:'commands',label:'Commands'}],categories:[{id:'actions',label:'Actions'}],defaults:structuredClone(values),fields:[]},renderGuidanceSettings(){},shortcutRecording:null,el:(...args)=>new Node(...args),settingsButton:(label,run,cls)=>Object.assign(new Node('button',cls,label),{onclick:run}),Option:function(text,value){this.text=text;this.value=value;},shortcutValidationMessage:()=>'',canonicalShortcut:value=>value,applyAppSettings(){},api:async(path,payload)=>{calls.push({path,payload});return apiHandler(path,payload);},loadAppSettings:async(options)=>{const next=await loadHandler(options);return !options||options.canApply()?next:null;}});
  loadScripts(c,settingsScripts);
  // Later fixtures restore these actual functions over the stubs.
- const actual={filterSettings:c.filterSettings,finishShortcutRecording:c.finishShortcutRecording};Object.assign(c,{filterSettings(){},finishShortcutRecording:async()=>{}});
- const quick=source.indexOf(' for(const action of settingsDraft.quickActions){');evaluate(c,'function drawQuick(panel){'+source.slice(quick,source.indexOf("const output=el('div');output.id='quick-action-runs'",quick))+'}');
+ const actual={filterSettings:c.filterSettings,finishShortcutRecording:c.finishShortcutRecording},paint=c.paintSettingsBody;Object.assign(c,{filterSettings(){},finishShortcutRecording:async()=>{},paintSettingsBody:()=>draw()});
  c.resetSettingsDraft(baseline);let routine,shortcut,quickPanel;
- function draw(){for(const node of nodes)if(node.draftNode)node.isConnected=false;const start=nodes.length;routine=c.settingInput(['appearance','theme','Theme','text','']);shortcut=c.shortcutInput({id:'commands',label:'Commands'});quickPanel=new Node('section');c.drawQuick(quickPanel);for(const node of nodes.slice(start))node.draftNode=true;}
+ // The real paint draws the quick actions in the Actions panel; theme and shortcut controls are drawn directly.
+ function draw(){for(const node of nodes)if(node.draftNode)node.isConnected=false;const start=nodes.length;routine=c.settingInput(['appearance','theme','Theme','text','']);shortcut=c.shortcutInput({id:'commands',label:'Commands'});paint();quickPanel=settingsBody.children.find(panel=>panel.dataset.category==='actions');for(const node of nodes.slice(start))node.draftNode=true;}
  // The actual import control is a draft control in this fixture's connected document.
  draw();const file=c.file;Object.defineProperty(file,'isConnected',{value:true});nodes.push(file);file.files=[];
  const independent=new Node('input');independent.id='sharing-independent';
