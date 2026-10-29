@@ -3,7 +3,7 @@ use super::*;
 use super::{domain, connections::ProviderHost};
 use fs2::FileExt;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashSet},
     fs::{File, OpenOptions},
     io::{Read, Write},
     os::unix::fs::{OpenOptionsExt, MetadataExt, PermissionsExt},
@@ -449,18 +449,23 @@ impl Repository {
                         }
                     }
                 }
+                let current = state["items"]
+                    .as_array()
+                    .map(|items| items.iter().map(|x| text(x, "id")).collect::<HashSet<_>>())
+                    .unwrap_or_default();
                 for (id, item) in &catalog {
                     if item["source"] == source
                         && (state["overrides"][id]["hidden"] == true
                             || ["github", "linear"].contains(&source)
                                 && item["status"] != "done"
-                                && arr(&state["items"]).iter().any(|x| x["id"] == *id))
+                                && current.contains(id.as_str()))
                     {
                         ids.insert(id.clone());
                     }
                 }
+                let fetched = items.iter().map(|x| text(x, "id")).collect::<HashSet<_>>();
                 ids.into_iter()
-                    .filter(|id| !items.iter().any(|x| x["id"] == *id))
+                    .filter(|id| !fetched.contains(id.as_str()))
                     .filter_map(|id| catalog.get(&id).cloned())
                     .collect::<Vec<_>>()
             };

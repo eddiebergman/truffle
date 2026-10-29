@@ -15,15 +15,20 @@ use std::{
 };
 const MAX_BODY: usize = 128 * 1024;
 const CSP:&str="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+/// Replace `path` atomically: readers see the old or the new bytes, never a partial file.
 pub fn private_write(path: &Path, bytes: &[u8]) -> Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
-    file.write_all(bytes)?;
-    Ok(())
+    let name = path.file_name().ok_or(Error::new("Write target has no file name."))?;
+    let temp = path.with_file_name(format!(".{}.{}.tmp", name.to_string_lossy(), uuid::Uuid::new_v4()));
+    let written = (|| {
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        std::fs::rename(&temp, path)
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    Ok(written?)
 }
 fn claim_sentry_environment(repo:&Repository,environment:&str)->Result<bool>{
     repo.transaction(|s| {
@@ -702,4 +707,26 @@ mod environment_admission_tests{
  #[test]fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_admission(){
   let temp=tempfile::tempdir().unwrap();let repo=Repository::open(temp.path().into(),None,true).unwrap();repo.transaction(|state|{state["sources"]["sentry"]["disabled"]=json!(true);state["sentryEnvironments"]=json!({"qa":{"lastSuccess":42,"itemIds":["cached"],"extension":"keep"}});Ok(())}).unwrap();let before=repo.state.lock().unwrap().clone();let bytes=std::fs::read(&repo.data).unwrap();let cooldown=repo.cooldown.lock().unwrap().clone();let mut starts=0;let claim=claim_sentry_environment(&repo,"new-environment");if matches!(claim,Ok(true)){starts+=1;}assert!(claim.unwrap_err().message.contains("paused"));assert_eq!(starts,0);assert_eq!(*repo.state.lock().unwrap(),before);assert_eq!(std::fs::read(&repo.data).unwrap(),bytes);assert_eq!(*repo.cooldown.lock().unwrap(),cooldown);
  }
+}
+#[cfg(test)]
+mod private_write_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn private_write_replaces_whole_files_privately_and_leaves_no_temp_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("doc.json");
+        std::fs::write(&path, b"old and longer").unwrap();
+        private_write(&path, b"new").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        let blocked = temp.path().join("dir");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::write(blocked.join("child"), b"").unwrap();
+        assert!(private_write(&blocked, b"x").is_err());
+        let mut names = std::fs::read_dir(temp.path()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["dir", "doc.json"]);
+    }
 }
