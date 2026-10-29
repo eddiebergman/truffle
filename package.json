@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:rust",
-    "lint:js": "eslint . && prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
+    "lint:js": "eslint --max-warnings 0 . && prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
     "format:js": "eslint --fix . ; prettier --write \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/build-diffs.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
     "lint:css": "stylelint \"static/*.css\" && prettier --check \"static/*.css\"",
     "format:css": "prettier --write \"static/*.css\" && stylelint --fix \"static/*.css\"",

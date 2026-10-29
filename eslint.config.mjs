@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
 import * as eslintScope from "eslint-scope";
 import * as espree from "espree";
@@ -157,7 +158,7 @@ const sharedGlobalsAreUsed = {
     schema: [],
   },
   create(context) {
-    const path = context.filename.slice(new URL(root).pathname.length);
+    const path = context.filename.slice(fileURLToPath(root).length);
     const others = [...scripts].filter(([other]) => other !== path);
     return {
       Program(node) {
@@ -189,8 +190,8 @@ const rules = {
   "max-depth": ["error", 4],
   "no-param-reassign": "error",
   "no-shadow": "error",
-  // Functions run after the whole script has loaded, so they may use later
-  // declarations. Uses in the same scope before the declaration are reported.
+  // A function body may use a later declaration of an outer scope, because it
+  // runs after that declaration. A use earlier in the same scope is an error.
   "no-use-before-define": [
     "error",
     { functions: false, classes: true, variables: false },
@@ -208,11 +209,8 @@ export default [
     ],
   },
   {
-    linterOptions: {
-      noInlineConfig: true,
-      reportUnusedDisableDirectives: "error",
-      reportUnusedInlineConfigs: "error",
-    },
+    // Comments cannot disable rules. `lint:js` fails on the warning that such a comment causes.
+    linterOptions: { noInlineConfig: true },
   },
   {
     files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
