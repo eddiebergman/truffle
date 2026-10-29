@@ -1,8 +1,8 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const app=fs.readFileSync('static/app.js','utf8'),source=app.slice(app.indexOf('async function refreshSources('),app.indexOf("$('#export').onclick"));
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
 function fixture(){
  const buttons={'#sync':{disabled:false},'#force-refresh':{disabled:false}},calls=[],messages=[];let finish;
- const c=vm.createContext({$:id=>buttons[id],state:{old:true},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/commands/invoke')return new Promise(resolve=>finish=resolve);return {sources:{},syncing:[]};},render:()=>{calls.push({render:true});for(const button of Object.values(buttons))button.disabled=false;},toast:message=>messages.push(message)});vm.runInContext(app.slice(app.indexOf('function sameSnapshot('),app.indexOf('async function refresh()')),c);vm.runInContext(source,c);
+ const c=browserContext({document:{querySelector:id=>buttons[id]},state:{old:true},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/commands/invoke')return new Promise(resolve=>finish=resolve);return {sources:{},syncing:[]};},render:()=>{calls.push({render:true});for(const button of Object.values(buttons))button.disabled=false;},toast:message=>messages.push(message)});loadScripts(c,['static/client.js','static/app.js'],{elements:buttons});
  return {c,buttons,calls,messages,resolve:receipt=>finish(receipt)};
 }
 test('both source refresh buttons use the named owner and wait for its receipt before reloading state',async()=>{
@@ -21,7 +21,6 @@ test('source refresh retries obsolete reads and preserves newer metadata, receip
  for(const exhausted of [false,true]){
   const f=fixture(),reads=[],cooldown=Date.now()/1000+60;
   f.c.state={revision:'fixture:1',sessions:[{id:'chat',title:'Before',hidden:false}],sources:{},syncing:[]};
-  vm.runInContext(app.slice(app.indexOf('async function mutateChatMetadata('),app.indexOf('function workStatusLabel(')),f.c);
   f.c.api=async(path,payload)=>{
    if(path==='/api/state'){const read=deferredRead();reads.push(read);return read.promise;}
    if(payload.name==='sources.refresh')return {message:'Owner accepted source refresh.',forceRefreshAfter:cooldown};
