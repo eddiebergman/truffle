@@ -1,5 +1,5 @@
 //! Sole writer of the canonical JSON state. UI projections never write layout into records.
-use super::*;
+use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
 use super::{connections::ProviderHost, domain};
 use fs2::FileExt;
 use std::{
@@ -366,7 +366,7 @@ impl Repository {
         let mut v = s.clone();
         v.as_object_mut().unwrap().remove("sessionDispatch");
         v.as_object_mut().unwrap().remove("uiPresentations");
-        let catalog = domain::catalog(&s);
+        let catalog = domain::catalog(s);
         for session in v["sessions"].as_array_mut().unwrap() {
             if !export {
                 let fields = session.as_object_mut().unwrap();
@@ -379,7 +379,7 @@ impl Repository {
                 .map(|i| domain::item_ref(catalog.get(text(i, "id")).unwrap_or(i)))
                 .collect::<Vec<_>>());
         }
-        v["bundles"] = domain::bundles(&s);
+        v["bundles"] = domain::bundles(s);
         let ids: BTreeSet<String> = arr(&v["bundles"])
             .iter()
             .flat_map(|x| arr(&x["itemIds"]))
@@ -397,7 +397,7 @@ impl Repository {
             .collect::<Vec<_>>());
         for collection in ["items", "notes"] {
             for item in v[collection].as_array_mut().unwrap() {
-                item["snoozed"] = json!(domain::snoozed(&s, item));
+                item["snoozed"] = json!(domain::snoozed(s, item));
                 item["actionReasons"] = json!(domain::reasons(item));
             }
         }
@@ -706,11 +706,7 @@ impl Repository {
         let root = self.data.parent().unwrap().join("logs");
         std::fs::create_dir_all(&root)?;
         let path = root.join("sync.jsonl");
-        if path
-            .metadata()
-            .map(|m| m.len() > 512 * 1024)
-            .unwrap_or(false)
-        {
+        if path.metadata().is_ok_and(|m| m.len() > 512 * 1024) {
             let _ = std::fs::rename(root.join("sync.jsonl.1"), root.join("sync.jsonl.2"));
             let _ = std::fs::rename(&path, root.join("sync.jsonl.1"));
         }
@@ -765,7 +761,7 @@ pub fn iso_time() -> String {
     let secs = now() as i64;
     let mut t: libc::tm = unsafe { std::mem::zeroed() };
     unsafe {
-        libc::gmtime_r(&secs, &mut t);
+        libc::gmtime_r(&raw const secs, &raw mut t);
     }
     format!(
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+00:00",

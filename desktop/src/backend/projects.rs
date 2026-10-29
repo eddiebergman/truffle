@@ -1,5 +1,8 @@
 //! Local project metadata. No launch, provider, shell, or trust-setting effects.
-use super::*;
+use super::{
+    arr, checked, directory, domain, json, now, safe_url, text, uuid, Error, Repository, Result,
+    Value,
+};
 const FIELDS: [&str; 5] = ["title", "detail", "url", "cwd", "status"];
 fn object_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let fields = value

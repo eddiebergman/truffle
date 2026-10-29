@@ -1,5 +1,5 @@
 //! Native credential setup. Public projections contain no credentials.
-use super::*;
+use super::{json, now, text, uuid, Error, PathBuf, Repository, Result, Value};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -383,10 +383,6 @@ impl SetupHost {
         }
         Ok(())
     }
-    pub fn preview(&self, payload: &Value) -> Result<Value> {
-        check_fields(payload, &["provider", "token", "source", "org", "base"])?;
-        self.preview_with_ticket(payload, self.begin_preview())
-    }
     pub fn preview_with_ticket(&self, payload: &Value, ticket: u64) -> Result<Value> {
         self.preview_with_source(payload, ticket, github_cli_token)
     }
@@ -445,7 +441,7 @@ impl SetupHost {
         preview["expiresInSeconds"] = json!(TTL);
         preview["provider"] = json!(provider);
         let expiry = Arc::downgrade(&self.pending);
-        let expiry_id = id.clone();
+        let expiry_id = id;
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(300));
             if let Some(pending) = expiry.upgrade() {
@@ -614,14 +610,13 @@ fn github_cli_token() -> Result<Zeroizing<String>> {
             .read_to_end(&mut bytes)
             .map(|_| bytes)
     });
-    let status = match child.wait_timeout(Duration::from_secs(15))? {
-        Some(status) => status,
-        None => {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = reader.join();
-            return Err(Error::new("GitHub CLI token lookup timed out."));
-        }
+    let status = if let Some(status) = child.wait_timeout(Duration::from_secs(15))? {
+        status
+    } else {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = reader.join();
+        return Err(Error::new("GitHub CLI token lookup timed out."));
     };
     let bytes = reader.join().map_err(|_| Error::io())??;
     if !status.success() || bytes.len() > MAX_SECRET {
@@ -675,7 +670,7 @@ impl ProviderHost {
                 .get(&account(&self.profile, &entry.credential_ref))
             {
                 Ok(token) => {
-                    provider.configure_connection(source, &token, &entry.org, &entry.base)?
+                    provider.configure_connection(source, &token, &entry.org, &entry.base)?;
                 }
                 Err(error) => {
                     provider.configure_connection(source, "", &entry.org, &entry.base)?;
@@ -729,9 +724,6 @@ impl ProviderHost {
     }
     pub fn linear_url(&self, id: &str) -> Result<String> {
         self.snapshot("linear")?.linear_url(id)
-    }
-    pub fn github_pr(&self, id: &str) -> Result<(Value, String)> {
-        self.snapshot("github")?.github_pr(id)
     }
     pub fn github_pr_action(&self, id: &str, action: &str, login: &str) -> Result<(Value, String)> {
         self.snapshot("github")?.github_pr_action(id, action, login)

@@ -1,5 +1,5 @@
 //! Agent-reported resource metadata. Reporting never provisions, polls or stops cloud resources.
-use super::*;
+use super::{arr, checked, json, repository, sid, text, Error, Repository, Result, Value};
 fn short(v: &Value, key: &str, max: usize) -> String {
     text(v, key).chars().take(max).collect()
 }
@@ -69,10 +69,10 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
         if !entry.is_object() {
             return Err(Error::new("Each resource must be an object."));
         }
-        let external_id = if !text(entry, "id").is_empty() {
-            checked(entry, "id", 500, true)?
-        } else {
+        let external_id = if text(entry, "id").is_empty() {
             checked(entry, "identifier", 500, true)?
+        } else {
+            checked(entry, "id", 500, true)?
         };
         let provider = checked(entry, "provider", 80, true)?;
         let kind = checked(entry, "kind", 80, true)?;
@@ -116,9 +116,7 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
             }),
             SaveMode::Merge => None,
         };
-        row["reportedAt"] = json!(captured_time
-            .map(str::to_owned)
-            .unwrap_or_else(repository::iso_time));
+        row["reportedAt"] = json!(captured_time.map_or_else(repository::iso_time, str::to_owned));
         if let Some(previous) = resources.iter().position(|r| r["resourceKey"] == key) {
             // Reporting a state update preserves an earlier purpose or locator omitted by the agent.
             let mut merged = resources[previous].clone();
@@ -151,7 +149,7 @@ pub fn import_pending(repo: &Repository) {
     let files = std::fs::read_dir(&dir)
         .into_iter()
         .flatten()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().extension().is_some_and(|s| s == "json"))
         .take(64);
     for entry in files {

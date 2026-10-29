@@ -1,6 +1,9 @@
 //! App adapter for the portable Context Bundle / Inbox protocol. No UI layout in storage.
 use super::local_files::{directory as folder_directory, read as folder_read};
-use super::*;
+use super::{
+    arr, artifacts, checked, directory, expand, home, json, now, sid, text, uuid, workflows, Error,
+    PathBuf, Repository, Result, Value,
+};
 use context_kit::{Bundle, MAX_MANIFEST, MAX_RESOURCE, MAX_TOTAL};
 use reqwest::{blocking::Client, Url};
 use serde::{Deserialize, Serialize};
@@ -64,7 +67,7 @@ impl SharingConfig {
         match &self.transport {
             Transport::Gcs { root } => Ok(root.trim_end_matches('/').into()),
             Transport::Folder { root } => Ok(Url::from_directory_path(root)
-                .map_err(|_| Error::new("Invalid shared folder path."))?
+                .map_err(|()| Error::new("Invalid shared folder path."))?
                 .as_str()
                 .trim_end_matches('/')
                 .into()),
@@ -72,7 +75,7 @@ impl SharingConfig {
     }
 }
 fn parse_config(value: &Value) -> Result<Option<SharingConfig>> {
-    if value.as_object().is_some_and(|value| value.is_empty()) {
+    if value.as_object().is_some_and(serde_json::Map::is_empty) {
         return Ok(None);
     }
     let config = if value.get("version").is_none() {
@@ -156,7 +159,8 @@ pub fn load(data: &Path) -> Result<Value> {
         if let Some(config) = parse_config(&s["config"])? {
             let root = config.root_uri()?;
             if text(&s, "configRoot") != root || text(&s, "configHandle") != config.handle {
-                for key in ["entries"] {
+                {
+                    let key = "entries";
                     s[key] = json!({});
                 }
                 for key in [
@@ -582,10 +586,10 @@ impl Store {
             let root = Url::parse(&self.root)
                 .unwrap()
                 .to_file_path()
-                .map_err(|_| Error::new("Invalid folder root URI."))?;
+                .map_err(|()| Error::new("Invalid folder root URI."))?;
             let path = url
                 .to_file_path()
-                .map_err(|_| Error::new("Invalid folder reference URI."))?;
+                .map_err(|()| Error::new("Invalid folder reference URI."))?;
             let key=path.strip_prefix(root).map_err(|_|Error::new("Reference is outside the configured sharing folder. It remains an external link."))?;
             let key = key
                 .to_str()
@@ -613,12 +617,12 @@ impl Store {
         .unwrap();
         {
             let mut p = u.path_segments_mut().unwrap();
-            p.pop_if_empty().push(&bucket).push("o");
+            p.pop_if_empty().push(bucket).push("o");
             if let Some(key) = key {
                 let full = if prefix.is_empty() {
                     key.into()
                 } else {
-                    format!("{}/{}", prefix, key)
+                    format!("{prefix}/{key}")
                 };
                 p.push(&full);
             }
@@ -678,7 +682,7 @@ impl Store {
         let full = if prefix.is_empty() {
             key.into()
         } else {
-            format!("{}/{}", prefix, key)
+            format!("{prefix}/{key}")
         };
         url.query_pairs_mut()
             .append_pair("uploadType", "media")
@@ -766,7 +770,7 @@ impl Store {
         let full = if store_prefix.is_empty() {
             prefix.into()
         } else {
-            format!("{}/{}", store_prefix, prefix)
+            format!("{store_prefix}/{prefix}")
         };
         url.query_pairs_mut()
             .append_pair("prefix", &full)
@@ -807,14 +811,14 @@ impl Store {
                 *prefix = json!(prefix
                     .as_str()
                     .unwrap_or("")
-                    .strip_prefix(&(store_prefix.to_string() + "/"))
+                    .strip_prefix(&(store_prefix.clone() + "/"))
                     .ok_or(Error::new("Unexpected inbox prefix."))?);
             }
         }
         for entry in v["items"].as_array_mut().into_iter().flatten() {
             if !store_prefix.is_empty() {
                 entry["name"] = json!(text(entry, "name")
-                    .strip_prefix(&(store_prefix.to_string() + "/"))
+                    .strip_prefix(&(store_prefix.clone() + "/"))
                     .ok_or(Error::new("Unexpected object prefix."))?);
             }
         }
@@ -970,7 +974,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
             let _guard = CONFIG_WRITE_LOCK.lock().map_err(|_| Error::io())?;
             with_idle_configuration(repo, || {
                 let (previous, hash) = config_snapshot(repo)?;
-                if request.revision != previous.as_ref().map(|config| config.revision).unwrap_or(0)
+                if request.revision != previous.as_ref().map_or(0, |config| config.revision)
                     || request.content_hash != hash
                 {
                     let mut error =
@@ -1161,8 +1165,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
                 }
                 let task = entry["importJobId"]
                     .as_str()
-                    .map(str::to_owned)
-                    .unwrap_or_else(uuid);
+                    .map_or_else(uuid, str::to_owned);
                 s["importKeys"][&key] = json!({"jobId":task,"sha256":entry["bundle"]["sha256"]});
                 Ok(task)
             })?;
@@ -1506,7 +1509,7 @@ fn session_file(agent: &str, id: &str) -> Option<PathBuf> {
             return None;
         }
         let entries = fs::read_dir(root).ok()?;
-        for e in entries.filter_map(|e| e.ok()) {
+        for e in entries.filter_map(std::result::Result::ok) {
             *budget = budget.saturating_sub(1);
             if *budget == 0 {
                 break;
@@ -1559,7 +1562,7 @@ fn recent_messages(path: &Path) -> Result<Vec<Value>> {
                         break;
                     }
                     let end = buffer.iter().position(|c| *c == b'\n');
-                    let count = end.map(|i| i + 1).unwrap_or(buffer.len());
+                    let count = end.map_or(buffer.len(), |i| i + 1);
                     reader.consume(count);
                     total += count;
                     if total > 256 * 1024 * 1024 {
@@ -1736,8 +1739,7 @@ fn run_preparer(record: &Value, prompt: &str, out: &Path) -> Result<Value> {
     let t = text.trim();
     let t = if t.starts_with("```") {
         t.split_once('\n')
-            .map(|(_, b)| b.rsplit_once("```").map(|(a, _)| a).unwrap_or(b))
-            .unwrap_or(t)
+            .map_or(t, |(_, b)| b.rsplit_once("```").map_or(b, |(a, _)| a))
     } else {
         t
     };
@@ -2269,8 +2271,7 @@ fn recommended_directory(raw: &Value) -> Option<String> {
         }
         let name = url
             .path_segments()?
-            .filter(|s| !s.is_empty())
-            .next_back()?
+            .rfind(|s| !s.is_empty())?
             .trim_end_matches(".git");
         if name.is_empty()
             || !name
@@ -2388,12 +2389,11 @@ fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
         total += size;
         let bytes = if let Some(encoded) = resource["inline_base64"].as_str() {
             use base64::Engine;
-            match base64::engine::general_purpose::STANDARD.decode(encoded) {
-                Ok(bytes) => Some(bytes),
-                Err(_) => {
-                    notices.push(json!("Invalid inline attachment encoding."));
-                    None
-                }
+            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(encoded) {
+                Some(bytes)
+            } else {
+                notices.push(json!("Invalid inline attachment encoding."));
+                None
             }
         } else if store.folder_extension()
             && text(resource, "href")
@@ -2530,8 +2530,10 @@ fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
             let title = arr(&raw["items"])
                 .iter()
                 .find(|i| arr(&i["resources"]).contains(&resource["id"]))
-                .map(|i| text(i, "title").to_string())
-                .unwrap_or_else(|| text(&resource, "name").into());
+                .map_or_else(
+                    || text(&resource, "name").into(),
+                    |i| text(i, "title").to_string(),
+                );
             // Generic JSON may not be truffle.table/v1, so retain it as a file in the bundle.
             if ext == "json" {
                 continue;

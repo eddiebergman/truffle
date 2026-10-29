@@ -1,5 +1,5 @@
 //! Native registration and lifecycle client for the local agent bridge.
-use super::*;
+use super::{expand, home, json, now, safe_url, sid, terminal, text, uuid, Error, Result, Value};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{
@@ -80,8 +80,7 @@ impl Options {
         self.values
             .get(key)
             .and_then(|v| v.first())
-            .map(String::as_str)
-            .unwrap_or("")
+            .map_or("", String::as_str)
     }
     fn required(&self, key: &str) -> Result<&str> {
         let value = self.get(key);
@@ -270,7 +269,7 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
         }
         "context" => {
             o.validate(&["record", "file", "show"])?;
-            if o.has("show") == !o.get("file").is_empty() {
+            if o.has("show") != o.get("file").is_empty() {
                 return Err(Error::new("Choose either --show or --file."));
             }
             p["operation"] = json!(if o.has("show") {
@@ -339,10 +338,10 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
                 return Err(Error::new("Choose a file or URL."));
             }
             p["operation"] = json!("save-artifact");
-            if !o.get("file").is_empty() {
-                p["path"] = json!(path(o.get("file"))?);
-            } else {
+            if o.get("file").is_empty() {
                 p["url"] = json!(safe_url(o.get("url"))?);
+            } else {
+                p["path"] = json!(path(o.get("file"))?);
             }
             if !o.get("title").is_empty() {
                 p["title"] = json!(o.get("title"));
@@ -543,8 +542,7 @@ pub fn activity_snapshot(data: &Value) -> Value {
                 .unwrap_or("other");
             let identity = task
                 .get("id")
-                .map(Value::to_string)
-                .unwrap_or_else(|| index.to_string());
+                .map_or_else(|| index.to_string(), Value::to_string);
             if seen.insert((kind.to_owned(), identity)) {
                 *counts.entry(kind.into()).or_default() += 1;
             }
@@ -615,8 +613,7 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
         }
         let root = if options.get("home").is_empty() {
             std::env::var_os("TRUFFLE_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home().join("code/mydash"))
+                .map_or_else(|| home().join("code/mydash"), PathBuf::from)
         } else {
             expand(options.get("home"))
         };

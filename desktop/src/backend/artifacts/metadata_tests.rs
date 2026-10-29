@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String, Vec<String>) {
     let temp = tempfile::tempdir().unwrap();
@@ -21,7 +22,7 @@ fn update(repo: &Repository, read: &Value, patch: Value) -> Result<Value> {
 }
 #[test]
 fn artifact_metadata_full_read_is_pure_registered_metadata_and_preserves_more_than_twenty_links() {
-    let (temp, repo, id, ids) = fixture();
+    let (_temp, repo, id, ids) = fixture();
     let config = repo.data.parent().unwrap().join("config/skills.json");
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     std::fs::write(config, b"invalid catalog config").unwrap();

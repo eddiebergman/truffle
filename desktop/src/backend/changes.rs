@@ -1,5 +1,5 @@
 //! Cached observed changes and exact-ID read markers. No provider or filesystem reads.
-use super::*;
+use super::{commands, json, safe_url, text, Error, Repository, Result, Value};
 use std::collections::BTreeSet;
 const MAX_CHANGES: usize = 500;
 fn keys(args: &Value, allowed: &[&str]) -> Result<()> {
@@ -145,9 +145,7 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
         .map(|row| summary(repo, row))
         .collect::<Result<Vec<_>>>()?;
     let next = if has_more {
-        page.last()
-            .map(|row| row["id"].clone())
-            .unwrap_or(Value::Null)
+        page.last().map_or(Value::Null, |row| row["id"].clone())
     } else {
         Value::Null
     };

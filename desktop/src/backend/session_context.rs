@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    arr, checked, directory, domain, json, now, safe_url, sid, text, workflows, Error, Repository,
+    Result, Value,
+};
 
 fn index(s: &Value, id: &str) -> Result<usize> {
     sid(id)?;
@@ -49,12 +52,12 @@ fn append_work(
     let mut catalog = domain::catalog(s);
     if let Some(item) = imported {
         let key = text(&item, "id").to_owned();
-        if !catalog.contains_key(&key) {
+        catalog.entry(key).or_insert_with(|| {
             let mut items = arr(&s["items"]);
             items.push(item.clone());
             s["items"] = json!(items);
-            catalog.insert(key, item);
-        }
+            item
+        });
     }
     let mut items = arr(&s["sessions"][position]["items"]);
     let mut ids = vec![];

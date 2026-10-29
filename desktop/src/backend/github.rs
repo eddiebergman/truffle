@@ -1,5 +1,5 @@
 //! Explicit PR mutations and durable review-request notification cycles.
-use super::*;
+use super::{arr, checked, json, now, sid, text, uuid, Error, Repository, Result, Value};
 pub fn review_ready(item: &Value) -> bool {
     item["source"] == "github"
         && item["kind"] == "Pull request"
@@ -110,7 +110,7 @@ fn action_with(
     let _guard = Guard(repo, key.clone());
     repo.cooldown(&format!("{key}:{operation}"), 3.0)?;
     let mut item = if repo.demo {
-        let mut item = old.clone();
+        let mut item = old;
         match operation.as_str() {
             "ready" => {
                 item["isDraft"] = json!(false);

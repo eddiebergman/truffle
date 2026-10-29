@@ -78,10 +78,10 @@ async fn connection_setup_cancel(state: State<'_, NativeState>) -> Result<Value,
         let cached = cached
             .lock()
             .map_err(|_| "Connection setup is unavailable.".to_string())?;
-        Ok(cached
-            .as_ref()
-            .map(|(_, host)| host.cancel())
-            .unwrap_or_else(|| serde_json::json!({"cancelled":true})))
+        Ok(cached.as_ref().map_or_else(
+            || serde_json::json!({"cancelled":true}),
+            |(_, host)| host.cancel(),
+        ))
     })
     .await
     .map_err(|_| "Could not cancel connection setup.".to_string())?
@@ -436,21 +436,17 @@ fn main() {
                 .position(|x| x == key)
                 .and_then(|i| args.get(i + 1))
         };
-        let root = value("--home")
-            .map(PathBuf::from)
-            .unwrap_or_else(restart::root);
-        let url = value("--url")
-            .map(String::as_str)
-            .unwrap_or("http://127.0.0.1:8765");
+        let root = value("--home").map_or_else(restart::root, PathBuf::from);
+        let url = value("--url").map_or("http://127.0.0.1:8765", String::as_str);
         let result = match args.get(index + 1).map(String::as_str) {
             Some("preview") => restart::preview(&root, url),
             Some("status") => restart::status(&root),
             Some("start") => restart::start(
                 &root,
                 url,
-                value("--mode").map(String::as_str).unwrap_or("service"),
+                value("--mode").map_or("service", String::as_str),
                 args.iter().any(|x| x == "--confirm-interruption"),
-                value("--snapshot").map(String::as_str).unwrap_or(""),
+                value("--snapshot").map_or("", String::as_str),
             ),
             _ => Err("Use restart-control preview, status, or start.".into()),
         };
@@ -480,7 +476,7 @@ fn main() {
         return;
     }
     if let Some(index) = args.iter().position(|x| x == "--check-agent-storage") {
-        let agent = args.get(index + 1).map(String::as_str).unwrap_or("claude");
+        let agent = args.get(index + 1).map_or("claude", String::as_str);
         match backend::embedded::check_agent_storage(agent) {
             Ok(()) => println!("Agent storage is writable."),
             Err(error) => {
@@ -606,7 +602,7 @@ fn main() {
         )
         .setup(move |app| {
             let navigation = service.clone();
-            let new_windows = service.clone();
+            let new_windows = service;
             let window_builder = WebviewWindowBuilder::new(
                 app,
                 "main",
@@ -694,7 +690,7 @@ fn main() {
         .expect("Could not initialize truffle");
     app.run(|app, event| {
         if let tauri::RunEvent::Reopen { .. } = event {
-            show(app)
+            show(app);
         }
     });
 }

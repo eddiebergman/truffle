@@ -1,4 +1,4 @@
-use super::*;
+use super::{json, text, PathBuf, Value};
 use std::{
     collections::{BTreeMap, HashSet},
     io::Read,
@@ -23,11 +23,9 @@ pub fn review_skill(configuration: &Path) -> Value {
 /// Read available skill metadata without importing or running the skill.
 pub fn discover(user_home: &Path, projects: &[PathBuf], application_skills: &Path) -> Value {
     let claude = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| user_home.join(".claude"));
-    let codex = std::env::var_os("CODEX_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| user_home.join(".codex"));
+        .map_or_else(|| user_home.join(".claude"), PathBuf::from);
+    let codex =
+        std::env::var_os("CODEX_HOME").map_or_else(|| user_home.join(".codex"), PathBuf::from);
     let mut roots = vec![
         Root {
             path: claude.join("skills"),

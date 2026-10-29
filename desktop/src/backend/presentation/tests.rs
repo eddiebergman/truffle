@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
     fixture_secret(None)

@@ -1,6 +1,6 @@
 //! Preparation saves context; it never opens a terminal.
 //! Aliases last while their saved record is retained; absence does not prove no effect.
-use super::*;
+use super::{arr, json, sid, text, Error, Repository, Result, Value};
 const MAX_ALIASES: usize = 128;
 const RECEIPT: &str = "preparationReceipt";
 pub(super) const KINDS: [&str; 8] = [

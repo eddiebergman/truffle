@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, commands, json, now, sid, text, uuid, Error, Repository, Result, Value};
 mod access;
 pub use access::{history, read, update_note};
 
@@ -32,8 +32,7 @@ pub(super) fn versions(repo: &Repository, id: &str) -> Result<Value> {
         .chain(
             arr(&record["worktrees"])
                 .iter()
-                .map(|t| text(t, "path").to_owned())
-                .collect::<Vec<_>>(),
+                .map(|t| text(t, "path").to_owned()),
         )
         .filter(|r| !r.is_empty())
         .collect::<std::collections::BTreeSet<_>>();
@@ -347,8 +346,8 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
             };
             let side = text(comment, "side");
             let content = match side {
-                "additions" => text(&file, "newContent"),
-                "deletions" => text(&file, "oldContent"),
+                "additions" => text(file, "newContent"),
+                "deletions" => text(file, "oldContent"),
                 _ => return Err(Error::new("Comment side must be additions or deletions.")),
             };
             let start = comment["start"].as_u64().unwrap_or(0);
@@ -382,8 +381,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
             if author.len() > 120 {
                 return Err(Error::new("Comment author exceeds 120 bytes."));
             }
-            let stamp =
-                super::git_diff::review_file_stamp(text(&file, "root"), text(&file, "path"));
+            let stamp = super::git_diff::review_file_stamp(text(file, "root"), text(file, "path"));
             *comment = json!({"id":if key.is_empty(){uuid()}else{key},"author":if author.is_empty(){"You"}else{author},"createdAt":now(),"fileStamp":stamp,"requestId":p["requestId"],"path":file["path"],"root":file["root"],"side":side,"start":start,"end":end,"text":text(comment,"text").trim(),"baseCommit":file["baseCommit"],"fingerprint":file["fingerprint"],"excerpt":content.split('\n').skip(start as usize-1).take((end-start+1).min(20) as usize).collect::<Vec<_>>().join("\n")});
         }
     }

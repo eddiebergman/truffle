@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, checked, json, text, Error, Repository, Result, Value};
 
 use super::work_search::normalized;
 fn rank(row: &Value, words: &[String]) -> usize {
@@ -100,6 +100,7 @@ pub fn target(repo: &Repository, id: &str) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::uuid;
     #[test]
     fn search_finds_punctuation_variants_in_folders_and_archived_chats() {
         let temp = tempfile::tempdir().unwrap();

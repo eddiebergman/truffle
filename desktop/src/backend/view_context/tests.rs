@@ -1,4 +1,5 @@
 use super::*;
+use std::path::PathBuf;
 #[test]
 fn snapshot_preserves_the_filtered_set_overrides_links_and_retry_identity() {
     let temp = tempfile::tempdir().unwrap();

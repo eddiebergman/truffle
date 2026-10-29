@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 #[test]
 fn null_id_runtime_observation_requires_exact_live_identity_and_canonical_generation() {
     let id = uuid();

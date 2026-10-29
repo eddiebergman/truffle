@@ -1,5 +1,7 @@
 //! Persisted skill schedules. Claim a due occurrence before launching it; never replay a backlog.
-use super::*;
+use super::{
+    arr, checked, directory, expand, json, now, text, uuid, Error, Repository, Result, Value,
+};
 use super::{artifacts, workflows};
 pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
     match text(schedule, "mode") {
@@ -8,7 +10,7 @@ pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
                 .as_u64()
                 .filter(|n| (5..=10080).contains(n))
                 .ok_or(Error::new("Use an interval of 5 minutes to 7 days."))?;
-            Ok(after + minutes as f64 * 60.0)
+            Ok((minutes as f64).mul_add(60.0, after))
         }
         "daily" => {
             let raw = text(schedule, "time");
@@ -22,16 +24,16 @@ pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
             }
             let seconds = after as libc::time_t;
             let mut local: libc::tm = unsafe { std::mem::zeroed() };
-            unsafe { libc::localtime_r(&seconds, &mut local) };
+            unsafe { libc::localtime_r(&raw const seconds, &raw mut local) };
             local.tm_hour = parts[0];
             local.tm_min = parts[1];
             local.tm_sec = 0;
             local.tm_isdst = -1;
-            let mut result = unsafe { libc::mktime(&mut local) } as f64;
+            let mut result = unsafe { libc::mktime(&raw mut local) } as f64;
             if result <= after {
                 local.tm_mday += 1;
                 local.tm_isdst = -1;
-                result = unsafe { libc::mktime(&mut local) } as f64;
+                result = unsafe { libc::mktime(&raw mut local) } as f64;
             }
             Ok(result)
         }
@@ -286,10 +288,10 @@ fn update_preset_from_source(
     checked_patch(&args["patch"], &args["expected"], &EDITABLE_PRESET)?;
     let patch = preset_patch(&args["patch"], false)?;
     repo.transaction_if_changed(|state| {
-        source_current(repo, &source)?;
+        source_current(repo, source)?;
         let (mut row, custom) = source.find(state, &id)?;
         for field in patch.as_object().unwrap().keys() {
-            if args["expected"][field] != preset_field_token(&source, &row, custom, field)? {
+            if args["expected"][field] != preset_field_token(source, &row, custom, field)? {
                 return Err(editor_conflict());
             }
         }
@@ -307,9 +309,9 @@ fn update_preset_from_source(
             } else {
                 rows.push(row);
             }
-            validate_preset_count(&source, state)?;
+            validate_preset_count(source, state)?;
         }
-        let mut view = editor_view(repo, &source, state, &id)?;
+        let mut view = editor_view(repo, source, state, &id)?;
         view["saved"] = json!(true);
         view["changedFields"] = json!(changed);
         Ok(view)

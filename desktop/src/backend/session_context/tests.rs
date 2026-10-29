@@ -1,5 +1,7 @@
 use super::*;
+use crate::backend::{resources, uuid};
 use std::fs;
+use std::path::PathBuf;
 fn fixture() -> (
     tempfile::TempDir,
     std::sync::Arc<Repository>,

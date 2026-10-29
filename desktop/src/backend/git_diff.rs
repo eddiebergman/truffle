@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, json, terminal, text, Error, PathBuf, Repository, Result, Value};
 use serde::Serialize;
 use std::{
     fs,
@@ -37,7 +37,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
         "-C".into(),
         root.to_string_lossy().into_owned(),
     ];
-    command.extend(args.iter().map(|arg| arg.to_string()));
+    command.extend(args.iter().map(std::string::ToString::to_string));
     terminal::run("git", &command, None, 10)
 }
 fn valid_path(path: &str) -> Result<PathBuf> {
@@ -344,7 +344,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
         json!({"path":path,"root":comparison.root,"baseCommit":comparison.base,"baseRef":comparison.base_ref,"branch":comparison.branch,"fingerprint":fingerprint,"oldContent":old,"newContent":new}),
     )
 }
-fn command_args<'a>(args: &'a Value, file: bool) -> Result<(&'a str, &'a str, &'a str)> {
+fn command_args(args: &Value, file: bool) -> Result<(&str, &str, &str)> {
     let object = args
         .as_object()
         .ok_or(Error::new("Chat diff arguments must be an object."))?;

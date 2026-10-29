@@ -1,5 +1,5 @@
 //! A same-user Unix socket separates PTY lifetime from the replaceable HTTP/UI process.
-use super::*;
+use super::{json, sid, text, Error, PathBuf, Result, Value};
 use fs2::FileExt;
 use std::{
     fs::{File, OpenOptions},
@@ -89,7 +89,7 @@ fn read_frame(stream: &mut UnixStream) -> Result<Value> {
     stream.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-pub(crate) fn call(dir: &Path, payload: Value) -> Result<Value> {
+pub fn call(dir: &Path, payload: Value) -> Result<Value> {
     let mut stream=UnixStream::connect(dir.join("terminal.sock")).map_err(|_|Error::new("Terminal daemon is unavailable. Running agents were not closed; retry after it responds."))?;
     stream.set_read_timeout(Some(Duration::from_secs(8)))?;
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
@@ -119,7 +119,7 @@ pub(super) fn open_request(dir: &Path, payload: Value) -> Result<super::terminal
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
     if stream
         .write_all(&(frame.len() as u32).to_be_bytes())
-        .and_then(|_| stream.write_all(&frame))
+        .and_then(|()| stream.write_all(&frame))
         .is_err()
     {
         return Ok(super::terminal::OpenOutcome::Unknown);

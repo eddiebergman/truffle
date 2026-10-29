@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 #[test]
 fn resolve_rejects_empty_and_invalid_urls_without_panicking() {
     let root = tempfile::tempdir().unwrap();

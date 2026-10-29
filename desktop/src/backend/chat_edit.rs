@@ -1,5 +1,8 @@
 //! Captured-field edits of an existing saved chat; never opens an agent.
-use super::*;
+use super::{
+    arr, checked, commands, directory, domain, json, now, safe_url, sid, text, Error, Repository,
+    Result, Value,
+};
 const FIELDS: [&str; 6] = [
     "title",
     "cwd",
@@ -240,7 +243,7 @@ fn check_tokens(row: &Value, args: &Value) -> Result<()> {
 }
 fn association(state: &Value, current: &Value, patch: &Value, repo: &Repository) -> Result<()> {
     if let Some(value) = patch.get("sessionId") {
-        let old = text(&current, "sessionId");
+        let old = text(current, "sessionId");
         if !old.is_empty() && value.as_str() != Some(old) {
             return Err(conflict(
                 "An attached conversation identity cannot be changed.",

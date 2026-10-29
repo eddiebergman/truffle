@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, domain, json, sid, text, Error, Repository, Result, Value};
 use std::path::{Component, PathBuf};
 
 const MAX_TEXT_BYTES: usize = 64 * 1024;
@@ -25,7 +25,7 @@ fn summary(repo: &Repository, value: &Value, fields: &[&str]) -> Value {
         match value.get(*field) {
             Some(Value::String(text)) => result[*field] = json!(prefix(repo, text, 300)),
             Some(value @ (Value::Bool(_) | Value::Number(_) | Value::Null)) => {
-                result[*field] = value.clone()
+                result[*field] = value.clone();
             }
             _ => {}
         }
@@ -212,7 +212,7 @@ fn artifact_file(repo: &Repository, id: &str) -> Result<ArtifactFile> {
             "Artifact file changed. Read its metadata again.",
         ));
     }
-    let root = roots.into_iter().find(|root| path.strip_prefix(root).ok().is_some_and(|relative| {
+    let root = roots.into_iter().find(|root| path.strip_prefix(root).is_ok_and(|relative| {
         relative.components().all(|part| matches!(part, Component::Normal(name) if !name.to_string_lossy().starts_with('.')))
     })).ok_or(Error::new("Artifact is outside its registered roots."))?;
     let key = path

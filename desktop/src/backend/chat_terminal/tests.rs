@@ -1,4 +1,5 @@
 use super::*;
+use std::path::PathBuf;
 #[test]
 fn shell_identity_and_working_directory_survive_reopen() {
     let root = tempfile::tempdir().unwrap();

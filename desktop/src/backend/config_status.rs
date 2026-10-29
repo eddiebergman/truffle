@@ -1,5 +1,5 @@
 //! Content-only status for independently refreshed configuration domains.
-use super::*;
+use super::{json, Error, Repository, Result, Value};
 
 fn status(document: Result<Value>, message: &str) -> Value {
     match document.and_then(|value| Ok(context_kit::sha256(&serde_json::to_vec(&value)?))) {

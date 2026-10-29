@@ -1,5 +1,8 @@
 //! Loopback API and authenticated agent inbox. No UI-specific persistence.
-use super::*;
+use super::{
+    arr, checked, domain, home, json, now, sid, text, uuid, Error, PathBuf, Repository, Result,
+    Value,
+};
 use super::{artifacts, workflows};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -106,8 +109,7 @@ fn header<'a>(r: &'a tiny_http::Request, name: &str) -> &'a str {
     r.headers()
         .iter()
         .find(|h| h.field.as_str().as_str().eq_ignore_ascii_case(name))
-        .map(|h| h.value.as_str())
-        .unwrap_or("")
+        .map_or("", |h| h.value.as_str())
 }
 fn equal(a: &str, b: &str) -> bool {
     let mut mac = Hmac::<Sha256>::new_from_slice(b"truffle-comparison").unwrap();
@@ -182,16 +184,15 @@ fn handle(
                             .map(|x| text(x, "url").to_owned())
                             .or_else(|| s["linearLinks"][id].as_str().map(str::to_owned))
                     };
-                    let url = match cached {
-                        Some(v) => v,
-                        None => {
-                            let v = repo.providers.linear_url(id)?;
-                            repo.transaction(|s| {
-                                s["linearLinks"][id] = json!(v);
-                                Ok(())
-                            })?;
-                            v
-                        }
+                    let url = if let Some(v) = cached {
+                        v
+                    } else {
+                        let v = repo.providers.linear_url(id)?;
+                        repo.transaction(|s| {
+                            s["linearLinks"][id] = json!(v);
+                            Ok(())
+                        })?;
+                        v
                     };
                     let mut response = response(302, vec![], "text/plain", false);
                     response.add_header(tiny_http::Header::from_bytes("Location", url).unwrap());
@@ -706,7 +707,7 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
     let Ok(entries) = std::fs::read_dir(inbox) else {
         return;
     };
-    for entry in entries.filter_map(|e| e.ok()).take(100) {
+    for entry in entries.filter_map(std::result::Result::ok).take(100) {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
         if name.ends_with(".result.json") || name.ends_with(".tmp") {

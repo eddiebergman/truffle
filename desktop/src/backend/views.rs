@@ -1,4 +1,4 @@
-use super::*;
+use super::{json, Error, Repository, Result, Value};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path, sync::Mutex};
@@ -53,10 +53,10 @@ pub enum GroupBy {
 #[serde(tag = "op", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Predicate {
     All {
-        conditions: Vec<Predicate>,
+        conditions: Vec<Self>,
     },
     Any {
-        conditions: Vec<Predicate>,
+        conditions: Vec<Self>,
     },
     In {
         field: ScalarField,
@@ -387,9 +387,6 @@ fn scalar(item: &Value, field: ScalarField) -> Option<String> {
         }
     }
 }
-pub fn matches_filter(filter: &Predicate, item: &Value) -> bool {
-    matches_filter_at(filter, item, now())
-}
 fn matches_filter_at(filter: &Predicate, item: &Value, time: f64) -> bool {
     match filter {
         Predicate::All { conditions } => conditions
@@ -430,10 +427,9 @@ fn matches_filter_at(filter: &Predicate, item: &Value, time: f64) -> bool {
             value,
         } => item["pinned"].as_bool() == Some(*value),
         Predicate::WithinLast { field, days } => item_time(item, *field)
-            .is_some_and(|at| at >= time - f64::from(*days) * 86400.0 && at <= time),
-        Predicate::OlderThan { field, days } => {
-            item_time(item, *field).is_some_and(|at| at < time - f64::from(*days) * 86400.0)
-        }
+            .is_some_and(|at| at >= f64::mul_add(f64::from(*days), -86400.0, time) && at <= time),
+        Predicate::OlderThan { field, days } => item_time(item, *field)
+            .is_some_and(|at| at < f64::mul_add(f64::from(*days), -86400.0, time)),
         Predicate::BeforeDate { field, date } => item_time(item, *field)
             .zip(date_boundary(date))
             .is_some_and(|(at, boundary)| at < boundary),
@@ -447,9 +443,6 @@ fn matches_filter_at(filter: &Predicate, item: &Value, time: f64) -> bool {
         } => item_time(item, *field)
             .is_some_and(|at| matches_calendar_period(*period, timezone, at, time)),
     }
-}
-pub fn evaluate(view: &SavedView, item: &Value) -> bool {
-    evaluate_at(view, item, now())
 }
 pub fn evaluate_at(view: &SavedView, item: &Value, time: f64) -> bool {
     let page = match view.parent {

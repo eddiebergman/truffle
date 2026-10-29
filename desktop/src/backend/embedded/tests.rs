@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::{arr, Repository};
 #[test]
 fn close_stops_only_the_matching_terminal_generation_and_allows_resume() {
     let host = EmbeddedHost::default();

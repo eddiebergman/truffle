@@ -6,7 +6,7 @@ use std::{
     path::{Component, Path},
 };
 
-pub(crate) fn directory(root: &Path, path: &Path, create: bool) -> std::io::Result<fs::File> {
+pub fn directory(root: &Path, path: &Path, create: bool) -> std::io::Result<fs::File> {
     use std::{
         ffi::CString,
         os::fd::{AsRawFd, FromRawFd},
@@ -56,7 +56,7 @@ pub(crate) fn directory(root: &Path, path: &Path, create: bool) -> std::io::Resu
     }
     Ok(current)
 }
-pub(crate) fn generation(metadata: &fs::Metadata) -> String {
+pub fn generation(metadata: &fs::Metadata) -> String {
     use std::os::unix::fs::MetadataExt;
     format!(
         "{}:{}:{}:{}:{}",
@@ -67,7 +67,7 @@ pub(crate) fn generation(metadata: &fs::Metadata) -> String {
         metadata.mtime_nsec()
     )
 }
-pub(crate) fn read(
+pub fn read(
     root: &Path,
     key: &str,
     limit: u64,

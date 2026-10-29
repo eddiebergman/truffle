@@ -1,5 +1,5 @@
 //! Fixed, browser-based login jobs. Credentials and command output never enter app state.
-use super::*;
+use super::{json, now, uuid, Error, Result, Value};
 use std::{
     process::{Command, Stdio},
     sync::{

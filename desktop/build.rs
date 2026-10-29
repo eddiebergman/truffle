@@ -18,7 +18,7 @@ fn main() {
         for item in std::fs::read_dir(current).unwrap() {
             let path = item.unwrap().path();
             if path.is_dir() {
-                files(root, &path, result)
+                files(root, &path, result);
             } else if path.is_file() {
                 result.push(path);
             }
@@ -48,8 +48,7 @@ fn main() {
     }
     source.push_str("_=>None}}\n");
     source.push_str(&format!(
-        "pub const CONFIG_FILES:&[&str]=&{:?};\n",
-        config_names
+        "pub const CONFIG_FILES:&[&str]=&{config_names:?};\n"
     ));
     std::fs::write(
         std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("assets.rs"),
@@ -57,5 +56,5 @@ fn main() {
     )
     .unwrap();
     println!("cargo:rerun-if-changed={}", root.display());
-    tauri_build::build()
+    tauri_build::build();
 }

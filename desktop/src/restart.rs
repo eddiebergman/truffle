@@ -22,8 +22,7 @@ fn io<T>(r: std::io::Result<T>) -> Result<T> {
 }
 pub fn root() -> PathBuf {
     std::env::var_os("TRUFFLE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| backend::home().join("code/mydash"))
+        .map_or_else(|| backend::home().join("code/mydash"), PathBuf::from)
 }
 fn data(root: &Path) -> PathBuf {
     root.join("data/state.json")
@@ -38,12 +37,11 @@ fn directory(root: &Path) -> Result<PathBuf> {
     Ok(path)
 }
 fn read(path: &Path) -> Result<Value> {
-    let bytes = context_kit::read_bounded(path, 1024 * 1024).map_err(|e| e.to_string())?;
+    let bytes = context_kit::read_bounded(path, 1024 * 1024)?;
     serde_json::from_slice(&bytes).map_err(|_| "Invalid restart metadata.".into())
 }
 fn read_state(root: &Path) -> Result<Value> {
-    let bytes =
-        context_kit::read_bounded(&data(root), 64 * 1024 * 1024).map_err(|e| e.to_string())?;
+    let bytes = context_kit::read_bounded(&data(root), 64 * 1024 * 1024)?;
     serde_json::from_slice(&bytes).map_err(|_| "Invalid dashboard state.".into())
 }
 fn write(path: &Path, value: &Value) -> Result<()> {

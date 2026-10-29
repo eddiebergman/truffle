@@ -1,5 +1,8 @@
 //! Bounded navigation requests. Queuing does not confirm that a UI showed them.
-use super::*;
+use super::{
+    arr, chat_search, checked, commands, domain, json, sid, text, views, work_search, Error,
+    Repository, Result, Value,
+};
 use std::collections::BTreeSet;
 const MAX_PENDING: usize = 8;
 const MAX_ACKNOWLEDGED: usize = 32;

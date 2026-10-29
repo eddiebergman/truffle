@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::{arr, commands};
 use std::sync::{Arc, Barrier};
 
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {

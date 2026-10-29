@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::{now, uuid};
 
 #[test]
 fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effects() {
@@ -637,7 +638,7 @@ fn saved_chat_open_command_is_strict_user_action_and_returns_only_bounded_receip
 fn artifact_metadata_commands_share_cas_owner_and_deny_discovery_registration_to_app_chat() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let id = super::artifacts::id("https://example.invalid/command-metadata");
+    let id = crate::backend::artifacts::id("https://example.invalid/command-metadata");
     repo.transaction(|state|{state["artifacts"]=json!([{"id":id,"title":"Original","url":"https://example.invalid/command-metadata","sessionIds":[],"privateNs":"private-command-artifact"}]);Ok(())}).unwrap();
     for (name, effect, policy) in [
         (

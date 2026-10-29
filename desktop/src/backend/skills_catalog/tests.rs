@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::arr;
 #[test]
 fn application_review_is_discovered_for_both_agents_without_global_installation() {
     let temp = tempfile::tempdir().unwrap();

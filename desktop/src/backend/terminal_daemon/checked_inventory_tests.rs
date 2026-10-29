@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 #[test]
 fn runtime_inventory_failure_is_per_call_even_when_shared_warning_is_clear() {
     let temp = tempfile::tempdir().unwrap();

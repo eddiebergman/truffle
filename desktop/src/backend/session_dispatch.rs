@@ -1,5 +1,5 @@
 //! Conservative tracked submission over the existing, generation-unfenced PTY transport.
-use super::*;
+use super::{arr, checked, domain, json, now, sid, text, uuid, Error, Repository, Result, Value};
 const JOURNAL: &str = "sessionDispatch";
 const LEGACY_MAX_ENTRIES: usize = 1024;
 const MAX_UNRESOLVED: usize = 128;
@@ -12,7 +12,7 @@ pub enum Kind {
     CiInvestigation,
 }
 impl Kind {
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             Self::ReviewRequest => "review-request",
             Self::ReviewFeedback => "review-feedback",
@@ -436,10 +436,10 @@ fn feedback(record: &Value, draft: &Value, checked: &Value) -> Result<(String, V
         .into_iter()
         .filter(|entry| entry["sentAt"].is_null() && review_pending(draft, entry))
         .collect::<Vec<_>>();
-    let note = if draft["note"] != draft["reviewedNote"] {
-        text(draft, "note")
-    } else {
+    let note = if draft["note"] == draft["reviewedNote"] {
         ""
+    } else {
+        text(draft, "note")
     };
     if comments.is_empty() && assessments.is_empty() && note.trim().is_empty() {
         return Err(Error::new("There is no pending review feedback to send."));
@@ -476,14 +476,14 @@ fn feedback(record: &Value, draft: &Value, checked: &Value) -> Result<(String, V
         lines.push(format!("\nOverall review:\n{}", safe(note)));
     }
     for entry in &assessments {
-        let scope = if !text(entry, "root").is_empty() {
+        let scope = if text(entry, "root").is_empty() {
+            "Scope: conversation across repositories".into()
+        } else {
             format!(
                 "Worktree: {} · base: {}",
                 safe(text(entry, "root")),
                 safe(text(entry, "baseCommit"))
             )
-        } else {
-            "Scope: conversation across repositories".into()
         };
         lines.push(format!(
             "\nReviewer assessment · {} · {}\n{}\n{}",
@@ -582,10 +582,10 @@ fn request_prompt(
         .into_owned())
 }
 fn ci_prompt(repo: &Repository, record: &Value, item: &Value, operation: &str) -> String {
-    let reference = if !text(item, "reference").is_empty() {
-        text(item, "reference")
-    } else {
+    let reference = if text(item, "reference").is_empty() {
         text(item, "id")
+    } else {
+        text(item, "reference")
     };
     let mut lines=vec![format!("Investigate the current CI failures for {}: {}",safe(reference),safe(text(item,"title"))),format!("Pull request: {}",safe(text(item,"url"))),format!("Session working directory: {}",safe(text(record,"cwd"))),format!("Report progress using: {} ci --record {} --item {} --request {} --state investigating",repo.agent_helper,text(record,"id"),text(item,"id"),operation),"Use that same command with --state complete after reporting your diagnosis, or --state failed if blocked.".into(),format!("Head branch: {}",safe(text(item,"headRefName"))),format!("Cached check summary: {}",safe(text(&item["ci"],"state")))];
     for check in arr(&item["ci"]["checks"])

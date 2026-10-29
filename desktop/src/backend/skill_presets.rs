@@ -1,6 +1,6 @@
 //! Raw skill definitions and their custom overlay. Display paths and availability
 //! belong to artifacts; edit tokens and writes belong to scheduler.
-use super::*;
+use super::{checked, json, Error, PathBuf, Repository, Result, Value};
 use std::collections::BTreeSet;
 
 const MAX_CONFIG_BYTES: u64 = 512 * 1024;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::domain;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();

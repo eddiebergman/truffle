@@ -1,5 +1,5 @@
 //! Provider adapters. Explicit PR actions are fixed mutations against cached identities.
-use super::*;
+use super::{arr, home, json, safe_url, text, Error, Result, Value};
 use reqwest::{blocking::Client, redirect::Policy};
 use std::collections::BTreeMap;
 // Snapshot redaction for a single output stream. Never publish a possible secret
@@ -218,7 +218,7 @@ impl Providers {
             *value = value.replace(secret, "[redacted]");
         }
     }
-    pub fn sentry_configured(&self) -> bool {
+    pub const fn sentry_configured(&self) -> bool {
         !self.sentry_org.is_empty() && !self.sentry_token.is_empty()
     }
     fn remote_error(&self, source: &str, response: reqwest::blocking::Response) -> Error {
@@ -778,7 +778,7 @@ pub fn github_item(n: &Value) -> Result<Value> {
             }
         };
     }
-    let requested=arr(&n["reviewRequests"]["nodes"]).iter().map(|r|{let user=&r["requestedReviewer"];if !text(user,"login").is_empty(){json!({"login":user["login"],"kind":"user"})}else{json!({"login":format!("{}/{}",text(&user["organization"],"login"),text(user,"slug")),"name":user["name"],"kind":"team"})}}).filter(|r|text(r,"login")!="/").collect::<Vec<_>>();
+    let requested=arr(&n["reviewRequests"]["nodes"]).iter().map(|r|{let user=&r["requestedReviewer"];if text(user,"login").is_empty() {json!({"login":format!("{}/{}",text(&user["organization"],"login"),text(user,"slug")),"name":user["name"],"kind":"team"})} else {json!({"login":user["login"],"kind":"user"})}}).filter(|r|text(r,"login")!="/").collect::<Vec<_>>();
     Ok(
         json!({"id":format!("github:{}",text(n,"id")),"source":"github","title":n["title"],"detail":text(n,"body").chars().take(10000).collect::<String>(),"url":safe_url(text(n,"url"))?,"reference":format!("#{}",n["number"]),"project":n["repository"]["nameWithOwner"],"status":state,"sourceStatus":native,"kind":if pr{"Pull request"}else{"Issue"},"relations":["linked"],"createdAt":n["createdAt"],"updatedAt":n["updatedAt"],"ci":ci,"mergeState":n["mergeStateStatus"],"mergeable":n["mergeable"],"isDraft":n["isDraft"],"githubState":n["state"],"author":n["author"]["login"],"canUpdate":n["viewerCanUpdate"],"baseRefName":n["baseRefName"],"headRefName":n["headRefName"],"headRefOid":n["headRefOid"],"headRepository":n["headRepository"]["nameWithOwner"],"requestedReviewers":if n["reviewRequests"].is_null(){Value::Null}else{json!(requested)},"reviewerCount":n["reviewRequests"]["totalCount"],"latestReviews":arr(&n["latestReviews"]["nodes"])}),
     )
@@ -794,7 +794,7 @@ pub fn linear_item(n: &Value) -> Result<Value> {
         .into_iter()
         .filter(|x| {
             x["sourceType"] == "sentry"
-                && reqwest::Url::parse(text(x, "url")).ok().is_some_and(|u| {
+                && reqwest::Url::parse(text(x, "url")).is_ok_and(|u| {
                     u.host_str()
                         .is_some_and(|h| h == "sentry.io" || h.ends_with(".sentry.io"))
                 })
@@ -808,8 +808,7 @@ pub fn linear_item(n: &Value) -> Result<Value> {
 pub fn sentry_item(n: &Value, org: &str) -> Result<Value> {
     let id = n["id"]
         .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| n["id"].to_string());
+        .map_or_else(|| n["id"].to_string(), str::to_owned);
     if !id.chars().all(|x| x.is_ascii_digit()) {
         return Err(Error::new("Invalid Sentry identity."));
     }

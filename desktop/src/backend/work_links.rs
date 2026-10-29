@@ -1,5 +1,5 @@
 //! Exact local manual work edges. Inferred/transitive bundles remain domain-owned.
-use super::*;
+use super::{domain, json, Error, Repository, Result, Value};
 use std::collections::BTreeMap;
 
 const MAX_LINKS: usize = 2000;

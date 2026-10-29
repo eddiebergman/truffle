@@ -1,5 +1,8 @@
 //! App assistant with a bounded tool surface and no terminal access.
-use super::*;
+use super::{
+    arr, checked, commands, domain, json, now, sid, text, uuid, Error, PathBuf, Repository, Result,
+    Value,
+};
 use std::{
     io::{Read, Write},
     os::unix::{
@@ -23,13 +26,13 @@ enum Assistant {
     Codex,
 }
 impl Assistant {
-    fn id(self) -> &'static str {
+    const fn id(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
         }
     }
-    fn label(self) -> &'static str {
+    const fn label(self) -> &'static str {
         match self {
             Self::Claude => "Claude",
             Self::Codex => "Codex",
@@ -65,7 +68,7 @@ fn assistant_options(repo: &Repository) -> (Option<Assistant>, Value) {
     ];
     let selected = choose_assistant(
         text(&repo.settings.view()["values"], "defaultAgent"),
-        |agent| installed[if agent == Assistant::Claude { 0 } else { 1 }],
+        |agent| installed[usize::from(agent != Assistant::Claude)],
     );
     (
         selected,
@@ -460,10 +463,15 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
         for target in targets {
             let id = checked(&target, "id", 160, true)?;
             let kind = text(&target, "type");
-            let item=match kind{
-                "work"=>catalog.get(&id).map(|i|project(&effective(&s,i),0)).unwrap_or(Value::Null),
-                "chat"=>arr(&s["sessions"]).iter().find(|r|r["id"]==id).map(|r|json!({"id":r["id"],"title":r["title"],"cwd":r["cwd"],"agent":r["agent"]})).unwrap_or(Value::Null),
-                _=>return Err(Error::new("Unknown displayed result target."))
+            let item = match kind {
+                "work" => catalog
+                    .get(&id)
+                    .map_or(Value::Null, |i| project(&effective(&s, i), 0)),
+                "chat" => arr(&s["sessions"]).iter().find(|r| r["id"] == id).map_or(
+                    Value::Null,
+                    |r| json!({"id":r["id"],"title":r["title"],"cwd":r["cwd"],"agent":r["agent"]}),
+                ),
+                _ => return Err(Error::new("Unknown displayed result target.")),
             };
             displayed.push(json!({"type":kind,"id":id,"item":item}));
         }
@@ -830,8 +838,7 @@ fn cli_response(output: &str, streaming: bool, diagnostics: &mut Value) -> Resul
         output
             .lines()
             .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-            .filter(|value| value["type"] == "result")
-            .last()
+            .rfind(|value| value["type"] == "result")
     } else {
         serde_json::from_str::<Value>(output).ok()
     };
@@ -1343,7 +1350,7 @@ fn execute_diagnosed(
                     && Instant::now() < deadline
                     && !cancelled.load(Ordering::Relaxed) =>
             {
-                std::thread::sleep(Duration::from_millis(100))
+                std::thread::sleep(Duration::from_millis(100));
             }
             Err(_) => {
                 unsafe {
@@ -1380,7 +1387,7 @@ fn execute_diagnosed(
     diagnostics["stdoutBytes"] = json!(stdout.len());
     diagnostics["stderrBytes"] = json!(stderr.len());
     diagnostics["stdoutShape"] = json!(response_shape(&String::from_utf8_lossy(&stdout)));
-    let status = status.map_err(|error| {
+    let status = status.inspect_err(|_error| {
         if diagnostics.get("code").is_none() {
             diagnostics["code"] = json!(if cancelled.load(Ordering::Relaxed) {
                 "cancelled"
@@ -1388,7 +1395,6 @@ fn execute_diagnosed(
                 "timed_out"
             });
         }
-        error
     })?;
     diagnostics["exitCode"] = json!(status.code());
     if !status.success() {

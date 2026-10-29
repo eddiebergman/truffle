@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, checked, directory, home, json, text, Error, PathBuf, Repository, Result, Value};
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1143,7 +1143,7 @@ pub fn invoke(repo: &Arc<Repository>, p: &Value, assistant: bool) -> Result<Valu
         CommandId::OnboardingRead => super::onboarding::view(repo),
         CommandId::DiagnosticsStorage => {
             let s = repo.state.lock().map_err(|_| Error::io())?;
-            json!({"engine":"json","databasePath":Value::Null,"sqlSchema":Value::Null,"statePath":repo.data,"logsDirectory":repo.data.parent().unwrap().join("logs"),"settingsPath":repo.data.parent().unwrap().join("settings.json"),"sharingPath":repo.data.parent().unwrap().join("sharing/state.json"),"model":s.as_object().map(|o|o.iter().map(|(key,value)|(key.clone(),json!({"type":match value{Value::Array(_)=>"array",Value::Object(_)=>"object",_=>"scalar"},"count":value.as_array().map(|a|a.len()).or_else(||value.as_object().map(|o|o.len()))}))).collect::<serde_json::Map<_,_>>()),"note":"SQLite is not installed as the metadata store. Use service commands to query or update records; do not edit the state file directly."})
+            json!({"engine":"json","databasePath":Value::Null,"sqlSchema":Value::Null,"statePath":repo.data,"logsDirectory":repo.data.parent().unwrap().join("logs"),"settingsPath":repo.data.parent().unwrap().join("settings.json"),"sharingPath":repo.data.parent().unwrap().join("sharing/state.json"),"model":s.as_object().map(|o|o.iter().map(|(key,value)|(key.clone(),json!({"type":match value{Value::Array(_)=>"array",Value::Object(_)=>"object",_=>"scalar"},"count":value.as_array().map(std::vec::Vec::len).or_else(||value.as_object().map(serde_json::Map::len))}))).collect::<serde_json::Map<_,_>>()),"note":"SQLite is not installed as the metadata store. Use service commands to query or update records; do not edit the state file directly."})
         }
         CommandId::DiagnosticsLogs => {
             let kind = text(&args, "kind");

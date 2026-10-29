@@ -1,4 +1,4 @@
-use super::*;
+use super::{arr, home, json, now, text, uuid, Error, PathBuf, Repository, Result, Value};
 use std::{
     collections::BTreeMap,
     io::Read,
@@ -147,22 +147,20 @@ impl Host {
             "TICKET_URL",
             "TICKET_ID",
         ] {
-            if text(&action, "command").contains(&format!("${key}"))
-                || text(&action, "command").contains(&format!("${{{key}}}"))
+            if (text(&action, "command").contains(&format!("${key}"))
+                || text(&action, "command").contains(&format!("${{{key}}}")))
+                && context.get(key).is_none_or(std::string::String::is_empty)
             {
-                if context.get(key).is_none_or(|s| s.is_empty()) {
-                    return Err(Error::new(format!(
-                        "Choose a chat, worktree or work item to supply ${key}."
-                    )));
-                }
+                return Err(Error::new(format!(
+                    "Choose a chat, worktree or work item to supply ${key}."
+                )));
             }
         }
         let cwd = context
             .get("WORKTREE_PATH")
             .or(context.get("CHAT_CWD"))
             .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(home);
+            .map_or_else(home, PathBuf::from);
         let id = uuid();
         let job = json!({"command":action["command"],"cwd":cwd,"id":id,"actionId":action["id"],"title":action["title"],"state":"running","startedAt":now(),"output":""});
         {
@@ -280,7 +278,7 @@ impl Host {
                         "succeeded"
                     } else {
                         "failed"
-                    })
+                    });
                 }
                 Err(e) => {
                     job["state"] = json!("failed");
@@ -332,7 +330,7 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
         if prefix == "PR" {
             let number = text(&item, "url")
                 .split('/')
-                .last()
+                .next_back()
                 .unwrap_or("")
                 .to_string();
             if !text(&item, "url").contains("/pull/") || !number.bytes().all(|b| b.is_ascii_digit())

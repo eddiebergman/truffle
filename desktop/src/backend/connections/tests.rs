@@ -58,9 +58,15 @@ impl Remote for FixtureRemote {
 fn host(profile: &Path, store: Arc<MemoryStore>, remote: Arc<FixtureRemote>) -> SetupHost {
     SetupHost::with_adapters(profile.into(), store, remote).unwrap()
 }
+fn preview_payload(host: &SetupHost, payload: &Value) -> Result<Value> {
+    host.preview_with_ticket(payload, host.begin_preview())
+}
 fn preview(host: &SetupHost) -> Value {
-    host.preview(&json!({"provider":"github","source":"manual","token":"benign-fixture-secret"}))
-        .unwrap()
+    preview_payload(
+        host,
+        &json!({"provider":"github","source":"manual","token":"benign-fixture-secret"}),
+    )
+    .unwrap()
 }
 fn commit_payload(preview: &Value) -> Value {
     json!({"previewId":preview["previewId"],"expectedRevision":preview["expectedRevision"]})
@@ -222,7 +228,7 @@ fn unsupported_config_and_unsafe_hosts_are_rejected_without_network_or_secret_wr
         json!({"provider":"github","source":"manual","token":"benign-fixture","base":"https://attacker.invalid"}),
         json!({"provider":"github","source":"manual","token":"benign-fixture","command":"anything"}),
     ] {
-        assert!(broker.preview(&payload).is_err());
+        assert!(preview_payload(&broker, &payload).is_err());
     }
     assert_eq!(remote.calls.load(Ordering::SeqCst), 0);
     assert!(store.values.lock().unwrap().is_empty());
@@ -233,9 +239,11 @@ fn unsupported_config_and_unsafe_hosts_are_rejected_without_network_or_secret_wr
     )
     .unwrap();
     assert!(broker.view().is_err());
-    assert!(broker
-        .preview(&json!({"provider":"github","source":"manual","token":"benign-fixture"}))
-        .is_err());
+    assert!(preview_payload(
+        &broker,
+        &json!({"provider":"github","source":"manual","token":"benign-fixture"})
+    )
+    .is_err());
     assert_eq!(remote.calls.load(Ordering::SeqCst), 0);
 }
 #[test]
@@ -244,9 +252,11 @@ fn provider_response_cannot_echo_the_secret_into_the_preview() {
     let remote = Arc::new(FixtureRemote::default());
     *remote.response.lock().unwrap() = json!({"identity":"benign-fixture-secret","resources":[]});
     let broker = host(directory.path(), Arc::new(MemoryStore::default()), remote);
-    let error = broker
-        .preview(&json!({"provider":"github","source":"manual","token":"benign-fixture-secret"}))
-        .unwrap_err();
+    let error = preview_payload(
+        &broker,
+        &json!({"provider":"github","source":"manual","token":"benign-fixture-secret"}),
+    )
+    .unwrap_err();
     assert!(!error.message.contains("benign-fixture-secret"));
     assert!(broker.pending.lock().unwrap().is_none());
 }
@@ -341,8 +351,10 @@ fn cancelled_in_flight_preview_cannot_replace_a_newer_account() {
     );
     let old_broker = broker.clone();
     let old = std::thread::spawn(move || {
-        old_broker
-            .preview(&json!({"provider":"github","source":"manual","token":"benign-old-fixture"}))
+        preview_payload(
+            &old_broker,
+            &json!({"provider":"github","source":"manual","token":"benign-old-fixture"}),
+        )
     });
     started_rx.recv().unwrap();
     let current = preview(&broker);
@@ -396,12 +408,12 @@ fn provider_reload_serializes_keychain_reads_and_keeps_the_latest_account() {
         Arc::new(FixtureRemote::default()),
     )
     .unwrap();
-    let first = broker.preview(&json!({"provider":"sentry","source":"manual","token":"benign-first-fixture","org":"first-org","base":"https://sentry.io"})).unwrap();
+    let first = preview_payload(&broker, &json!({"provider":"sentry","source":"manual","token":"benign-first-fixture","org":"first-org","base":"https://sentry.io"})).unwrap();
     broker.commit(&commit_payload(&first)).unwrap();
     let old_providers = providers.clone();
     let old = std::thread::spawn(move || old_providers.reload());
     started_rx.recv().unwrap();
-    let second = broker.preview(&json!({"provider":"sentry","source":"manual","token":"benign-second-fixture","org":"second-org","base":"https://sentry.io"})).unwrap();
+    let second = preview_payload(&broker, &json!({"provider":"sentry","source":"manual","token":"benign-second-fixture","org":"second-org","base":"https://sentry.io"})).unwrap();
     broker.commit(&commit_payload(&second)).unwrap();
     let new_providers = providers.clone();
     let (done_tx, done_rx) = mpsc::channel();
@@ -437,9 +449,11 @@ fn connection_storage_backend_is_explicit_and_never_falls_back() {
     let unsupported = serde_json::to_vec(&config).unwrap();
     std::fs::write(&path, &unsupported).unwrap();
     assert!(broker.view().is_err());
-    assert!(broker
-        .preview(&json!({"provider":"github","source":"manual","token":"benign-fixture"}))
-        .is_err());
+    assert!(preview_payload(
+        &broker,
+        &json!({"provider":"github","source":"manual","token":"benign-fixture"})
+    )
+    .is_err());
     assert_eq!(store.gets.load(Ordering::SeqCst), 0);
     assert_eq!(std::fs::read(path).unwrap(), unsupported);
 }

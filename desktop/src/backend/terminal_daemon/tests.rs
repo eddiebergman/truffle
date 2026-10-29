@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 #[test]
 fn socket_directory_identity_uses_canonical_parent_and_rejects_public_or_symlink_directories() {
     let root = tempfile::tempdir().unwrap();

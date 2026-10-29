@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();

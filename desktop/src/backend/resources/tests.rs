@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::workflows;
 #[test]
 fn resources_keep_open_metadata_and_update_without_erasing_other_resources() {
     let temp = tempfile::tempdir().unwrap();

@@ -1,11 +1,12 @@
 use super::chat_preparation::{self, Request};
-use super::*;
+use super::{
+    arr, checked, commands, directory, expand, home, json, now, safe_url, sid, text, uuid, Error,
+    PathBuf, Repository, Result, Value,
+};
 use super::{artifacts, domain, terminal};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
-    std::env::var("TRUFFLE_WORKDIR")
-        .map(|s| expand(&s))
-        .unwrap_or_else(|_| home().join("code"))
+    std::env::var("TRUFFLE_WORKDIR").map_or_else(|_| home().join("code"), |s| expand(&s))
 }
 pub fn folders() -> Value {
     folders_in(&work_root())
@@ -14,7 +15,7 @@ fn folders_in(root: &std::path::Path) -> Value {
     let mut result = std::fs::read_dir(root)
         .into_iter()
         .flatten()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'))
         .filter_map(|e| {
             e.path()
@@ -41,7 +42,7 @@ fn repo_name(item: &Value) -> String {
 }
 pub fn contexts(item: &Value) -> Vec<Value> {
     let mut result = vec![];
-    match text(item,"source"){"github"=>{let name=repo_name(item);result.push(json!({"key":format!("github:{}",name.to_lowercase()),"label":format!("GitHub repo {name}")}));},"linear"=>{let mut parent=&item["parent"];let mut top=Value::Null;for _ in 0..8 {if parent.is_null()||parent.as_object().is_none(){break;}top=parent.clone();parent=&parent["parent"];}if top.is_null()&&!arr(&item["children"]).is_empty(){top=item.clone();}if !top.is_null(){result.push(json!({"key":format!("linear-family:{}",text(&top,"id")),"label":format!("Issue family {}",text(&top,"reference"))}));}if !text(item,"projectId").is_empty(){let workspace=text(item,"url").split('/').nth(3).unwrap_or("");result.push(json!({"key":format!("linear-project:{workspace}:{}",text(item,"projectId")),"label":format!("Linear project {}",text(item,"project"))}));}},"sentry"=>result.push(json!({"key":format!("sentry-project:{}",text(item,"project")),"label":format!("Sentry project {}",text(item,"project"))})),_=>()};
+    match text(item,"source"){"github"=>{let name=repo_name(item);result.push(json!({"key":format!("github:{}",name.to_lowercase()),"label":format!("GitHub repo {name}")}));},"linear"=>{let mut parent=&item["parent"];let mut top=Value::Null;for _ in 0..8 {if parent.is_null()||parent.as_object().is_none(){break;}top=parent.clone();parent=&parent["parent"];}if top.is_null()&&!arr(&item["children"]).is_empty(){top=item.clone();}if !top.is_null(){result.push(json!({"key":format!("linear-family:{}",text(&top,"id")),"label":format!("Issue family {}",text(&top,"reference"))}));}if !text(item,"projectId").is_empty(){let workspace=text(item,"url").split('/').nth(3).unwrap_or("");result.push(json!({"key":format!("linear-project:{workspace}:{}",text(item,"projectId")),"label":format!("Linear project {}",text(item,"project"))}));}},"sentry"=>result.push(json!({"key":format!("sentry-project:{}",text(item,"project")),"label":format!("Sentry project {}",text(item,"project"))})),_=>()}
     if !text(item, "id").is_empty() {
         result
             .push(json!({"key":format!("item:{}",text(item,"id")),"label":"Only this work item"}));
@@ -57,11 +58,7 @@ pub(super) fn automatic_folder(
     candidates: &Value,
 ) -> Option<String> {
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let usable = |value: &str| {
-        directory(value)
-            .ok()
-            .filter(|path| PathBuf::from(path) != root)
-    };
+    let usable = |value: &str| directory(value).ok().filter(|path| *path != root);
     let setting = &s["itemSettings"][text(item, "id")];
     if setting["explicit"] == true {
         if let Some(path) = usable(text(setting, "cwd")) {
@@ -81,7 +78,7 @@ pub(super) fn automatic_folder(
     if item["source"] == "github" {
         let name = repo_name(item)
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("")
             .to_lowercase();
         if let Some(path) = arr(candidates)
@@ -119,7 +116,7 @@ fn choose_with(
         return Ok((path.to_string_lossy().into(), Some(new)));
     }
     if !manual.is_empty() {
-        if !arr(&candidates).iter().any(|x| x["path"] == manual) {
+        if !arr(candidates).iter().any(|x| x["path"] == manual) {
             return Err(Error::new(
                 "Choose an existing folder under the work directory.",
             ));
@@ -136,7 +133,7 @@ fn choose_with(
     }
     let mut error = Error::new("Choose a folder for this session.");
     error.status = 409;
-    error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').last().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
+    error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').next_back().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
     Err(error)
 }
 fn session_text(fields: &Value) -> Result<(String, String)> {
@@ -263,7 +260,7 @@ fn save_session_with_intent(s: &mut Value, p: &Value, intent: SaveIntent) -> Res
             sid_value = Some(uuid());
         }
     }
-    let id = old["id"].as_str().map(str::to_owned).unwrap_or_else(uuid);
+    let id = old["id"].as_str().map_or_else(uuid, str::to_owned);
     let mut session = old.clone();
     for(k,v)in json!({"id":id,"agent":agent,"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
     sessions.retain(|x| x["id"] != id);
@@ -502,12 +499,12 @@ fn quick_in_root(
     let mut created = None;
     let result=repo.preparation_transaction(if review{"pr-review-prepare"}else{"quick-session"},3.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}let mut item=domain::catalog(s).get(text(p,"itemId")).cloned().unwrap_or(Value::Null);if !text(p,"itemId").is_empty()&&item.is_null(){return Err(Error::new("Work item unavailable."));}if item.is_null()&&p["scopeSource"]=="github"&&!text(p,"scope").is_empty(){item=arr(&s["items"]).into_iter().find(|i|i["source"]=="github"&&repo_name(i)==text(p,"scope")).unwrap_or(Value::Null);}
  if review{if item["source"]!="github"||item["kind"]!="Pull request"{return Err(Error::new("Choose a GitHub PR."));}if let Some(existing)=arr(&s["sessions"]).iter().rev().find(|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()){return chat_preparation::finish(repo,request,s,existing.clone(),true);}}
- admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map(|x|text(x,"key")).unwrap_or(""));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
- let pr_label=format!("{}{}",repo_name(&item).split('/').last().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
- let ids=if !text(p,"itemId").is_empty(){json!([item["id"]])}else{json!([])};
+ admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map_or("", |x|text(x,"key")));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
+ let pr_label=format!("{}{}",repo_name(&item).split('/').next_back().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
+ let ids=if text(p,"itemId").is_empty() {json!([])} else {json!([item["id"]])};
  let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});session_text(&payload)?;
  if new.is_some(){std::fs::create_dir_all(root)?;created=Some(CreatedQuickFolder::create(std::path::Path::new(&cwd))?);if created.as_ref().unwrap().identity.is_none(){return Err(Error::new("The new folder identity could not be verified."));}}
- let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map(|x|x["label"].clone()).unwrap_or(Value::Null)});}if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
+ let mut record=save_session(s,&payload)?;if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});}if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
  *s["sessions"].as_array_mut().unwrap().last_mut().unwrap()=record.clone();chat_preparation::finish(repo,request,s,record,false)});
     complete_quick_preparation(result, &mut created)
 }
@@ -833,8 +830,8 @@ fn register_resolving(
                 runtime["scheduledWakeups"] = count.clone();
                 runtime["activityAt"] = json!(now());
             }
-            let background = runtime["backgroundCounts"].as_object().map(|v|v.values().filter_map(Value::as_u64).sum::<u64>()).unwrap_or(0);
-            if runtime["state"] == "waiting" && (background > 0 || ids.len() > 0 || runtime["scheduledWakeups"].as_u64().unwrap_or(0) > 0) {
+            let background = runtime["backgroundCounts"].as_object().map_or(0, |v|v.values().filter_map(Value::as_u64).sum::<u64>());
+            if runtime["state"] == "waiting" && (background > 0 || !ids.is_empty() || runtime["scheduledWakeups"].as_u64().unwrap_or(0) > 0) {
                 runtime["state"] = json!("background");
             } else if runtime["state"] == "background" && background == 0 && ids.is_empty() && runtime["scheduledWakeups"].as_u64().unwrap_or(0) == 0 {
                 runtime["state"] = json!("waiting");
@@ -955,7 +952,7 @@ fn finish_registration(
             if let Some(metadata) = metadata {
                 save_worktree_with_folders(
                     s,
-                    text(&record, "id"),
+                    text(record, "id"),
                     metadata,
                     &current_ids,
                     true,
@@ -1065,7 +1062,7 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
     } else if arr(&record["items"]).is_empty() {
         value.push_str("\nAfter registration, wait for the user to describe the work.\n");
     }
-    let cat = domain::catalog(&s);
+    let cat = domain::catalog(s);
     for item in arr(&record["items"]) {
         let item = cat.get(text(&item, "id")).unwrap_or(&item);
         value.push_str(&format!(
@@ -1088,7 +1085,7 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
             .iter()
             .map(|i| text(i, "id").to_owned())
             .collect();
-        for bundle in arr(&domain::bundles(&s)) {
+        for bundle in arr(&domain::bundles(s)) {
             let ids = arr(&bundle["itemIds"]);
             if ids
                 .iter()
@@ -1123,7 +1120,7 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
             ));
         }
     }
-    for artifact in arr(&artifacts::catalog(repo, &s)?["artifacts"]) {
+    for artifact in arr(&artifacts::catalog(repo, s)?["artifacts"]) {
         if arr(&artifact["sessionIds"]).contains(&json!(id)) {
             value.push_str(&format!(
                 "\nArtifact (reference only): {} {} {}\n",
@@ -1339,7 +1336,7 @@ fn open_chat_observing(
     // and retried immediately without creating an artificial unknown outcome.
     repo.cooldown
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(cooldown_key, now() + 3.0);
     if outcome == terminal::OpenOutcome::Unknown {
         return Ok(open_receipt(&id, target, "unknown", false));
@@ -1372,7 +1369,7 @@ fn open_chat_observing(
 
 /// Repair only the exact legacy stock discovery clauses at render time. Keep
 /// user-authored workflow files and all unrelated template text unchanged.
-pub(crate) fn review_skill_discovery(template: &str) -> String {
+pub fn review_skill_discovery(template: &str) -> String {
     template
         .replace(
             "Use the {{REVIEW_SKILL}} skill. Read its complete instructions at {{HOME}}/.agents/skills{{REVIEW_COMMAND}}/SKILL.md.",

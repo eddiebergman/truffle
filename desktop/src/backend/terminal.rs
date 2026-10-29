@@ -1,5 +1,5 @@
 //! Terminal presentation port. Local CLI utilities and the optional Codex desktop opener.
-use super::*;
+use super::{directory, home, json, sid, text, Error, PathBuf, Result, Value};
 use std::{
     io::{Read, Write},
     process::{Command, Stdio},
@@ -161,15 +161,15 @@ pub fn open_desktop(s: &Value, packet: &str) -> Result<OpenOutcome> {
     let agent = text(s, "agent");
     let cwd = directory(text(s, "cwd"))?;
     if s["destination"] == "desktop" && agent == "codex" {
-        let url = if !id.is_empty() {
-            format!("codex://threads/{}", sid(id)?)
-        } else {
+        let url = if id.is_empty() {
             let mut u = reqwest::Url::parse("codex://new").unwrap();
             u.query_pairs_mut().append_pair("path", &cwd).append_pair(
                 "prompt",
                 &format!("Read the work context at {packet}. Follow the assigned instruction."),
             );
             u.to_string()
+        } else {
+            format!("codex://threads/{}", sid(id)?)
         };
         let mut command = Command::new("/usr/bin/open");
         command.arg(url);

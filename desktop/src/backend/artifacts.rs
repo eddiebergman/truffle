@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    arr, checked, commands, expand, json, now, safe_url, sid, text, Error, PathBuf, Repository,
+    Result, Value,
+};
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 pub fn presets(repo: &Repository, state: &Value) -> Result<Vec<Value>> {
@@ -68,7 +71,7 @@ pub fn file(path: &str, roots: &[PathBuf]) -> Result<PathBuf> {
         .canonicalize()
         .map_err(|_| Error::new("Artifact file unavailable."))?;
     if !roots.iter().any(|root| {
-        path.strip_prefix(root).ok().is_some_and(|p| {
+        path.strip_prefix(root).is_ok_and(|p| {
             !p.components()
                 .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
         })
@@ -114,7 +117,7 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
             continue;
         };
         let mut dirs = dirs
-            .filter_map(|x| x.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|x| x.file_name().to_string_lossy().len() == 10 && x.path().is_dir())
             .collect::<Vec<_>>();
         dirs.sort_by_key(|x| std::cmp::Reverse(x.file_name()));
@@ -122,7 +125,7 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
             for filename in ["report.html", "report.md", "audit.html"] {
                 let Ok(path) = file(
                     &dir.path().join(filename).to_string_lossy(),
-                    &[root.clone()],
+                    std::slice::from_ref(&root),
                 ) else {
                     continue;
                 };
@@ -153,7 +156,9 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
     }
     let mut entries = entries.into_values().collect::<Vec<_>>();
     for entry in &mut entries {
-        if !text(entry, "path").is_empty() {
+        if text(entry, "path").is_empty() {
+            entry["available"] = json!(true);
+        } else {
             match file(text(entry, "path"), &roots) {
                 Ok(path) => {
                     entry["available"] = json!(true);
@@ -166,8 +171,6 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
                 }
                 Err(_) => entry["available"] = json!(false),
             }
-        } else {
-            entry["available"] = json!(true);
         }
     }
     entries.sort_by(|a, b| {
@@ -487,7 +490,13 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
     {
         return Err(Error::new("Choose existing sessions."));
     }
-    let mut entry = if !text(p, "path").is_empty() {
+    let mut entry = if text(p, "path").is_empty() {
+        let url = safe_url(text(p, "url"))?;
+        if !url.starts_with("https://") {
+            return Err(Error::new("Enter an HTTPS artifact URL."));
+        }
+        json!({"id":id(&url),"url":url,"at":now(),"format":"link"})
+    } else {
         let path = file(text(p, "path"), &roots(repo, s)?)?;
         let bytes = std::fs::read(&path)?;
         if path.extension().is_some_and(|x| x == "json") {
@@ -512,12 +521,6 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
             super::http::private_write(&stored, &bytes)?;
         }
         json!({"id":key,"path":stored,"sourcePath":path,"at":now(),"format":extension,"snapshot":true})
-    } else {
-        let url = safe_url(text(p, "url"))?;
-        if !url.starts_with("https://") {
-            return Err(Error::new("Enter an HTTPS artifact URL."));
-        }
-        json!({"id":id(&url),"url":url,"at":now(),"format":"link"})
     };
     let old = arr(&s["artifacts"])
         .into_iter()
@@ -537,20 +540,20 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
         }
         entry = old.clone();
     }
-    let title = if !text(p, "title").trim().is_empty() {
-        checked(p, "title", 300, true)?
-    } else {
+    let title = if text(p, "title").trim().is_empty() {
         old["title"]
             .as_str()
             .or(entry["title"].as_str())
             .unwrap_or_else(|| {
-                if !text(&entry, "path").is_empty() {
-                    "Report"
-                } else {
+                if text(&entry, "path").is_empty() {
                     "Artifact"
+                } else {
+                    "Report"
                 }
             })
             .to_string()
+    } else {
+        checked(p, "title", 300, true)?
     };
     let mut links = if p["replaceSessions"] == true && !existing {
         vec![]

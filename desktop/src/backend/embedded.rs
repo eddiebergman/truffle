@@ -1,5 +1,5 @@
 //! Backend-owned PTYs. Bounded output, exact record identity, no shell-command API.
-use super::*;
+use super::{directory, home, json, now, sid, text, uuid, Error, PathBuf, Result, Value};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -38,9 +38,7 @@ pub fn check_agent_storage(agent: &str) -> Result<()> {
         _ => return Err(Error::new("Choose Claude or Codex.")),
     };
     let storage = if agent == "codex" {
-        std::env::var_os("CODEX_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home().join(name))
+        std::env::var_os("CODEX_HOME").map_or_else(|| home().join(name), PathBuf::from)
     } else {
         home().join(name)
     };

@@ -1,33 +1,38 @@
 use super::*;
+use crate::backend::now;
 fn defaults() -> Value {
     serde_json::from_str(include_str!("../../../../static/config/views.json")).unwrap()
 }
 #[test]
 fn defaults_and_missing_fields_have_explicit_meanings() {
     let doc = parse_document(&defaults()).unwrap();
-    assert!(evaluate(
+    assert!(evaluate_at(
         &doc.views[0],
-        &json!({"source":"github","kind":"Pull request","relations":["authored"],"status":"unknown"})
+        &json!({"source":"github","kind":"Pull request","relations":["authored"],"status":"unknown"}),
+        now()
     ));
-    assert!(!evaluate(
+    assert!(!evaluate_at(
         &doc.views[0],
-        &json!({"source":"github","kind":"Pull request","relations":["authored"],"status":"done"})
+        &json!({"source":"github","kind":"Pull request","relations":["authored"],"status":"done"}),
+        now()
     ));
     for filter in [
         json!({"op":"notIn","field":"status","values":["done"]}),
         json!({"op":"containsNone","field":"relations","values":["reviews"]}),
     ] {
         let predicate = serde_json::from_value(filter).unwrap();
-        assert!(!matches_filter(&predicate, &json!({})));
+        assert!(!matches_filter_at(&predicate, &json!({}), now()));
     }
     let predicate = serde_json::from_value(json!({"op":"all","conditions":[{"op":"in","field":"source","values":["github"]},{"op":"any","conditions":[{"op":"equals","field":"pinned","value":true},{"op":"containsAny","field":"relations","values":["reviews"]}]}]})).unwrap();
-    assert!(matches_filter(
+    assert!(matches_filter_at(
         &predicate,
-        &json!({"source":"github","relations":["reviews"]})
+        &json!({"source":"github","relations":["reviews"]}),
+        now()
     ));
-    assert!(!matches_filter(
+    assert!(!matches_filter_at(
         &predicate,
-        &json!({"source":"linear","pinned":true})
+        &json!({"source":"linear","pinned":true}),
+        now()
     ));
 }
 #[test]

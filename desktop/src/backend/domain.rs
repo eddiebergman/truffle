@@ -1,5 +1,5 @@
 //! Canonical record operations and projections. No HTTP, terminal, or UI dependencies.
-use super::*;
+use super::{arr, checked, json, now, sid, text, uuid, Error, Result, Value};
 use std::collections::{BTreeMap, BTreeSet};
 pub const STATUSES: &[&str] = &[
     "todo",
@@ -198,10 +198,10 @@ pub fn bundles(s: &Value) -> Value {
         regex::Regex::new(r"^https://(?:[^/]+\.)?sentry\.io/(?:organizations/[^/]+/)?issues/(\d+)")
             .unwrap();
     let url_key = |url: &str| {
-        sentry
-            .captures(url)
-            .map(|c| format!("sentry-issue:{}", &c[1]))
-            .unwrap_or_else(|| url.trim_end_matches('/').to_owned())
+        sentry.captures(url).map_or_else(
+            || url.trim_end_matches('/').to_owned(),
+            |c| format!("sentry-issue:{}", &c[1]),
+        )
     };
     let urls: BTreeMap<_, _> = items
         .iter()
@@ -238,11 +238,11 @@ pub fn bundles(s: &Value) -> Value {
         }
         let mut merged = BTreeSet::new();
         groups.retain(|g| {
-            if !g.is_disjoint(&ids) {
+            if g.is_disjoint(&ids) {
+                true
+            } else {
                 merged.extend(g.iter().cloned());
                 false
-            } else {
-                true
             }
         });
         groups.push(merged);
@@ -376,7 +376,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                     "status"
                         if value.is_null() || STATUSES.contains(&value.as_str().unwrap_or("")) =>
                     {
-                        ()
+                        ();
                     }
                     _ => return Err(Error::new("Invalid override.")),
                 }
@@ -411,11 +411,14 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                     s["snoozes"].as_object_mut().unwrap().remove(key);
                 }
                 "change" => {
-                    s["snoozes"][key] = json!({"fingerprint":fingerprint(item),"createdAt":now()})
+                    s["snoozes"][key] = json!({"fingerprint":fingerprint(item),"createdAt":now()});
                 }
                 "until" => {
                     let until = p["until"].as_f64().unwrap_or(0.0);
-                    if !until.is_finite() || until <= now() || until >= now() + 366.0 * 86400.0 {
+                    if !until.is_finite()
+                        || until <= now()
+                        || until >= 366.0f64.mul_add(86400.0, now())
+                    {
                         return Err(Error::new("Choose a future time within the next year."));
                     }
                     s["snoozes"][key] = json!({"until":until,"createdAt":now()});
@@ -467,24 +470,24 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                         if v.as_u64().is_some()
                             && v.as_u64().unwrap() <= if k == "days" { 90 } else { 100000000 } =>
                     {
-                        ()
+                        ();
                     }
                     "level"
                         if ["", "fatal", "error", "warning", "info", "debug"]
                             .contains(&v.as_str().unwrap_or("invalid")) =>
                     {
-                        ()
+                        ();
                     }
                     "category"
                         if ["", "error", "performance", "replay", "metric"]
                             .contains(&v.as_str().unwrap_or("invalid")) =>
                     {
-                        ()
+                        ();
                     }
                     "environment"
                         if v.as_str().is_some() && text(&p["filters"], k).len() <= 100 =>
                     {
-                        ()
+                        ();
                     }
                     _ => return Err(Error::new("Invalid Sentry filters.")),
                 }

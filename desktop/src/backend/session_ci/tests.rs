@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 #[test]
 fn investigation_progress_is_linked_and_request_guarded() {
     let temp = tempfile::tempdir().unwrap();
