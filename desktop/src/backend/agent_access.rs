@@ -87,6 +87,7 @@ pub fn snooze_work(repo: &Repository, args: &Value) -> Result<Value> {
         &json!({"action":"snooze","id":args["id"],"mode":args["mode"],"until":args["until"]}),
     )
 }
+#[derive(Clone, Copy)]
 pub enum ChatMetadata<'a> {
     Rename(&'a str),
     Visibility(bool),
@@ -113,8 +114,10 @@ pub fn update_chat(repo: &Repository, id: &str, change: ChatMetadata<'_>) -> Res
 }
 
 pub fn list_artifacts(repo: &Repository, args: &Value) -> Result<Value> {
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    let catalog = super::artifacts::catalog(repo, &state)?;
+    let catalog = {
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        super::artifacts::catalog(repo, &state)?
+    };
     let query = text(args, "query").to_lowercase();
     let rows = arr(&catalog["artifacts"])
         .into_iter()
@@ -184,17 +187,21 @@ fn artifact_file(repo: &Repository, id: &str) -> Result<ArtifactFile> {
     if id.len() != 24 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(Error::new("Invalid artifact ID."));
     }
-    let state = repo.state.lock().map_err(|_| Error::io())?;
-    let entry = arr(&super::artifacts::catalog(repo, &state)?["artifacts"])
-        .into_iter()
-        .find(|entry| entry["id"] == id)
-        .ok_or_else(|| Error::new("Artifact unavailable."))?;
-    if text(&entry, "path").is_empty() {
-        return Err(Error::new(
-            "Only local artifact files can be read. Remote URLs are not fetched.",
-        ));
-    }
-    let roots = super::artifacts::roots(repo, &state)?;
+    let (entry, roots) = {
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        let entry = arr(&super::artifacts::catalog(repo, &state)?["artifacts"])
+            .into_iter()
+            .find(|entry| entry["id"] == id)
+            .ok_or_else(|| Error::new("Artifact unavailable."))?;
+        if text(&entry, "path").is_empty() {
+            return Err(Error::new(
+                "Only local artifact files can be read. Remote URLs are not fetched.",
+            ));
+        }
+        let roots = super::artifacts::roots(repo, &state)?;
+        drop(state);
+        (entry, roots)
+    };
     let path = super::artifacts::file(text(&entry, "path"), &roots)?;
     let format = path
         .extension()
@@ -232,17 +239,17 @@ fn artifact_file(repo: &Repository, id: &str) -> Result<ArtifactFile> {
 pub fn read_artifact_text(repo: &Repository, args: &Value) -> Result<Value> {
     let artifact = artifact_file(repo, text(args, "id"))?;
     let content = artifact.read_text(repo)?;
-    let offset = args["offset"].as_u64().unwrap_or(0);
-    if offset > content.len() as u64 || !content.is_char_boundary(offset as usize) {
-        return Err(Error::new(
-            "Artifact offset must start at a character boundary in the redacted UTF-8 stream.",
-        ));
-    }
-    let offset = offset as usize;
-    let limit = args["maxBytes"]
-        .as_u64()
-        .unwrap_or(16000)
-        .clamp(4, MAX_TEXT_BYTES as u64) as usize;
+    let offset = usize::try_from(args["offset"].as_u64().unwrap_or(0))
+        .ok()
+        .filter(|&offset| content.is_char_boundary(offset))
+        .ok_or_else(|| {
+            Error::new(
+                "Artifact offset must start at a character boundary in the redacted UTF-8 stream.",
+            )
+        })?;
+    let limit = usize::try_from(args["maxBytes"].as_u64().unwrap_or(16000))
+        .unwrap_or(usize::MAX)
+        .clamp(4, MAX_TEXT_BYTES);
     let mut end = (offset + limit).min(content.len());
     while !content.is_char_boundary(end) {
         end -= 1;

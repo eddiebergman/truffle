@@ -22,7 +22,9 @@ fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>, String) {
 }
 
 fn invoke(repo: &std::sync::Arc<Repository>, name: &str, args: Value) -> Result<Value> {
-    commands::invoke(repo, &json!({"name":name,"args":args}), true)
+    let mut request = json!({"name":name});
+    request["args"] = args;
+    commands::invoke(repo, &request, true)
 }
 
 #[test]

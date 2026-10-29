@@ -15,10 +15,11 @@ use std::{
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
+type ConnectionCache = Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>;
 struct NativeState {
     service: Arc<LocalHttpService>,
     verified: Arc<AtomicBool>,
-    connections: Arc<Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>>,
+    connections: Arc<ConnectionCache>,
 }
 
 fn active_profile(service: &LocalHttpService) -> Result<PathBuf, String> {
@@ -41,7 +42,7 @@ fn active_profile(service: &LocalHttpService) -> Result<PathBuf, String> {
 }
 fn connection_host(
     service: &LocalHttpService,
-    cached: &Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>,
+    cached: &ConnectionCache,
 ) -> Result<Arc<backend::connections::SetupHost>, String> {
     let profile = active_profile(service)?;
     let mut cached = cached
@@ -57,6 +58,7 @@ fn connection_host(
         backend::connections::SetupHost::new(profile.clone()).map_err(|error| error.message)?,
     );
     *cached = Some((profile, host.clone()));
+    drop(cached);
     Ok(host)
 }
 #[tauri::command]
@@ -143,7 +145,7 @@ async fn service_request(
     })
     .await
     .map_err(|_| "Service request failed.".to_owned())
-    .map(|result| result.unwrap_or_else(service::error_reply))
+    .map(|result| result.unwrap_or_else(|error| service::error_reply(&error)))
 }
 #[tauri::command]
 async fn read_artifact(state: State<'_, NativeState>, id: String) -> Result<String, String> {
@@ -421,6 +423,246 @@ fn migrate_bundle_storage() {
         }
     }
 }
+fn restart_control(args: &[String], index: usize) {
+    let value = |key: &str| {
+        args.iter()
+            .position(|x| x == key)
+            .and_then(|i| args.get(i + 1))
+    };
+    let root = value("--home").map_or_else(restart::root, PathBuf::from);
+    let url = value("--url").map_or("http://127.0.0.1:8765", String::as_str);
+    let result = match args.get(index + 1).map(String::as_str) {
+        Some("preview") => restart::preview(&root, url),
+        Some("status") => restart::status(&root),
+        Some("start") => restart::start(
+            &root,
+            url,
+            value("--mode").map_or("service", String::as_str),
+            args.iter().any(|x| x == "--confirm-interruption"),
+            value("--snapshot").map_or("", String::as_str),
+        ),
+        _ => Err("Use restart-control preview, status, or start.".into()),
+    };
+    match result {
+        Ok(value) => println!("{value}"),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+}
+fn restart_dashboard(args: &[String]) {
+    let value = |key: &str| {
+        args.iter()
+            .position(|x| x == key)
+            .and_then(|i| args.get(i + 1))
+    };
+    let result = match (value("--home"), value("--job")) {
+        (Some(root), Some(id)) => restart::run(&PathBuf::from(root), id),
+        _ => Err("Restart helper requires --home and --job.".into()),
+    };
+    if let Err(error) = result {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
+}
+fn terminal_daemon(args: &[String]) {
+    let value = |name: &str| {
+        args.iter()
+            .position(|x| x == name)
+            .and_then(|i| args.get(i + 1))
+            .map(PathBuf::from)
+    };
+    let result = match (value("--home"), value("--data")) {
+        (Some(root), Some(data)) => backend::terminal_daemon::serve(
+            root,
+            data,
+            args.iter().any(|x| x == "--allow-demo-terminals"),
+        ),
+        _ => Err(backend::Error::new(
+            "Terminal daemon requires --home and --data.",
+        )),
+    };
+    if let Err(error) = result {
+        eprintln!("{}", error.message);
+        std::process::exit(1);
+    }
+}
+fn serve(args: &[String]) {
+    let value = |name: &str| {
+        args.iter()
+            .position(|x| x == name)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let root = value("--home")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("TRUFFLE_HOME").map(PathBuf::from))
+        .unwrap_or_else(|| backend::home().join("code/mydash"));
+    let port = value("--port").and_then(|x| x.parse().ok()).unwrap_or(8765);
+    if let Err(e) = backend::http::serve(
+        root,
+        value("--data").map(PathBuf::from),
+        port,
+        args.iter().any(|x| x == "--demo"),
+        value("--terminal-demo"),
+    ) {
+        eprintln!("{}", e.message);
+        std::process::exit(1);
+    }
+}
+fn artifact_response(
+    service: &LocalHttpService,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    let result = if request.method() == "GET" && request.uri().query().is_none() {
+        service.artifact(request.uri().path().trim_start_matches('/'))
+    } else {
+        Err("Invalid artifact request.".into())
+    };
+    match result {
+        Ok(asset) => tauri::http::Response::builder()
+            .status(200)
+            .header("Content-Type", asset.content_type)
+            .header("Content-Security-Policy", service::ARTIFACT_CSP)
+            .header("X-Content-Type-Options", "nosniff")
+            .header("Referrer-Policy", "no-referrer")
+            .header("Cache-Control", "no-store")
+            .body(asset.bytes),
+        Err(_) => tauri::http::Response::builder()
+            .status(404)
+            .header("Content-Type", "text/plain")
+            .body(b"Artifact unavailable.".to_vec()),
+    }
+    .expect("Valid artifact response")
+}
+fn build_main_window(app: &tauri::App, service: Arc<LocalHttpService>) -> tauri::Result<()> {
+    let navigation = service.clone();
+    let new_windows = service;
+    let window_builder =
+        WebviewWindowBuilder::new(app, "main", WebviewUrl::App(PathBuf::from("index.html")))
+            .title("truffle")
+            .inner_size(1360.0, 860.0)
+            .min_inner_size(800.0, 540.0);
+    #[cfg(target_os = "macos")]
+    let window_builder = window_builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
+        // Wry's y inset adjusts the native container height, not the button top.
+        // 23 centers the controls in workspace.css's 40-point title bar.
+        .traffic_light_position(tauri::LogicalPosition::new(12.0, 19.0));
+    let window = window_builder
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(25, 23, 36, 255))
+        .on_navigation(move |url| {
+            if (url.scheme() == "tauri"
+                && url.host_str() == Some("localhost")
+                && !url.path().starts_with("/linear/"))
+                || (url.scheme() == "truffle-artifact" && url.host_str() == Some("localhost"))
+                || url.as_str() == "about:blank"
+            {
+                return true;
+            }
+            open_external(url, &navigation);
+            false
+        })
+        .on_new_window(move |url, _| {
+            open_external(&url, &new_windows);
+            tauri::webview::NewWindowResponse::Deny
+        })
+        .build()?;
+    window.on_window_event(|event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+        }
+    });
+    Ok(())
+}
+fn install_menu(app: &tauri::App) -> tauri::Result<()> {
+    // Native menu provides About, Quit, Hide, and standard macOS Edit shortcuts.
+    let menu = tauri::menu::Menu::default(app.handle())?;
+    let hide_label = tauri::menu::PredefinedMenuItem::hide(app.handle(), None)?.text()?;
+    let close_label = tauri::menu::PredefinedMenuItem::close_window(app.handle(), None)?.text()?;
+    for item in menu.items()? {
+        if let Some(submenu) = item.as_submenu() {
+            for child in submenu.items()? {
+                if let tauri::menu::MenuItemKind::Predefined(predefined) = &child {
+                    if predefined.text()? == close_label || predefined.text()? == hide_label {
+                        submenu.remove(predefined)?;
+                    }
+                }
+            }
+            if submenu.text()? == "View" {
+                for (id, label, key) in [
+                    ("toggle-left", "Toggle Left Sidebar", "CmdOrCtrl+H"),
+                    ("toggle-right", "Toggle Right Sidebar", "CmdOrCtrl+L"),
+                    ("commands", "Commands…", "CmdOrCtrl+K"),
+                    ("settings", "Settings…", "CmdOrCtrl+,"),
+                    ("find-work", "Find Work…", "CmdOrCtrl+P"),
+                    ("page-search", "Search Current Page…", "CmdOrCtrl+F"),
+                    ("chat-terminal", "Toggle Chat Terminal", "CmdOrCtrl+J"),
+                ] {
+                    submenu.append(&tauri::menu::MenuItem::with_id(
+                        app.handle(),
+                        id,
+                        label,
+                        true,
+                        Some(key),
+                    )?)?;
+                }
+            }
+            if submenu.text()? == "File" {
+                for (id, label, key) in [
+                    ("agent-new", "New Agent Tab", "CmdOrCtrl+T"),
+                    ("agent-close", "Close Agent Tab", "CmdOrCtrl+W"),
+                    (
+                        "agent-reopen",
+                        "Reopen Closed Agent Tab",
+                        "CmdOrCtrl+Shift+T",
+                    ),
+                    ("agent-rename", "Rename Agent Tab", "CmdOrCtrl+R"),
+                ] {
+                    submenu.append(&tauri::menu::MenuItem::with_id(
+                        app.handle(),
+                        id,
+                        label,
+                        true,
+                        Some(key),
+                    )?)?;
+                }
+            }
+        }
+    }
+    app.on_menu_event(|app, event| {
+        let id = event.id().as_ref();
+        if ![
+            "agent-new",
+            "agent-close",
+            "agent-reopen",
+            "agent-rename",
+            "toggle-left",
+            "toggle-right",
+            "commands",
+            "find-work",
+            "page-search",
+            "settings",
+            "chat-terminal",
+        ]
+        .contains(&id)
+        {
+            return;
+        }
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('truffle-configured-command',{{detail:{}}}))",
+            serde_json::json!(id)
+        );
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.eval(&script);
+        }
+    });
+    app.set_menu(menu)?;
+    Ok(())
+}
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     if let Some(result) = backend::agent_cli::run(&args) {
@@ -431,48 +673,11 @@ fn main() {
         return;
     }
     if let Some(index) = args.iter().position(|x| x == "--restart-control") {
-        let value = |key: &str| {
-            args.iter()
-                .position(|x| x == key)
-                .and_then(|i| args.get(i + 1))
-        };
-        let root = value("--home").map_or_else(restart::root, PathBuf::from);
-        let url = value("--url").map_or("http://127.0.0.1:8765", String::as_str);
-        let result = match args.get(index + 1).map(String::as_str) {
-            Some("preview") => restart::preview(&root, url),
-            Some("status") => restart::status(&root),
-            Some("start") => restart::start(
-                &root,
-                url,
-                value("--mode").map_or("service", String::as_str),
-                args.iter().any(|x| x == "--confirm-interruption"),
-                value("--snapshot").map_or("", String::as_str),
-            ),
-            _ => Err("Use restart-control preview, status, or start.".into()),
-        };
-        match result {
-            Ok(value) => println!("{value}"),
-            Err(error) => {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        }
+        restart_control(&args, index);
         return;
     }
     if args.iter().any(|x| x == "--restart-dashboard") {
-        let value = |key: &str| {
-            args.iter()
-                .position(|x| x == key)
-                .and_then(|i| args.get(i + 1))
-        };
-        let result = match (value("--home"), value("--job")) {
-            (Some(root), Some(id)) => restart::run(&PathBuf::from(root), id),
-            _ => Err("Restart helper requires --home and --job.".into()),
-        };
-        if let Err(error) = result {
-            eprintln!("{error}");
-            std::process::exit(1);
-        }
+        restart_dashboard(&args);
         return;
     }
     if let Some(index) = args.iter().position(|x| x == "--check-agent-storage") {
@@ -487,50 +692,11 @@ fn main() {
         return;
     }
     if args.iter().any(|x| x == "--terminal-daemon") {
-        let value = |name: &str| {
-            args.iter()
-                .position(|x| x == name)
-                .and_then(|i| args.get(i + 1))
-                .map(PathBuf::from)
-        };
-        let result = match (value("--home"), value("--data")) {
-            (Some(root), Some(data)) => backend::terminal_daemon::serve(
-                root,
-                data,
-                args.iter().any(|x| x == "--allow-demo-terminals"),
-            ),
-            _ => Err(backend::Error::new(
-                "Terminal daemon requires --home and --data.",
-            )),
-        };
-        if let Err(error) = result {
-            eprintln!("{}", error.message);
-            std::process::exit(1);
-        }
+        terminal_daemon(&args);
         return;
     }
     if args.iter().any(|x| x == "--serve") {
-        let value = |name: &str| {
-            args.iter()
-                .position(|x| x == name)
-                .and_then(|i| args.get(i + 1))
-                .cloned()
-        };
-        let root = value("--home")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("TRUFFLE_HOME").map(PathBuf::from))
-            .unwrap_or_else(|| backend::home().join("code/mydash"));
-        let port = value("--port").and_then(|x| x.parse().ok()).unwrap_or(8765);
-        if let Err(e) = backend::http::serve(
-            root,
-            value("--data").map(PathBuf::from),
-            port,
-            args.iter().any(|x| x == "--demo"),
-            value("--terminal-demo"),
-        ) {
-            eprintln!("{}", e.message);
-            std::process::exit(1);
-        }
+        serve(&args);
         return;
     }
 
@@ -577,108 +743,13 @@ fn main() {
             move |_, request, responder| {
                 let service = assets.clone();
                 std::thread::spawn(move || {
-                    let result = if request.method() == "GET" && request.uri().query().is_none() {
-                        service.artifact(request.uri().path().trim_start_matches('/'))
-                    } else {
-                        Err("Invalid artifact request.".into())
-                    };
-                    let response = match result {
-                        Ok(asset) => tauri::http::Response::builder()
-                            .status(200)
-                            .header("Content-Type", asset.content_type)
-                            .header("Content-Security-Policy", service::ARTIFACT_CSP)
-                            .header("X-Content-Type-Options", "nosniff")
-                            .header("Referrer-Policy", "no-referrer")
-                            .header("Cache-Control", "no-store")
-                            .body(asset.bytes),
-                        Err(_) => tauri::http::Response::builder()
-                            .status(404)
-                            .header("Content-Type", "text/plain")
-                            .body(b"Artifact unavailable.".to_vec()),
-                    };
-                    responder.respond(response.expect("Valid artifact response"));
+                    responder.respond(artifact_response(&service, &request));
                 });
             },
         )
         .setup(move |app| {
-            let navigation = service.clone();
-            let new_windows = service;
-            let window_builder = WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::App(PathBuf::from("index.html")),
-            )
-            .title("truffle")
-            .inner_size(1360.0, 860.0)
-            .min_inner_size(800.0, 540.0)
-            ;
-            #[cfg(target_os = "macos")]
-            let window_builder = window_builder
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true)
-                // Wry's y inset adjusts the native container height, not the button top.
-                // 23 centers the controls in workspace.css's 40-point title bar.
-                .traffic_light_position(tauri::LogicalPosition::new(12.0, 19.0));
-            let window = window_builder
-            .theme(Some(tauri::Theme::Dark))
-            .background_color(tauri::window::Color(25, 23, 36, 255))
-            .on_navigation(move |url| {
-                if (url.scheme() == "tauri"
-                    && url.host_str() == Some("localhost")
-                    && !url.path().starts_with("/linear/"))
-                    || (url.scheme() == "truffle-artifact" && url.host_str() == Some("localhost"))
-                    || url.as_str() == "about:blank"
-                {
-                    return true;
-                }
-                open_external(url, &navigation);
-                false
-            })
-            .on_new_window(move |url, _| {
-                open_external(&url, &new_windows);
-                tauri::webview::NewWindowResponse::Deny
-            })
-            .build()?;
-            window.on_window_event(|event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                }
-            });
-            // Native menu provides About, Quit, Hide, and standard macOS Edit shortcuts.
-            let menu = tauri::menu::Menu::default(app.handle())?;
-            let hide_label = tauri::menu::PredefinedMenuItem::hide(app.handle(), None)?.text()?;
-            let close_label = tauri::menu::PredefinedMenuItem::close_window(app.handle(), None)?.text()?;
-            for item in menu.items()? {
-                if let Some(submenu) = item.as_submenu() {
-                    for child in submenu.items()? {
-                        if let tauri::menu::MenuItemKind::Predefined(predefined) = &child {
-                            if predefined.text()? == close_label || predefined.text()? == hide_label { submenu.remove(predefined)?; }
-                        }
-                    }
-                    if submenu.text()? == "View" {
-                        for (id,label,key) in [("toggle-left","Toggle Left Sidebar","CmdOrCtrl+H"),("toggle-right","Toggle Right Sidebar","CmdOrCtrl+L"),("commands","Commands…","CmdOrCtrl+K"),("settings","Settings…","CmdOrCtrl+,"),("find-work","Find Work…","CmdOrCtrl+P"),("page-search","Search Current Page…","CmdOrCtrl+F"),("chat-terminal","Toggle Chat Terminal","CmdOrCtrl+J")] {
-                            submenu.append(&tauri::menu::MenuItem::with_id(app.handle(),id,label,true,Some(key))?)?;
-                        }
-                    }
-                    if submenu.text()? == "File" {
-                        for (id, label, key) in [
-                            ("agent-new", "New Agent Tab", "CmdOrCtrl+T"),
-                            ("agent-close", "Close Agent Tab", "CmdOrCtrl+W"),
-                            ("agent-reopen", "Reopen Closed Agent Tab", "CmdOrCtrl+Shift+T"),
-                            ("agent-rename", "Rename Agent Tab", "CmdOrCtrl+R"),
-                        ] {
-                            submenu.append(&tauri::menu::MenuItem::with_id(app.handle(), id, label, true, Some(key))?)?;
-                        }
-                    }
-                }
-            }
-            app.on_menu_event(|app, event| {
-                let id=event.id().as_ref();
-                if !["agent-new","agent-close","agent-reopen","agent-rename","toggle-left","toggle-right","commands","find-work","page-search","settings","chat-terminal"].contains(&id){return;}
-                let script=format!("window.dispatchEvent(new CustomEvent('truffle-configured-command',{{detail:{}}}))",serde_json::json!(id));
-                if let Some(window) = app.get_webview_window("main") { let _ = window.eval(&script); }
-            });
-            app.set_menu(menu)?;
+            build_main_window(app, service)?;
+            install_menu(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {

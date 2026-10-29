@@ -2,7 +2,7 @@
 use reqwest::{blocking::Client, redirect::Policy, Url};
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::{sync::Mutex, time::Duration};
+use std::{io::Read, sync::Mutex, time::Duration};
 
 const READ_ROUTES: &[&str] = &[
     "/api/config-status",
@@ -258,7 +258,6 @@ impl DashboardService for LocalHttpService {
         if response.content_length().unwrap_or(0) > 10 * 1024 * 1024 {
             return Err("Artifact exceeds 10 MiB.".into());
         }
-        use std::io::Read;
         let mut bytes = Vec::new();
         response
             .take(10 * 1024 * 1024 + 1)
@@ -280,7 +279,7 @@ pub fn validate_artifact_id(id: &str) -> Result<(), String> {
         Err("Invalid artifact ID.".into())
     }
 }
-pub fn error_reply(message: String) -> Reply {
+pub fn error_reply(message: &str) -> Reply {
     Reply {
         status: 503,
         data: json!({"error":message}),

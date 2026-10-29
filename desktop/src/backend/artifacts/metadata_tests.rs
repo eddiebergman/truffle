@@ -10,7 +10,7 @@ fn fixture() -> (tempfile::TempDir, Arc<Repository>, String, Vec<String>) {
     repo.transaction(|state|{state["sessions"]=json!(ids.iter().map(|id|json!({"id":id,"cwd":temp.path(),"items":[]})).collect::<Vec<_>>());state["artifacts"]=json!([{"id":artifact,"title":"Original title","sessionIds":ids[..31],"url":url,"format":"link","at":42,"snapshot":true,"presetId":"original-owner","role":"skill-output","privateNs":{"keep":"private-metadata-marker"}}]);Ok(())}).unwrap();
     (temp, repo, artifact, ids)
 }
-fn update(repo: &Repository, read: &Value, patch: Value) -> Result<Value> {
+fn update(repo: &Repository, read: &Value, patch: &Value) -> Result<Value> {
     let mut expected = json!({});
     for key in patch.as_object().unwrap().keys() {
         expected[key] = read["expected"][key].clone();
@@ -47,20 +47,20 @@ fn artifact_metadata_full_read_is_pure_registered_metadata_and_preserves_more_th
 fn artifact_metadata_field_cas_commutes_and_preserves_immutable_data_and_extensions() {
     let (_temp, repo, id, ids) = fixture();
     let baseline = metadata_read(&repo, &json!({"id":id})).unwrap();
-    let links = update(&repo, &baseline, json!({"sessionIds":ids})).unwrap();
-    let renamed = update(&repo, &baseline, json!({"title":"New title"})).unwrap();
+    let links = update(&repo, &baseline, &json!({"sessionIds":ids})).unwrap();
+    let renamed = update(&repo, &baseline, &json!({"title":"New title"})).unwrap();
     assert_eq!(
         renamed["artifact"]["sessionIds"].as_array().unwrap().len(),
         32
     );
     assert_eq!(renamed["changedFields"], json!(["title"]));
     assert_eq!(
-        update(&repo, &baseline, json!({"title":"Stale title"}))
+        update(&repo, &baseline, &json!({"title":"Stale title"}))
             .unwrap_err()
             .status,
         409
     );
-    let final_links = update(&repo, &links, json!({"sessionIds":[]})).unwrap();
+    let final_links = update(&repo, &links, &json!({"sessionIds":[]})).unwrap();
     assert_eq!(final_links["artifact"]["title"], "New title");
     let state = repo.state.lock().unwrap();
     let artifact = &state["artifacts"][0];
@@ -75,11 +75,11 @@ fn artifact_metadata_field_cas_commutes_and_preserves_immutable_data_and_extensi
 fn artifact_metadata_conflicts_invalid_patch_and_unchecked_legacy_save_leave_canonical_unchanged() {
     let (_temp, repo, id, ids) = fixture();
     let read = metadata_read(&repo, &json!({"id":id})).unwrap();
-    update(&repo, &read, json!({"sessionIds":[ids[0]]})).unwrap();
+    update(&repo, &read, &json!({"sessionIds":[ids[0]]})).unwrap();
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        update(&repo, &read, json!({"sessionIds":[]}))
+        update(&repo, &read, &json!({"sessionIds":[]}))
             .unwrap_err()
             .status,
         409
@@ -129,7 +129,7 @@ fn artifact_metadata_discovery_read_does_not_register_and_materialization_checks
     assert_eq!(read["origin"]["type"], "discovered");
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    assert!(update(&repo, &read, json!({"title":"No silent registration"})).is_err());
+    assert!(update(&repo, &read, &json!({"title":"No silent registration"})).is_err());
     std::fs::write(&path, "Changed report with a different size").unwrap();
     let args = json!({"id":id,"patch":{"sessionIds":[]},"expected":{"sessionIds":read["expected"]["sessionIds"]}});
     assert_eq!(register_discovered(&repo, &args).unwrap_err().status, 409);
@@ -154,11 +154,11 @@ fn artifact_metadata_failed_save_and_reattachment_preserve_extensions_and_latest
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
-    assert!(update(&repo, &read, json!({"title":"Not committed"})).is_err());
+    assert!(update(&repo, &read, &json!({"title":"Not committed"})).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     std::fs::remove_dir(repo.data.with_extension("tmp")).unwrap();
-    update(&repo, &read, json!({"title":"Current title"})).unwrap();
+    update(&repo, &read, &json!({"title":"Current title"})).unwrap();
     attach_to_chat(
         &repo,
         &ids[31],

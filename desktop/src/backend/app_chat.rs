@@ -76,6 +76,8 @@ fn assistant_options(repo: &Repository) -> (Option<Assistant>, Value) {
     )
 }
 
+type ReplyModel =
+    fn(&Repository, Assistant, &str, &[Value], &AtomicBool, Instant, &mut Value) -> Result<String>;
 #[derive(Default)]
 pub struct Host {
     job: Mutex<Option<Value>>,
@@ -112,6 +114,7 @@ impl Host {
             Ok(())
         })?;
         *job = None;
+        drop(job);
         Ok(json!({"created":true}))
     }
     pub fn cancel(&self) -> Value {
@@ -139,15 +142,7 @@ impl Host {
         repo: &Arc<Repository>,
         p: &Value,
         installed: impl Fn(Assistant) -> bool,
-        model: fn(
-            &Repository,
-            Assistant,
-            &str,
-            &[Value],
-            &AtomicBool,
-            Instant,
-            &mut Value,
-        ) -> Result<String>,
+        model: ReplyModel,
     ) -> Result<Value> {
         if repo.demo {
             return Err(Error::new("App chat does not launch agents in the demo."));
@@ -430,29 +425,7 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
     if !filters.is_object() || serde_json::to_vec(&filters)?.len() > 4096 {
         return Err(Error::new("Invalid app filters."));
     }
-    let mut ui = json!({});
-    if let Some(filter) = p["ui"].get("settingsFilter") {
-        ui["settingsFilter"] = settings_filter_context(repo, filter)?;
-    }
-    for key in ["heading", "dialog", "settingsCategory", "reviewFile"] {
-        ui[key] = json!(checked(&p["ui"], key, 500, false)?);
-    }
-    let timezone = checked(&p["ui"], "timezone", 100, false)?;
-    let timezone = if timezone.is_empty() {
-        "UTC"
-    } else {
-        &timezone
-    };
-    if timezone.parse::<chrono_tz::Tz>().is_err() {
-        return Err(Error::new("Unknown app timezone."));
-    }
-    ui["timezone"] = json!(timezone);
-    for key in ["sharingOpen", "sharingInbox"] {
-        if p["ui"].get(key).is_some_and(|value| !value.is_boolean()) {
-            return Err(Error::new("Invalid sharing UI context."));
-        }
-        ui[key] = json!(p["ui"][key].as_bool().unwrap_or(false));
-    }
+    let mut ui = ui_context(repo, p)?;
     if source == "chat-results" {
         let targets = arr(&p["resultTargets"]);
         if targets.len() > 40 {
@@ -480,9 +453,36 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
     let selected = arr(&s["sessions"])
         .into_iter()
         .find(|r| source == "agents" && r["id"] == p["recordId"]);
+    drop(s);
     Ok(
-        json!({"page":source,"query":query,"ui":ui,"setup":setup,"chatRecovery":chat_recovery,"selectedChat":selected.as_ref().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"work":arr(&r["items"]).iter().take(20).map(|i|project(i,0)).collect::<Vec<_>>()})),"selectedWorktree":if source=="agents" {selected_worktree(&selected,p)?}else{Value::Null},"filters":filters,"visibleItems":visible,"capturedAt":now()}),
+        json!({"page":source,"query":query,"ui":ui,"setup":setup,"chatRecovery":chat_recovery,"selectedChat":selected.as_ref().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"work":arr(&r["items"]).iter().take(20).map(|i|project(i,0)).collect::<Vec<_>>()})),"selectedWorktree":if source=="agents" {selected_worktree(selected.as_ref(),p)?}else{Value::Null},"filters":filters,"visibleItems":visible,"capturedAt":now()}),
     )
+}
+fn ui_context(repo: &Repository, p: &Value) -> Result<Value> {
+    let mut ui = json!({});
+    if let Some(filter) = p["ui"].get("settingsFilter") {
+        ui["settingsFilter"] = settings_filter_context(repo, filter)?;
+    }
+    for key in ["heading", "dialog", "settingsCategory", "reviewFile"] {
+        ui[key] = json!(checked(&p["ui"], key, 500, false)?);
+    }
+    let timezone = checked(&p["ui"], "timezone", 100, false)?;
+    let timezone = if timezone.is_empty() {
+        "UTC"
+    } else {
+        &timezone
+    };
+    if timezone.parse::<chrono_tz::Tz>().is_err() {
+        return Err(Error::new("Unknown app timezone."));
+    }
+    ui["timezone"] = json!(timezone);
+    for key in ["sharingOpen", "sharingInbox"] {
+        if p["ui"].get(key).is_some_and(|value| !value.is_boolean()) {
+            return Err(Error::new("Invalid sharing UI context."));
+        }
+        ui[key] = json!(p["ui"][key].as_bool().unwrap_or(false));
+    }
+    Ok(ui)
 }
 fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
     let fields = value
@@ -516,14 +516,12 @@ fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
     }
     Ok(result)
 }
-fn selected_worktree(record: &Option<Value>, p: &Value) -> Result<Value> {
+fn selected_worktree(record: Option<&Value>, p: &Value) -> Result<Value> {
     let path = text(p, "worktree");
     if path.is_empty() {
         return Ok(Value::Null);
     }
-    let record = record
-        .as_ref()
-        .ok_or_else(|| Error::new("Selected chat unavailable."))?;
+    let record = record.ok_or_else(|| Error::new("Selected chat unavailable."))?;
     if record["cwd"] != path && !arr(&record["worktrees"]).iter().any(|t| t["path"] == path) {
         return Err(Error::new("Selected worktree is not linked to this chat."));
     }
@@ -577,86 +575,9 @@ fn tool(
             repo.settings.apply(args, true)?;
             Ok(routine_settings(repo))
         }
-        "settings-propose" => {
-            if args.as_object().unwrap().len() != 3
-                || args["revision"].as_u64().is_none()
-                || !args["contentHash"].is_string()
-                || !args["patch"].is_object()
-            {
-                return Err(Error::new(
-                    "Supply only the current revision, contentHash and a settings patch object.",
-                ));
-            }
-            // The full preview can contain private current commands. Never put it in the model transcript.
-            repo.settings.preview(args, false)?;
-            let fields = args["patch"]
-                .as_object()
-                .unwrap()
-                .keys()
-                .cloned()
-                .collect::<Vec<_>>();
-            commands.push(json!({"type":"settings-proposal","revision":args["revision"],"contentHash":args["contentHash"],"patch":args["patch"]}));
-            Ok(
-                json!({"proposedFields":fields,"applied":false,"userApprovalRequired":true,"note":"Nothing was applied. The user must review and save this patch in Settings. Array patches replace complete arrays."}),
-            )
-        }
+        "settings-propose" => propose_settings(repo, args, commands),
         "query" => super::commands::invoke(repo, &json!({"name":"work.query","args":args}), true),
-        "navigate" => {
-            if commands.len() >= 4 {
-                return Err(Error::new("Too many page changes in one message."));
-            }
-            if args
-                .as_object()
-                .unwrap()
-                .keys()
-                .any(|key| !["destination", "category"].contains(&key.as_str()))
-            {
-                return Err(Error::new("Unknown app navigation field."));
-            }
-            let destination = text(args, "destination");
-            if ![
-                "setup",
-                "skills",
-                "artifacts",
-                "logs",
-                "settings",
-                "sharing-inbox",
-                "chat-recovery",
-            ]
-            .contains(&destination)
-            {
-                return Err(Error::new("Unknown app destination."));
-            }
-            let mut command = json!({"type":"navigate","destination":destination});
-            if let Some(category) = args.get("category") {
-                let category = category
-                    .as_str()
-                    .ok_or_else(|| Error::new("Choose a known Settings category."))?;
-                if destination != "settings"
-                    || ![
-                        "appearance",
-                        "review",
-                        "keyboard",
-                        "agents",
-                        "actions",
-                        "connections",
-                        "sharing",
-                        "data",
-                        "help",
-                    ]
-                    .contains(&category)
-                {
-                    return Err(Error::new(
-                        "Choose a known Settings category only when opening settings.",
-                    ));
-                }
-                command["category"] = json!(category);
-            }
-            commands.push(command.clone());
-            Ok(
-                json!({"queued":command,"note":"The app opens this destination when the reply arrives, or offers Show results if the user navigated away. Existing work filters remain unchanged."}),
-            )
-        }
+        "navigate" => navigate(args, commands),
         "show-view" => {
             if commands.len() >= 4 {
                 return Err(Error::new("Too many page changes in one message."));
@@ -682,41 +603,8 @@ fn tool(
             Ok(json!({"queued":command}))
         }
         "chats-query" => super::chat_search::search(repo, args),
-        "show-chats" => {
-            if commands.len() >= 4 {
-                return Err(Error::new("Too many page changes in one message."));
-            }
-            let result = super::chat_search::search(repo, args)?;
-            let recommended = checked(args, "recommendedId", 160, false)?;
-            if !recommended.is_empty()
-                && !arr(&result["chats"]).iter().any(|c| c["id"] == recommended)
-            {
-                return Err(Error::new(
-                    "The recommended chat is not in these results. Search again.",
-                ));
-            }
-            let command = json!({"type":"chat-results","query":checked(args,"query",500,false)?,"chats":result["chats"],"total":result["total"],"recommendedId":recommended,"reason":checked(args,"reason",300,false)?});
-            commands.push(command.clone());
-            Ok(json!({"queued":command}))
-        }
-        "open-chat" => {
-            if commands.len() >= 4 {
-                return Err(Error::new("Too many page changes in one message."));
-            }
-            let id = checked(args, "id", 160, true)?;
-            let target = super::chat_search::target(repo, &id)?;
-            let query = checked(args, "query", 500, false)?;
-            let results = if query.is_empty() {
-                Value::Null
-            } else {
-                Some(super::chat_search::search(repo,&json!({"query":query}))?).filter(|r|arr(&r["chats"]).iter().any(|c|c["id"]==id)).map(|r|json!({"type":"chat-results","query":query,"chats":r["chats"],"total":r["total"],"recommendedId":id,"reason":""})).ok_or_else(|| Error::new("The target is not in these search results."))?
-            };
-            let command = json!({"type":"open-chat","id":id,"results":results});
-            commands.push(command.clone());
-            Ok(
-                json!({"queued":command,"chat":target,"note":"The app selects this chat when the reply arrives, or offers Show results if the user navigated away. No new agent process starts."}),
-            )
-        }
+        "show-chats" => show_chats(repo, args, commands),
+        "open-chat" => open_chat(repo, args, commands),
         "item" => {
             let id = checked(args, "id", 160, true)?;
             let s = repo.state.lock().map_err(|_| Error::io())?;
@@ -725,43 +613,156 @@ fn tool(
                 .map(|item| project(&effective(&s, item), 4000))
                 .ok_or_else(|| Error::new("That item is not cached."))
         }
-        "show" => {
-            if commands.len() >= 4 {
-                return Err(Error::new("Too many page changes in one message."));
-            }
-            let source = text(args, "source");
-            let status = if text(args, "status").is_empty() {
-                "all"
-            } else {
-                text(args, "status")
-            };
-            if ![
-                "all", "linear", "github", "sentry", "notes", "agents", "sessions",
-            ]
-            .contains(&source)
-                || ![
-                    "all",
-                    "active",
-                    "todo",
-                    "in-progress",
-                    "blocked",
-                    "needs-review",
-                    "ready-to-merge",
-                    "draft",
-                    "done",
-                ]
-                .contains(&status)
-            {
-                return Err(Error::new("Unknown app view or status filter."));
-            }
-            let command = json!({"type":"show","source":source,"query":checked(args,"query",500,false)?,"status":status});
-            commands.push(command.clone());
-            Ok(
-                json!({"queued":command,"note":"The app applies this page change when the reply arrives. If the user has navigated elsewhere, it offers a Show results button."}),
-            )
-        }
+        "show" => show_page(args, commands),
         _ => Err(Error::new("Unknown assistant tool. Use discover.")),
     }
+}
+fn propose_settings(repo: &Repository, args: &Value, commands: &mut Vec<Value>) -> Result<Value> {
+    if args.as_object().unwrap().len() != 3
+        || args["revision"].as_u64().is_none()
+        || !args["contentHash"].is_string()
+        || !args["patch"].is_object()
+    {
+        return Err(Error::new(
+            "Supply only the current revision, contentHash and a settings patch object.",
+        ));
+    }
+    // The full preview can contain private current commands. Never put it in the model transcript.
+    repo.settings.preview(args, false)?;
+    let fields = args["patch"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    commands.push(json!({"type":"settings-proposal","revision":args["revision"],"contentHash":args["contentHash"],"patch":args["patch"]}));
+    Ok(
+        json!({"proposedFields":fields,"applied":false,"userApprovalRequired":true,"note":"Nothing was applied. The user must review and save this patch in Settings. Array patches replace complete arrays."}),
+    )
+}
+fn navigate(args: &Value, commands: &mut Vec<Value>) -> Result<Value> {
+    if commands.len() >= 4 {
+        return Err(Error::new("Too many page changes in one message."));
+    }
+    if args
+        .as_object()
+        .unwrap()
+        .keys()
+        .any(|key| !["destination", "category"].contains(&key.as_str()))
+    {
+        return Err(Error::new("Unknown app navigation field."));
+    }
+    let destination = text(args, "destination");
+    if ![
+        "setup",
+        "skills",
+        "artifacts",
+        "logs",
+        "settings",
+        "sharing-inbox",
+        "chat-recovery",
+    ]
+    .contains(&destination)
+    {
+        return Err(Error::new("Unknown app destination."));
+    }
+    let mut command = json!({"type":"navigate","destination":destination});
+    if let Some(category) = args.get("category") {
+        let category = category
+            .as_str()
+            .ok_or_else(|| Error::new("Choose a known Settings category."))?;
+        if destination != "settings"
+            || ![
+                "appearance",
+                "review",
+                "keyboard",
+                "agents",
+                "actions",
+                "connections",
+                "sharing",
+                "data",
+                "help",
+            ]
+            .contains(&category)
+        {
+            return Err(Error::new(
+                "Choose a known Settings category only when opening settings.",
+            ));
+        }
+        command["category"] = json!(category);
+    }
+    commands.push(command.clone());
+    Ok(
+        json!({"queued":command,"note":"The app opens this destination when the reply arrives, or offers Show results if the user navigated away. Existing work filters remain unchanged."}),
+    )
+}
+fn show_chats(repo: &Repository, args: &Value, commands: &mut Vec<Value>) -> Result<Value> {
+    if commands.len() >= 4 {
+        return Err(Error::new("Too many page changes in one message."));
+    }
+    let result = super::chat_search::search(repo, args)?;
+    let recommended = checked(args, "recommendedId", 160, false)?;
+    if !recommended.is_empty() && !arr(&result["chats"]).iter().any(|c| c["id"] == recommended) {
+        return Err(Error::new(
+            "The recommended chat is not in these results. Search again.",
+        ));
+    }
+    let command = json!({"type":"chat-results","query":checked(args,"query",500,false)?,"chats":result["chats"],"total":result["total"],"recommendedId":recommended,"reason":checked(args,"reason",300,false)?});
+    commands.push(command.clone());
+    Ok(json!({"queued":command}))
+}
+fn open_chat(repo: &Repository, args: &Value, commands: &mut Vec<Value>) -> Result<Value> {
+    if commands.len() >= 4 {
+        return Err(Error::new("Too many page changes in one message."));
+    }
+    let id = checked(args, "id", 160, true)?;
+    let target = super::chat_search::target(repo, &id)?;
+    let query = checked(args, "query", 500, false)?;
+    let results = if query.is_empty() {
+        Value::Null
+    } else {
+        Some(super::chat_search::search(repo,&json!({"query":query}))?).filter(|r|arr(&r["chats"]).iter().any(|c|c["id"]==id)).map(|r|json!({"type":"chat-results","query":query,"chats":r["chats"],"total":r["total"],"recommendedId":id,"reason":""})).ok_or_else(|| Error::new("The target is not in these search results."))?
+    };
+    let command = json!({"type":"open-chat","id":id,"results":results});
+    commands.push(command.clone());
+    Ok(
+        json!({"queued":command,"chat":target,"note":"The app selects this chat when the reply arrives, or offers Show results if the user navigated away. No new agent process starts."}),
+    )
+}
+fn show_page(args: &Value, commands: &mut Vec<Value>) -> Result<Value> {
+    if commands.len() >= 4 {
+        return Err(Error::new("Too many page changes in one message."));
+    }
+    let source = text(args, "source");
+    let status = if text(args, "status").is_empty() {
+        "all"
+    } else {
+        text(args, "status")
+    };
+    if ![
+        "all", "linear", "github", "sentry", "notes", "agents", "sessions",
+    ]
+    .contains(&source)
+        || ![
+            "all",
+            "active",
+            "todo",
+            "in-progress",
+            "blocked",
+            "needs-review",
+            "ready-to-merge",
+            "draft",
+            "done",
+        ]
+        .contains(&status)
+    {
+        return Err(Error::new("Unknown app view or status filter."));
+    }
+    let command = json!({"type":"show","source":source,"query":checked(args,"query",500,false)?,"status":status});
+    commands.push(command.clone());
+    Ok(
+        json!({"queued":command,"note":"The app applies this page change when the reply arrives. If the user has navigated elsewhere, it offers a Show results button."}),
+    )
 }
 fn response_shape(value: &str) -> &'static str {
     if value.trim().is_empty() {
@@ -1244,8 +1245,7 @@ fn image_reply(output: &str) -> Result<String> {
     output
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .filter(|v| v["type"] == "result")
-        .next_back()
+        .rfind(|v| v["type"] == "result")
         .filter(|v| v["is_error"] != true)
         .and_then(|v| v["result"].as_str().map(str::to_owned))
         .ok_or_else(|| {
@@ -1290,6 +1290,28 @@ fn execute(
 ) -> Result<String> {
     execute_diagnosed(command, prompt, cancelled, deadline, &mut json!({}))
 }
+fn capture(mut stream: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut saved = Vec::new();
+        let mut buf = [0; 4096];
+        while let Ok(n) = stream.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            if saved.len() < 128 * 1024 {
+                saved.extend_from_slice(&buf[..n.min(128 * 1024 - saved.len())]);
+            }
+        }
+        saved
+    })
+}
+fn kill_group(child: &std::process::Child) {
+    if let Ok(pid) = libc::pid_t::try_from(child.id()) {
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
 fn execute_diagnosed(
     mut command: Command,
     prompt: &str,
@@ -1321,26 +1343,9 @@ fn execute_diagnosed(
     let input = prompt.as_bytes().to_vec();
     let writer = std::thread::spawn(move || stdin.write_all(&input));
     let readers = [
-        Box::new(child.stdout.take().unwrap()) as Box<dyn Read + Send>,
-        Box::new(child.stderr.take().unwrap()) as Box<dyn Read + Send>,
-    ]
-    .into_iter()
-    .map(|mut stream| {
-        std::thread::spawn(move || {
-            let mut saved = Vec::new();
-            let mut buf = [0; 4096];
-            while let Ok(n) = stream.read(&mut buf) {
-                if n == 0 {
-                    break;
-                }
-                if saved.len() < 128 * 1024 {
-                    saved.extend_from_slice(&buf[..n.min(128 * 1024 - saved.len())]);
-                }
-            }
-            saved
-        })
-    })
-    .collect::<Vec<_>>();
+        capture(child.stdout.take().unwrap()),
+        capture(child.stderr.take().unwrap()),
+    ];
     let start = Instant::now();
     let status = loop {
         match child.try_wait() {
@@ -1353,9 +1358,7 @@ fn execute_diagnosed(
                 std::thread::sleep(Duration::from_millis(100));
             }
             Err(_) => {
-                unsafe {
-                    libc::kill(-(child.id() as i32), libc::SIGKILL);
-                }
+                kill_group(&child);
                 let _ = child.wait();
                 diagnostics["code"] = json!("process_wait_failed");
                 break Err(Error::new(
@@ -1363,9 +1366,7 @@ fn execute_diagnosed(
                 ));
             }
             _ => {
-                unsafe {
-                    libc::kill(-(child.id() as i32), libc::SIGKILL);
-                }
+                kill_group(&child);
                 let _ = child.wait();
                 break Err(Error::new(if cancelled.load(Ordering::Relaxed) {
                     "App chat stopped."
@@ -1375,15 +1376,14 @@ fn execute_diagnosed(
             }
         }
     };
-    unsafe {
-        libc::kill(-(child.id() as i32), libc::SIGKILL);
-    }
+    kill_group(&child);
     let _ = writer.join();
     let mut outputs = readers.into_iter().map(|r| r.join().unwrap_or_default());
     let stdout = outputs.next().unwrap_or_default();
     let stderr = outputs.next().unwrap_or_default();
     diagnostics["stage"] = json!("process");
-    diagnostics["durationMs"] = json!(start.elapsed().as_millis() as u64);
+    diagnostics["durationMs"] =
+        json!(u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
     diagnostics["stdoutBytes"] = json!(stdout.len());
     diagnostics["stderrBytes"] = json!(stderr.len());
     diagnostics["stdoutShape"] = json!(response_shape(&String::from_utf8_lossy(&stdout)));

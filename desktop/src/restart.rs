@@ -169,7 +169,8 @@ fn daemon(root: &Path) -> Result<Option<Value>> {
             if health["root"] != json!(root)
                 || !health["pid"]
                     .as_u64()
-                    .is_some_and(|p| matches_process(p as u32, "--terminal-daemon", root))
+                    .and_then(|p| u32::try_from(p).ok())
+                    .is_some_and(|p| matches_process(p, "--terminal-daemon", root))
             {
                 return Err("Could not verify the terminal daemon for this profile.".into());
             }
@@ -372,8 +373,11 @@ fn patch(root: &Path, id: &str, p: Value) -> Result<Value> {
     let dir = directory(root)?;
     let path = dir.join(format!("{id}.json"));
     let mut job = read(&path)?;
-    for (k, v) in p.as_object().ok_or("Invalid restart patch.")? {
-        job[k] = v.clone();
+    let Value::Object(fields) = p else {
+        return Err("Invalid restart patch.".into());
+    };
+    for (k, v) in fields {
+        job[k] = v;
     }
     write(&path, &job)?;
     write(&dir.join("current.json"), &job)?;
@@ -383,11 +387,14 @@ fn phase(root: &Path, id: &str, name: &str, message: &str) -> Result<()> {
     patch(root, id, json!({"phase":name,"message":message}))?;
     Ok(())
 }
-fn stop(pid: u32, mode: &str, root: &Path) -> Result<()> {
-    if !matches_process(pid, mode, root) {
+fn stop(pid: u64, mode: &str, root: &Path) -> Result<()> {
+    let Some(pid) = u32::try_from(pid)
+        .ok()
+        .filter(|&pid| matches_process(pid, mode, root))
+    else {
         return Err("The target process changed. No signal was sent.".into());
-    }
-    if unsafe { libc::kill(pid as i32, libc::SIGTERM) } != 0 {
+    };
+    if !libc::pid_t::try_from(pid).is_ok_and(|pid| unsafe { libc::kill(pid, libc::SIGTERM) } == 0) {
         return Err("Could not stop the verified truffle process.".into());
     }
     let until = Instant::now() + Duration::from_secs(10);
@@ -480,6 +487,43 @@ fn resume(root: &Path, url: &str, records: &[Value]) -> Vec<String> {
     }
     failures
 }
+fn restart_terminal_daemon(
+    root: &Path,
+    id: &str,
+    records: &[Value],
+    touched: &mut bool,
+    interrupted: &mut bool,
+) -> Result<()> {
+    if let Some(host) = daemon(root)? {
+        let actual = arr(&daemon_request(root, json!({"op":"inventory"}))?);
+        if actual.iter().filter(|r| r["live"] == true).any(|r| {
+            !records
+                .iter()
+                .any(|saved| saved["id"] == r["recordId"] && saved["generation"] == r["generation"])
+        }) {
+            return Err(
+                "Another terminal opened before shutdown. The terminal daemon was left running."
+                    .into(),
+            );
+        }
+        phase(root, id, "terminals", "Restarting terminal daemon…")?;
+        for candidate in actual.iter().filter(|r| r["live"] == true) {
+            *touched = true;
+            *interrupted = true;
+            daemon_request(
+                root,
+                json!({"op":"close","id":candidate["recordId"],"generation":candidate["generation"]}),
+            )?;
+            *touched = true;
+        }
+        stop(
+            host["pid"].as_u64().ok_or("Invalid terminal daemon PID.")?,
+            "--terminal-daemon",
+            root,
+        )?;
+    }
+    Ok(())
+}
 pub fn run(root: &Path, id: &str) -> Result<()> {
     backend::sid(id).map_err(|e| e.message)?;
     let root = io(root.canonicalize())?;
@@ -529,34 +573,10 @@ pub fn run(root: &Path, id: &str) -> Result<()> {
         phase(&root, id, "service", "Restarting dashboard service…")?;
         if let Some(pid) = review["servicePid"].as_u64() {
             touched = true;
-            stop(pid as u32, "--serve", &root)?;
+            stop(pid, "--serve", &root)?;
         }
         if mode == "terminals" {
-            if let Some(host) = daemon(&root)? {
-                let actual = arr(&daemon_request(&root, json!({"op":"inventory"}))?);
-                if actual.iter().filter(|r| r["live"] == true).any(|r| {
-                    !records.iter().any(|saved| {
-                        saved["id"] == r["recordId"] && saved["generation"] == r["generation"]
-                    })
-                }) {
-                    return Err("Another terminal opened before shutdown. The terminal daemon was left running.".into());
-                }
-                phase(&root, id, "terminals", "Restarting terminal daemon…")?;
-                for candidate in actual.iter().filter(|r| r["live"] == true) {
-                    touched = true;
-                    interrupted = true;
-                    daemon_request(
-                        &root,
-                        json!({"op":"close","id":candidate["recordId"],"generation":candidate["generation"]}),
-                    )?;
-                    touched = true;
-                }
-                stop(
-                    host["pid"].as_u64().ok_or("Invalid terminal daemon PID.")? as u32,
-                    "--terminal-daemon",
-                    &root,
-                )?;
-            }
+            restart_terminal_daemon(&root, id, &records, &mut touched, &mut interrupted)?;
         }
         start_service(&root, url)?;
         if preserve {
@@ -571,15 +591,10 @@ pub fn run(root: &Path, id: &str) -> Result<()> {
             Ok(resume(&root, url, &records))
         }
     })();
-    match result {
+    let update = match result {
         Ok(errors) => {
             let success = errors.is_empty();
-            patch(
-                &root,
-                id,
-                json!({"status":if success{"succeeded"}else{"failed"},"phase":"finished","finishedAt":backend::now(),"errors":errors,"message":if success{if mode=="service"&&job["review"]["preserveTerminals"]==true{"Service restarted; running terminals were preserved."}else{"Restarted; saved conversations were reopened in their original folders."}}else{"Restarted, but some chats need attention. Open History for those listed below."}}),
-            )?;
-            Ok(())
+            json!({"status":if success{"succeeded"}else{"failed"},"phase":"finished","finishedAt":backend::now(),"errors":errors,"message":if success{if mode=="service"&&job["review"]["preserveTerminals"]==true{"Service restarted; running terminals were preserved."}else{"Restarted; saved conversations were reopened in their original folders."}}else{"Restarted, but some chats need attention. Open History for those listed below."}})
         }
         Err(error) => {
             let mut errors = vec![error.clone()];
@@ -590,14 +605,11 @@ pub fn run(root: &Path, id: &str) -> Result<()> {
                     errors.extend(resume(&root, url, &records));
                 }
             }
-            patch(
-                &root,
-                id,
-                json!({"status":"failed","phase":"finished","finishedAt":backend::now(),"errors":errors,"message":error}),
-            )?;
-            Ok(())
+            json!({"status":"failed","phase":"finished","finishedAt":backend::now(),"errors":errors,"message":error})
         }
-    }
+    };
+    patch(&root, id, update)?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
 use super::*;
-use crate::backend::{now, uuid};
+use crate::backend::uuid;
 fn invoke(repo: &std::sync::Arc<Repository>, name: &str, args: Value) -> Result<Value> {
-    super::super::commands::invoke(repo, &json!({"name":name,"args":args}), true)
+    let mut request = json!({"name":name});
+    request["args"] = args;
+    super::super::commands::invoke(repo, &request, true)
 }
 #[test]
 fn artifact_pages_use_the_redacted_stream_at_every_cursor() {
@@ -214,7 +216,11 @@ fn assistant_changes_only_local_work_state_and_can_restore_it() {
     )
     .unwrap();
     assert_eq!(restored["item"]["status"], "todo");
-    let until = (now() + 3600.0) as u64;
+    let until = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3600;
     assert_eq!(
         invoke(
             &repo,
