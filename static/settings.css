@@ -515,7 +515,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   cursor: pointer;
 }
 
-.preference-control input[type="checkbox"]:after {
+.preference-control input[type="checkbox"]::after {
   content: "";
   position: absolute;
   width: 12px;
@@ -531,7 +531,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   border-color: var(--iris);
 }
 
-.preference-control input[type="checkbox"]:checked:after {
+.preference-control input[type="checkbox"]:checked::after {
   left: 14px;
   background: var(--bg);
 }

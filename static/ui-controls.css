@@ -109,7 +109,7 @@
 /* Compact editable line: class="ui-field" data-appearance="line". Native caret/focus. */
 .ui-field[data-appearance="line"] {
   padding: 4px 0;
-  -webkit-appearance: none;
+  appearance: none;
   border: 0;
   border-bottom: 1px solid var(--muted);
   border-radius: 0;

@@ -550,8 +550,7 @@ main {
 .change-row .change-transitions {
   grid-column: 3;
   grid-row: 1;
-  flex-direction: row;
-  flex-wrap: nowrap;
+  flex-flow: row nowrap;
   align-items: center;
   gap: 5px;
   max-width: min(35vw, 350px);
@@ -1037,7 +1036,6 @@ summary::-webkit-details-marker {
   position: static;
   width: auto;
   height: auto;
-  clip: auto;
   clip-path: none;
   overflow: visible;
   white-space: normal;
@@ -1544,12 +1542,11 @@ summary::-webkit-details-marker {
 
 .live-agent-bar {
   display: flex;
-  overflow-x: auto;
+  overflow: auto hidden;
   align-self: stretch;
   align-items: center;
   gap: 3px;
   padding: 0;
-  overflow-y: hidden;
   scrollbar-width: none;
   flex: 1;
   min-width: 0;
@@ -1954,7 +1951,7 @@ summary::-webkit-details-marker {
   color: var(--muted);
 }
 
-.sharing-entry.unread strong:before {
+.sharing-entry.unread strong::before {
   content: "• ";
   color: var(--iris);
 }
@@ -3398,14 +3395,14 @@ button.git-file-row {
   border-bottom: 1px solid var(--iris);
 }
 
-.git-tree-folder > summary:before {
+.git-tree-folder > summary::before {
   content: "⌄";
   display: inline-block;
   width: 11px;
   font-size: 10px;
 }
 
-.git-tree-folder:not([open]) > summary:before {
+.git-tree-folder:not([open]) > summary::before {
   content: "›";
 }
 
@@ -3706,10 +3703,8 @@ button.git-file-row {
 
 #diff-review-dialog.quick-file-review {
   position: fixed;
-  left: var(--inspector-left, 8px);
-  right: var(--inspector-right, 8px);
-  top: var(--inspector-top, 48px);
-  bottom: auto;
+  inset: var(--inspector-top, 48px) var(--inspector-right, 8px) auto
+    var(--inspector-left, 8px);
   width: auto;
   height: var(--inspector-height, 60dvh);
   margin: 0;
