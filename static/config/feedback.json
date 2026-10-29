@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "repository": "https://github.com/eddiebergman/truffle",
+  "starAfterDays": 2,
+  "starTitle": "Enjoying Truffle?",
+  "starText": "If Truffle has been useful, consider leaving a star on GitHub.",
+  "feedbackText": "Something not working for you? Describe it to the app assistant, or draft an issue."
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "revision": 0,
+  "views": [
+    {
+      "id": "github-mine", "name": "Mine", "parent": "github", "lifecycle": "active",
+      "filter": {"op": "all", "conditions": [
+        {"op": "in", "field": "kind", "values": ["Pull request"]},
+        {"op": "containsAny", "field": "relations", "values": ["authored"]}
+      ]},
+      "query": "", "groupBy": "stack"
+    },
+    {
+      "id": "github-review", "name": "To Review", "parent": "github", "lifecycle": "active",
+      "filter": {"op": "all", "conditions": [
+        {"op": "in", "field": "kind", "values": ["Pull request"]},
+        {"op": "containsAny", "field": "relations", "values": ["reviews"]}
+      ]},
+      "query": "", "groupBy": "stack"
+    }
+  ]
+}

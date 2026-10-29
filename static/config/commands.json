@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "commands",
+      "label": "Open command palette",
+      "defaultBinding": "Primary+K"
+    },
+    {
+      "id": "find-work",
+      "label": "Find work items",
+      "defaultBinding": "Primary+P"
+    },
+    {
+      "id": "settings",
+      "label": "Open settings",
+      "defaultBinding": "Primary+,"
+    },
+    {
+      "id": "toggle-left",
+      "label": "Toggle left sidebar",
+      "defaultBinding": "Primary+H"
+    },
+    {
+      "id": "toggle-right",
+      "label": "Toggle right sidebar",
+      "defaultBinding": "Primary+L"
+    },
+    {
+      "id": "agent-new",
+      "label": "New chat",
+      "defaultBinding": "Primary+T"
+    },
+    {
+      "id": "agent-location",
+      "label": "Choose new chat folder",
+      "defaultBinding": "Primary+N"
+    },
+    {
+      "id": "agent-close",
+      "label": "Close chat",
+      "defaultBinding": "Primary+W"
+    },
+    {
+      "id": "agent-reopen",
+      "label": "Reopen closed chat",
+      "defaultBinding": "Primary+Shift+T"
+    },
+    {
+      "id": "agent-rename",
+      "label": "Rename chat",
+      "defaultBinding": "Primary+R"
+    },
+    {
+      "id": "terminal-focus",
+      "label": "Toggle terminal focus",
+      "defaultBinding": "Primary+Shift+Enter"
+    },
+    {
+      "id": "view-agents",
+      "label": "Go to agents",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-skills",
+      "label": "Go to skills",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-all",
+      "label": "Go to all items",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-linear",
+      "label": "Go to Linear",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-github",
+      "label": "Go to GitHub",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-sentry",
+      "label": "Go to Sentry",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-notes",
+      "label": "Go to projects",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-sessions",
+      "label": "Go to activity",
+      "defaultBinding": ""
+    },
+    {
+      "id": "view-changes",
+      "label": "Go to changes",
+      "defaultBinding": ""
+    },
+    {
+      "id": "chat-terminal",
+      "label": "Toggle chat terminal",
+      "defaultBinding": "Primary+J"
+    },
+    {
+      "id": "page-search",
+      "label": "Search current page",
+      "defaultBinding": "Primary+F"
+    }
+  ]
+}

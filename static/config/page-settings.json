@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "revision": 0,
+  "pages": {
+    "linear": {"scopes": null},
+    "github": {"scopes": null},
+    "sentry": {"scopes": null}
+  }
+}

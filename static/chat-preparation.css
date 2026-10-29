@@ -1,0 +1,7 @@
+.chat-recovery-list{list-style:none;margin:0;padding:4px;display:grid;gap:8px}
+.chat-recovery-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;padding:12px;border:1px solid var(--line);border-radius:var(--control-radius);background:var(--panel)}
+.chat-recovery-summary{display:grid;justify-items:start;gap:4px;min-width:0;overflow-wrap:anywhere}
+.chat-recovery-summary .form-hint{margin:0}
+.chat-recovery-id{font:10px/1.5 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.chat-recovery-summary .runtime-pill{max-width:100%;white-space:normal}
+.chat-recovery-row>.ui-control{margin:4px;max-width:100%;white-space:normal}

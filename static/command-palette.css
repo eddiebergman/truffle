@@ -1,0 +1,10 @@
+#action-results .action-command[aria-selected="true"] {
+  background:var(--overlay);
+  box-shadow:inset 3px 0 0 var(--accent);
+  outline:1px solid var(--accent);
+  outline-offset:-1px;
+}
+#action-results .action-command[aria-selected="true"] .action-command-heading strong {
+  color:var(--accent);
+  font-weight:600;
+}

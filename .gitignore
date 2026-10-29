@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+data/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+
+.local-backups/
+desktop/target/
+desktop/node_modules/
+desktop/gen/

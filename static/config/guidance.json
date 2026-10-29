@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "tips": [
+    {
+      "id": "ci.investigate",
+      "title": "Investigate failed CI",
+      "text": "CI has failed. Use this icon to ask this chat’s agent to investigate."
+    },
+    {
+      "id": "review.comment-selection",
+      "title": "Leave a review comment",
+      "text": "Select a line or drag across lines to leave a review comment."
+    },
+    {
+      "id": "review.pending-comments",
+      "title": "Send comments when ready",
+      "text": "Your comment is saved here. Send comments when you’re ready for the agent to address them, or include them in an agent review."
+    },
+    {
+      "id": "review.agent-scope",
+      "title": "Review across repositories",
+      "text": "Ask this chat to run your review skill. Its review can cover related repositories."
+    },
+    {
+      "id": "chat.shell",
+      "title": "A shell for this chat",
+      "text": "Open a shell in this chat’s working folder. Toggle it with {shortcut}."
+    },
+    {
+      "id": "assistant.after-setup",
+      "title": "Ask Truffle",
+      "text": "Ask the app assistant for help finding work, changing settings, or using Truffle."
+    },
+    {
+      "id": "chat.snooze",
+      "title": "Keep your tab bar clear",
+      "text": "This chat has been ready for at least three hours. Use the moon icon to snooze its tab and find it again in Snoozed chats."
+    }
+  ]
+}

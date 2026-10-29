@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "appearance",
+      "label": "Appearance"
+    },
+    {
+      "id": "review",
+      "label": "Review"
+    },
+    {
+      "id": "keyboard",
+      "label": "Keyboard"
+    },
+    {
+      "id": "agents",
+      "label": "Agents & workflows"
+    },
+    {
+      "id": "actions",
+      "label": "Quick actions"
+    },
+    {
+      "id": "connections",
+      "label": "Connections"
+    },
+    {
+      "id": "sharing",
+      "label": "Sharing"
+    },
+    {
+      "id": "data",
+      "label": "Data & profiles"
+    }
+  ],
+  "fields": [
+    {
+      "section": "appearance",
+      "key": "theme",
+      "label": "Theme",
+      "type": "select",
+      "choices": [
+        [
+          "rose-pine",
+          "Ros\u00e9 Pine"
+        ],
+        [
+          "midnight",
+          "Midnight"
+        ],
+        [
+          "light",
+          "Light"
+        ],
+        [
+          "system",
+          "Follow system"
+        ]
+      ],
+      "description": "Use the same palette for the interface, terminal and syntax highlighting. Add themes as JSON files in the configuration folder."
+    },
+    {
+      "section": "appearance",
+      "key": "uiScale",
+      "label": "Interface scale",
+      "type": "number",
+      "min": 85,
+      "max": 130,
+      "unit": "%",
+      "description": "Scale the whole interface. Terminal and diff font sizes can also be adjusted separately."
+    },
+    {
+      "section": "appearance",
+      "key": "density",
+      "label": "Density",
+      "type": "select",
+      "choices": [
+        [
+          "compact",
+          "Compact"
+        ],
+        [
+          "comfortable",
+          "Comfortable"
+        ]
+      ],
+      "description": "Adjust spacing in navigation, work items and file lists."
+    },
+    {
+      "section": "appearance",
+      "key": "terminalFontSize",
+      "label": "Terminal font size",
+      "type": "number",
+      "min": 9,
+      "max": 22,
+      "unit": "px",
+      "description": "Font size for embedded agent terminals. Changes apply to open terminals."
+    },
+    {
+      "section": "appearance",
+      "key": "terminalScrollback",
+      "label": "Terminal scrollback",
+      "type": "number",
+      "min": 500,
+      "max": 20000,
+      "unit": "lines",
+      "description": "Maximum lines retained in each terminal view."
+    },
+    {
+      "section": "review",
+      "key": "diffFontSize",
+      "label": "Diff font size",
+      "type": "number",
+      "min": 8,
+      "max": 20,
+      "unit": "px",
+      "description": "Font size for full reviews and single-file previews."
+    },
+    {
+      "section": "review",
+      "key": "diffLayout",
+      "label": "Full review layout",
+      "type": "select",
+      "choices": [
+        [
+          "unified",
+          "Inline"
+        ],
+        [
+          "split",
+          "Side by side"
+        ]
+      ],
+      "description": "Default layout when opening a full review."
+    },
+    {
+      "section": "review",
+      "key": "fileDiffLayout",
+      "label": "Single-file layout",
+      "type": "select",
+      "choices": [
+        [
+          "split",
+          "Side by side"
+        ],
+        [
+          "unified",
+          "Inline"
+        ]
+      ],
+      "description": "Default layout when opening an individual file."
+    },
+    {
+      "section": "review",
+      "key": "previewHeight",
+      "label": "File preview height",
+      "type": "number",
+      "min": 30,
+      "max": 85,
+      "unit": "% of chat height",
+      "description": "Height of a single-file preview, as a percentage of the chat area."
+    },
+    {
+      "section": "review",
+      "key": "enterToComment",
+      "label": "Enter submits a comment",
+      "type": "checkbox",
+      "description": "Submit a selected-line comment with Enter. Use Shift+Enter for a newline."
+    },
+    {
+      "section": "agents",
+      "key": "defaultAgent",
+      "label": "Default agent",
+      "type": "select",
+      "choices": [
+        [
+          "claude",
+          "Claude"
+        ],
+        [
+          "codex",
+          "Codex"
+        ]
+      ],
+      "description": "Agent selected for new chats. Existing chats keep their agent."
+    },
+    {
+      "section": "agents",
+      "key": "editor",
+      "label": "Diff editor",
+      "type": "select",
+      "choices": [
+        [
+          "zed",
+          "Zed"
+        ],
+        [
+          "code",
+          "VS Code"
+        ],
+        [
+          "cursor",
+          "Cursor"
+        ]
+      ],
+      "description": "Zed opens file diffs. VS Code and Cursor open the selected worktree."
+    },
+    {
+      "section": "agents",
+      "key": "claudeReviewCommand",
+      "label": "Claude review skill",
+      "type": "text",
+      "placeholder": "/review",
+      "description": "Optional slash command for the review skill in Claude, such as /review. The skill defines its reviewer roles."
+    },
+    {
+      "section": "agents",
+      "key": "codexReviewCommand",
+      "label": "Codex review skill",
+      "type": "text",
+      "placeholder": "$review",
+      "description": "Optional skill command for Codex, such as $review. Leave empty to disable agent review."
+    }
+  ]
+}

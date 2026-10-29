@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "values": {
+    "theme": "rose-pine",
+    "uiScale": 100,
+    "density": "compact",
+    "terminalFontSize": 12,
+    "terminalScrollback": 3000,
+    "diffFontSize": 10,
+    "diffLayout": "unified",
+    "fileDiffLayout": "split",
+    "previewHeight": 60,
+    "enterToComment": true,
+    "defaultAgent": "claude",
+    "claudeReviewCommand": "",
+    "codexReviewCommand": "",
+    "editor": "zed",
+    "quickActions": []
+  }
+}
