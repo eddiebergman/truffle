@@ -1,5 +1,8 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
 const defaults=JSON.parse(fs.readFileSync('static/config/views.json','utf8'));
+// Replace what a const object of a loaded script holds, so tests can set its state.
+const replaceContents=(target,value)=>{for(const key of Object.keys(target))delete target[key];Object.assign(target,value);};
 function fixture({prefs={},responses=[]}={}){
  const calls=[],storage=new Map(),elements=new Map();let renders=0;
  class Element{
@@ -27,9 +30,10 @@ function fixture({prefs={},responses=[]}={}){
   insertAdjacentElement(_,node){this.after=node;}
  }
  const document={querySelector(selector){return elements.get(selector)||null;},querySelectorAll:selector=>descendants(document.body).filter(node=>node.matches(selector)),body:new Element('body')};document.activeElement=document.body;
- const c=vm.createContext({Event,TextEncoder,console,crypto:{randomUUID:()=>String(calls.length)},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},prefs,groupingPrefs:{github:'stack',linear:'status',all:'status'},source:'github',sourceNames:{github:'GitHub'},document,getComputedStyle:node=>({visibility:node.visibility||'visible'}),el:(tag,cls,text)=>new Element(tag,cls,text),Option:class extends Element{constructor(text,value){super('option','',text);this.text=text;this.value=value;}},api:async(path,payload)=>{calls.push({path,payload});const next=responses.shift();if(next instanceof Error)throw next;return next;},render:()=>renders++,persist(){},allItems:()=>[]});
- const app=fs.readFileSync('static/app.js','utf8'),features=fs.readFileSync('static/features.js','utf8');vm.runInContext(app.slice(app.indexOf('function holdFormFocus('),app.indexOf('function projectCorrectionTarget(')),c);vm.runInContext(app.slice(app.indexOf('function requestDialogClose('),app.indexOf("for (const button of document.querySelectorAll('.close-dialog')")),c);vm.runInContext(features.slice(features.indexOf('function freezeFeatureForm('),features.indexOf('function presentFeatureFormResult(')),c);c.workReference=item=>item.reference||'';vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function workViewAllows(')),c);vm.runInContext(fs.readFileSync('static/views.js','utf8'),c);
- return {c,calls,elements,Element,document,get renders(){return renders;},setDoc(doc={...defaults,contentHash:'a'.repeat(64)}){c.doc=doc;vm.runInContext('savedViewsDocument=validateSavedViewsDocument(doc);savedViewsError="";',c);},state:()=>JSON.parse(vm.runInContext('JSON.stringify(savedViewPageStates)',c))};
+ const c=browserContext({Event,TextEncoder,console,crypto:{randomUUID:()=>String(calls.length)},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},prefs,source:'github',document,getComputedStyle:node=>({visibility:node.visibility||'visible'}),el:(tag,cls,text)=>new Element(tag,cls,text),Option:class extends Element{constructor(text,value){super('option','',text);this.text=text;this.value=value;}},api:async(path,payload)=>{calls.push({path,payload});const next=responses.shift();if(next instanceof Error)throw next;return next;},render:()=>renders++,persist(){},allItems:()=>[]});
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/views.js']);c.workReference=item=>item.reference||'';
+ replaceContents(c.groupingPrefs,{github:'stack',linear:'status',all:'status'});replaceContents(c.sourceNames,{github:'GitHub'});replaceContents(c.scopePrefs,{});
+ return {c,calls,elements,Element,document,get renders(){return renders;},setDoc(doc={...defaults,contentHash:'a'.repeat(64)}){c.doc=doc;evaluate(c,'savedViewsDocument=validateSavedViewsDocument(doc);savedViewsError="";');},state:()=>JSON.parse(evaluate(c,'JSON.stringify(savedViewPageStates)'))};
 }
 const predicate=(op,field,values)=>({op,field,values});
 test('typed nested filters apply AND/OR and reject missing negative fields',()=>{
@@ -62,8 +66,8 @@ test('legacy preferences migrate per page and selecting saved views restores que
 });
 test('save sends revision and content hash, a conflict preserves the current draft',async()=>{
  const initial={...defaults,contentHash:'a'.repeat(64)},saved={...defaults,revision:1,contentHash:'b'.repeat(64)};saved.views=structuredClone(defaults.views);saved.views[0].name='Authored';
- const f=fixture({responses:[saved,new Error('Saved views changed. Reload the views before saving again.')]});f.setDoc(initial);const before=f.state(),changed={...defaults.views[0],name:'Authored'};await f.c.saveSavedViewDefinition(changed,{replaceId:'github-mine'});assert.equal(f.calls[0].payload.revision,0);assert.equal(f.calls[0].payload.contentHash,initial.contentHash);assert.equal(f.calls[0].payload.views.length,2);assert.deepEqual(f.state(),before);assert.equal(vm.runInContext('savedViewsDocument.views[0].name',f.c),'Authored');
- await assert.rejects(f.c.saveSavedViewDefinition({...changed,name:'Again'},{replaceId:'github-mine'}),/changed/);assert.equal(f.calls[1].payload.revision,1);assert.equal(f.calls[1].payload.contentHash,saved.contentHash);assert.deepEqual(f.state(),before);assert.equal(vm.runInContext('savedViewsDocument.views[0].name',f.c),'Authored');
+ const f=fixture({responses:[saved,new Error('Saved views changed. Reload the views before saving again.')]});f.setDoc(initial);const before=f.state(),changed={...defaults.views[0],name:'Authored'};await f.c.saveSavedViewDefinition(changed,{replaceId:'github-mine'});assert.equal(f.calls[0].payload.revision,0);assert.equal(f.calls[0].payload.contentHash,initial.contentHash);assert.equal(f.calls[0].payload.views.length,2);assert.deepEqual(f.state(),before);assert.equal(evaluate(f.c,'savedViewsDocument.views[0].name'),'Authored');
+ await assert.rejects(f.c.saveSavedViewDefinition({...changed,name:'Again'},{replaceId:'github-mine'}),/changed/);assert.equal(f.calls[1].payload.revision,1);assert.equal(f.calls[1].payload.contentHash,saved.contentHash);assert.deepEqual(f.state(),before);assert.equal(evaluate(f.c,'savedViewsDocument.views[0].name'),'Authored');
 });
 test('compact controls change lifecycle and the editor builds nested typed conditions',()=>{
  const f=fixture();f.setDoc();const host=new f.Element('div');f.elements.set('#saved-view-controls',host);f.c.renderSavedViewControls();assert.equal(host.children[0].attrs['aria-label'],'Work lifecycle');host.children[0].children[1].onclick();assert.equal(f.c.currentSavedViewState().draft.lifecycle,'completed');
@@ -76,8 +80,7 @@ test('view counts apply eligibility and page visibility; loading errors never br
 });
 
 test('integrated selector counts the same lifecycle, predicates, scope and visibility as rows',()=>{
- const f=fixture();f.setDoc();f.c.scopePrefs={github:'owner/repo'};f.c.matchesSentry=()=>true;f.c.scopeKey=item=>item.project;f.c.source='github';
- const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('function workViewAllows('),app.indexOf('function render() {')),f.c);
+ const f=fixture();f.setDoc();replaceContents(f.c.scopePrefs,{github:'owner/repo'});f.c.matchesSentry=()=>true;f.c.scopeKey=item=>item.project;f.c.source='github';
  f.c.activateSavedView('github-mine');f.c.setSavedViewScope('owner/repo');f.c.scopePrefs.github='owner/repo';
  const item={id:'good',source:'github',kind:'Pull request',status:'unknown',relations:['authored'],project:'owner/repo'};
  const items=[item,{...item,id:'done',status:'done'},{...item,id:'hidden',hidden:true},{...item,id:'snoozed',snoozed:true},{...item,id:'archive',archivedAt:1},{...item,id:'other',project:'other/repo'},{...item,id:'role',relations:['assigned']}];
@@ -91,20 +94,20 @@ test('page transitions restore their own query/group and metric filters stay edi
 });
 
 test('quick repository scopes become saved predicates and activation clears unrelated scopes',()=>{
- const f=fixture();f.setDoc();f.c.scopePrefs={github:'unrelated/repo'};f.c.activateSavedView('github-mine');assert.equal(f.c.scopePrefs.github,'');f.c.setSavedViewScope('owner/repo');const draft=f.c.currentSavedViewState().draft;assert.equal(draft.filter.conditions.at(-1).field,'scope');assert.equal(draft.filter.conditions.at(-1).values[0],'owner/repo');
+ const f=fixture();f.setDoc();replaceContents(f.c.scopePrefs,{github:'unrelated/repo'});f.c.activateSavedView('github-mine');assert.equal(f.c.scopePrefs.github,'');f.c.setSavedViewScope('owner/repo');const draft=f.c.currentSavedViewState().draft;assert.equal(draft.filter.conditions.at(-1).field,'scope');assert.equal(draft.filter.conditions.at(-1).values[0],'owner/repo');
  f.c.applySavedViewPresentation(draft);assert.equal(f.c.scopePrefs.github,'owner/repo');f.c.setSavedViewScope('');assert.equal(f.c.currentSavedViewState().draft.filter.conditions.some(condition=>condition.field==='scope'),false);
  const migrated=fixture({prefs:{scopes:{linear:'Missing project'}}});assert.equal(migrated.c.currentSavedViewState('linear').draft.filter.conditions[0].values[0],'Missing project');
 });
 
 test('page settings exposes filter editing beside provider visibility',async()=>{
  const f=fixture();f.setDoc();let filters=0;f.c.openSavedViewEditor=()=>filters++;
- const settings=fs.readFileSync('static/page-settings.js','utf8').replace('void loadPageSettings();','');vm.runInContext(settings,f.c);await f.c.openPageSettings('github');
+ const api=f.c.api;f.c.api=()=>new Promise(()=>{});loadScripts(f.c,'static/page-settings.js');f.c.api=api;await f.c.openPageSettings('github');
  const dialog=f.document.body.children.at(-1),edit=descendants(dialog).find(node=>node.textContent==='Edit this view’s filters'),visibility=descendants(dialog).find(node=>node.textContent==='Choose visible repositories');assert.ok(edit);assert.ok(visibility);edit.onclick();assert.equal(filters,1);
 });
 
 test('Sentry saved badges and activated rows use the same legacy filter regardless of current page',()=>{
- const f=fixture();f.setDoc();f.c.sentryFilters={level:'error'};f.c.environmentMembers=new Set();f.c.scopePrefs={sentry:''};f.c.scopeKey=item=>item.project||'';
- const features=fs.readFileSync('static/features.js','utf8');vm.runInContext(features.slice(features.indexOf('function matchesSentry('),features.indexOf('let environmentRequest=')),f.c);const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('function workViewAllows('),app.indexOf('const renderHooks=')),f.c);
+ const f=fixture();f.setDoc();f.c.sentryFilters={level:'error'};f.c.environmentMembers=new Set();replaceContents(f.c.scopePrefs,{sentry:''});f.c.scopeKey=item=>item.project||'';
+ 
  const view={id:'sentry-errors',name:'Errors',parent:'sentry',lifecycle:'active',filter:{op:'all',conditions:[]},query:'',groupBy:'status'},items=[{id:'error',source:'sentry',status:'todo',level:'error'},{id:'warning',source:'sentry',status:'todo',level:'warning'}];f.setDoc({version:1,revision:0,contentHash:'a'.repeat(64),views:[view]});f.c.activateSavedView(view.id);assert.equal(f.c.savedViewCount(view,items),1);assert.equal(f.c.workViewCount(items,'sentry'),1);f.c.source='github';assert.equal(f.c.savedViewCount(view,items),1);assert.equal(f.c.workViewCount(items,'sentry'),1);
 });
 test('Reload adopts changed saved definitions for clean snapshots and preserves visibly stale drafts',async()=>{
@@ -267,7 +270,7 @@ test('filter badge counts direct agent predicates and nested rules, including a 
 test('background view refresh preserves draft and document when a dialog opens during the read',async()=>{
  const f=fixture();f.setDoc();f.c.activateSavedView('github-mine');f.c.currentSavedViewState().draft.query='Unsaved query';const before=f.state();let release,allow=true;const gate=new Promise(resolve=>release=resolve);
  const changed=structuredClone(defaults);changed.revision=2;changed.contentHash='b'.repeat(64);changed.views[0].name='External name';
- f.c.api=async()=>{await gate;return changed;};const pending=f.c.loadSavedViews({canApply:()=>allow});allow=false;release();assert.equal(await pending,null);assert.deepEqual(f.state(),before);assert.equal(vm.runInContext('savedViewsDocument.revision',f.c),0);
+ f.c.api=async()=>{await gate;return changed;};const pending=f.c.loadSavedViews({canApply:()=>allow});allow=false;release();assert.equal(await pending,null);assert.deepEqual(f.state(),before);assert.equal(evaluate(f.c,'savedViewsDocument.revision'),0);
 });
 
 test('focused filter fields and date operators retain focus across their own redraws',()=>{
@@ -406,7 +409,7 @@ test('accepted Save and Delete paint failures remain locked and recover through 
 test('late accepted saves and deletes keep canonical persistence without activating or closing replacement editors',async()=>{
  for(const action of ['Save changes','Confirm delete'])for(const replacement of [false,true]){
   const f=editorFixture(),old=f.dialog,gate=viewDeferred(),before=JSON.stringify(f.c.currentSavedViewState());let paints=0;f.c.render=()=>paints++;if(action==='Confirm delete')editorButton(old,'Delete view').onclick();let sent;f.c.api=async(path,payload)=>{sent=payload;return gate.promise;};const pending=editorButton(old,action).onclick();old.close();let newer;if(replacement){f.c.openSavedViewEditor();newer=f.document.body.children.at(-1);control(newer,'View name').value='Replacement draft';control(newer,'View name').focus();}const active=f.document.activeElement;
-  gate.resolve(submittedViews(sent));await pending;assert.equal(vm.runInContext('savedViewsDocument.revision',f.c),1);assert.equal(JSON.stringify(f.c.currentSavedViewState()),before);assert.equal(paints,0);assert.equal(f.document.activeElement,active);if(newer){assert.equal(newer.open,true);assert.equal(control(newer,'View name').value,'Replacement draft');assert.equal(control(newer,'View name').disabled,false);}
+  gate.resolve(submittedViews(sent));await pending;assert.equal(evaluate(f.c,'savedViewsDocument.revision'),1);assert.equal(JSON.stringify(f.c.currentSavedViewState()),before);assert.equal(paints,0);assert.equal(f.document.activeElement,active);if(newer){assert.equal(newer.open,true);assert.equal(control(newer,'View name').value,'Replacement draft');assert.equal(control(newer,'View name').disabled,false);}
  }
 });
 test('Reload shares pending freeze and owned focus while preserving the independent filter draft',async()=>{
