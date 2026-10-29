@@ -638,9 +638,9 @@ document.addEventListener(
     }
     const chord = chordFromEvent(event),
       id = Object.keys(appSettings.values.keybindings).find(
-        (id) =>
-          appSettings.values.keybindings[id] &&
-          appSettings.values.keybindings[id].toUpperCase() ===
+        (eachId) =>
+          appSettings.values.keybindings[eachId] &&
+          appSettings.values.keybindings[eachId].toUpperCase() ===
             chord.toUpperCase(),
       );
     if (id) {
@@ -1887,21 +1887,21 @@ window.addEventListener("truffle-configured-command", (event) =>
 openSettings = () => openPreferences();
 $("#settings").onclick = openSettings;
 const oldDialog = $("#settings-dialog"),
-  legacy = el("div");
-legacy.id = "legacy-connections";
+  legacySettings = el("div");
+legacySettings.id = "legacy-connections";
 while (oldDialog.children.length > 2) {
-  legacy.append(oldDialog.children[2]);
+  legacySettings.append(oldDialog.children[2]);
 }
 oldDialog.replaceChildren();
 oldDialog.classList.add("preferences-page");
-const heading = el("header", "preferences-heading"),
-  title = el("h1", "", "Settings"),
-  search = el("input");
-search.id = "settings-search";
-search.type = "search";
-search.placeholder = "Search settings…";
-search.setAttribute("aria-label", "Search settings");
-search.oninput = filterSettings;
+const settingsHeading = el("header", "preferences-heading"),
+  settingsTitle = el("h1", "", "Settings"),
+  settingsSearch = el("input");
+settingsSearch.id = "settings-search";
+settingsSearch.type = "search";
+settingsSearch.placeholder = "Search settings…";
+settingsSearch.setAttribute("aria-label", "Search settings");
+settingsSearch.oninput = filterSettings;
 const settingsCloseButton = settingsButton(
   "×",
   () => {
@@ -1915,7 +1915,7 @@ const settingsCloseButton = settingsButton(
   "icon-button",
 );
 settingsCloseButton.setAttribute("aria-label", "Close settings");
-const scope = el("span", "settings-scope", "User"),
+const settingsScope = el("span", "settings-scope", "User"),
   context = el("span", "settings-context", "settings.json"),
   edit = settingsDraftButton(
     "Edit settings.json",
@@ -1934,12 +1934,15 @@ const scope = el("span", "settings-scope", "User"),
     },
     "button settings-edit-file",
   );
-heading.append(scope, context, edit, settingsCloseButton);
+settingsHeading.append(settingsScope, context, edit, settingsCloseButton);
 const layout = el("div", "preferences-layout"),
-  nav = el("nav", "preferences-nav");
-const navHead = el("div", "preferences-nav-head");
-navHead.append(title, ...settingsFilterControls(search));
-nav.setAttribute("aria-label", "Settings categories");
+  settingsNav = el("nav", "preferences-nav");
+const settingsNavHead = el("div", "preferences-nav-head");
+settingsNavHead.append(
+  settingsTitle,
+  ...settingsFilterControls(settingsSearch),
+);
+settingsNav.setAttribute("aria-label", "Settings categories");
 for (const [id, label] of settingsCategories()) {
   const button = settingsButton(
     label,
@@ -1953,19 +1956,19 @@ for (const [id, label] of settingsCategories()) {
   );
   button.dataset.settingsCategory = id;
   button.prepend(el("span", "settings-chevron", "›"));
-  nav.append(button);
+  settingsNav.append(button);
 }
-const body = el("main", "preferences-body");
-body.id = "settings-body";
-body.append(legacy);
-layout.append(nav, body);
+const settingsBodyPanel = el("main", "preferences-body");
+settingsBodyPanel.id = "settings-body";
+settingsBodyPanel.append(legacySettings);
+layout.append(settingsNav, settingsBodyPanel);
 const footer = el("footer", "preferences-footer"),
   settingsStatusLine = el("span");
 settingsStatusLine.id = "settings-status";
 settingsStatusLine.setAttribute("role", "status");
-const error = el("span", "inline-error");
-error.id = "settings-error";
-error.setAttribute("role", "alert");
+const settingsErrorLine = el("span", "inline-error");
+settingsErrorLine.id = "settings-error";
+settingsErrorLine.setAttribute("role", "alert");
 const discard = settingsDraftButton(
   "Discard & reload files",
   discardSettingsDraft,
@@ -1973,11 +1976,11 @@ const discard = settingsDraftButton(
 );
 const save = settingsButton("Save changes", savePreferences, "button primary");
 save.id = "settings-save";
-footer.append(settingsStatusLine, error, discard, save);
+footer.append(settingsStatusLine, settingsErrorLine, discard, save);
 const settingsFrame = el("div", "preferences-main");
-settingsFrame.append(heading, body);
-nav.prepend(navHead);
-layout.replaceChildren(nav, settingsFrame);
+settingsFrame.append(settingsHeading, settingsBodyPanel);
+settingsNav.prepend(settingsNavHead);
+layout.replaceChildren(settingsNav, settingsFrame);
 oldDialog.append(layout, footer);
 oldDialog.addEventListener("close", () => void finishShortcutRecording());
 oldDialog.addEventListener("cancel", (e) => {
@@ -2034,8 +2037,8 @@ file.onchange = async () => {
     updateSettingsDirty();
     $("#settings-error").textContent =
       "Profile loaded for review. Check Quick actions and review skills before saving; nothing has been applied.";
-  } catch (error) {
-    $("#settings-error").textContent = error.message;
+  } catch (failure) {
+    $("#settings-error").textContent = failure.message;
   } finally {
     file.value = "";
   }

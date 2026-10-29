@@ -964,7 +964,7 @@ function onboardingCompanyMessage(instructions) {
           );
           paragraph(`Edit its instructions at ${builtin.path}`);
           for (const agent of documentState.assistants.filter(
-            (agent) => agent.installed,
+            (eachAgent) => eachAgent.installed,
           )) {
             content.append(
               button(

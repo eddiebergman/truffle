@@ -578,7 +578,7 @@ function applySavedViewPresentation(draft) {
   }
 }
 function activateSavedView(id) {
-  const view = savedViewsDocument?.views.find((view) => view.id === id);
+  const view = savedViewsDocument?.views.find((eachView) => eachView.id === id);
   if (!view) {
     return;
   }
@@ -656,7 +656,7 @@ async function loadSavedViews({ canApply = () => true } = {}) {
         ["mine", "review"].includes(prefs.githubView)
       ) {
         const view = next.views.find(
-          (view) => view.id === `github-${prefs.githubView}`,
+          (eachView) => eachView.id === `github-${prefs.githubView}`,
         );
         if (view) {
           state.id = view.id;
@@ -866,7 +866,9 @@ function renderSavedViewControls() {
     );
     lifecycle.append(button);
   }
-  const view = savedViewsDocument?.views.find((view) => view.id === state.id),
+  const view = savedViewsDocument?.views.find(
+      (eachView) => eachView.id === state.id,
+    ),
     label = view?.name || "Current view",
     modified = Boolean(
       view && state.base && !sameSavedViewDefinition(state.draft, state.base),
@@ -941,7 +943,7 @@ function renderSavedViewSidebar() {
     host.hidden = source !== page;
     host.replaceChildren();
     for (const view of savedViewsDocument.views.filter(
-      (view) => view.parent === page,
+      (eachView) => eachView.parent === page,
     )) {
       const button = savedViewButton(view.name, () =>
         activateSavedView(view.id),
@@ -1201,7 +1203,7 @@ function savedViewFilterBuilder(
         : -1;
       children.replaceChildren();
       rendered = [];
-      for (const [index, condition] of filter.conditions.entries()) {
+      for (const [index, rule] of filter.conditions.entries()) {
         const row = el("div", "saved-view-condition"),
           join = el(
             "span",
@@ -1215,9 +1217,9 @@ function savedViewFilterBuilder(
             if (!canEdit()) {
               return;
             }
-            const removedIndex = filter.conditions.indexOf(condition);
-            filter.conditions.splice(removedIndex, 1);
-            draw({ removedIndex });
+            const removedAt = filter.conditions.indexOf(rule);
+            filter.conditions.splice(removedAt, 1);
+            draw({ removedIndex: removedAt });
             onchange();
           },
           "saved-view-remove-rule",
@@ -1225,14 +1227,14 @@ function savedViewFilterBuilder(
         const updateRemoveLabel = () =>
           remove.setAttribute(
             "aria-label",
-            ["all", "any"].includes(condition.op)
+            ["all", "any"].includes(rule.op)
               ? "Remove condition group"
-              : `Remove ${savedViewFieldLabels[condition.field]} rule`,
+              : `Remove ${savedViewFieldLabels[rule.field]} rule`,
           );
         updateRemoveLabel();
         row.append(
           join,
-          savedViewFilterBuilder(condition, {
+          savedViewFilterBuilder(rule, {
             depth: depth + 1,
             canEdit,
             onchange: () => {
@@ -1243,7 +1245,7 @@ function savedViewFilterBuilder(
           remove,
         );
         children.append(row);
-        rendered.push({ condition, row });
+        rendered.push({ condition: rule, row });
       }
       if (!filter.conditions.length) {
         children.append(
@@ -1543,7 +1545,7 @@ function openSavedViewEditor() {
     saving = false,
     accepted = null;
   const draft = cloneSavedView(state.draft),
-    view = baseline?.views.find((view) => view.id === state.id),
+    view = baseline?.views.find((eachView) => eachView.id === state.id),
     dialog = el("dialog", "saved-view-editor");
   dialog.setAttribute("aria-label", "Edit saved view");
   const header = el("div", "saved-view-editor-heading"),

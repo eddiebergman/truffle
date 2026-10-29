@@ -446,11 +446,11 @@ function itemSessionChip(item) {
       "◎",
     );
     const existing = (state.sessions || []).some(
-      (session) =>
-        session.workflow === "pr-review" &&
-        session.reviewItemId === item.id &&
-        session.agent === $("#quick-agent").value &&
-        !session.archivedAt,
+      (eachSession) =>
+        eachSession.workflow === "pr-review" &&
+        eachSession.reviewItemId === item.id &&
+        eachSession.agent === $("#quick-agent").value &&
+        !eachSession.archivedAt,
     );
     const label = `${existing ? "Continue" : "Run"} review with ${agentName($("#quick-agent").value)} for ${workReference(item)}`;
     review.title =
@@ -1238,11 +1238,11 @@ async function openSavedSession(
     const latest = state.sessions.find((row) => row.id === id),
       generation = entry.receipt.terminal?.generation;
     const candidate = agents?.candidates?.find(
-      (candidate) =>
-        candidate.recordId === id &&
-        candidate.host === "embedded" &&
-        candidate.live === true &&
-        (generation === undefined || candidate.generation === generation),
+      (eachCandidate) =>
+        eachCandidate.recordId === id &&
+        eachCandidate.host === "embedded" &&
+        eachCandidate.live === true &&
+        (generation === undefined || eachCandidate.generation === generation),
     );
     const ready =
       Boolean(snapshot?.accepted) &&
@@ -1315,11 +1315,11 @@ async function openSavedSession(
     status?.remove();
     if (stillHeld && current() && !document.querySelector("dialog[open]")) {
       const replacement = [...document.querySelectorAll("button")].find(
-        (target) =>
-          target.dataset.savedOpenRecord === id &&
-          !target.disabled &&
-          !target.hidden &&
-          target.getClientRects().length,
+        (eachTarget) =>
+          eachTarget.dataset.savedOpenRecord === id &&
+          !eachTarget.disabled &&
+          !eachTarget.hidden &&
+          eachTarget.getClientRects().length,
       );
       replacement?.focus({ preventScroll: true });
     }
@@ -1828,7 +1828,7 @@ async function saveExistingLaunch(values, { lifetime, open }) {
     }
   }
   const record = () => {
-    const saved = state.sessions.find((saved) => saved.id === id);
+    const saved = state.sessions.find((eachSaved) => eachSaved.id === id);
     if (!saved) {
       throw new Error(
         "The saved session is not in the loaded view. Refresh or inspect History; do not repeat the save.",

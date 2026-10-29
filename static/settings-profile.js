@@ -158,7 +158,7 @@ function renderSettingsProfilePreview(
   }
   async function validate(
     candidate,
-    { expectedRevision, expectedContentHash } = {},
+    { expectedRevision: revision, expectedContentHash: contentHash } = {},
   ) {
     if (disposed) {
       return;
@@ -177,9 +177,8 @@ function renderSettingsProfilePreview(
         return;
       }
       if (
-        expectedRevision !== undefined &&
-        (current.revision !== expectedRevision ||
-          current.contentHash !== expectedContentHash)
+        revision !== undefined &&
+        (current.revision !== revision || current.contentHash !== contentHash)
       ) {
         throw new Error(
           "Settings changed since this proposal. Refresh the preview and choose changes again.",

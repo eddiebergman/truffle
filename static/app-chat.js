@@ -697,9 +697,9 @@ if (typeof document !== "undefined") {
             [
               ...$("#sharing-menu").querySelectorAll(".sharing-tabs button"),
             ].some(
-              (button) =>
-                button.textContent === "Inbox" &&
-                button.getAttribute("aria-pressed") === "true",
+              (eachButton) =>
+                eachButton.textContent === "Inbox" &&
+                eachButton.getAttribute("aria-pressed") === "true",
             ),
           ),
           reviewFile: review?.activePath || review?.file?.path || "",

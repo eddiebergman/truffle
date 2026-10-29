@@ -122,7 +122,7 @@ test("refresh Claude closes only the selected terminal generation and resumes th
     selectedAgentKey: "embedded:chat",
     loadInventory: async () => {},
     candidateForRecord: () => candidate,
-    candidateKey: (c) => `embedded:${c.recordId}`,
+    candidateKey: (entry) => `embedded:${entry.recordId}`,
     api: async (route, payload) => {
       calls.push({ route, payload });
       candidate = null;
@@ -136,8 +136,8 @@ test("refresh Claude closes only the selected terminal generation and resumes th
       };
       calls.push({ resume: r.sessionId, cwd: r.cwd });
     },
-    selectAgent: (r, candidate) =>
-      calls.push({ selected: r.id, generation: candidate.generation }),
+    selectAgent: (r, selected) =>
+      calls.push({ selected: r.id, generation: selected.generation }),
   });
   loadScripts(c, scriptsThrough("static/command-palette.js"));
   await c.refreshClaudeSession(record);
@@ -317,9 +317,9 @@ function paletteFixture({
   });
   loadScripts(c, scriptsThrough(through), { keepHost: ["document"] });
   c.document = document;
-  function key(key, extra = {}) {
+  function key(name, extra = {}) {
     const event = {
-      key,
+      key: name,
       target: active,
       isComposing: false,
       preventDefault() {

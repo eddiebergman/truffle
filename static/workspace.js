@@ -725,9 +725,9 @@ function renderLiveBar() {
       )
       .map((tab) => [tab.dataset.agentKey, tab.dataset.agentProcess]);
     const targets = [],
-      bind = (node, key, process, role) => {
-        node.dataset.agentControl = role;
-        targets.push({ node, key, process, role });
+      bind = (node, key, process, nodeRole) => {
+        node.dataset.agentControl = nodeRole;
+        targets.push({ node, key, process, role: nodeRole });
         return node;
       };
     liveBarSignature = signature;
@@ -922,11 +922,14 @@ function renderLiveBar() {
       );
       const target =
         same.find(
-          (target) => target.role === focus.role && visible(target.node),
+          (eachTarget) =>
+            eachTarget.role === focus.role && visible(eachTarget.node),
         )?.node ||
-        same.find((target) => target.role === "tab" && visible(target.node))
+        same.find(
+          (eachTarget) => eachTarget.role === "tab" && visible(eachTarget.node),
+        )?.node ||
+        nearby.find((eachTarget) => eachTarget && visible(eachTarget.node))
           ?.node ||
-        nearby.find((target) => target && visible(target.node))?.node ||
         $("#new-note");
       if (visible(target)) {
         target.focus({ preventScroll: true });
@@ -2306,10 +2309,10 @@ async function runSkill(preset, button) {
     }
     const agents = await loadInventory(true),
       candidate = agents?.candidates?.find(
-        (candidate) =>
-          candidate.recordId === record.id &&
-          candidate.host === "embedded" &&
-          candidate.live === true,
+        (eachCandidate) =>
+          eachCandidate.recordId === record.id &&
+          eachCandidate.host === "embedded" &&
+          eachCandidate.live === true,
       );
     if (candidate && source === page && selectedAgentKey === key) {
       selectAgent(record, candidate);
@@ -2606,7 +2609,9 @@ function renderSourceSubmenus(items) {
     projects.push(scopePrefs.linear);
   }
   const counts = new Map();
-  for (const item of items.filter((item) => workViewAllows(item, "linear"))) {
+  for (const item of items.filter((eachItem) =>
+    workViewAllows(eachItem, "linear"),
+  )) {
     counts.set(scopeKey(item), (counts.get(scopeKey(item)) || 0) + 1);
   }
   const signature = JSON.stringify([

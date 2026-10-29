@@ -250,11 +250,11 @@ if (typeof document !== "undefined") {
         draft?.sending || currentJob(draft?.sendId)?.status === "working",
       );
     }
-    function editDraft(draft, field, value) {
+    function editDraft(draft, fieldName, value) {
       if (draftSending(draft)) {
         return;
       }
-      draft[field] = value;
+      draft[fieldName] = value;
       draft.revision++;
       draft.sendId = "";
     }
@@ -1269,7 +1269,7 @@ if (typeof document !== "undefined") {
       paint();
       try {
         const entry = data.entries.find(
-            (entry) => entry.id === intent.deliveryId,
+            (eachEntry) => eachEntry.id === intent.deliveryId,
           ),
           job = currentJob(local.jobId),
           receipt =
@@ -1295,7 +1295,7 @@ if (typeof document !== "undefined") {
           );
         }
         inventory = agents;
-        let record = state.sessions.find((record) => record.id === id);
+        let record = state.sessions.find((eachRecord) => eachRecord.id === id);
         if (!record) {
           throw new Error(
             "The imported chat is unavailable in the refreshed dashboard. Use Open imported chat to try again; do not import again.",

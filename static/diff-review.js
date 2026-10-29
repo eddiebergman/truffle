@@ -455,10 +455,10 @@ function renderReviewAnnotations(comments, path) {
 function reviewAnnotations(file) {
   const groups = new Map();
   for (const c of reviewState.draft.comments.filter(
-    (c) =>
-      c.path === file.path &&
-      c.root === file.root &&
-      c.fingerprint === file.fingerprint,
+    (eachC) =>
+      eachC.path === file.path &&
+      eachC.root === file.root &&
+      eachC.fingerprint === file.fingerprint,
   )) {
     const key = `${c.side}:${c.end}`;
     if (!groups.has(key)) {
@@ -1287,7 +1287,9 @@ function paintReviewComments() {
           parent.tagName === "DETAILS" &&
           !parent.open &&
           child !==
-            [...parent.children].find((entry) => entry.tagName === "SUMMARY")
+            [...parent.children].find(
+              (eachEntry) => eachEntry.tagName === "SUMMARY",
+            )
         ) {
           return false;
         }

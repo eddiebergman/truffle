@@ -212,7 +212,7 @@ const receipt = (extra = {}) => ({
 function button(host, label) {
   const node = host
     .querySelectorAll("button")
-    .find((node) => node.textContent === label);
+    .find((eachNode) => eachNode.textContent === label);
   assert.ok(node, `Missing ${label}`);
   return node;
 }
@@ -591,9 +591,9 @@ function ciFixture(options) {
     workReference: (item) => item.id,
     agentIcon: () => new f.Node("svg"),
     featureIconButton: (text, label, handler, cls) => {
-      const button = f.c.featureButton(text, handler, cls);
-      button.setAttribute("aria-label", label);
-      return button;
+      const control = f.c.featureButton(text, handler, cls);
+      control.setAttribute("aria-label", label);
+      return control;
     },
   });
   const section = new f.Node("section", "agent-work-section"),
@@ -612,11 +612,13 @@ test("actual CI investigate uses the captured identity and receipt owner without
   assert.equal(investigate.disabled, false);
   await investigate.onclick();
   const call = f.calls.find(
-    (call) => call.name === "chats.ci.investigate.prepare",
+    (eachCall) => eachCall.name === "chats.ci.investigate.prepare",
   );
   assert.equal(call.args.recordId, "chat");
   assert.equal(call.args.itemId, "pr");
-  assert.ok(f.calls.every((call) => call.path === "/api/commands/invoke"));
+  assert.ok(
+    f.calls.every((eachCall) => eachCall.path === "/api/commands/invoke"),
+  );
   assert.equal(
     f.section.children.filter((node) => node.dataset.dispatchRecord).length,
     1,

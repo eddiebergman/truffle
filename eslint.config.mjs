@@ -186,6 +186,13 @@ const rules = {
   "object-shorthand": "error",
   "prefer-template": "error",
   radix: "error",
+  "no-shadow": "error",
+  // Functions run after the whole script has loaded, so they may use later
+  // declarations. Uses in the same scope before the declaration are reported.
+  "no-use-before-define": [
+    "error",
+    { functions: false, classes: true, variables: false },
+  ],
 };
 
 export default [

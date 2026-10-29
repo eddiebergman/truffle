@@ -426,9 +426,9 @@ test("Run skill uses the named command receipt and selects its exact chat withou
         : fresh;
     },
     loadInventory: async () => calls.push({ path: "inventory" }),
-    candidateForRecord: (record) => ({ recordId: record.id }),
-    selectAgent: (record, candidate) =>
-      selected.push([record.id, candidate?.recordId || null]),
+    candidateForRecord: (chat) => ({ recordId: chat.id }),
+    selectAgent: (chat, candidate) =>
+      selected.push([chat.id, candidate?.recordId || null]),
     toast: (message) => messages.push(message),
   });
   await c.runSkill({ id: "fixture" }, button);

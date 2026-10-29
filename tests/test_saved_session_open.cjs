@@ -376,7 +376,7 @@ test("actual Resume in Truffle gateway sends only strict embedded open and repla
   const first = gateway(f),
     button = first
       .querySelectorAll("button")
-      .find((button) => button.textContent === "Resume in Truffle");
+      .find((eachButton) => eachButton.textContent === "Resume in Truffle");
   await button.onclick();
   assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0].payload)), {
     name: "chats.open",
@@ -386,12 +386,14 @@ test("actual Resume in Truffle gateway sends only strict embedded open and repla
   assert.equal(
     next
       .querySelectorAll("button")
-      .some((button) => button.textContent === "Start new with context"),
+      .some(
+        (eachButton) => eachButton.textContent === "Start new with context",
+      ),
     false,
   );
   await next
     .querySelectorAll("button")
-    .find((button) => button.textContent === "Check terminal")
+    .find((eachButton) => eachButton.textContent === "Check terminal")
     .onclick();
   assert.equal(
     f.calls.filter((call) => call.payload?.name === "chats.open").length,
@@ -663,7 +665,7 @@ test("actual History Resume keeps the record focus key through pending status an
   const button = f
     .$("#work-list")
     .querySelectorAll("button")
-    .find((button) => button.dataset.savedOpenRecord === "a");
+    .find((eachButton) => eachButton.dataset.savedOpenRecord === "a");
   button.focus();
   await button.onclick();
   assert.equal(f.document.activeElement.dataset.savedOpenRecord, "a");
@@ -678,7 +680,7 @@ test("focused actual gateway and History Resume navigate from their owned status
       const view = gateway(f);
       button = view
         .querySelectorAll("button")
-        .find((button) => button.textContent === "Resume in Truffle");
+        .find((eachButton) => eachButton.textContent === "Resume in Truffle");
     } else {
       f.c.source = "sessions";
       Object.assign(f.c, {
@@ -692,7 +694,7 @@ test("focused actual gateway and History Resume navigate from their owned status
       button = f
         .$("#work-list")
         .querySelectorAll("button")
-        .find((button) => button.dataset.savedOpenRecord === "a");
+        .find((eachButton) => eachButton.dataset.savedOpenRecord === "a");
     }
     button.focus();
     await button.onclick();
@@ -713,7 +715,7 @@ test("a pending owned Resume hold cannot authorize navigation after external foc
       view = gateway(f);
     const button = view
       .querySelectorAll("button")
-      .find((button) => button.textContent === "Resume in Truffle");
+      .find((eachButton) => eachButton.textContent === "Resume in Truffle");
     button.focus();
     const pending = button.onclick();
     assert.equal(f.document.activeElement.attrs.role, "status");

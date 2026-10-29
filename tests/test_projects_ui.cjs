@@ -304,8 +304,8 @@ function fixture({ handler } = {}) {
     get renders() {
       return renders;
     },
-    notice: (host) => {
-      const region = (host || form).querySelector("[data-project-notice]");
+    notice: (target) => {
+      const region = (target || form).querySelector("[data-project-notice]");
       return {
         message: region.querySelector("p"),
         buttons: region.querySelectorAll("button"),
@@ -337,14 +337,15 @@ test("editor reads full owner values and sends only changed fields with captured
   assert.equal(f.fields.status.value, "blocked");
   f.fields.title.value = "Changed title";
   await f.submit();
-  const call = f.calls.find((call) => call.name === "projects.update");
+  const call = f.calls.find((eachCall) => eachCall.name === "projects.update");
   assert.deepEqual(JSON.parse(JSON.stringify(call.args)), {
     id: "note:one",
     patch: { title: "Changed title" },
     expected: { title: "1".repeat(64) },
   });
   assert.equal(
-    f.calls.filter((call) => call.path === "/api/commands/invoke").length,
+    f.calls.filter((eachCall) => eachCall.path === "/api/commands/invoke")
+      .length,
     2,
   );
   assert.equal(f.note.open, false);
@@ -509,7 +510,7 @@ test("project status changes read fresh tokens then update status only without r
     item = f.openStatus();
   item.title = "Stale title";
   await f.c.changeProjectStatus(item, "done", { close: true });
-  const call = f.calls.find((call) => call.name === "projects.update");
+  const call = f.calls.find((eachCall) => eachCall.name === "projects.update");
   assert.deepEqual(JSON.parse(JSON.stringify(call.args)), {
     id: "note:one",
     patch: { status: "done" },

@@ -193,7 +193,9 @@ test("comments from different reviewers on one line stay visible together and st
   assert.equal(annotations[0].metadata[0].author, "You");
   assert.equal(annotations[0].metadata[1].author, "Codex · Performance");
   assert.equal(annotations[0].metadata[1].text, "Second");
-  assert.ok(!annotations[0].metadata.some((c) => c.text === "Outdated"));
+  assert.ok(
+    !annotations[0].metadata.some((eachC) => eachC.text === "Outdated"),
+  );
 });
 
 test("an observed file finishes loading even when earlier mounts move it outside the viewport", async () => {
@@ -417,9 +419,9 @@ test("review code highlighting retains literal text and newlines without treatin
     getSharedHighlighter: async (options) => {
       assert.equal(options.langs[0], "python");
       return {
-        codeToTokens(text, options) {
+        codeToTokens(text, tokenOptions) {
           assert.equal(text, code.textContent);
-          assert.equal(options.lang, "python");
+          assert.equal(tokenOptions.lang, "python");
           return {
             tokens: [
               [{ content: "if", color: "#c4a7e7" }, { content: " x:" }],
@@ -1217,7 +1219,7 @@ test("actual safe Markdown body links preserve exact destination and duplicate o
 test("changed or removed Markdown link falls back to known entry control without following another destination", async () => {
   for (const change of ["destination", "removed", "duplicate-removed"]) {
     const f = reviewFocusFixture(),
-      row = f.current.draft.comments.find((row) => row.id === "two");
+      row = f.current.draft.comments.find((eachRow) => eachRow.id === "two");
     row.text =
       "[First](https://example.test/a) [Again](https://example.test/a)";
     f.c.paintReviewComments();
@@ -1228,7 +1230,7 @@ test("changed or removed Markdown link falls back to known entry control without
     const pending = f.c.reviewAction("chat", "check"),
       draft = structuredClone(f.current.draft);
     draft.revision++;
-    draft.comments.find((row) => row.id === "two").text =
+    draft.comments.find((eachRow) => eachRow.id === "two").text =
       change === "removed"
         ? "No link remains."
         : change === "destination"

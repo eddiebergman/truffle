@@ -91,7 +91,7 @@ test("inbox refresh retries a failed selected preview without importing a chat o
     calls.length = 0;
     await c.refreshInbox();
     assert.deepEqual(
-      calls.map((c) => c.path),
+      calls.map((eachC) => eachC.path),
       status === "failed"
         ? ["sharing.refresh", "sharing.preview"]
         : ["sharing.refresh"],

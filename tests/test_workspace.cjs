@@ -341,8 +341,8 @@ function snoozeContext(extra = {}) {
     agentRename: null,
     inventory: { candidates: [candidate, other] },
     state: { sessions: [{ id: "one", title: "First" }] },
-    candidateKey: (c) => `embedded:${c.recordId}`,
-    recordForCandidate: (c) => ({ id: c.recordId, title: c.title }),
+    candidateKey: (entry) => `embedded:${entry.recordId}`,
+    recordForCandidate: (entry) => ({ id: entry.recordId, title: entry.title }),
     liveCandidates: () => [candidate, other],
     persist() {},
     render() {},
@@ -426,7 +426,7 @@ test("selecting an agent through a work link restores its snoozed tab", () => {
     selectedAgentKey: "",
     agentRename: null,
     snoozedAgentTabs: { "embedded:one": { at: 1 } },
-    candidateKey: (c) => `embedded:${c.recordId}`,
+    candidateKey: (entry) => `embedded:${entry.recordId}`,
     persist() {
       saved++;
     },

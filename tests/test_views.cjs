@@ -262,11 +262,11 @@ test("typed nested filters apply AND/OR and reject missing negative fields", () 
     c.matchesSavedViewFilter(filter, { source: "linear", pinned: true }),
     false,
   );
-  for (const filter of [
+  for (const candidateFilter of [
     predicate("notIn", "status", ["done"]),
     predicate("containsNone", "relations", ["reviews"]),
   ]) {
-    assert.equal(c.matchesSavedViewFilter(filter, {}), false);
+    assert.equal(c.matchesSavedViewFilter(candidateFilter, {}), false);
   }
   assert.equal(
     c.matchesSavedViewFilter(
@@ -542,8 +542,8 @@ test("integrated selector counts the same lifecycle, predicates, scope and visib
   assert.equal(f.c.workViewCount(items, "github"), 1);
   assert.deepEqual(
     items
-      .filter((item) => f.c.workViewAllows(item, "github"))
-      .map((item) => item.id),
+      .filter((eachItem) => f.c.workViewAllows(eachItem, "github"))
+      .map((eachItem) => eachItem.id),
     ["good"],
   );
   f.c.pageSettingsAllows = () => false;
@@ -1161,7 +1161,7 @@ test("pending deletion ignores duplicate confirmation", async () => {
   assert.ok(
     f.dialog
       .querySelectorAll("input,select,button")
-      .every((control) => control.disabled),
+      .every((eachControl) => eachControl.disabled),
   );
   const next = {
     ...structuredClone(defaults),

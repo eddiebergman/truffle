@@ -564,10 +564,10 @@ test("shared snapshot loader commits before returning acceptance metadata", asyn
   loadScripts(context, appScripts);
   const pending = context.loadStateSnapshot();
   resolveRead({ revision: "fixture:2", sessions: [] });
-  const result = await pending.then((result) => {
+  const result = await pending.then((eachResult) => {
     assert.equal(context.state.revision, "fixture:2");
     context.state = { ...context.state, localChange: true };
-    return result;
+    return eachResult;
   });
   assert.deepEqual(JSON.parse(JSON.stringify(result)), {
     accepted: true,

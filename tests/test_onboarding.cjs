@@ -1939,11 +1939,11 @@ test("actual async Continue holds focus before native disabling and moves to the
     assert.equal(write.writes(), 1);
     write.resolve();
     await f.tick();
-    const heading = ui.content.querySelector("h3");
-    assert.equal(heading.textContent, "Make yourself at home");
-    assert.equal(f.document.activeElement, heading);
-    assert.equal(heading.tabIndex, -1);
-    assert.equal(heading.focusOptions.preventScroll, false);
+    const title = ui.content.querySelector("h3");
+    assert.equal(title.textContent, "Make yourself at home");
+    assert.equal(f.document.activeElement, title);
+    assert.equal(title.tabIndex, -1);
+    assert.equal(title.focusOptions.preventScroll, false);
     assert.equal(ui.continue.disabled, false);
     assert.equal(
       f.calls.filter((call) => call.path === "/api/settings" && call.payload)
@@ -2083,13 +2083,13 @@ test("a removed same-step control falls back to its heading only while the actio
   select.focus();
   select.onchange();
   await f.tick();
-  const heading = ui.content.querySelector("h3");
-  ui.content.replaceChildren(heading);
+  const title = ui.content.querySelector("h3");
+  ui.content.replaceChildren(title);
   write.resolve();
   await f.tick();
   assert.equal(select.isConnected, false);
-  assert.equal(f.document.activeElement, heading);
-  assert.equal(heading.tabIndex, -1);
+  assert.equal(f.document.activeElement, title);
+  assert.equal(title.tabIndex, -1);
 });
 test("a newly opened modal blocks settling even if browser focus still reports the setup holder", async () => {
   const f = onboardingHostFixture({ step: "theme" }),

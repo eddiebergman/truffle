@@ -420,7 +420,9 @@ function renderRelatedWork(item) {
                 currentItem?.id === item.id &&
                 remove.isConnected,
               afterReady: () => {
-                const latest = allItems().find((row) => row.id === item.id);
+                const latest = allItems().find(
+                  (eachRow) => eachRow.id === item.id,
+                );
                 if (latest) {
                   renderRelatedWork(latest);
                 }

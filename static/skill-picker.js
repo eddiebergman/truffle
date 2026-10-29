@@ -191,13 +191,13 @@ function installSkillPicker() {
     return row;
   }
   function paintMode() {
-    for (const [option, label] of agentLabels) {
+    for (const [option, optionLabel] of agentLabels) {
       option.disabled =
         mode === "installed" &&
         Boolean(selected) &&
         !selected.agents.includes(option.value);
       option.textContent =
-        label + (option.disabled ? " · unavailable for this skill" : "");
+        optionLabel + (option.disabled ? " · unavailable for this skill" : "");
     }
     if (mode === "installed" && selected) {
       status.textContent = `Available for ${selected.agents

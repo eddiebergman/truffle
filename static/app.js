@@ -547,11 +547,11 @@ function styleWorkTitle(title, item) {
 const collapsedIssueTrees = new Set();
 function appendLinearTree(container, items) {
   const nodes = new Map(),
-    order = [];
+    issueOrder = [];
   function ensure(ref) {
     if (!nodes.has(ref.id)) {
       nodes.set(ref.id, { ref, children: [] });
-      order.push(ref.id);
+      issueOrder.push(ref.id);
     }
     return nodes.get(ref.id);
   }
@@ -632,7 +632,7 @@ function appendLinearTree(container, items) {
     }
     return wrap;
   }
-  for (const id of order) {
+  for (const id of issueOrder) {
     const node = nodes.get(id);
     if (!node.parent) {
       container.append(renderNode(node, new Set()));
@@ -1126,21 +1126,25 @@ function workGroupingKeys(items, groupBy) {
     : ["all"];
 }
 const renderHooks = { before: new Map(), after: new Map(), finally: new Map() };
-function registerRenderHook(name, run, { phase = "after", order = 0 } = {}) {
+function registerRenderHook(
+  name,
+  run,
+  { phase = "after", order: hookOrder = 0 } = {},
+) {
   const hooks = Object.hasOwn(renderHooks, phase) ? renderHooks[phase] : null;
   if (
     !hooks ||
     typeof name !== "string" ||
     !name ||
     typeof run !== "function" ||
-    !Number.isFinite(order)
+    !Number.isFinite(hookOrder)
   ) {
     throw new Error("Invalid render hook.");
   }
   if (hooks.has(name)) {
     throw new Error(`Render hook already registered: ${name}`);
   }
-  hooks.set(name, { name, run, order });
+  hooks.set(name, { name, run, order: hookOrder });
 }
 function runRenderHooks(phase, context) {
   const hooks = [...renderHooks[phase].values()].sort(
@@ -1753,7 +1757,7 @@ function renderSync() {
   body.tabIndex = 0;
   body.setAttribute("role", "region");
   body.setAttribute("aria-label", "Connection errors");
-  for (const [name, info] of entries.filter(([, info]) => info.error)) {
+  for (const [name, info] of entries.filter(([, eachInfo]) => eachInfo.error)) {
     body.append(el("p", "", `${sourceNames[name]}: ${info.error}`));
   }
   const actions = el("div", "ui-actiongroup ui-notice-actions");
@@ -1796,8 +1800,8 @@ function projectNotice(host, label = "Project recovery actions") {
   const actions = el("div", "ui-actiongroup");
   actions.setAttribute("role", "group");
   actions.setAttribute("aria-label", label);
-  const button = (label) => {
-    const control = el("button", "ui-control", label);
+  const button = (text) => {
+    const control = el("button", "ui-control", text);
     control.type = "button";
     control.dataset.variant = "secondary";
     control.dataset.projectRecovery = "true";
@@ -1806,11 +1810,11 @@ function projectNotice(host, label = "Project recovery actions") {
     return control;
   };
   const reload = button("Discard draft and reload"),
-    refresh = button("Refresh view"),
+    refreshButton = button("Refresh view"),
     inspect = button("Close and inspect Projects");
   region.append(message, actions);
   host.append(region);
-  return { region, message, reload, refresh, inspect };
+  return { region, message, reload, refresh: refreshButton, inspect };
 }
 function holdFormFocus(host, current) {
   const active = document.activeElement;
@@ -2522,9 +2526,9 @@ function renderCI(item) {
 function openSettings() {
   $("#connections").replaceChildren();
   if (state) {
-    for (const source of ["github", "linear", "sentry"]) {
-      const info = state.sources[source] || { error: "Not configured" };
-      const row = el("div", "connection-row", sourceNames[source]);
+    for (const sourceName of ["github", "linear", "sentry"]) {
+      const info = state.sources[sourceName] || { error: "Not configured" };
+      const row = el("div", "connection-row", sourceNames[sourceName]);
       row.append(
         el(
           "span",

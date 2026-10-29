@@ -510,10 +510,10 @@ function chatDispatchRecovery(
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-label", "Delivery recovery actions");
     host.append(actions);
-    const button = (label, run, variant = "secondary") => {
-      const control = featureButton(label, () => void act(run), "ui-control");
+    const button = (caption, run, variant = "secondary") => {
+      const control = featureButton(caption, () => void act(run), "ui-control");
       control.dataset.variant = variant;
-      control.dataset.dispatchAction = label;
+      control.dataset.dispatchAction = caption;
       control.disabled = working || entry.busy;
       actions.append(control);
       return control;

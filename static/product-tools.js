@@ -579,8 +579,8 @@ async function openThemeChooser() {
     list.replaceChildren();
     active = null;
     for (const theme of Object.values(window.truffleThemeCatalog).filter(
-      (theme) =>
-        `${theme.label} ${theme.type}`
+      (eachTheme) =>
+        `${eachTheme.label} ${eachTheme.type}`
           .toLowerCase()
           .includes(query.value.toLowerCase()),
     )) {

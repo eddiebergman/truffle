@@ -291,10 +291,10 @@ function installedPickerFixture(catalog, { load } = {}) {
       "Node",
     ],
   });
-  const picker = heading.afterNode,
-    status = picker.children[2],
-    results = picker.children[4],
-    modes = picker.children[0];
+  const pickerNode = heading.afterNode,
+    status = pickerNode.children[2],
+    results = pickerNode.children[4],
+    modes = pickerNode.children[0];
   return {
     c,
     owner,

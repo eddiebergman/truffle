@@ -283,7 +283,7 @@ function paintChatRecoveryList(dialog) {
       summary = el("div", "chat-recovery-summary"),
       record = attempt.recordId
         ? (state?.sessions || []).find(
-            (record) => record.id === attempt.recordId,
+            (eachRecord) => eachRecord.id === attempt.recordId,
           )
         : null,
       title =
@@ -729,7 +729,7 @@ async function readPreparedChat(attempt) {
     );
   }
   const record = state.sessions.find(
-    (record) => record.id === attempt.recordId,
+    (eachRecord) => eachRecord.id === attempt.recordId,
   );
   if (!record) {
     throw new Error(

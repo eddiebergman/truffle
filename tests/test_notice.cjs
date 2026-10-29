@@ -17,7 +17,7 @@ function fixture() {
       this.dataset = {};
       this.attrs = {};
       this.classList = {
-        add: (cls) => (this.className += ` ${cls}`),
+        add: (name) => (this.className += ` ${name}`),
         toggle() {},
       };
     }
@@ -203,8 +203,8 @@ test("all loaded styles leave connection notice layout to the shared header and 
       body: match[2],
     })),
   );
-  for (const rule of rules.filter((rule) =>
-    /(?:\.|#)connection-notice(?:-dismiss)?\b/.test(rule.selector),
+  for (const rule of rules.filter((eachRule) =>
+    /(?:\.|#)connection-notice(?:-dismiss)?\b/.test(eachRule.selector),
   )) {
     assert.doesNotMatch(
       rule.body,

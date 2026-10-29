@@ -208,8 +208,8 @@ function recorderContext({ desktop = false, invoke = async () => {} } = {}) {
       },
     },
     input = { value: "Primary+K", readOnly: false, focus() {} };
-  const key = (key, extra = {}) => ({
-    key,
+  const key = (name, extra = {}) => ({
+    key: name,
     preventDefault() {
       this.prevented = true;
     },
