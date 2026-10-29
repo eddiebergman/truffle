@@ -1,4 +1,20 @@
 {
+  "name": "dracula",
+  "displayName": "Dracula Theme",
+  "type": "dark",
+  "truffle": {
+    "bg": "#282a36",
+    "panel": "#21222c",
+    "overlay": "#343746",
+    "line": "#44475a",
+    "text": "#f8f8f2",
+    "muted": "#6272a4",
+    "iris": "#bd93f9",
+    "foam": "#8be9fd",
+    "love": "#ff5555",
+    "gold": "#f1fa8c",
+    "rose": "#ff79c6"
+  },
   "colors": {
     "activityBar.activeBackground": "#BD93F910",
     "activityBar.activeBorder": "#FF79C680",
@@ -196,9 +212,6 @@
     "titleBar.inactiveForeground": "#6272A4",
     "walkThrough.embeddedEditorBackground": "#21222C"
   },
-  "displayName": "Dracula Theme",
-  "name": "dracula",
-  "semanticHighlighting": true,
   "tokenColors": [
     {
       "scope": [
@@ -1058,5 +1071,5 @@
       }
     }
   ],
-  "type": "dark"
+  "semanticHighlighting": true
 }

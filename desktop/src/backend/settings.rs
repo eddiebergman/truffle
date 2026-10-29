@@ -339,7 +339,9 @@ impl Store {
             values[key] = value.clone();
         }
         validate(&values)?;
-        if values["theme"] != "system"
+        // A saved theme whose file was removed stays valid until the user picks another one.
+        if values["theme"] != doc["values"]["theme"]
+            && values["theme"] != "system"
             && self.themes()?["themes"]
                 .get(text(&values, "theme"))
                 .is_none()
@@ -538,20 +540,31 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_theme_whose_file_was_removed_does_not_block_other_settings() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::load(temp.path().join("settings.json")).unwrap();
+        store.apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"nord"}}), false).unwrap();
+        std::fs::remove_file(temp.path().join("config/themes/nord.json")).unwrap();
+        store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":12}}), false).unwrap();
+        assert!(store.apply(&json!({"revision":2,"contentHash":store.view()["contentHash"],"patch":{"theme":"midnight"}}), false).is_err());
+        assert_eq!(store.values()["theme"], "nord");
+    }
+
+    #[test]
     fn settings_persist_reject_conflicts_and_gate_agent_commands() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("settings.json");
         let store = Store::load(path.clone()).unwrap();
         let changed = store
             .apply(
-                &json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"light","diffFontSize":11}}),
+                &json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"github-light","diffFontSize":11}}),
                 true,
             )
             .unwrap();
         assert_eq!(changed["revision"], 1);
-        assert_eq!(Store::load(path).unwrap().values()["theme"], "light");
+        assert_eq!(Store::load(path).unwrap().values()["theme"], "github-light");
         assert!(store
-            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"midnight"}}), false)
+            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"github-dark"}}), false)
             .is_err());
         assert!(store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"quickActions":[{"id":"test","title":"Test","command":"printf test"}]}}),true).is_err());
         assert!(store

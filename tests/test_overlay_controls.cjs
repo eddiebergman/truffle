@@ -42,7 +42,7 @@ test('saved-view header Close uses the same cancellation policy as Escape',()=>{
 });
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 function themeFixture(){
- let document;const nodes=[],calls=[],notices=[];
+ let document;const nodes=[],calls=[],notices=[],previews=[];
  class Node extends EventTarget{
   constructor(tag,cls='',text=''){super();this.tag=tag;this.className=cls;this.textContent=text;this.children=[];this.dataset={};this.attrs={};this.value='';this.hidden=false;this.classList={contains:name=>this.className.split(' ').includes(name),add:name=>this.className+=' '+name};nodes.push(this);}
   append(...children){for(const child of children){child.parentElement=this;this.children.push(child);}}
@@ -68,14 +68,25 @@ function themeFixture(){
  const c=vm.createContext({Event,MutationObserver,source:'all',document,window:{truffleThemeCatalog:catalog},appSettings:saved,
   $:selector=>({'#quick-action-picker':dialog,'#quick-action-picker-form':form,'#settings-dialog':settingsDialog,'#settings-error':settingsError})[selector],
   el:(...args)=>new Node(...args),featureButton:(label,onclick,cls)=>Object.assign(new Node('button',cls,label),{onclick,type:'button'}),
-  setting:key=>c.appSettings.values[key],toast:text=>notices.push(text),applyAppSettings(){},
+  setting:key=>c.appSettings.values[key],toast:text=>notices.push(text),applyAppSettings(){},previewTheme:id=>previews.push(id),
   api:async(path,payload)=>{calls.push({path,payload});if(payload){saved={revision:2,contentHash:'b',values:{...saved.values,...payload.patch}};return saved;}return path==='/api/themes'?{themes:catalog}:saved;}});
  const settings=fs.readFileSync('static/settings.js','utf8'),features=fs.readFileSync('static/features.js','utf8'),product=fs.readFileSync('static/product-tools.js','utf8');
  vm.runInContext(helper+app.slice(app.indexOf('function holdFormFocus('),app.indexOf('function projectCorrectionTarget('))+features.slice(features.indexOf('function freezeFeatureForm('),features.indexOf('function presentFeatureFormResult('))+settings.slice(settings.indexOf('function settingsButton('),settings.indexOf('function settingsReset('))+settings.slice(settings.indexOf('async function loadAppSettings('),settings.indexOf('function focusPageSearch('))+product.slice(product.indexOf('async function openThemeChooser('),product.indexOf('// Sharing has its own CAS document')),c);
- return {c,dialog,form,body,document,nodes,calls,notices,Node,settingsDialog,settingsError,buttons:()=>form.querySelectorAll('button'),button:label=>form.querySelectorAll('button').find(node=>node.textContent===label),choices:()=>form.querySelectorAll('button').filter(node=>node.className==='theme-choice'),posts:()=>calls.filter(call=>call.payload)};
+ return {c,dialog,form,body,document,nodes,calls,notices,previews,Node,settingsDialog,settingsError,buttons:()=>form.querySelectorAll('button'),button:label=>form.querySelectorAll('button').find(node=>node.textContent===label),choices:()=>form.querySelectorAll('button').filter(node=>node.className==='theme-choice'),posts:()=>calls.filter(call=>call.payload)};
 }
 test('theme chooser exposes a shared secondary Close action without applying a theme',async()=>{
  const f=themeFixture();await f.c.openThemeChooser();const actions=f.form.children.find(node=>node.className==='ui-actiongroup');assert.equal(actions.attrs.role,'group');assert.equal(actions.attrs['aria-label'],'Theme chooser actions');const close=f.button('Close');assert.equal(close.type,'button');assert.equal(close.dataset.variant,'secondary');close.click();assert.equal(f.dialog.open,false);assert.equal(f.posts().length,0);
+});
+test('theme chooser previews hovered and arrowed themes, saves the active one on Enter and reverts on close',async()=>{
+ const f=themeFixture();await f.c.openThemeChooser();const query=f.form.children.find(node=>node.tag==='input'),key=k=>query.onkeydown({key:k,preventDefault(){}});
+ assert.deepEqual(f.previews,[]);
+ f.choices()[1].onmouseenter();assert.deepEqual(f.previews,['light']);assert.equal(f.choices()[1].dataset.active,'true');
+ key('ArrowUp');key('ArrowUp');assert.deepEqual(f.previews,['light','dark','dark']);assert.equal(f.choices()[1].dataset.active,'false');
+ query.value='lig';query.oninput();assert.equal(f.choices().length,1);assert.equal(f.previews.at(-1),'light');
+ f.button('Close').click();assert.equal(f.dialog.open,false);assert.equal(f.previews.at(-1),null);assert.equal(f.posts().length,0);
+ const g=themeFixture();await g.c.openThemeChooser();const input=g.form.children.find(node=>node.tag==='input');input.onkeydown({key:'ArrowDown',preventDefault(){}});input.onkeydown({key:'ArrowDown',preventDefault(){}});
+ assert.equal(g.previews.at(-1),'light');g.form.onsubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(JSON.stringify(g.posts().map(call=>call.payload.patch)),'[{"theme":"light"}]');
 });
 test('theme pending owner blocks duplicate choice, submit, Close, Escape and navigation before one write',async()=>{
  const f=themeFixture();await f.c.openThemeChooser();const post=deferred(),original=f.c.api;f.c.api=async(path,payload)=>payload?(f.calls.push({path,payload}),post.promise):original(path,payload);

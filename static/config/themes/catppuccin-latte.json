@@ -1,4 +1,20 @@
 {
+  "name": "catppuccin-latte",
+  "displayName": "Catppuccin Latte",
+  "type": "light",
+  "truffle": {
+    "bg": "#eff1f5",
+    "panel": "#e6e9ef",
+    "overlay": "#ccd0da",
+    "line": "#bcc0cc",
+    "text": "#4c4f69",
+    "muted": "#6c6f85",
+    "iris": "#8839ef",
+    "foam": "#1e66f5",
+    "love": "#d20f39",
+    "gold": "#df8e1d",
+    "rose": "#ea76cb"
+  },
   "colors": {
     "activityBar.activeBackground": "#00000000",
     "activityBar.activeBorder": "#00000000",
@@ -565,140 +581,6 @@
     "welcomePage.tileBackground": "#e6e9ef",
     "widget.shadow": "#e6e9ef80"
   },
-  "displayName": "Catppuccin Latte",
-  "name": "catppuccin-latte",
-  "semanticHighlighting": true,
-  "semanticTokenColors": {
-    "boolean": {
-      "foreground": "#fe640b"
-    },
-    "builtinAttribute.attribute.library:rust": {
-      "foreground": "#1e66f5"
-    },
-    "class.builtin:python": {
-      "foreground": "#8839ef"
-    },
-    "class:haskell": {
-      "fontStyle": "",
-      "foreground": "#df8e1d"
-    },
-    "class:python": {
-      "foreground": "#df8e1d"
-    },
-    "constant.builtin.readonly:nix": {
-      "foreground": "#8839ef"
-    },
-    "enum:haskell": {
-      "fontStyle": "italic",
-      "foreground": "#df8e1d"
-    },
-    "enumMember": {
-      "foreground": "#179299"
-    },
-    "enumMember:haskell": {
-      "fontStyle": "",
-      "foreground": "#1e66f5"
-    },
-    "function.decorator:python": {
-      "foreground": "#fe640b"
-    },
-    "generic.attribute:rust": {
-      "foreground": "#4c4f69"
-    },
-    "heading": {
-      "foreground": "#d20f39"
-    },
-    "interface:haskell": {
-      "fontStyle": "",
-      "foreground": "#ea76cb"
-    },
-    "macro:haskell": {
-      "fontStyle": "",
-      "foreground": "#1e66f5"
-    },
-    "number": {
-      "foreground": "#fe640b"
-    },
-    "pol": {
-      "foreground": "#dd7878"
-    },
-    "property.readonly:javascript": {
-      "foreground": "#4c4f69"
-    },
-    "property.readonly:javascriptreact": {
-      "foreground": "#4c4f69"
-    },
-    "property.readonly:typescript": {
-      "foreground": "#4c4f69"
-    },
-    "property.readonly:typescriptreact": {
-      "foreground": "#4c4f69"
-    },
-    "property:haskell": {
-      "fontStyle": "italic",
-      "foreground": "#7287fd"
-    },
-    "selfKeyword": {
-      "foreground": "#d20f39"
-    },
-    "text.emph": {
-      "fontStyle": "italic",
-      "foreground": "#d20f39"
-    },
-    "text.math": {
-      "foreground": "#dd7878"
-    },
-    "text.strong": {
-      "fontStyle": "bold",
-      "foreground": "#d20f39"
-    },
-    "tomlArrayKey": {
-      "fontStyle": "",
-      "foreground": "#1e66f5"
-    },
-    "tomlTableKey": {
-      "fontStyle": "",
-      "foreground": "#1e66f5"
-    },
-    "type.defaultLibrary:go": {
-      "foreground": "#8839ef"
-    },
-    "type:haskell": {
-      "fontStyle": "italic",
-      "foreground": "#df8e1d"
-    },
-    "typeParameter:haskell": {
-      "fontStyle": "",
-      "foreground": "#e64553"
-    },
-    "variable.defaultLibrary": {
-      "foreground": "#e64553"
-    },
-    "variable.readonly.defaultLibrary:go": {
-      "foreground": "#8839ef"
-    },
-    "variable.readonly:javascript": {
-      "foreground": "#4c4f69"
-    },
-    "variable.readonly:javascriptreact": {
-      "foreground": "#4c4f69"
-    },
-    "variable.readonly:scala": {
-      "foreground": "#4c4f69"
-    },
-    "variable.readonly:typescript": {
-      "foreground": "#4c4f69"
-    },
-    "variable.readonly:typescriptreact": {
-      "foreground": "#4c4f69"
-    },
-    "variable.typeHint:python": {
-      "foreground": "#df8e1d"
-    },
-    "variable:haskell": {
-      "fontStyle": ""
-    }
-  },
   "tokenColors": [
     {
       "scope": [
@@ -1231,189 +1113,6 @@
       "scope": "meta.objectvalues.graphql constant.object.key.graphql string.unquoted.graphql",
       "settings": {
         "foreground": "#dd7878"
-      }
-    },
-    {
-      "scope": [
-        "meta.declaration.data constant.other.haskell",
-        "constant.other.haskell",
-        "meta.declaration.pattern constant.other.haskell",
-        "constant.language.unit.haskell punctuation",
-        "constant.language.unit.unboxed.haskell punctuation"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#1e66f5"
-      }
-    },
-    {
-      "scope": [
-        "storage.type.haskell"
-      ],
-      "settings": {
-        "fontStyle": "italic",
-        "foreground": "#df8e1d"
-      }
-    },
-    {
-      "scope": [
-        "support.constant.unit.haskell punctuation",
-        "support.constant.unit.haskell keyword.operator.hash",
-        "support.constant.unit.unboxed.haskell punctuation",
-        "support.constant.unit.unboxed.haskell keyword.operator.hash"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#df8e1d"
-      }
-    },
-    {
-      "scope": [
-        "variable.other.generic-type.haskell"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#e64553"
-      }
-    },
-    {
-      "scope": [
-        "keyword.other.default.haskell",
-        "keyword.other.role.nominal.haskell",
-        "keyword.other.role.representational.haskell",
-        "keyword.other.role.phantom.haskell"
-      ],
-      "settings": {
-        "foreground": "#d20f39"
-      }
-    },
-    {
-      "scope": [
-        "keyword.other.preprocessor.haskell",
-        "keyword.other.preprocessor.pragma.haskell"
-      ],
-      "settings": {
-        "foreground": "#dc8a78"
-      }
-    },
-    {
-      "scope": [
-        "keyword.other.preprocessor.extension.haskell"
-      ],
-      "settings": {
-        "foreground": "#d20f39"
-      }
-    },
-    {
-      "scope": [
-        "source.haskell meta.preprocessor.c",
-        "source.haskell meta.preprocessor.c punctuation.definition.preprocessor.c"
-      ],
-      "settings": {
-        "foreground": "#dc8a78"
-      }
-    },
-    {
-      "scope": [
-        "meta.preprocessor.haskell"
-      ],
-      "settings": {
-        "foreground": "#7c7f93"
-      }
-    },
-    {
-      "scope": [
-        "variable.other.member.haskell",
-        "variable.other.member.definition.haskell"
-      ],
-      "settings": {
-        "fontStyle": "italic",
-        "foreground": "#7287fd"
-      }
-    },
-    {
-      "scope": [
-        "keyword.control.else.haskell"
-      ],
-      "settings": {
-        "foreground": "#8839ef"
-      }
-    },
-    {
-      "scope": [
-        "string.quoted.single.haskell",
-        "string.quoted.single.haskell punctuation.definition.string"
-      ],
-      "settings": {
-        "foreground": "#179299"
-      }
-    },
-    {
-      "scope": [
-        "storage.type.operator.haskell",
-        "storage.type.operator.infix.haskell",
-        "entity.name.function.infix.haskell",
-        "punctuation.backtick.haskell"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#179299"
-      }
-    },
-    {
-      "scope": [
-        "support.constant.tuple.haskell",
-        "support.constant.tuple.unboxed.haskell"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#179299"
-      }
-    },
-    {
-      "scope": [
-        "keyword.operator.lambda.haskell",
-        "keyword.operator.pipe.haskell",
-        "keyword.operator.double-dot.haskell",
-        "variable.other.member.wildcard.haskell"
-      ],
-      "settings": {
-        "foreground": "#d20f39"
-      }
-    },
-    {
-      "scope": [
-        "meta.type-application keyword.operator.prefix.at.haskell",
-        "keyword.operator.infix.tight.at.haskell",
-        "keyword.operator.prefix.tilde.haskell",
-        "keyword.operator.prefix.bang.haskell",
-        "keyword.operator.double-colon.haskell",
-        "keyword.operator.big-arrow.haskell",
-        "meta.function.type-declaration keyword.operator.period.haskell",
-        "meta.type-declaration keyword.operator.period.haskell",
-        "meta.declaration.type keyword.operator.period.haskell"
-      ],
-      "settings": {
-        "fontStyle": "",
-        "foreground": "#7c7f93"
-      }
-    },
-    {
-      "scope": [
-        "keyword.operator.prefix.dollar.haskell",
-        "keyword.operator.quasi-quotation.begin.haskell",
-        "keyword.operator.quasi-quotation.end.haskell"
-      ],
-      "settings": {
-        "foreground": "#ea76cb"
-      }
-    },
-    {
-      "scope": [
-        "keyword.operator.prefix.minus.haskell"
-      ],
-      "settings": {
-        "foreground": "#fe640b"
       }
     },
     {
@@ -2360,5 +2059,101 @@
       }
     }
   ],
-  "type": "light"
+  "semanticHighlighting": true,
+  "semanticTokenColors": {
+    "boolean": {
+      "foreground": "#fe640b"
+    },
+    "builtinAttribute.attribute.library:rust": {
+      "foreground": "#1e66f5"
+    },
+    "class.builtin:python": {
+      "foreground": "#8839ef"
+    },
+    "class:python": {
+      "foreground": "#df8e1d"
+    },
+    "constant.builtin.readonly:nix": {
+      "foreground": "#8839ef"
+    },
+    "enumMember": {
+      "foreground": "#179299"
+    },
+    "function.decorator:python": {
+      "foreground": "#fe640b"
+    },
+    "generic.attribute:rust": {
+      "foreground": "#4c4f69"
+    },
+    "heading": {
+      "foreground": "#d20f39"
+    },
+    "number": {
+      "foreground": "#fe640b"
+    },
+    "pol": {
+      "foreground": "#dd7878"
+    },
+    "property.readonly:javascript": {
+      "foreground": "#4c4f69"
+    },
+    "property.readonly:javascriptreact": {
+      "foreground": "#4c4f69"
+    },
+    "property.readonly:typescript": {
+      "foreground": "#4c4f69"
+    },
+    "property.readonly:typescriptreact": {
+      "foreground": "#4c4f69"
+    },
+    "selfKeyword": {
+      "foreground": "#d20f39"
+    },
+    "text.emph": {
+      "fontStyle": "italic",
+      "foreground": "#d20f39"
+    },
+    "text.math": {
+      "foreground": "#dd7878"
+    },
+    "text.strong": {
+      "fontStyle": "bold",
+      "foreground": "#d20f39"
+    },
+    "tomlArrayKey": {
+      "fontStyle": "",
+      "foreground": "#1e66f5"
+    },
+    "tomlTableKey": {
+      "fontStyle": "",
+      "foreground": "#1e66f5"
+    },
+    "type.defaultLibrary:go": {
+      "foreground": "#8839ef"
+    },
+    "variable.defaultLibrary": {
+      "foreground": "#e64553"
+    },
+    "variable.readonly.defaultLibrary:go": {
+      "foreground": "#8839ef"
+    },
+    "variable.readonly:javascript": {
+      "foreground": "#4c4f69"
+    },
+    "variable.readonly:javascriptreact": {
+      "foreground": "#4c4f69"
+    },
+    "variable.readonly:scala": {
+      "foreground": "#4c4f69"
+    },
+    "variable.readonly:typescript": {
+      "foreground": "#4c4f69"
+    },
+    "variable.readonly:typescriptreact": {
+      "foreground": "#4c4f69"
+    },
+    "variable.typeHint:python": {
+      "foreground": "#df8e1d"
+    }
+  }
 }

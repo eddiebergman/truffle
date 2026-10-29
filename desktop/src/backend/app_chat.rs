@@ -1474,7 +1474,7 @@ mod tests {
         let responses = [
             json!({"tool":"query","args":{"query":"latency"}}),
             json!({"tool":"show","args":{"source":"all","query":"latency","status":"all"}}),
-            json!({"tool":"settings-apply","args":{"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"theme":"light"}}}),
+            json!({"tool":"settings-apply","args":{"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"theme":"github-light"}}}),
             json!({"reply":"Found one cached ticket. The theme is now light."}),
         ];
         let mut i = 0;
@@ -1488,7 +1488,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(result.1[0]["query"], "latency");
-        assert_eq!(repo.settings.values()["theme"], "light");
+        assert_eq!(repo.settings.values()["theme"], "github-light");
     }
     #[test]
     fn recovery_context_verifies_receipts_and_reaches_the_model_without_replay() {

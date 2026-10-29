@@ -1,12 +1,22 @@
 {
+  "name": "solarized-dark",
+  "displayName": "Solarized Dark",
+  "type": "dark",
+  "truffle": {
+    "bg": "#002b36",
+    "panel": "#00212b",
+    "overlay": "#073642",
+    "line": "#0d4a5a",
+    "text": "#839496",
+    "muted": "#657b83",
+    "iris": "#268bd2",
+    "foam": "#2aa198",
+    "love": "#dc322f",
+    "gold": "#b58900",
+    "rose": "#d33682"
+  },
   "colors": {
     "activityBar.background": "#003847",
-    "agentsBottomPanel.border": "#00000000",
-    "agentsCard.border": "#00000000",
-    "agentsChatInput.border": "#586E7566",
-    "agentsChatInput.focusBorder": "#2AA19899",
-    "agentsNewSessionButton.border": "#586E7566",
-    "agentsPanel.border": "#586E7566",
     "badge.background": "#047aa6",
     "button.background": "#2AA19899",
     "debugExceptionWidget.background": "#00212B",
@@ -54,11 +64,7 @@
     "list.hoverBackground": "#004454AA",
     "list.inactiveSelectionBackground": "#00445488",
     "minimap.selectionHighlight": "#274642",
-    "modernActivityBarItem.activeBackground": "#005A6F",
-    "modernActivityBarItem.hoverBackground": "#005A6F87",
     "panel.border": "#2b2b4a",
-    "panelSection.border": "#2b2b4a",
-    "panelSectionHeader.border": "#2b2b4a",
     "peekView.border": "#2b2b4a",
     "peekViewEditor.background": "#10192c",
     "peekViewEditor.matchHighlightBackground": "#7744AA40",
@@ -71,17 +77,14 @@
     "quickInputList.focusBackground": "#005A6F",
     "selection.background": "#2AA19899",
     "sideBar.background": "#00212B",
-    "sideBarSectionHeader.border": "#2b2b4a",
     "sideBarTitle.foreground": "#93A1A1",
     "statusBar.background": "#00212B",
     "statusBar.debuggingBackground": "#00212B",
     "statusBar.foreground": "#93A1A1",
-    "statusBar.inactiveBackground": "#0E2931",
     "statusBar.noFolderBackground": "#00212B",
     "statusBarItem.prominentBackground": "#003847",
     "statusBarItem.prominentHoverBackground": "#003847",
     "statusBarItem.remoteBackground": "#2AA19899",
-    "surface.border": "#00222c",
     "tab.activeBackground": "#002B37",
     "tab.activeForeground": "#d6dbdb",
     "tab.border": "#003847",
@@ -104,12 +107,8 @@
     "terminal.ansiRed": "#dc322f",
     "terminal.ansiWhite": "#eee8d5",
     "terminal.ansiYellow": "#b58900",
-    "titleBar.activeBackground": "#002C39",
-    "titleBar.inactiveBackground": "#0E2931"
+    "titleBar.activeBackground": "#002C39"
   },
-  "displayName": "Solarized Dark",
-  "name": "solarized-dark",
-  "semanticHighlighting": true,
   "tokenColors": [
     {
       "settings": {
@@ -400,5 +399,5 @@
       }
     }
   ],
-  "type": "dark"
+  "semanticHighlighting": true
 }

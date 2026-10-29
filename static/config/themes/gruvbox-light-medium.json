@@ -1,4 +1,20 @@
 {
+  "name": "gruvbox-light-medium",
+  "displayName": "Gruvbox Light Medium",
+  "type": "light",
+  "truffle": {
+    "bg": "#fbf1c7",
+    "panel": "#f2e5bc",
+    "overlay": "#ebdbb2",
+    "line": "#d5c4a1",
+    "text": "#3c3836",
+    "muted": "#7c6f64",
+    "iris": "#af3a03",
+    "foam": "#076678",
+    "love": "#9d0006",
+    "gold": "#b57614",
+    "rose": "#8f3f71"
+  },
   "colors": {
     "activityBar.background": "#fbf1c7",
     "activityBar.border": "#ebdbb2",
@@ -258,20 +274,6 @@
     "titleBar.inactiveBackground": "#fbf1c7",
     "widget.border": "#ebdbb2",
     "widget.shadow": "#fbf1c730"
-  },
-  "displayName": "Gruvbox Light Medium",
-  "name": "gruvbox-light-medium",
-  "semanticHighlighting": true,
-  "semanticTokenColors": {
-    "component": "#af3a03",
-    "constant.builtin": "#8f3f71",
-    "function": "#427b58",
-    "function.builtin": "#af3a03",
-    "method": "#427b58",
-    "parameter": "#076678",
-    "property": "#076678",
-    "property:python": "#3c3836",
-    "variable": "#3c3836"
   },
   "tokenColors": [
     {
@@ -1214,5 +1216,16 @@
       }
     }
   ],
-  "type": "light"
+  "semanticHighlighting": true,
+  "semanticTokenColors": {
+    "component": "#af3a03",
+    "constant.builtin": "#8f3f71",
+    "function": "#427b58",
+    "function.builtin": "#af3a03",
+    "method": "#427b58",
+    "parameter": "#076678",
+    "property": "#076678",
+    "property:python": "#3c3836",
+    "variable": "#3c3836"
+  }
 }

@@ -51,8 +51,9 @@ async function openThemeChooser(){
  const owns=()=>openThemeChooser.current===current&&$('#quick-action-picker')===dialog&&$('#quick-action-picker-form')===form&&form.isConnected&&query.parentElement===form;
  current.isCurrent=()=>owns()&&dialog.open&&source===page;
  const unobscured=()=>![...document.querySelectorAll('dialog[open]')].some(open=>open!==dialog&&!open.contains(dialog));
- const dispose=()=>{dialog.removeEventListener('cancel',cancel);dialog.removeEventListener('close',closed);observer.disconnect();};
+ const dispose=()=>{dialog.removeEventListener('cancel',cancel);dialog.removeEventListener('close',closed);observer.disconnect();previewTheme(null);};
  const cancel=event=>{if(owns()&&(current.pending||current.refreshing))event.preventDefault();};
+ const idle=()=>current.isCurrent()&&!current.pending&&!current.refreshing&&!current.result?.conflict&&!['accepted','unknown'].includes(current.result?.kind);
  const closed=()=>{if(!dialog.open)dispose();};
  const observer=new MutationObserver(()=>{if(!owns())dispose();});observer.observe(form,{childList:true});
  dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',closed);
@@ -103,9 +104,12 @@ async function openThemeChooser(){
   }catch(error){current.result.error=error.message;}
   finally{current.pending=false;if(current.isCurrent())paintOutcome();else{dispose();if(current.result.kind!=='rejected'&&current.result.presentation!=='ready')toast(current.result.kind==='accepted'?'Theme saved. Refresh settings to inspect it.':'The theme save outcome is unknown. Inspect settings before choosing again.');}}
  }
- const draw=()=>{for(const control of list.querySelectorAll('button'))current.controls.delete(control);list.replaceChildren();for(const theme of Object.values(window.truffleThemeCatalog).filter(theme=>(theme.label+' '+theme.type).toLowerCase().includes(query.value.toLowerCase()))){const button=featureButton(theme.label+' · '+theme.type,()=>choose(theme),'theme-choice');button.dataset.themeId=theme.id;button.setAttribute('aria-pressed',String(setting('theme','')===theme.id));list.append(button);}};
- query.oninput=()=>{if(current.isCurrent()&&!current.pending&&!current.refreshing&&!current.result?.conflict&&!['accepted','unknown'].includes(current.result?.kind))draw();};
- form.onsubmit=event=>{event.preventDefault();if(current.isCurrent())list.querySelector('button')?.click();};
+ let active=null;
+ const activate=button=>{if(!idle()||!button)return;if(active)active.dataset.active='false';active=button;button.dataset.active='true';button.scrollIntoView?.({block:'nearest'});previewTheme(button.dataset.themeId);};
+ const draw=()=>{for(const control of list.querySelectorAll('button'))current.controls.delete(control);list.replaceChildren();active=null;for(const theme of Object.values(window.truffleThemeCatalog).filter(theme=>(theme.label+' '+theme.type).toLowerCase().includes(query.value.toLowerCase()))){const button=featureButton(theme.label+' · '+theme.type,()=>choose(theme),'theme-choice');button.dataset.themeId=theme.id;button.setAttribute('aria-pressed',String(setting('theme','')===theme.id));button.onmouseenter=button.onfocus=()=>activate(button);list.append(button);}};
+ query.oninput=()=>{if(idle()){draw();if(query.value)activate(list.querySelector('button'));}};
+ query.onkeydown=event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();const buttons=[...list.querySelectorAll('button')],index=buttons.indexOf(active)+(event.key==='ArrowDown'?1:-1);activate(buttons[Math.max(0,Math.min(buttons.length-1,index<-1?buttons.length-1:index))]);};
+ form.onsubmit=event=>{event.preventDefault();if(current.isCurrent())(active||list.querySelector('button'))?.click();};
  draw();dialog.showModal();query.focus();return true;
 }
 // Sharing has its own CAS document; keep its reviewed draft outside settings.json.

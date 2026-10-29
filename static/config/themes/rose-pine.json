@@ -1,4 +1,20 @@
 {
+  "name": "rose-pine",
+  "displayName": "Rosé Pine",
+  "type": "dark",
+  "truffle": {
+    "bg": "#191724",
+    "panel": "#1f1d2e",
+    "overlay": "#26233a",
+    "line": "#403d52",
+    "text": "#e0def4",
+    "muted": "#908caa",
+    "iris": "#c4a7e7",
+    "foam": "#9ccfd8",
+    "love": "#eb6f92",
+    "gold": "#f6c177",
+    "rose": "#ebbcba"
+  },
   "colors": {
     "activityBar.activeBorder": "#e0def4",
     "activityBar.background": "#191724",
@@ -37,7 +53,7 @@
     "debugExceptionWidget.background": "#1f1d2e",
     "debugExceptionWidget.border": "#6e6a8633",
     "debugIcon.breakpointCurrentStackframeForeground": "#908caa",
-    "debugIcon.breakpointDisabledForeground": "#524f67",
+    "debugIcon.breakpointDisabledForeground": "#908caa",
     "debugIcon.breakpointForeground": "#908caa",
     "debugIcon.breakpointStackframeForeground": "#908caa",
     "debugIcon.breakpointUnverifiedForeground": "#908caa",
@@ -226,7 +242,7 @@
     "gitDecoration.submoduleResourceForeground": "#f6c177",
     "gitDecoration.untrackedResourceForeground": "#f6c177",
     "icon.foreground": "#908caa",
-    "input.background": "#232034",
+    "input.background": "#26233a80",
     "input.border": "#6e6a8633",
     "input.foreground": "#e0def4",
     "input.placeholderForeground": "#908caa",
@@ -282,10 +298,10 @@
     "merge.border": "#26233a",
     "merge.commonContentBackground": "#6e6a8633",
     "merge.commonHeaderBackground": "#6e6a8633",
-    "merge.currentContentBackground": "#f6c17733",
-    "merge.currentHeaderBackground": "#f6c17733",
-    "merge.incomingContentBackground": "#9ccfd833",
-    "merge.incomingHeaderBackground": "#9ccfd833",
+    "merge.currentContentBackground": "#f6c17780",
+    "merge.currentHeaderBackground": "#f6c17780",
+    "merge.incomingContentBackground": "#9ccfd880",
+    "merge.incomingHeaderBackground": "#9ccfd880",
     "minimap.background": "#1f1d2e",
     "minimap.errorHighlight": "#eb6f9280",
     "minimap.findMatchHighlight": "#6e6a8633",
@@ -465,8 +481,6 @@
     "window.activeBorder": "#1f1d2e",
     "window.inactiveBorder": "#1f1d2e"
   },
-  "displayName": "Ros\u00e9 Pine",
-  "name": "rose-pine",
   "tokenColors": [
     {
       "scope": [
@@ -735,19 +749,5 @@
         "foreground": "#c4a7e7"
       }
     }
-  ],
-  "type": "dark",
-  "truffle": {
-    "bg": "#191724",
-    "panel": "#1f1d2e",
-    "overlay": "#26233a",
-    "line": "#393552",
-    "text": "#e0def4",
-    "muted": "#908caa",
-    "iris": "#c4a7e7",
-    "foam": "#9ccfd8",
-    "love": "#eb6f92",
-    "gold": "#f6c177",
-    "rose": "#ebbcba"
-  }
+  ]
 }

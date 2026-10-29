@@ -1,4 +1,20 @@
 {
+  "name": "nord",
+  "displayName": "Nord",
+  "type": "dark",
+  "truffle": {
+    "bg": "#2e3440",
+    "panel": "#2e3440",
+    "overlay": "#3b4252",
+    "line": "#434c5e",
+    "text": "#d8dee9",
+    "muted": "#7b88a1",
+    "iris": "#88c0d0",
+    "foam": "#81a1c1",
+    "love": "#bf616a",
+    "gold": "#ebcb8b",
+    "rose": "#b48ead"
+  },
   "colors": {
     "activityBar.activeBackground": "#3b4252",
     "activityBar.activeBorder": "#88c0d0",
@@ -304,9 +320,6 @@
     "welcomePage.buttonHoverBackground": "#4c566a",
     "widget.shadow": "#00000066"
   },
-  "displayName": "Nord",
-  "name": "nord",
-  "semanticHighlighting": true,
   "tokenColors": [
     {
       "settings": {
@@ -1282,5 +1295,5 @@
       }
     }
   ],
-  "type": "dark"
+  "semanticHighlighting": true
 }
