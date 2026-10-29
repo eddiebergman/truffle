@@ -154,4 +154,5 @@ function onboardingCompanyMessage(instructions){
    documentState=nextDocument;showSurface();await paint();
  };
  window.closeOnboarding=closeOnboarding;window.onboardingIsOpen=onboardingIsOpen;window.onboardingRoot=onboardingRoot;
+ if(typeof module!=='undefined')module.exports.onboardingInternals={runAction,setBusy,confirmChoice,choices,leaveSettings,addSkill,get continueAction(){return continueAction;},get actionPending(){return actionPending;}};
 })();

@@ -1,17 +1,14 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-function onboardingTestContext(value){
- const c=vm.createContext({source:'all',document:{activeElement:null,querySelectorAll:()=>[]},shell:null,openGeneration:0,paintGeneration:0,actionSerial:0,resume:null,returnGeneration:0,paint:async()=>{},...value});
- c.onboardingRoot=()=>c.dialog;c.onboardingIsOpen=()=>c.dialog?.open!==false;
- c.closeOnboarding=({forChild}={})=>{if(forChild)c.resume={ticket:c.returnGeneration};c.dialog?.close?.();};c.showSurface=()=>c.dialog.showModal();return c;
-}
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
+// Dialog navigation and the skill editor come from these scripts, in index.html order.
 function installSkillEditorInitializer(c){
- c.Event=Event;const app=fs.readFileSync('static/app.js','utf8');vm.runInContext(app.slice(app.indexOf('function requestDialogClose('),app.indexOf("for (const button of document.querySelectorAll('.close-dialog')")),c);
- c.disposeFeatureForm=()=>{};c.createFeatureForm=(dialog,form)=>{const current={dialog,host:form,ui:{inspect:{},refresh:{}}};c.lastSkillEditor=current;return current;};c.refreshSkillEditor=()=>{};
- const editor=fs.readFileSync('static/skills-editor.js','utf8');vm.runInContext(editor.slice(editor.indexOf('function openSkillEditor('),editor.indexOf('function updateScheduleFields(')),c);
+ c.Event=Event;c.disposeFeatureForm=()=>{};c.createFeatureForm=(dialog,form)=>{const current={dialog,host:form,ui:{inspect:{},refresh:{}}};c.lastSkillEditor=current;return current;};c.refreshSkillEditor=()=>{};
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/skills-editor.js']);
 }
-const source=fs.readFileSync('static/onboarding.js','utf8');
-const context=vm.createContext({});vm.runInContext(source.slice(0,source.indexOf('(function(){')),context);
+// Load the whole onboarding script; its window entry points land on the test's window.
+function loadOnboarding(c){const mod={exports:{}};c.module=mod;loadScripts(c,'static/onboarding.js',{keepHost:['window']});return mod.exports.onboardingInternals;}
+const context=browserContext({});loadScripts(context,'static/onboarding.js');
 test('onboarding follows integration then skills order and bounds back/forward navigation',()=>{
  assert.equal(context.onboardingNextStep('integrations'),'skills');
  assert.equal(context.onboardingNextStep('skills',-1),'integrations');
@@ -40,23 +37,21 @@ test('keymap preview shows every displaced shortcut and preserves unrelated bind
 });
 
 test('onboarding serializes actions and releases controls after failures',async()=>{
- const back={disabled:false,closest:()=>null},next={disabled:false,closest:()=>null},select={disabled:false,closest:()=>null},attributes={},errors=[];
- const c=onboardingTestContext({actionPending:false,dialog:{setAttribute:(name,value)=>attributes[name]=value,querySelectorAll:()=>[back,next,select],querySelector:()=>null},documentState:{progress:{step:'assistant'}},$:()=>back,showError:error=>errors.push(error.message)});
- vm.runInContext(source.slice(source.indexOf(' async function runAction('),source.indexOf(' const button=')),c);
+ const f=onboardingHostFixture(),ob=f.internals;await f.c.window.openOnboarding();const ui=setupParts(f),{back,skip}=ui,next=ui.continue;
  let release,executed=0;
- const first=c.runAction(async()=>{executed++;await new Promise(resolve=>release=resolve);});
- assert.equal(next.disabled,true);assert.equal(select.disabled,true);assert.equal(attributes['aria-busy'],'true');
- await c.runAction(async()=>executed++);assert.equal(executed,1);
- release();await first;assert.equal(back.disabled,true);assert.equal(next.disabled,false);assert.equal(select.disabled,false);
- c.documentState.progress.step='theme';await c.runAction(async()=>{throw new Error('Save failed');});assert.deepEqual(errors,['Save failed']);assert.equal(back.disabled,false);assert.equal(attributes['aria-busy'],'false');
+ const first=ob.runAction(async()=>{executed++;await new Promise(resolve=>release=resolve);});
+ assert.equal(next.disabled,true);assert.equal(skip.disabled,true);assert.equal(ui.root.attrs['aria-busy'],'true');
+ await ob.runAction(async()=>executed++);assert.equal(executed,1);
+ release();await first;assert.equal(back.disabled,true);assert.equal(next.disabled,false);assert.equal(skip.disabled,false);
+ // Continue moves setup to the theme step, where Back is available.
+ next.onclick();for(let spin=0;(ob.actionPending||heading(ui)!=='Make yourself at home')&&spin<20;spin++)await f.tick();
+ await ob.runAction(async()=>{throw new Error('Save failed');});assert.equal(ui.error.textContent,'Save failed');assert.equal(back.disabled,false);assert.equal(ui.root.attrs['aria-busy'],'false');
 });
 
-test('unsupported setup versions keep navigation disabled while Close remains usable',()=>{
- const close={disabled:false,closest:()=>null},back={disabled:false,closest:()=>null},next={disabled:false,closest:()=>null};
- const c=onboardingTestContext({dialog:{setAttribute(){},querySelectorAll:()=>[close,back,next],querySelector:()=>close},documentState:{progressReadOnly:true,progress:{step:'assistant'}},$:()=>back});
- vm.runInContext(source.slice(source.indexOf(' function setBusy('),source.indexOf(' const button=')),c);
- c.setBusy(false);assert.equal(close.disabled,false);assert.equal(back.disabled,true);assert.equal(next.disabled,true);
- c.setBusy(true);assert.equal(close.disabled,true);
+test('unsupported setup versions keep navigation disabled while Close remains usable',async()=>{
+ const f=onboardingHostFixture(),ob=f.internals;withSetup(f,{progressReadOnly:true,progressError:'Unsupported setup version.'});await f.c.window.openOnboarding();const {close,back,continue:next}=setupParts(f);
+ ob.setBusy(false);assert.equal(close.disabled,false);assert.equal(back.disabled,true);assert.equal(next.disabled,true);
+ ob.setBusy(true);assert.equal(close.disabled,true);
 });
 
 test('portable review selection changes only the explicitly chosen assistant',()=>{
@@ -70,12 +65,10 @@ test('portable review selection changes only the explicitly chosen assistant',()
 });
 
 
-test('onboarding busy state does not disable the globally hosted App chat controls',()=>{
- const owned={disabled:false,closest:()=>null},chat={disabled:false,closest:()=>null},back={};
- const c=onboardingTestContext({dialog:{setAttribute(){},querySelectorAll:selector=>selector.includes('.onboarding-shell')?[owned]:[owned,chat],querySelector:()=>null},documentState:{progress:{step:'theme'}},$:()=>back});
- vm.runInContext(source.slice(source.indexOf(' function setBusy('),source.indexOf(' const button=')),c);
- c.setBusy(true);assert.equal(owned.disabled,true);assert.equal(chat.disabled,false);
- c.setBusy(false);assert.equal(owned.disabled,false);assert.equal(chat.disabled,false);
+test('onboarding busy state does not disable the globally hosted App chat controls',async()=>{
+ const f=onboardingHostFixture({step:'theme'}),ob=f.internals;await f.c.window.openOnboarding({host:f.host});const owned=setupParts(f).continue,chat=new f.Element('button');f.host.append(chat);
+ ob.setBusy(true);assert.equal(owned.disabled,true);assert.equal(chat.disabled,false);
+ ob.setBusy(false);assert.equal(owned.disabled,false);assert.equal(chat.disabled,false);
 });
 
 function profileFixture({previewError,initialProfile,expectedRevision,expectedContentHash="a".repeat(64)}={}){
@@ -92,8 +85,8 @@ function profileFixture({previewError,initialProfile,expectedRevision,expectedCo
  }
  const dialog=new Node('dialog'),container=new Node('main'),calls=[];dialog.append(container);
  const current={revision:3,contentHash:'a'.repeat(64),values:{theme:'system',editor:'zed',codexReviewCommand:'',keybindings:{commands:'Primary+K',other:'Primary+O'},quickActions:[]},approval:{theme:'routine',editor:'user',codexReviewCommand:'user',quickActions:'user',keybindings:'routine'},fields:[{key:'theme',label:'Theme'},{key:'editor',label:'Editor'}],commands:[{id:'commands',label:'Commands'}]};
- const c=onboardingTestContext({TextEncoder,structuredClone,document:{createElement:tag=>new Node(tag)},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/settings/preview'){if(previewError)throw new Error(previewError);return {revision:current.revision,contentHash:current.contentHash,values:structuredClone(payload.patch)};}if(!payload)return structuredClone(current);current.values={...current.values,...structuredClone(payload.patch)};current.revision++;current.contentHash='b'.repeat(64);return structuredClone(current);},loadAppSettings:async()=>{}});
- const settings=fs.readFileSync('static/settings.js','utf8');vm.runInContext(settings.slice(settings.indexOf('function mergeSettingsProfile('),settings.indexOf('function exportSettingsProfile(')),c);vm.runInContext(fs.readFileSync('static/settings-profile.js','utf8'),c);const root=c.renderSettingsProfilePreview(container,{initialProfile,expectedRevision,expectedContentHash});
+ const c=browserContext({TextEncoder,structuredClone,document:{createElement:tag=>new Node(tag)},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/settings/preview'){if(previewError)throw new Error(previewError);return {revision:current.revision,contentHash:current.contentHash,values:structuredClone(payload.patch)};}if(!payload)return structuredClone(current);current.values={...current.values,...structuredClone(payload.patch)};current.revision++;current.contentHash='b'.repeat(64);return structuredClone(current);},loadAppSettings:async()=>{}});
+ loadScripts(c,['static/client.js','static/app.js','static/features.js','static/settings.js','static/settings-profile.js']);const root=c.renderSettingsProfilePreview(container,{initialProfile,expectedRevision,expectedContentHash});
  const nodes=()=>{const visit=n=>[n,...n.children.flatMap(visit)];return visit(root);};const button=text=>nodes().find(n=>n.tagName==='button'&&n.textContent===text),input=nodes().find(n=>n.tagName==='textarea'),file=nodes().find(n=>n.tagName==='input'&&n.type==='file'),status=nodes().find(n=>n.attrs.role==='status');
  const paste=async values=>{input.value=JSON.stringify({format:'truffle-settings',version:1,values});await button('Preview pasted profile').onclick();};
  return {c,current,calls,root,dialog,container,nodes,button,input,file,status,paste};
@@ -124,9 +117,8 @@ test('company profile disposal clears private fields and ignores delayed preview
   f.input.value=JSON.stringify({format:'truffle-settings',version:1,values:{theme:'midnight'}});const pending=f.button('Preview pasted profile').onclick();while(!release)await Promise.resolve();f.file.value='fixture.json';f.dialog.handlers.close();assert.equal(f.input.value,'');assert.equal(f.file.value,'');release();await pending;assert.equal(f.nodes().some(n=>n.type==='checkbox'),false);assert.equal(f.button('Apply selected changes').disabled,true);
  }
 });
-test('onboarding busy state preserves company importer disabled policy',()=>{
- const owned={disabled:false,closest:()=>null},company={disabled:true,closest:selector=>selector.includes('.settings-profile-import')?{}:null},back={};
- const c=onboardingTestContext({dialog:{setAttribute(){},querySelectorAll:()=>[owned,company],querySelector:()=>null},documentState:{progress:{step:'company'}},$:()=>back});vm.runInContext(source.slice(source.indexOf(' function setBusy('),source.indexOf(' const button=')),c);c.setBusy(false);assert.equal(company.disabled,true);assert.equal(owned.disabled,false);
+test('onboarding busy state preserves company importer disabled policy',async()=>{
+ const f=onboardingHostFixture({step:'company'}),ob=f.internals;await f.c.window.openOnboarding({host:f.host});const owned=setupParts(f).continue,company=new f.Element('button');company.disabled=true;f.host.querySelector('.settings-profile-import').append(company);ob.setBusy(false);assert.equal(company.disabled,true);assert.equal(owned.disabled,false);
 });
 
 test('shared proposal review previews only requested changes and applies selected fields at the proposal revision',async()=>{
@@ -152,77 +144,74 @@ test('same-revision file changes invalidate proposal previews and approvals',asy
  assert.match(f.status.textContent,/changed since this proposal/);assert.equal(f.calls.some(c=>c.path==='/api/settings/preview'),false);await f.button('Refresh preview').onclick();const box=f.nodes().find(n=>n.type==='checkbox');box.checked=true;box.onchange();f.current.contentHash='d'.repeat(64);await f.button('Apply selected changes').onclick();assert.match(f.status.textContent,/changed elsewhere/);assert.equal(f.calls.some(c=>c.path==='/api/settings'&&c.payload),false);assert.equal(f.button('Apply selected changes').disabled,true);
 });
 
-function onboardingDecisionFixture(){
- const nodes=new Map(),calls=[];const node=(tag,text,cls)=>({tagName:tag,textContent:text||'',className:cls||'',children:[],attrs:{},dataset:{},value:'',append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},setAttribute(name,value){this.attrs[name]=value;},querySelectorAll:()=>[]});const content=node('main');
- for(const id of ['onboarding-continue','onboarding-skip','onboarding-back','onboarding-step-count'])nodes.set('#'+id,node('button'));
- const c=onboardingTestContext({node,content,actionPending:false,documentState:{progress:{step:'assistant'}},paintGeneration:0,$:selector=>nodes.get(selector),paragraph:text=>content.append(node('p',text)),button:(text,action)=>Object.assign(node('button',text),{onclick:action}),preference:async patch=>calls.push(['preference',patch]),next:async status=>calls.push(['next',status]),runAction:async action=>action()});
- vm.runInContext(source.slice(source.indexOf(' function confirmChoice('),source.indexOf(' async function leaveSettings(')),c);return {c,calls,nodes,content};
-}
+// Setup writes made by a preference or a step decision, not by the progress saves that render a step.
+const decisions=f=>f.calls.filter(call=>call.payload&&(call.path==='/api/settings'||call.payload.status!=='current'));
 test('assistant question uses local pressed choices and one explicit footer commit',async()=>{
- const f=onboardingDecisionFixture(),items=[{id:'claude',label:'Claude'},{id:'codex',label:'Codex'}];f.c.confirmChoice(items,'claude','defaultAgent','Which assistant would you like for new chats?');
- assert.equal(f.calls.length,0);const group=f.content.children.find(node=>node.attrs.role==='group');assert.equal(group.attrs['aria-label'],'Which assistant would you like for new chats?');assert.equal(group.children[0].attrs['aria-pressed'],'true');assert.equal(f.nodes.get('#onboarding-continue').textContent,'Use Claude');
- await group.children[1].onclick();assert.equal(f.calls.length,0);assert.equal(group.children[0].attrs['aria-pressed'],'false');assert.equal(group.children[1].attrs['aria-pressed'],'true');assert.equal(f.nodes.get('#onboarding-continue').textContent,'Use Codex');
- await f.c.continueAction();assert.equal(f.calls[0][0],'preference');assert.equal(f.calls[0][1].defaultAgent,'codex');assert.equal(f.calls[1][0],'next');assert.equal(f.content.children.some(node=>node.textContent==='Use selected assistant'),false);
+ const f=onboardingHostFixture(),ob=f.internals;withSetup(f,{assistants:[{id:'claude',label:'Claude',installed:true},{id:'codex',label:'Codex',installed:true}]});f.c.setting=(key,fallback)=>key==='defaultAgent'?'claude':fallback;await f.c.window.openOnboarding();const ui=setupParts(f);
+ assert.equal(decisions(f).length,0);const group=ui.content.children.find(node=>node.attrs.role==='group');assert.equal(group.attrs['aria-label'],'Which assistant would you like for new chats?');assert.equal(group.children[0].attrs['aria-pressed'],'true');assert.equal(ui.continue.textContent,'Use Claude');
+ await group.children[1].onclick();assert.equal(decisions(f).length,0);assert.equal(group.children[0].attrs['aria-pressed'],'false');assert.equal(group.children[1].attrs['aria-pressed'],'true');assert.equal(ui.continue.textContent,'Use Codex');
+ await ob.continueAction();const [preference,next]=decisions(f);assert.equal(preference.path,'/api/settings');assert.equal(preference.payload.patch.defaultAgent,'codex');assert.equal(next.path,'/api/onboarding');assert.equal(next.payload.status,'complete');assert.equal(ui.content.children.some(node=>node.textContent==='Use selected assistant'),false);
 });
 test('a single installed assistant or editor needs no redundant picker and saves only on confirmation',async()=>{
  for(const [key,id,label]of [['defaultAgent','codex','Codex'],['editor','zed','Zed']]){
-  const f=onboardingDecisionFixture();f.c.confirmChoice([{id,label}],'unavailable',key,'Choose a tool');assert.equal(f.content.children.some(node=>node.attrs.role==='group'),false);assert.equal(f.calls.length,0);assert.equal(f.nodes.get('#onboarding-continue').textContent,'Use '+label);await f.c.continueAction();assert.equal(f.calls[0][1][key],id);
+  const f=onboardingHostFixture(),ob=f.internals;await f.c.window.openOnboarding();const ui=setupParts(f);ob.confirmChoice([{id,label}],'unavailable',key,'Choose a tool');assert.equal(ui.content.children.some(node=>node.attrs.role==='group'),false);assert.equal(decisions(f).length,0);assert.equal(ui.continue.textContent,'Use '+label);await ob.continueAction();assert.equal(decisions(f)[0].payload.patch[key],id);
  }
 });
 test('question confirmation preserves revision plus content hash and does not advance after a conflict',async()=>{
- const f=onboardingDecisionFixture();const requests=[];f.c.api=async(path,payload)=>{requests.push({path,payload});if(!payload)return {revision:4,contentHash:'a'.repeat(64)};throw new Error('Settings changed.');};f.c.loadAppSettings=async()=>{};
- vm.runInContext(source.slice(source.indexOf(' async function preference('),source.indexOf(' function paragraph(')),f.c);f.c.confirmChoice([{id:'codex',label:'Codex'}],'codex','defaultAgent','Choose an assistant');await assert.rejects(f.c.continueAction(),/Settings changed/);assert.equal(requests[1].payload.revision,4);assert.equal(requests[1].payload.contentHash,'a'.repeat(64));assert.equal(requests[1].payload.patch.defaultAgent,'codex');assert.equal(f.calls.some(call=>call[0]==='next'),false);
+ const f=onboardingHostFixture(),ob=f.internals;await f.c.window.openOnboarding();const requests=[],original=f.c.api;f.c.api=async(path,payload)=>{if(path!=='/api/settings')return original(path,payload);requests.push({path,payload});if(!payload)return {revision:4,contentHash:'a'.repeat(64)};throw new Error('Settings changed.');};
+ ob.confirmChoice([{id:'codex',label:'Codex'}],'codex','defaultAgent','Choose an assistant');const before=f.calls.length;await assert.rejects(ob.continueAction(),/Settings changed/);assert.equal(requests[1].payload.revision,4);assert.equal(requests[1].payload.contentHash,'a'.repeat(64));assert.equal(requests[1].payload.patch.defaultAgent,'codex');assert.equal(decisions({calls:f.calls.slice(before)}).length,0);
 });
-test('remaining native onboarding selectors have explicit accessible labels',()=>{
- const f=onboardingDecisionFixture();for(const label of ['Theme','Skill availability','Saved skill to schedule']){const select=f.c.choices([['one','One']],'noop','one',label);assert.equal(select.attrs['aria-label'],label);}
+test('remaining native onboarding selectors have explicit accessible labels',async()=>{
+ const f=onboardingHostFixture(),ob=f.internals;await f.c.window.openOnboarding();for(const label of ['Theme','Skill availability','Saved skill to schedule']){const select=ob.choices([['one','One']],'noop','one',label);assert.equal(select.attrs['aria-label'],label);}
 });
 test('no installed assistant keeps a clear skip path without changing preferences',async()=>{
- const f=onboardingDecisionFixture();Object.assign(f.c,{documentState:{progress:{step:'assistant'},assistants:[]},labels:{assistant:'Your assistant',theme:'Theme'},error:{},dialog:{},setting:()=> 'claude'});
- vm.runInContext(source.slice(source.indexOf(' async function paint('),source.indexOf(' window.openOnboarding=')),f.c);await f.c.paint();assert.equal(f.nodes.get('#onboarding-continue').textContent,'Continue without an assistant');await f.c.continueAction();assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0],['next','skipped']);
+ const f=onboardingHostFixture(),ob=f.internals;withSetup(f,{assistants:[]});f.c.setting=()=> 'claude';await f.c.window.openOnboarding();const ui=setupParts(f);
+ assert.equal(ui.continue.textContent,'Continue without an assistant');await ob.continueAction();const made=decisions(f);assert.equal(made.length,1);assert.deepEqual([made[0].path,made[0].payload.status],['/api/onboarding','skipped']);
 });
 test('actual assistant and editor steps render one decision instead of autosaving dropdowns and duplicate CTAs',async()=>{
  for(const step of ['assistant','editor']){
-  const f=onboardingDecisionFixture();Object.assign(f.c,{documentState:{progress:{step},assistants:[{id:'claude',label:'Claude',installed:true},{id:'codex',label:'Codex',installed:true}],editors:[{id:'zed',label:'Zed',installed:true,diffSupported:true}]},labels:{assistant:'Your assistant',editor:'Diff editor'},error:{},dialog:{},setting:()=>step==='assistant'?'codex':'zed',onboardingSupportedEditors:editors=>editors.filter(editor=>editor.installed&&editor.diffSupported)});
-  vm.runInContext(source.slice(source.indexOf(' async function paint('),source.indexOf(' window.openOnboarding=')),f.c);await f.c.paint();assert.equal(f.content.children.some(node=>node.tagName==='select'||/Use selected/.test(node.textContent)),false);assert.equal(f.calls.length,0);assert.equal(f.nodes.get('#onboarding-continue').textContent,step==='assistant'?'Use Codex':'Use Zed');if(step==='assistant')assert.ok(f.content.children.some(node=>/preferred installed assistant/.test(node.textContent)));
+  const f=onboardingHostFixture({step});withSetup(f,{assistants:[{id:'claude',label:'Claude',installed:true},{id:'codex',label:'Codex',installed:true}],editors:[{id:'zed',label:'Zed',installed:true,diffSupported:true}]});f.c.setting=()=>step==='assistant'?'codex':'zed';
+  await f.c.window.openOnboarding();const ui=setupParts(f);assert.equal(ui.content.children.some(node=>node.tagName==='SELECT'||/Use selected/.test(node.textContent)),false);assert.equal(decisions(f).length,0);assert.equal(ui.continue.textContent,step==='assistant'?'Use Codex':'Use Zed');if(step==='assistant')assert.ok(ui.content.children.some(node=>/preferred installed assistant/.test(node.textContent)));
  }
 });
 test('entering a direct skill path initializes the chosen default assistant after resetting the form',async()=>{
  for(const preferred of ['codex','claude']){
-  const fields=Object.fromEntries(['title','skill','agent','command','cwd'].map(key=>[key,{value:'stale'}])),form={elements:fields,reset(){for(const field of Object.values(fields))field.value='';fields.agent.value='claude';}},error={},child={dataset:{},showModal(){this.open=true;}},nodes={'#skill-editor-form':form,'#skill-editor-error':error,'#skill-editor':child};
-  const c=onboardingTestContext({selectedSkill:null,pendingImport:false,baseline:[],api:async()=>({presets:[]}),save:async()=>{},dialog:{close(){}},$:selector=>nodes[selector],setting:()=>preferred,returnAfter(){}});
-  installSkillEditorInitializer(c);vm.runInContext(source.slice(source.indexOf(' async function addSkill('),source.indexOf(' async function discoverSkills(')),c);await c.addSkill(null);assert.equal(child.dataset.skillSource,'file');assert.equal(fields.agent.value,preferred);assert.equal(fields.command.value,'');assert.equal(child.open,true);assert.equal(error.hidden,true);
+  const f=onboardingHostFixture({step:'skills'}),ob=f.internals;f.c.skillPickerMatches=()=>[];f.c.setting=()=>preferred;
+  const fields=Object.fromEntries(['title','skill','agent','command','cwd'].map(key=>[key,{value:'stale'}])),form=new f.Element('form'),error=new f.Element('p'),child=new f.Element('dialog');form.id='skill-editor-form';form.elements=fields;form.reset=()=>{for(const field of Object.values(fields))field.value='';fields.agent.value='claude';};error.id='skill-editor-error';child.id='skill-editor';f.body.append(child,form,error);
+  await f.c.window.openOnboarding();await ob.addSkill(null);assert.equal(child.dataset.skillSource,'file');assert.equal(fields.agent.value,preferred);assert.equal(fields.command.value,'');assert.equal(child.open,true);assert.equal(error.hidden,true);
  }
 });
 
-function onboardingAsyncFixture(){
- const f=onboardingDecisionFixture();Object.assign(f.c,{documentState:{progress:{step:'keymap',steps:{}},editors:[{id:'zed',label:'Zed',installed:true,diffSupported:true}]},dialog:{open:true},labels:{keymap:'Familiar shortcuts',editor:'Diff editor'},error:{textContent:''},setting:()=> 'zed',onboardingSupportedEditors:context.onboardingSupportedEditors,onboardingKeymapPreset:context.onboardingKeymapPreset,appSettings:{commands:['commands','find-work','toggle-left'].map(id=>({id,label:id}))}});f.c.showError=error=>f.c.error.textContent=error.message;
- vm.runInContext(source.slice(source.indexOf(' async function paint('),source.indexOf(' window.openOnboarding=')),f.c);return f;
+// The keymap step waits on its shortcut preview; each preview read stays pending until the test settles it.
+function keymapFixture(){
+ const f=onboardingHostFixture({step:'keymap'});withSetup(f,{editors:[{id:'zed',label:'Zed',installed:true,diffSupported:true}]});Object.assign(f.c,{setting:()=> 'zed',appSettings:{commands:['commands','find-work','toggle-left'].map(id=>({id,label:id}))}});
+ const original=f.c.api;f.previews=[];f.c.api=(path,payload)=>path==='/api/settings'&&!payload?new Promise((resolve,reject)=>f.previews.push({resolve,reject})):original(path,payload);
+ f.waitForPreview=async count=>{for(let spin=0;f.previews.length<count&&spin<20;spin++)await f.tick();assert.equal(f.previews.length,count);};return f;
 }
 const shortcutPreview=binding=>({revision:1,values:{keybindings:{commands:binding,'find-work':'Primary+P','toggle-left':'Primary+B'}}});
 test('a delayed shortcut preview cannot append old controls after Back renders the editor step',async()=>{
- const f=onboardingAsyncFixture();let release;f.c.api=()=>new Promise(resolve=>release=resolve);const pending=f.c.paint();assert.ok(release);
- f.c.documentState.progress.step='editor';await f.c.paint();release(shortcutPreview('Primary+K'));await pending;
- assert.equal(f.content.children[0].textContent,'Diff editor');assert.equal(f.content.children.some(node=>node.tagName==='ul'||node.textContent==='Apply these shortcuts'),false);assert.equal(f.nodes.get('#onboarding-continue').textContent,'Use Zed');assert.equal(f.calls.length,0);
+ const f=keymapFixture(),pending=f.c.window.openOnboarding();await f.waitForPreview(1);const ui=setupParts(f);
+ ui.back.onclick();for(let spin=0;heading(ui)!=='Diff editor'&&spin<20;spin++)await f.tick();f.previews[0].resolve(shortcutPreview('Primary+K'));await pending;
+ assert.equal(ui.content.children[0].textContent,'Diff editor');assert.equal(ui.content.children.some(node=>node.tagName==='UL'||node.textContent==='Apply these shortcuts'),false);assert.equal(ui.continue.textContent,'Use Zed');assert.equal(decisions(f).length,0);
 });
 test('closing setup ignores delayed preview success and failure without adding controls or stale errors',async()=>{
  for(const fails of [false,true]){
-  const f=onboardingAsyncFixture();let settle;f.c.api=()=>new Promise((resolve,reject)=>settle=()=>fails?reject(new Error('Stale request failed')):resolve(shortcutPreview('Primary+K')));const pending=f.c.paint();f.c.dialog.open=false;settle();await pending;
-  assert.equal(f.content.children.some(node=>node.tagName==='ul'||node.textContent==='Apply these shortcuts'),false);assert.equal(f.c.error.textContent,'');assert.equal(f.calls.length,0);
+  const f=keymapFixture(),pending=f.c.window.openOnboarding();await f.waitForPreview(1);const ui=setupParts(f);f.c.window.closeOnboarding();if(fails)f.previews[0].reject(new Error('Stale request failed'));else f.previews[0].resolve(shortcutPreview('Primary+K'));await pending;
+  assert.equal(ui.content.children.some(node=>node.tagName==='UL'||node.textContent==='Apply these shortcuts'),false);assert.equal(ui.error.textContent,'');assert.equal(decisions(f).length,0);
  }
 });
 test('returning to the same step uses only its newest preview response',async()=>{
- const f=onboardingAsyncFixture(),release=[];f.c.api=()=>new Promise(resolve=>release.push(resolve));const old=f.c.paint();f.c.dialog.open=false;f.c.dialog.open=true;const current=f.c.paint();release[1](shortcutPreview('Primary+L'));await current;release[0](shortcutPreview('Primary+K'));await old;
- const lists=f.content.children.filter(node=>node.tagName==='ul');assert.equal(lists.length,1);assert.match(lists[0].children[0].textContent,/Primary\+L/);assert.equal(f.content.children.filter(node=>node.textContent==='Apply these shortcuts').length,1);
+ const f=keymapFixture(),old=f.c.window.openOnboarding();await f.waitForPreview(1);const ui=setupParts(f);f.c.window.closeOnboarding();const current=f.c.window.openOnboarding();await f.waitForPreview(2);f.previews[1].resolve(shortcutPreview('Primary+L'));await current;f.previews[0].resolve(shortcutPreview('Primary+K'));await old;
+ const lists=ui.content.children.filter(node=>node.tagName==='UL');assert.equal(lists.length,1);assert.match(lists[0].children[0].textContent,/Primary\+L/);assert.equal(ui.content.children.filter(node=>node.textContent==='Apply these shortcuts').length,1);
 });
 test('a silent Settings load failure restores setup with an error instead of waiting on a closed child',async()=>{
- const f=onboardingDecisionFixture();let returnHandlers=0;const child={open:false};Object.assign(f.c,{documentState:{progress:{step:'company'}},error:{textContent:''},dialog:{open:true,close(){this.open=false;},showModal(){this.open=true;}},save:async(step,status)=>f.calls.push([step,status]),openPreferences:async()=>undefined,filterSettings:()=>f.calls.push('filter'),returnAfter:()=>returnHandlers++,$:()=>child,setBusy(){},showError:error=>f.c.error.textContent=error.message});
- vm.runInContext(source.slice(source.indexOf(' async function runAction('),source.indexOf(' function setBusy(')),f.c);vm.runInContext(source.slice(source.indexOf(' async function leaveSettings('),source.indexOf(' function returnAfter(')),f.c);
- await f.c.runAction(()=>f.c.leaveSettings('sharing'));assert.equal(f.c.dialog.open,true);assert.equal(child.open,false);assert.equal(returnHandlers,0);assert.match(f.c.error.textContent,/Settings could not open.*progress is saved/);assert.deepEqual(f.calls,[['company','pending']]);assert.equal(f.c.documentState.progress.step,'company');
- child.open=true;f.c.openPreferences=async({category})=>{assert.equal(category,'sharing');return true;};await f.c.runAction(()=>f.c.leaveSettings('sharing'));assert.equal(f.c.dialog.open,false);assert.equal(returnHandlers,1);assert.equal(f.calls.includes('filter'),false);
+ const f=onboardingHostFixture({step:'company'}),ob=f.internals;let filters=0;Object.assign(f.c,{filterSettings:()=>filters++,openPreferences:async()=>undefined});await f.c.window.openOnboarding();const ui=setupParts(f),before=f.calls.length,returnHandlers=()=>(f.settings.listeners.get('close')||[]).length;
+ await ob.runAction(()=>ob.leaveSettings('sharing'));assert.equal(ui.root.open,true);assert.equal(f.settings.open,false);assert.equal(returnHandlers(),0);assert.match(ui.error.textContent,/Settings could not open.*progress is saved/);assert.deepEqual(f.calls.slice(before).filter(call=>call.payload).map(call=>[call.payload.step,call.payload.status]),[['company','pending']]);assert.equal(f.progress.step,'company');assert.equal(heading(ui),'Company setup');
+ f.c.openPreferences=async({category})=>{assert.equal(category,'sharing');f.settings.showModal();return true;};await ob.runAction(()=>ob.leaveSettings('sharing'));assert.equal(ui.root.open,false);assert.equal(returnHandlers(),1);assert.equal(filters,0);
 });
 test('closing during handoff progress save does not open Settings after setup has closed',async()=>{
- const f=onboardingDecisionFixture();let release,opens=0;Object.assign(f.c,{documentState:{progress:{step:'company'}},dialog:{open:true,close(){this.open=false;}},save:()=>new Promise(resolve=>release=resolve),openPreferences:async()=>opens++});vm.runInContext(source.slice(source.indexOf(' async function leaveSettings('),source.indexOf(' function returnAfter(')),f.c);
- const pending=f.c.leaveSettings('sharing');f.c.dialog.close();release();await pending;assert.equal(opens,0);assert.equal(f.c.dialog.open,false);
+ const f=onboardingHostFixture({step:'company'}),ob=f.internals;let release,opens=0;await f.c.window.openOnboarding();const ui=setupParts(f),original=f.c.api;f.c.api=(path,payload)=>path==='/api/onboarding'&&payload?new Promise(resolve=>release=()=>resolve(original(path,payload))):original(path,payload);f.c.openPreferences=async()=>opens++;
+ const pending=ob.leaveSettings('sharing');ui.root.close();release();await pending;assert.equal(opens,0);assert.equal(ui.root.open,false);
 });
 
 function onboardingHostFixture({step='assistant'}={}){
@@ -253,9 +242,13 @@ function onboardingHostFixture({step='assistant'}={}){
  const body=new Element('body'),document={body,activeElement:body,createElement:tag=>new Element(tag),querySelector:selector=>body.querySelector(selector),querySelectorAll:selector=>body.querySelectorAll(selector)};
  const host=new Element('section');host.id='inline-setup';host.hidden=true;body.append(host);const settings=new Element('dialog');settings.id='settings-dialog';body.append(settings);
  const calls=[],progress={revision:0,step,steps:{}},connection={disposed:0},profile={disposed:0};
- const c=vm.createContext({document,MutationObserver,source:'all',window:{},settingsCategory:'appearance',TextEncoder,structuredClone,$:selector=>document.querySelector(selector),setting:(key,fallback)=>fallback,appSettings:{commands:[]},loadAppSettings:async()=>{},filterSettings(){},openPreferences:async({category}={})=>{settings.showModal();c.settingsCategory=category;return true;},renderConnectionSetup:async container=>{const setup=new Element('section');setup.className='connection-setup';let disposed=false;setup.disposeConnectionSetup=()=>{if(!disposed){disposed=true;connection.disposed++;}};container.append(setup);},renderSettingsProfilePreview:container=>{const importer=new Element('section');importer.className='settings-profile-import';let disposed=false;importer.disposeProfileImport=()=>{if(!disposed){disposed=true;profile.disposed++;}};container.append(importer);},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/onboarding'){if(payload){progress.step=payload.step||progress.step;progress.revision++;return structuredClone(progress);}return {progress:structuredClone(progress),assistants:[{id:'codex',label:'Codex',installed:true}],editors:[]};}if(path==='/api/settings')return {revision:2,contentHash:'a'.repeat(64),values:{keybindings:{commands:'Primary+K','find-work':'Primary+P','toggle-left':'Primary+B'}}};return {presets:[],skills:[]};}});
- installSkillEditorInitializer(c);vm.runInContext(source,c);const tick=()=>new Promise(resolve=>setImmediate(resolve));return {c,body,document,host,settings,calls,progress,connection,profile,Element,tick};
+ const c=browserContext({document,MutationObserver,source:'all',window:{},settingsCategory:'appearance',TextEncoder,structuredClone,setting:(key,fallback)=>fallback,appSettings:{commands:[]},loadAppSettings:async()=>{},filterSettings(){},openPreferences:async({category}={})=>{settings.showModal();c.settingsCategory=category;return true;},renderConnectionSetup:async container=>{const setup=new Element('section');setup.className='connection-setup';let disposed=false;setup.disposeConnectionSetup=()=>{if(!disposed){disposed=true;connection.disposed++;}};container.append(setup);},renderSettingsProfilePreview:container=>{const importer=new Element('section');importer.className='settings-profile-import';let disposed=false;importer.disposeProfileImport=()=>{if(!disposed){disposed=true;profile.disposed++;}};container.append(importer);},api:async(path,payload)=>{calls.push({path,payload});if(path==='/api/onboarding'){if(payload){progress.step=payload.step||progress.step;progress.revision++;return structuredClone(progress);}return {progress:structuredClone(progress),assistants:[{id:'codex',label:'Codex',installed:true}],editors:[]};}if(path==='/api/settings')return {revision:2,contentHash:'a'.repeat(64),values:{keybindings:{commands:'Primary+K','find-work':'Primary+P','toggle-left':'Primary+B'}}};return {presets:[],skills:[]};}});
+ installSkillEditorInitializer(c);const internals=loadOnboarding(c),tick=()=>new Promise(resolve=>setImmediate(resolve));return {c,internals,body,document,host,settings,calls,progress,connection,profile,Element,tick};
 }
+// Replace fields of the setup document that the first progress read returns.
+function withSetup(f,patch){const original=f.c.api;f.c.api=async(path,payload)=>path==='/api/onboarding'&&!payload?{...await original(path,payload),...patch}:original(path,payload);}
+function setupParts(f){const root=f.c.window.onboardingRoot(),find=selector=>root.querySelector(selector);return {root,content:find('.onboarding-content'),error:find('.onboarding-error'),close:find('[data-onboarding-close]'),back:find('#onboarding-back'),skip:find('#onboarding-skip'),continue:find('#onboarding-continue')};}
+const heading=ui=>ui.content.querySelector('h3')?.textContent;
 test('one onboarding shell moves between connected inline section and standalone dialog without duplicate IDs',async()=>{
  const f=onboardingHostFixture();await f.c.window.openOnboarding({host:f.host});const shell=f.host.children[0];assert.equal(f.c.window.onboardingRoot(),f.host);assert.equal(f.c.window.onboardingIsOpen(),true);assert.equal(f.host.hidden,false);assert.equal(f.host.querySelectorAll('dialog').length,0);
  await f.c.window.openOnboarding();const modal=f.document.querySelector('#onboarding-dialog');assert.equal(modal.children[0],shell);assert.equal(f.host.hidden,true);assert.equal(modal.open,true);assert.equal(f.c.window.closeOnboarding({host:f.host}),false);assert.equal(modal.open,true);
@@ -333,38 +326,23 @@ test('returning from an enabled schedule and choosing On demand keeps truthful s
  assert.equal(f.c.state.skillSchedules['new-skill'].enabled,true);assert.ok(f.host.querySelectorAll('button').some(node=>node.textContent==='Configure schedule'));assert.equal(f.calls.some(call=>call.path==='/api/skills/schedule'),false);
 });
 
-function localChoiceFocusFixture(){
- const document={body:{tagName:'BODY'},activeElement:null};document.activeElement=document.body;
- class Element{
-  constructor(tag,text='',cls=''){Object.assign(this,{tagName:tag.toUpperCase(),textContent:text||'',className:cls,children:[],attrs:{},dataset:{},_disabled:false});}
-  append(...children){this.children.push(...children);}
-  setAttribute(key,value){this.attrs[key]=value;}
-  closest(){return null;}
-  focus(){if(!this.disabled)document.activeElement=this;}
-  set disabled(value){this._disabled=value;if(value&&document.activeElement===this)document.activeElement=document.body;}
-  get disabled(){return this._disabled;}
- }
- const content=new Element('main'),back=new Element('button','Back'),close=new Element('button','Close'),next=new Element('button','Continue'),nodes=new Map([['#onboarding-back',back],['#onboarding-continue',next]]),calls=[];
- const extraControls=[],controls=()=>[back,close,next,...extraControls,...content.children.flatMap(node=>node.children)];
- const root={open:true,attrs:{},setAttribute(key,value){this.attrs[key]=value;},querySelectorAll:controls,querySelector:()=>close};
- const c=onboardingTestContext({document,node:(...args)=>new Element(...args),content,dialog:root,actionPending:false,documentState:{progress:{step:'assistant'}},$:id=>nodes.get(id),showError:error=>calls.push(['error',error.message]),preference:async patch=>calls.push(['preference',patch]),next:async()=>calls.push(['next'])});
- vm.runInContext(source.slice(source.indexOf(' async function runAction('),source.indexOf(' const showError=')),c);
- vm.runInContext(source.slice(source.indexOf(' function paragraph('),source.indexOf(' function choices(')),c);
- // The real footer factory keeps the existing serialized Continue owner.
- vm.runInContext("globalThis.commitButton=button('Continue',()=>continueAction(),true)",c);extraControls.push(c.commitButton);
- return {c,document,root,content,next,calls,group:()=>content.children.find(node=>node.attrs.role==='group')};
-}
 test('local assistant and editor choices preserve native keyboard focus and commit only from Continue',async()=>{
  for(const [key,items]of [['defaultAgent',[{id:'claude',label:'Claude'},{id:'codex',label:'Codex'}]],['editor',[{id:'zed',label:'Zed'},{id:'cursor',label:'Cursor'}]]]){
-  const f=localChoiceFocusFixture();f.c.confirmChoice(items,items[0].id,key,'Choose a tool');const group=f.group(),choice=group.children[1];choice.focus();choice.onclick();await Promise.resolve();
-  assert.equal(f.document.activeElement,choice);assert.equal(choice.disabled,false);assert.equal(choice.attrs['aria-pressed'],'true');assert.equal(group.children[0].attrs['aria-pressed'],'false');assert.equal(f.next.textContent,'Use '+items[1].label);assert.ok(group.className.includes('ui-segmented'));assert.equal(f.root.attrs['aria-busy'],undefined);assert.equal(f.c.actionPending,false);assert.equal(f.calls.length,0);
-  let finish;f.c.preference=async patch=>{f.calls.push(['preference',patch]);await new Promise(resolve=>finish=resolve);};f.c.commitButton.onclick();assert.equal(f.c.actionPending,true);assert.equal(choice.disabled,true);assert.equal(f.c.commitButton.disabled,true);assert.equal(f.calls[0][1][key],items[1].id);f.c.commitButton.onclick();assert.equal(f.calls.length,1);finish();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.c.actionPending,false);assert.equal(choice.disabled,false);assert.deepEqual(f.calls.at(-1),['next']);
+  const f=onboardingHostFixture({step:key==='editor'?'editor':'assistant'}),ob=f.internals;withSetup(f,{assistants:items.map(item=>({...item,installed:true})),editors:items.map(item=>({...item,installed:true,diffSupported:true}))});f.c.setting=(name,fallback)=>name===key?items[0].id:fallback;
+  await f.c.window.openOnboarding();const ui=setupParts(f),group=ui.content.children.find(node=>node.attrs.role==='group'),choice=group.children[1],busy=ui.root.attrs['aria-busy'];choice.focus();choice.onclick();await Promise.resolve();
+  assert.equal(f.document.activeElement,choice);assert.equal(choice.disabled,false);assert.equal(choice.attrs['aria-pressed'],'true');assert.equal(group.children[0].attrs['aria-pressed'],'false');assert.equal(ui.continue.textContent,'Use '+items[1].label);assert.ok(group.className.includes('ui-segmented'));assert.equal(ui.root.attrs['aria-busy'],busy);assert.equal(ob.actionPending,false);assert.equal(decisions(f).length,0);
+  const original=f.c.api,patches=[];let finish;f.c.api=async(path,payload)=>{if(path==='/api/settings'&&payload){patches.push(payload.patch);await new Promise(resolve=>finish=resolve);}return original(path,payload);};
+  ui.continue.onclick();assert.equal(ob.actionPending,true);assert.equal(choice.disabled,true);assert.equal(ui.continue.disabled,true);await f.tick();assert.equal(patches[0][key],items[1].id);ui.continue.onclick();await f.tick();assert.equal(patches.length,1);
+  finish();for(let spin=0;ob.actionPending&&spin<20;spin++)await f.tick();assert.equal(ob.actionPending,false);assert.equal(ui.continue.disabled,false);assert.deepEqual(decisions(f).map(call=>call.payload.status),[undefined,'complete']);
  }
 });
-test('local choices ignore pending, read-only and obsolete setup handlers without saving or changing the footer',()=>{
+test('local choices ignore pending, read-only and obsolete setup handlers without saving or changing the footer',async()=>{
  for(const mode of ['pending','read-only','closed','reopened']){
-  const f=localChoiceFocusFixture();f.c.confirmChoice([{id:'claude',label:'Claude'},{id:'codex',label:'Codex'}],'claude','defaultAgent','Choose a tool');const group=f.group();if(mode==='pending')f.c.actionPending=true;if(mode==='read-only')f.c.documentState.progressReadOnly=true;if(mode==='closed')f.root.open=false;if(mode==='reopened')f.c.openGeneration++;
-  group.children[1].onclick();assert.equal(group.children[0].attrs['aria-pressed'],'true',mode);assert.equal(group.children[1].attrs['aria-pressed'],'false',mode);assert.equal(f.next.textContent,'Use Claude',mode);assert.equal(f.calls.length,0,mode);
+  const f=onboardingHostFixture(),ob=f.internals;withSetup(f,{assistants:[{id:'claude',label:'Claude',installed:true},{id:'codex',label:'Codex',installed:true}],...mode==='read-only'?{progressReadOnly:true,progressError:'Unsupported setup version.'}:{}});f.c.setting=(key,fallback)=>key==='defaultAgent'?'claude':fallback;
+  // A read-only setup paints no question, so ask it directly.
+  await f.c.window.openOnboarding();const ui=setupParts(f);if(mode==='read-only')ob.confirmChoice([{id:'claude',label:'Claude'},{id:'codex',label:'Codex'}],'claude','defaultAgent','Choose a tool');const group=ui.content.children.find(node=>node.attrs.role==='group');
+  if(mode==='pending')void ob.runAction(()=>new Promise(()=>{}));if(mode==='closed')ui.root.open=false;if(mode==='reopened'){f.c.window.closeOnboarding();await f.c.window.openOnboarding();}
+  group.children[1].onclick();assert.equal(group.children[0].attrs['aria-pressed'],'true',mode);assert.equal(group.children[1].attrs['aria-pressed'],'false',mode);assert.equal(ui.continue.textContent,'Use Claude',mode);assert.equal(decisions(f).length,0,mode);
  }
 });
 
