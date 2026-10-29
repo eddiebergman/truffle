@@ -37,7 +37,13 @@ function browserContext(globals={}){
  const raw=vm.createContext(globals);
  const proxy=new Proxy(raw,{
   get(target,key){return typeof key==='string'&&identifier.test(key)&&key!==slot?readGlobal(target,key):Reflect.get(target,key);},
-  set(target,key,value){if(typeof key==='string'&&identifier.test(key)&&key!==slot)writeGlobal(target,key,value);else Reflect.set(target,key,value);return true;},
+  set(target,key,value){
+   if(typeof key!=='string'||!identifier.test(key)||key===slot)return Reflect.set(target,key,value);
+   writeGlobal(target,key,value);
+   // Keep a shadowed property in step, so a later load does not restore a stale value.
+   if(Object.hasOwn(target,key))target[key]=value;
+   return true;
+  },
  });
  raws.set(proxy,raw);
  return proxy;
