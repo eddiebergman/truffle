@@ -10,7 +10,7 @@ Establish which installed build and service the user is actually running before 
 ## Measure the reported interaction
 
 - Open **Logs → UI performance → Start recording**. Reproduce the slow action several times, then return to Logs and refresh the report. It identifies the native build profile, item count, CPU render times, service round trips, and approximate input-to-next-frame times. Stop recording afterwards. It stores only bounded numeric samples in memory. `truffle:render` also appears in the engine's User Timing timeline.
-- Use `uv run --no-project .agents/skills/truffle-performance/scripts/benchmark_service.py` from the repo root for a read-only cache baseline. It reads state without syncing or launching an agent. It reports bytes, counts, JSON parsing, and warm/cold latency. It does not print work titles or credentials.
+- Use `node .claude/skills/truffle-performance/scripts/benchmark_service.mjs` from the repo root for a read-only cache baseline. It reads state without syncing or launching an agent. It reports bytes, counts, JSON parsing, and warm/cold latency. It does not print work titles or credentials.
 - A tool's click/screenshot/accessibility call duration includes automation and accessibility traversal; it is not an app latency measurement. Use runtime timings and visible results. Avoid dumping thousands of accessibility rows while profiling.
 
 Separate CPU work from waiting. A fast HTTP read with a slow native IPC request points to IPC/serialization/queueing; a fast JavaScript render with slow presentation points to layout, paint, or native frame scheduling. Agent actions have separate cmux inventory or embedded PTY launch costs and should not block hover or navigation. Do not launch real agents merely to benchmark the dashboard.
