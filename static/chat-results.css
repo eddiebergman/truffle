@@ -51,13 +51,6 @@
   color: var(--muted);
 }
 
-.chat-search-recommended {
-  font-size: 11px;
-  border: 1px solid var(--accent);
-  padding: 1px 7px;
-  border-radius: 20px;
-}
-
 .chat-search-reason {
   font-size: 12px;
 }
@@ -75,6 +68,10 @@
 }
 
 .chat-search-recommended {
+  font-size: 11px;
+  border: 1px solid var(--accent);
+  padding: 1px 7px;
+  border-radius: 20px;
   border-color: var(--green);
   color: var(--green);
 }
