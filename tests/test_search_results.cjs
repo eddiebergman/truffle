@@ -1,13 +1,11 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs'),vm=require('node:vm');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs');
 function fixture(items=[]){
  const rendered=[],hooks=[];
- const c=vm.createContext({source:'chat-results',selectedAgentKey:'',state:{sessions:[]},sessionStorage:{getItem:()=>null},registerRenderHook:(name,run,options)=>hooks.push({name,run,options}),allItems:()=>items,workReference:item=>item.reference||'',renderRow:item=>{rendered.push(item);return item;}});
- const app=fs.readFileSync('static/app.js','utf8');
- vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function workViewAllows(')),c);
- const results=fs.readFileSync('static/chat-results.js','utf8');
- vm.runInContext(results.slice(0,results.indexOf('new MutationObserver(')),c);
+ const c=browserContext({source:'chat-results',selectedAgentKey:'',state:{sessions:[]},sessionStorage:{getItem:()=>null},registerRenderHook:(name,run,options)=>hooks.push({name,run,options}),allItems:()=>items,workReference:item=>item.reference||'',renderRow:item=>{rendered.push(item);return item;}});
+ loadScripts(c,['static/client.js','static/app.js']);
+ loadScripts(c,'static/chat-results.js');
  return {c,rendered,hooks,match:(row,query)=>c.resultSearchMatches(row,query)};
 }
 const work=item=>({type:'work',id:item.id,item});
@@ -48,9 +46,9 @@ test('displayed results actually retain a detail-only result when the filter inp
  }
  const item={id:'linear:ticket',source:'linear',title:'Investigate regression',detail:'Failure in thinking-v2'},f=fixture([item]);
  const list=new Node('main'),title=new Node('h1');
- Object.assign(f.c,{$:selector=>selector==='#work-list'?list:selector==='#page-title'?title:null,el:(...args)=>new Node(...args),requestAnimationFrame:callback=>callback(),renderRow:row=>{const node=new Node('article');node.workId=row.id;return node;}});
+ Object.assign(f.c,{document:{querySelector:selector=>selector==='#work-list'?list:selector==='#page-title'?title:null},el:(...args)=>new Node(...args),requestAnimationFrame:callback=>callback(),renderRow:row=>{const node=new Node('article');node.workId=row.id;return node;}});
  f.c.result={type:'display-items',title:'Thinking investigation',items:[work(item)],recommended:null,reason:''};
- vm.runInContext('chatSearchPage={command:result,scroll:0};renderChatSearchResults();',f.c);
+ evaluate(f.c,'chatSearchPage={command:result,scroll:0};renderChatSearchResults();');
  const form=list.children[0],input=form.children[0],matches=list.children[2];
  assert.equal(matches.children.length,1);input.value='thinkingv2';input.oninput();assert.equal(matches.children.length,1);assert.equal(matches.children[0].workId,item.id);
  input.value='unrelatedzzzz';input.oninput();assert.equal(matches.children.length,0);
@@ -124,7 +122,7 @@ test('mixed result Back restores its local filter and scroll without rewriting t
  const f=fixture(),list=new Node('main'),title=new Node('h1'),search={value:''},session={id:'chat-thinking',title:'Daily notes',cwd:'/work/thinking-v2'};
  const command={type:'display-items',title:'Selected investigation',items:[{type:'chat',id:session.id,item:session},work({id:'linear:unrelated',title:'Other ticket'})],recommended:null,reason:''};
  const descendants=node=>[node,...node.children.flatMap(descendants)];let saved;
- Object.assign(f.c,{source:'chat-results',appChatCommand:value=>value,loadInventory:async()=>{},candidateForRecord:()=>null,liveCandidates:()=>[],selectAgent:record=>{assert.equal(record,session);f.c.source='agents';},updateChatResultsBack:()=>{},persist(){},render:()=>f.c.renderChatSearchResults(),$:selector=>selector==='#work-list'?list:selector==='#page-title'?title:selector==='#search'?search:descendants(list).find(node=>'#'+node.id===selector),el:(...args)=>new Node(...args),renderRow:()=>new Node('article'),agentName:agent=>agent||'Agent',requestAnimationFrame:callback=>callback()});
+ Object.assign(f.c,{source:'chat-results',appChatCommand:value=>value,loadInventory:async()=>{},candidateForRecord:()=>null,liveCandidates:()=>[],selectAgent:record=>{assert.equal(record,session);f.c.source='agents';},updateChatResultsBack:()=>{},persist(){},render:()=>f.c.renderChatSearchResults(),document:{querySelector:selector=>selector==='#work-list'?list:selector==='#page-title'?title:selector==='#search'?search:descendants(list).find(node=>'#'+node.id===selector)},el:(...args)=>new Node(...args),renderRow:()=>new Node('article'),agentName:agent=>agent||'Agent',requestAnimationFrame:callback=>callback()});
  f.c.state.sessions=[session];f.c.sessionStorage.setItem=(_,value)=>{saved=JSON.parse(value);};
  f.c.showChatResults(command);const initial=JSON.stringify(command),input=list.children[0].children[0];
  input.value='thinkingv2';input.oninput();let matches=list.children[2];assert.equal(matches.children.length,1);assert.equal(saved.filter,'thinkingv2');assert.equal(saved.command.query,undefined);
@@ -142,7 +140,7 @@ function pendingResultsFixture(){
   setAttribute(){}
  }
  const f=fixture(),list=new Node('main'),title=new Node('h1'),search={value:''},requests=[],opened=[];
- Object.assign(f.c,{source:'chat-results',appChatCommand:value=>value,persist(){},render:()=>f.c.renderChatSearchResults(),$:selector=>selector==='#work-list'?list:selector==='#page-title'?title:selector==='#search'?search:null,el:(...args)=>new Node(...args),requestAnimationFrame:callback=>callback(),api:(_,args)=>new Promise((resolve,reject)=>requests.push({args,resolve,reject})),candidateForRecord:()=>null,liveCandidates:()=>[],updateChatResultsBack(){},selectAgent:record=>opened.push(record.id)});
+ Object.assign(f.c,{source:'chat-results',appChatCommand:value=>value,persist(){},render:()=>f.c.renderChatSearchResults(),document:{querySelector:selector=>selector==='#work-list'?list:selector==='#page-title'?title:selector==='#search'?search:null},el:(...args)=>new Node(...args),requestAnimationFrame:callback=>callback(),api:(_,args)=>new Promise((resolve,reject)=>requests.push({args,resolve,reject})),candidateForRecord:()=>null,liveCandidates:()=>[],updateChatResultsBack(){},selectAgent:record=>opened.push(record.id)});
  f.c.showChatResults({type:'chat-results',query:'alpha',chats:[],total:0,recommendedId:'',reason:''});
  return {...f,list,requests,opened,form:list.children[0],input:list.children[0].children[0],status:list.children[1],submit:()=>list.children[0].onsubmit({preventDefault(){}})};
 }
@@ -155,13 +153,13 @@ test('a pending chat search captures its query and cannot replace a newer page o
   if(change==='detach')f.form.isConnected=false;
   f.requests[0].resolve({chats:[{id:'alpha-chat',title:'Alpha',cwd:'/work'}],total:1});await pending;
   assert.equal(f.c.source,change==='navigate'?'github':'chat-results');
-  assert.notEqual(vm.runInContext('chatSearchPage.command.chats[0]?.id',f.c),'alpha-chat',change);
+  assert.notEqual(evaluate(f.c,'chatSearchPage.command.chats[0]?.id'),'alpha-chat',change);
   if(change==='edit')assert.equal(f.input.value,'beta');
  }
 });
 test('a current chat search renders its result while obsolete errors stay off the page',async()=>{
  const current=pendingResultsFixture(),pending=current.submit();current.requests[0].resolve({chats:[{id:'alpha-chat',title:'Alpha',cwd:'/work'}],total:1});await pending;
- assert.equal(vm.runInContext('chatSearchPage.command.query',current.c),'alpha');assert.equal(vm.runInContext('chatSearchPage.command.chats[0].id',current.c),'alpha-chat');
+ assert.equal(evaluate(current.c,'chatSearchPage.command.query'),'alpha');assert.equal(evaluate(current.c,'chatSearchPage.command.chats[0].id'),'alpha-chat');
  for(const obsolete of [false,true]){
   const f=pendingResultsFixture(),failed=f.submit();if(obsolete)f.input.value='beta';f.requests[0].reject(new Error('Search unavailable'));await failed;
   assert.equal(f.status.textContent.includes('Search unavailable'),!obsolete);assert.equal(f.form.children[1].disabled,false);
@@ -199,10 +197,10 @@ function stableResultsFixture(items=[]){
   focus(){if(this.isConnected&&!this.disabled)document.activeElement=this;}
   setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;}
  }
- document.body=new Node('body');document.activeElement=document.body;
+ document.body=new Node('body');document.activeElement=document.body;document.querySelector=selector=>$(selector);
  for(const [id,tag]of [['work-list','main'],['page-title','h1'],['search','input']]){const node=new Node(tag);node.id=id;nodes.set('#'+id,node);document.body.append(node);}
  const visit=node=>[node,...node.children.flatMap(visit)],$=selector=>nodes.get(selector)||visit(document.body).find(node=>'#'+node.id===selector)||null;
- Object.assign(f.c,{document,$,appChatCommand:command=>command,el:(...args)=>new Node(...args),persist(){},render:()=>{for(const hook of f.hooks)if(hook.options.phase==='before')hook.run();if(f.c.source==='chat-results')f.c.renderChatSearchResults();},requestAnimationFrame:callback=>frames.push(callback),api:async(path,payload)=>new Promise((resolve,reject)=>requests.push({path,payload,resolve,reject})),renderRow:item=>{const row=new Node('article','work-row',item.title);row.dataset.workId=item.id;row.status=item.status;return row;},sessionStorage:{getItem:()=>null,setItem:(key,value)=>stored.set(key,value)},candidateForRecord:()=>null,liveCandidates:()=>[],agentName:agent=>agent||'Agent'});
+ Object.assign(f.c,{document,appChatCommand:command=>command,el:(...args)=>new Node(...args),persist(){},render:()=>{for(const hook of f.hooks)if(hook.options.phase==='before')hook.run();if(f.c.source==='chat-results')f.c.renderChatSearchResults();},requestAnimationFrame:callback=>frames.push(callback),api:async(path,payload)=>new Promise((resolve,reject)=>requests.push({path,payload,resolve,reject})),renderRow:item=>{const row=new Node('article','work-row',item.title);row.dataset.workId=item.id;row.status=item.status;return row;},sessionStorage:{getItem:()=>null,setItem:(key,value)=>stored.set(key,value)},candidateForRecord:()=>null,liveCandidates:()=>[],agentName:agent=>agent||'Agent'});
  return {...f,Node,document,nodes,$,requests,stored,flush:()=>{while(frames.length)frames.shift()();},show:command=>{f.c.showChatResults(command);while(frames.length)frames.shift()();},form:()=>$('#work-list').children[0],input:()=>$('#work-list').children[0].children[0],submit:()=>$('#work-list').children[0].onsubmit({preventDefault(){}})};
 }
 const emptySearch=query=>({type:'chat-results',query,chats:[],total:0,recommendedId:'',reason:''});
@@ -216,7 +214,7 @@ test('chat-search unsent text and native selection survive refresh without becom
  const f=stableResultsFixture();f.show(emptySearch('submitted'));const input=f.input(),form=f.form(),submit=form.onsubmit;input.value='unsent Ω text';input.focus();input.setSelectionRange(2,7);input.compositionActive=true;const writes=input.valueWrites;f.c.render();f.flush();assert.equal(f.input(),input);assert.equal(f.form(),form);assert.equal(form.onsubmit,submit);assert.equal(input.value,'unsent Ω text');assert.equal(input.valueWrites,writes);assert.equal(input.selectionStart,2);assert.equal(input.selectionEnd,7);assert.equal(input.compositionActive,true);assert.equal(f.document.activeElement,input);assert.equal(JSON.parse(f.stored.get('truffle-chat-results')).command.query,'submitted');
 });
 test('a pending actual search remains connected and singleflight through repeated unrelated renders then resolves its captured query once',async()=>{
- const f=stableResultsFixture();f.show(emptySearch('old'));const form=f.form(),input=f.input();input.value='new query';input.focus();const pending=f.submit();assert.equal(form.children[1].disabled,true);assert.equal(form.attrs['aria-busy'],'true');f.c.render();f.c.render();const duplicate=f.submit();assert.equal(f.requests.length,1);assert.equal(f.form(),form);assert.equal(form.isConnected,true);assert.equal(f.input(),input);assert.equal(form.children[1].disabled,true);assert.equal(f.requests.length,1);assert.equal(f.requests[0].payload.args.query,'new query');f.requests[0].resolve({chats:[{id:'match',title:'New query match',cwd:'/work'}],total:1});await Promise.all([pending,duplicate]);f.flush();assert.equal(vm.runInContext('chatSearchPage.command.query',f.c),'new query');assert.equal(vm.runInContext('chatSearchPage.command.chats[0].id',f.c),'match');assert.notEqual(f.form(),form);assert.equal(f.requests.length,1);
+ const f=stableResultsFixture();f.show(emptySearch('old'));const form=f.form(),input=f.input();input.value='new query';input.focus();const pending=f.submit();assert.equal(form.children[1].disabled,true);assert.equal(form.attrs['aria-busy'],'true');f.c.render();f.c.render();const duplicate=f.submit();assert.equal(f.requests.length,1);assert.equal(f.form(),form);assert.equal(form.isConnected,true);assert.equal(f.input(),input);assert.equal(form.children[1].disabled,true);assert.equal(f.requests.length,1);assert.equal(f.requests[0].payload.args.query,'new query');f.requests[0].resolve({chats:[{id:'match',title:'New query match',cwd:'/work'}],total:1});await Promise.all([pending,duplicate]);f.flush();assert.equal(evaluate(f.c,'chatSearchPage.command.query'),'new query');assert.equal(evaluate(f.c,'chatSearchPage.command.chats[0].id'),'match');assert.notEqual(f.form(),form);assert.equal(f.requests.length,1);
 });
 test('same-page search errors and editable drafts survive later background renders without restarting requests',async()=>{
  const f=stableResultsFixture();f.show(emptySearch('alpha'));const input=f.input(),form=f.form(),pending=f.submit();f.requests[0].reject(Error('Search temporarily unavailable'));await pending;input.value='beta draft';input.focus();f.c.render();assert.equal(f.form(),form);assert.equal(f.input(),input);assert.equal(input.value,'beta draft');assert.equal(f.$('#work-list').children[1].textContent,'Search temporarily unavailable');assert.equal(form.children[1].disabled,false);assert.equal(form.attrs['aria-busy'],'false');assert.equal(f.requests.length,1);assert.equal(f.document.activeElement,input);
@@ -229,7 +227,7 @@ test('source-away ABA, replacement command and replacement host invalidate the o
   if(mode==='host'){const host=new f.Node('main');host.id='work-list';f.$('#work-list').remove();f.document.body.append(host);f.nodes.set('#work-list',host);f.c.render();}
   if(mode==='host-still-connected'){const previous=f.$('#work-list'),host=new f.Node('main');previous.id='previous-work-list';host.id='work-list';f.document.body.append(host);f.nodes.set('#work-list',host);f.c.render();}
   if(mode==='owned-node'){old.children[0].remove();f.c.render();}
-  assert.notEqual(f.form(),old,mode);f.requests[0].resolve({chats:[{id:'obsolete',title:'Old result',cwd:'/old'}],total:1});await pending;f.flush();assert.notEqual(vm.runInContext('chatSearchPage.command.chats[0]?.id',f.c),'obsolete',mode);assert.equal(f.requests.length,1,mode);
+  assert.notEqual(f.form(),old,mode);f.requests[0].resolve({chats:[{id:'obsolete',title:'Old result',cwd:'/old'}],total:1});await pending;f.flush();assert.notEqual(evaluate(f.c,'chatSearchPage.command.chats[0]?.id'),'obsolete',mode);assert.equal(f.requests.length,1,mode);
  }
 });
 test('refreshing rows never focuses the filter over an outside or modal input',()=>{
