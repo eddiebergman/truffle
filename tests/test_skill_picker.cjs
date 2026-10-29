@@ -1,13 +1,11 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
+// Scripts the picker needs, in index.html order.
+const pickerDependencies=['static/client.js','static/app.js','static/features.js','static/skills-editor.js'];
+function pickerContext(){const context=browserContext({});loadScripts(context,[...pickerDependencies,'static/skill-picker.js']);return context;}
 test('skill picker finds abbreviations across name, description and path and prefers compatible agents',()=>{
- const root=path.join(__dirname,'..');
- const app=fs.readFileSync(path.join(root,'static/app.js'),'utf8');
- const picker=fs.readFileSync(path.join(root,'static/skill-picker.js'),'utf8');
- const context=vm.createContext({});
- vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function render() {')),context);
- vm.runInContext(picker.slice(picker.indexOf('function skillPickerMatches('),picker.indexOf('function installSkillPicker(')),context);
+ const context=pickerContext();
  const skills=[{name:'latency review',description:'Find slow paths',path:'/skills/latency/SKILL.md',agents:['claude']},{name:'latency review',description:'Find slow paths',path:'/codex/latency/SKILL.md',agents:['codex']}];
  assert.equal(context.skillPickerMatches(skills,'ltncy rvw','codex')[0].path,'/codex/latency/SKILL.md');
  assert.equal(context.skillPickerMatches(skills,'slow paths','claude').length,2);
@@ -15,9 +13,7 @@ test('skill picker finds abbreviations across name, description and path and pre
 });
 
 function picker(){
- const app=fs.readFileSync(path.join(__dirname,'../static/app.js'),'utf8'),source=fs.readFileSync(path.join(__dirname,'../static/skill-picker.js'),'utf8'),context=vm.createContext({});
- vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function render() {')),context);
- vm.runInContext(source.slice(source.indexOf('function skillPickerMatches('),source.indexOf('function installSkillPicker(')),context);return (skills,query,agent='codex')=>Array.from(context.skillPickerMatches(skills,query,agent));
+ const context=pickerContext();return (skills,query,agent='codex')=>Array.from(context.skillPickerMatches(skills,query,agent));
 }
 const skill=(name,description='',extra={})=>({name,description,path:'/Users/reviewer/.agents/skills/'+name+'/SKILL.md',agents:['codex'],...extra});
 
@@ -78,10 +74,11 @@ function installedPickerFixture(catalog,{load}={}){
  const elements=Object.fromEntries(['title','cwd','agent','command','skill','description'].map(name=>{const field=new Element(name==='agent'?'select':'input');field.label=new Element('label');return [name,field];}));
  elements.agent.value='claude';elements.cwd.value='/repo';elements.agent.options=['claude','codex'].map(value=>Object.assign(new Element('option','',value==='claude'?'Claude':'Codex'),{value}));
  const form={elements,querySelector:selector=>selector==='.dialog-heading'?heading:selector===':scope>.form-hint'?hint:save};
- const c=vm.createContext({$:selector=>selector==='#skill-editor'?dialog:form,el:(...args)=>new Element(...args),featureButton:(label,onclick,cls)=>Object.assign(new Element('button',cls,label),{onclick}),agentName:agent=>agent==='codex'?'Codex':'Claude',api:async()=>load?load():({skills:catalog}),MutationObserver:class{constructor(callback){observer=callback;}observe(){}},Node:{TEXT_NODE:3},clearTimeout(){},setTimeout(){},document:{body,get activeElement(){return active;}}});
- const owner={isCurrent:()=>dialog.open,pending:false,result:null};c.featureForms=new Map([[dialog,owner]]);const features=fs.readFileSync(path.join(__dirname,'../static/features.js'),'utf8'),editor=fs.readFileSync(path.join(__dirname,'../static/skills-editor.js'),'utf8');vm.runInContext(features.slice(features.indexOf('function featureFormMutable('),features.indexOf('function freezeFeatureForm(')),c);vm.runInContext(editor.slice(editor.indexOf('function skillEditorMutable('),editor.indexOf('function skillScheduleMutable(')),c);
- const app=fs.readFileSync(path.join(__dirname,'../static/app.js'),'utf8');vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function render() {')),c);
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/skill-picker.js'),'utf8'),c);
+ const c=browserContext({el:(...args)=>new Element(...args),featureButton:(label,onclick,cls)=>Object.assign(new Element('button',cls,label),{onclick}),agentName:agent=>agent==='codex'?'Codex':'Claude',api:async()=>load?load():({skills:catalog}),MutationObserver:class{constructor(callback){observer=callback;}observe(){}},Node:{TEXT_NODE:3},clearTimeout(){},setTimeout(){},document:{body,get activeElement(){return active;},querySelector:selector=>selector==='#skill-editor'?dialog:form}});
+ loadScripts(c,pickerDependencies);
+ const owner={isCurrent:()=>dialog.open,pending:false,result:null};c.featureForms.clear();c.featureForms.set(dialog,owner);
+ // The picker installs itself at load, so it must see this dialog and observer.
+ loadScripts(c,'static/skill-picker.js',{keepHost:['document','MutationObserver','setTimeout','clearTimeout','Node']});
  const picker=heading.afterNode,status=picker.children[2],results=picker.children[4],modes=picker.children[0];
  return {c,owner,elements,status,save,dialog,results,get active(){return active;},outside:()=>new Element('input'),async open(prefill={}){Object.assign(elements.title,{value:prefill.title||''});Object.assign(elements.skill,{value:prefill.path||''});Object.assign(elements.command,{value:prefill.command||''});if(prefill.agent)elements.agent.value=prefill.agent;dialog.open=true;observer();await Promise.resolve();await Promise.resolve();},select(index=0){results.children[index].onclick();},changeAgent(agent){elements.agent.value=agent;elements.agent.dispatch('change');},mode(mode){modes.children[mode==='file'?1:0].onclick();}};
 }
