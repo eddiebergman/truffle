@@ -1,13 +1,21 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {normalizeShareHandle,matchingSharePeople}=require('../static/sharing.js');
+const {browserContext,loadScripts,evaluate}=require('./helpers/static-script.cjs'),{FakeElement,FakeDocument}=require('./helpers/fake-dom.cjs');
+// Load the whole script. Real paint() writes the unread badge whenever data exists, so badge writes count paints.
+function sharingFixture(globals={}){
+ const mod={exports:{}},menu=new FakeElement('details'),panel=new FakeElement('div'),badge=new FakeElement('span'),nodes={'#sharing-menu':menu,'#sharing-popover':panel,'#sharing-unread':badge};let paints=0,text='';
+ Object.defineProperty(badge,'textContent',{get:()=>text,set:value=>{text=value;paints++;}});
+ const c=browserContext({module:mod,$:selector=>nodes[selector]??null,registerRenderHook(){},...globals});loadScripts(c,'static/sharing.js');
+ return {c,sharing:mod.exports.sharingPanel,menu,panel,paints:()=>paints};
+}
 test('direct names normalize without requiring a directory',()=>{assert.equal(normalizeShareHandle(' /Eddie '),'eddie');for(const value of ['../eddie','/','//eddie','first last','a/b'])assert.equal(normalizeShareHandle(value),'');});
 test('autocomplete uses names and handles, never aliases or emails',()=>{const people=[{id:'alex',name:'Alex Example',aliases:['private@example.org']},{id:'sam',name:'Samantha'},{id:'retired',name:'Old',active:false}];assert.deepEqual(matchingSharePeople(people,'saman').map(p=>p.id),['sam']);assert.deepEqual(matchingSharePeople(people,'/alex').map(p=>p.id),['alex']);assert.deepEqual(matchingSharePeople(people,'private@example'),[]);assert.deepEqual(matchingSharePeople(people,'retired'),[]);});
 
 test('inbox refresh retries a failed selected preview without importing a chat or retrying active work',async()=>{
-  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8');
   for(const status of ['failed','working','ready']){
-    const calls=[];const c=vm.createContext({data:{entries:[{id:'delivery'}]},previewId:'delivery',previewJob:'old-job',previewStarting:false,lastRendered:'',paint(){},currentJob:()=>({status}),call:async(path,payload)=>{calls.push({path,payload});return {jobId:'retried-preview'};},$:()=>({}),message(){}});
-    vm.runInContext(source.slice(source.indexOf('  async function previewEntry('),source.indexOf('  function paintPeople(')),c);
+    const calls=[];const {sharing:c}=sharingFixture({api:async(path,{name,args})=>{calls.push({path:name,payload:args});return {entries:[{id:'delivery'}],jobs:[{id:'old-job',status}],jobId:calls.some(call=>call.path==='sharing.refresh')?'retried-preview':'old-job'};}});
+    // Select the delivery with an earlier preview job, then watch only the refresh.
+    await c.call('sharing.state',{});await c.previewEntry('delivery');assert.equal(c.previewJob,'old-job');calls.length=0;
     await c.refreshInbox();assert.deepEqual(calls.map(c=>c.path),status==='failed'?['sharing.refresh','sharing.preview']:['sharing.refresh']);
     if(status==='failed'){assert.equal(c.previewJob,'retried-preview');assert.equal(calls[1].payload.deliveryId,'delivery');}
   }
@@ -24,7 +32,7 @@ test('saving a reviewed profile uses the current local configuration CAS, never 
 });
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
 function sharingSettingsFixture(){
- const fs=require('node:fs'),vm=require('node:vm'),calls=[];
+ const calls=[];
  class Node{
   constructor(tag,cls='',text=''){this.tag=tag;this.className=cls;this.textContent=text;this.children=[];this.value='';this.attributes={};this.parentNode=null;this.open=tag==='dialog';}
   append(...items){for(const item of items){item.remove?.();this.children.push(item);if(item&&typeof item==='object')item.parentNode=this;}}
@@ -38,10 +46,10 @@ function sharingSettingsFixture(){
  }
  let config={revision:2,contentHash:'a'.repeat(64),handle:'eddie',root:'gs://bucket/prefix',transport:{kind:'gcs',root:'gs://bucket/prefix'}},handler=null;
  const document=new Node('document'),dialog=new Node('dialog');document.append(dialog);
- const c=vm.createContext({structuredClone,sharingTransport,sharingProfile,parseSharingProfile,sharingConfigurationPayload,sharingTransportHint,el:(...args)=>new Node(...args),settingsButton:(text,run,cls)=>{const node=new Node('button',cls,text);node.onclick=run;return node;},Option:function(text,value){this.text=text;this.value=value;},sharingCommand:async(name,args)=>{calls.push({name,args});if(handler)return handler(name,args);if(name==='sharing.configure'){config={...config,revision:config.revision+1,contentHash:'b'.repeat(64),handle:args.handle,transport:args.transport,root:args.transport.root};}return {config:structuredClone(config)};}});
- const source=fs.readFileSync(require.resolve('../static/product-tools.js'),'utf8');vm.runInContext(source.slice(source.indexOf('const sharingSettingsDraft='),source.indexOf('let onboardingOffered=')),c);
+ const c=browserContext({structuredClone,sharingTransport,sharingProfile,parseSharingProfile,sharingConfigurationPayload,sharingTransportHint,el:(...args)=>new Node(...args),settingsButton:(text,run,cls)=>{const node=new Node('button',cls,text);node.onclick=run;return node;},Option:function(text,value){this.text=text;this.value=value;},sharingCommand:async(name,args)=>{calls.push({name,args});if(handler)return handler(name,args);if(name==='sharing.configure'){config={...config,revision:config.revision+1,contentHash:'b'.repeat(64),handle:args.handle,transport:args.transport,root:args.transport.root};}return {config:structuredClone(config)};}});
+ loadScripts(c,'static/product-tools.js');
  let panel;const walk=node=>[node,...node.children.filter(child=>child instanceof Node).flatMap(walk)];
- return {c,calls,dialog,config:()=>config,setConfig(value){config=value;},request(fn){handler=fn;},state:()=>vm.runInContext('sharingSettingsDraft',c),
+ return {c,calls,dialog,config:()=>config,setConfig(value){config=value;},request(fn){handler=fn;},state:()=>evaluate(c,'sharingSettingsDraft'),
   async render(){panel?.remove();panel=new Node('panel');dialog.append(panel);await c.renderSharingSettings(panel);return panel;},
   input(label){return walk(panel).find(node=>node.attributes['aria-label']===label);},
   button(label){return walk(panel).find(node=>node.tag==='button'&&node.textContent===label);},
@@ -138,50 +146,46 @@ test('Settings sharing Save only clears the exact submitted draft and retains st
 });
 
 test('a destination-change retry error stays visible without silently starting a new send',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),calls=[],messages=[];
- const source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8');
- const local={draftId:'draft',sendId:'failed-send',recipient:'eddie',message:'Review',revision:0,sending:false};
- const c=vm.createContext({chatDraft:()=>local,normalizeShareHandle,currentJob:()=>({status:'failed'}),$:()=>({}),call:async(path,payload)=>{calls.push({path,payload});throw new Error('Sharing destination changed. Prepare a new share instead of retrying this send.');},message:(node,text,error)=>messages.push({text,error}),paintSend(){},paint(){}});
- vm.runInContext(source.slice(source.indexOf('  async function sendDraft('),source.indexOf('  async function importEntry(')),c);
+ const calls=[],jobs=[{id:'draft',kind:'prepare',recordId:'chat',status:'ready',recentConversation:true},{id:'failed-send',kind:'send',draftId:'draft',status:'failed',recipients:['eddie'],message:'Review'}];
+ const {sharing:c}=sharingFixture({liveCandidates:()=>[],state:{sessions:[{id:'chat'}]},selectedAgentKey:'record:chat',api:async(path,{name,args})=>{calls.push({path:name,payload:args});if(name==='sharing.send')throw new Error('Sharing destination changed. Prepare a new share instead of retrying this send.');return {config:{root:'/shared'},jobs};}});
+ // The selected chat's draft restores its prepared handover and failed send from the job list.
+ await c.call('sharing.state',{});calls.length=0;const local=c.chatDraft();
  await c.sendDraft();assert.equal(calls.length,1);assert.equal(calls[0].payload.retryId,'failed-send');assert.match(local.error,/destination changed.*Prepare a new share/);assert.equal(local.sending,false);assert.equal(local.sendId,'failed-send');
 });
 
 test('sharing buttons invoke named commands and preserve visible state on failure',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8'),requests=[];
- const initial={config:{handle:'fixture'},jobs:[]},result={config:{handle:'fixture'},jobId:'prepared',jobs:[]};let reject=false,paints=0;
- const c=vm.createContext({data:initial,lastFetch:0,Date,paint(){paints++;},api:async(path,payload)=>{requests.push({path,payload});if(reject)throw new Error('Changed destination');return result;}});
- vm.runInContext(source.slice(source.indexOf('function sharingCommand('),source.indexOf('function normalizeShareHandle(')),c);
- vm.runInContext(source.slice(source.indexOf('  async function call('),source.indexOf('  async function load(')),c);
- const args={recordId:'fixture',recentConversation:false};
- assert.equal(await c.call('sharing.prepare',args),result);assert.equal(c.data,result);assert.equal(paints,1);assert.ok(c.lastFetch>0);
+ const requests=[];
+ const result={config:{handle:'fixture'},jobId:'prepared',jobs:[]};let reject=false;
+ const f=sharingFixture({api:async(path,payload)=>{requests.push({path,payload});if(reject)throw new Error('Changed destination');return result;}}),c=f.sharing;
+ const args={recordId:'fixture',recentConversation:false};assert.equal(c.lastFetch,0);
+ assert.equal(await c.call('sharing.prepare',args),result);assert.equal(c.data,result);assert.equal(f.paints(),1);assert.ok(c.lastFetch>0);
  assert.deepEqual(JSON.parse(JSON.stringify(requests[0])),{path:'/api/commands/invoke',payload:{name:'sharing.prepare',args}});
- reject=true;await assert.rejects(c.call('sharing.send',{draftId:'fixture'}),/Changed destination/);assert.equal(c.data,result);assert.equal(paints,1);
+ reject=true;await assert.rejects(c.call('sharing.send',{draftId:'fixture'}),/Changed destination/);assert.equal(c.data,result);assert.equal(f.paints(),1);
 });
 
 test('ready sharing previews load once through the same command transport',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8'),requests=[],details=new Map(),loading=new Set();
- const basic={id:'prepared',status:'ready',kind:'prepare'},detail={...basic,preview:{title:'Fixture handover'}};let paints=0;
- const c=vm.createContext({data:{jobs:[basic]},jobDetails:details,detailsLoading:loading,lastRendered:'cached',paint(){paints++;},message(){},$:()=>({}),api:async(path,payload)=>{requests.push({path,payload});return detail;}});
- vm.runInContext(source.slice(source.indexOf('function sharingCommand('),source.indexOf('function normalizeShareHandle(')),c);
- vm.runInContext(source.slice(source.indexOf('  function currentJob('),source.indexOf('  function paintSend(')),c);
+ const requests=[];
+ const basic={id:'prepared',status:'ready',kind:'prepare'},detail={...basic,preview:{title:'Fixture handover'}};
+ const f=sharingFixture({api:async(path,payload)=>{requests.push({path,payload});return payload.name==='sharing.state'?{jobs:[basic]}:detail;}}),c=f.sharing,loading=c.detailsLoading;
+ await c.call('sharing.state',{});requests.length=0;const painted=f.paints(),paints=()=>f.paints()-painted;
  c.currentJob('prepared');c.currentJob('prepared');assert.equal(requests.length,1);
  await new Promise(resolve=>setImmediate(resolve));
- assert.deepEqual(JSON.parse(JSON.stringify(requests[0])),{path:'/api/commands/invoke',payload:{name:'sharing.job',args:{id:'prepared'}}});assert.equal(c.currentJob('prepared').preview,detail.preview);assert.equal(loading.size,0);assert.equal(paints,1);assert.equal(requests.length,1);
+ assert.deepEqual(JSON.parse(JSON.stringify(requests[0])),{path:'/api/commands/invoke',payload:{name:'sharing.job',args:{id:'prepared'}}});assert.equal(c.currentJob('prepared').preview,detail.preview);assert.equal(loading.size,0);assert.equal(paints(),1);assert.equal(requests.length,1);
 });
 
 test('initial sharing command waits for the app state bootstrap',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8'),requests=[];let paints=0;
- const c=vm.createContext({state:null,data:null,loading:false,lastFetch:0,Date,menu:{open:false},$:()=>null,message(){},paint(){paints++;},sharingCommand:async(name,args)=>{requests.push(name);return {entries:[]};}});
- vm.runInContext(source.slice(source.indexOf('  async function load('),source.indexOf('  function field(')),c);
+ const requests=[];
+ const f=sharingFixture({state:null,sharingCommand:async(name,args)=>{requests.push(name);return {entries:[]};}}),c=f.sharing;
  await c.load();assert.equal(requests.length,0);assert.equal(c.loading,false);
- c.state={};await c.load();assert.deepEqual(requests,['sharing.state']);assert.equal(paints,1);assert.equal(c.loading,false);
+ f.c.state={};await c.load();assert.deepEqual(requests,['sharing.state']);assert.equal(f.paints(),1);assert.equal(c.loading,false);
 });
 
 test('first sharing load builds from its fetched snapshot while later polls preserve the form',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../static/sharing.js'),'utf8');let builds=0,paints=0;
- const fetched={config:{revision:4},entries:[]};
- const c=vm.createContext({state:{},data:null,loading:false,lastFetch:0,Date,menu:{open:true},$:()=>null,message(){},paint(){paints++;},build(){assert.equal(c.data,fetched);builds++;},sharingCommand:async()=>fetched});
- vm.runInContext(source.slice(source.indexOf('  async function load('),source.indexOf('  function field(')),c);
- await c.load();assert.equal(builds,1);assert.equal(paints,0);
- await c.load();assert.equal(builds,1);assert.equal(paints,1);
+ const fetched={config:{revision:4},entries:[]};let builds=0;
+ const f=sharingFixture({state:{},el:(tag,cls,text)=>Object.assign(new FakeElement(tag),{className:cls||'',textContent:text||''}),liveCandidates:()=>[],selectedAgentKey:'',source:'agents',document:new FakeDocument(),sharingCommand:async()=>fetched}),c=f.sharing;
+ // build() starts by clearing the panel; the menu's loading placeholder passes children instead.
+ const replace=f.panel.replaceChildren.bind(f.panel);f.panel.replaceChildren=(...nodes)=>{if(!nodes.length){assert.equal(c.data,fetched);builds++;}replace(...nodes);};Object.defineProperty(f.panel,'lastChild',{get(){return this.children.at(-1);}});
+ // Opening the menu shows the placeholder and starts the first load. build() ends with its own paint.
+ f.menu.open=true;f.menu.listeners.toggle[0]();await new Promise(resolve=>setImmediate(resolve));assert.equal(builds,1);assert.equal(f.paints(),1);
+ await c.load();assert.equal(builds,1);assert.equal(f.paints(),2);
 });

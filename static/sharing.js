@@ -203,4 +203,5 @@ if(typeof document!=='undefined')(()=>{
   menu.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();menu.open=false;menu.querySelector('summary')?.focus();e.stopPropagation();}});
   setInterval(()=>{const working=data?.jobs?.some(j=>j.status==='working');const interval=menu.open||working?1500:60000;if(!document.hidden&&Date.now()-lastFetch>interval)void load();},1000);
   registerRenderHook('sharing:initial-load',()=>{if(!data)void load();else if(menu.open)paint();},{order:50});
+  if(typeof module!=='undefined')module.exports.sharingPanel={call,load,previewEntry,refreshInbox,currentJob,chatDraft,sendDraft,openSharingSettings,get data(){return data;},get lastFetch(){return lastFetch;},get loading(){return loading;},get previewJob(){return previewJob;},get detailsLoading(){return detailsLoading;}};
 })();
