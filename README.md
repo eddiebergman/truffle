@@ -110,7 +110,7 @@ Embedded agents inherit the service’s operating-system restrictions. Deploy th
 
 The compact UI uses Rosé Pine main, including the terminal ANSI palette. The global + starts an agent immediately; its arrow holds remembered agent and folder choices. Work links and results attach inline. The terminal’s expand button hides the surrounding panels and leaves Exit focus visible. Cmd+Shift+Enter (Ctrl+Shift+Enter on other platforms) toggles focus; Escape remains available to the agent CLI.
 
-Agents report worktrees through registration. The service records Git branch, main repo, checkout path and linked work; `register.py worktree --record … --path … --url … [--primary]` links additional checkouts without changing the resume directory unless requested. Git metadata is read on explicit registration only. See the global truffle skill for the reporting protocol.
+Agents report worktrees through registration. The service records Git branch, main repo, checkout path and linked work; `truffle-desktop worktree --record … --path … --url … [--primary]` links additional checkouts without changing the resume directory unless requested. Git metadata is read on explicit registration only. See the global truffle skill for the reporting protocol.
 
 Keyboard navigation: ⌘1–9 selects live agents; ⌘⇧Enter toggles terminal focus.
 ⌘N opens the inline fuzzy folder picker for the selected agent (Enter starts it).

@@ -1,6 +1,6 @@
 # truffle: Rust service and desktop host
 
-The active backend is Rust. It implements the existing loopback API and version-1 JSON storage; the old Python server remains in the source tree as migration reference/fallback, not the app's runtime. The small `register.py` helper remains a client for existing Claude/Codex skills. It does not own or write work state.
+The active backend is Rust. It implements the existing loopback API and version-1 JSON storage; the old Python server and its helpers were removed. Agent commands run through the installed `truffle-desktop` binary.
 
 ## Boundaries
 
@@ -36,8 +36,7 @@ Artifacts use opaque IDs. The backend validates display-file formats, size, root
 
 Run `~/code/mydash/start.command` from a regular Terminal window outside coding-agent tool sandboxes to start the Rust service. The native app connects to it on port 8765 and does not stop it when its window closes. The service does not connect to cmux.
 
-`start.command` runs the installed app's Rust binary in `--serve` mode. No Python server or uv process is needed for sync, storage, or desktop presentation. Existing agent registration commands still use the lightweight Python client through uv for compatibility.
-
+`start.command` runs the installed app's Rust binary in `--serve` mode. No Python server or uv process is needed for sync, storage, or desktop presentation.
 ## Build and run
 
 Requires Rust stable, Apple's Command Line Tools, and Node/npm for the Tauri build CLI. Node is a build dependency, not a runtime.
@@ -65,7 +64,7 @@ Close hides the native window. Clicking the Dock icon restores it. Cmd-Q quits t
 
 A separate terminal daemon owns up to 12 live PTYs. Closing the app or restarting the HTTP service does not stop them. The daemon keeps process generations and replay buffers so a replacement service can reconnect. The daemon itself and laptop shutdown still end its PTYs. Existing terminals owned by the older service cannot be migrated; this applies to launches after activation. Each PTY retains at most 2 MiB of output. Sequential 32 KiB polling and xterm write callbacks provide bounded replay/backpressure. Input and resize use authenticated fixed routes, never an arbitrary command execution API. History stores conversation identity and work links, not terminal transcripts. Existing external processes cannot be transplanted; after closing them, Resume in truffle starts their saved conversation in an embedded terminal.
 
-Launch-local Claude/Codex hooks report waiting, working, permission requests and subagent counts through runtime_hook.py. Global instructions and skill directories remain unchanged. Unknown state/counts are shown explicitly. Lifecycle metadata is advisory; live PTY/surface checks determine the active strip.
+Launch-local Claude/Codex hooks report waiting, working, permission requests and subagent counts through `truffle-desktop hook`. Global instructions and skill directories remain unchanged. Unknown state/counts are shown explicitly. Lifecycle metadata is advisory; live PTY/surface checks determine the active strip.
 
 Registered local results become private immutable snapshots under data/artifacts. Supported results include Markdown, sandboxed HTML without scripts, PNG/WebP/JPEG/SVG, CSV and truffle.table/v1 JSON tables. The skill documents registration. Schedules support daily local time or intervals, with one catch-up run or skipping missed intervals; they never replay a backlog. A completed turn means the agent stopped producing output for that turn, not proof that its task succeeded.
 
@@ -84,6 +83,6 @@ The production repository delegates PTY operations over a private Unix socket in
 
 ## Agent resource metadata and work-view tasks
 
-`resources.rs` stores bounded open resource descriptors on the associated session; `register.py resource --record ID --file REPORT` accepts a resources array with provider/kind/id identity and optional status, timestamps, grouped URIs and metadata. Receipt time is separate from observed time. Metadata does not provision or clean up cloud resources, and closing a terminal never implies cleanup. Agent launch packets and the truffle skill describe reporting at lifecycle changes.
+`resources.rs` stores bounded open resource descriptors on the associated session; `truffle-desktop resource --record ID --file REPORT` accepts a resources array with provider/kind/id identity and optional status, timestamps, grouped URIs and metadata. Receipt time is separate from observed time. Metadata does not provision or clean up cloud resources, and closing a terminal never implies cleanup. Agent launch packets and the truffle skill describe reporting at lifecycle changes.
 
 `view_context.rs` prepares an immutable bounded JSON snapshot from the exact filtered work IDs sent by the frontend, including matches beyond pagination. It records source sync times, local status overrides and reference links. Request IDs make retries reuse the saved task. Snapshot items are context; they are not all attached as assigned work.
