@@ -342,9 +342,10 @@ impl EmbeddedHost {
             .collect::<Vec<_>>();
         let has_more = start + (bytes.len() as u64) < output.end;
         let truncated = reset && output.base > 0;
+        let alive = session.alive.load(Ordering::Relaxed);
         drop(output);
         Ok(
-            json!({"generation":session.generation,"cursor":start+bytes.len()as u64,"hasMore":has_more,"bytes":bytes,"reset":reset,"truncated":truncated,"alive":session.alive.load(Ordering::Relaxed)}),
+            json!({"generation":session.generation,"cursor":start+bytes.len()as u64,"hasMore":has_more,"bytes":bytes,"reset":reset,"truncated":truncated,"alive":alive}),
         )
     }
     pub fn input(&self, id: &str, data: &str) -> Result<()> {
