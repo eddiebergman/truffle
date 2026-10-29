@@ -75,17 +75,6 @@
   display: none;
 }
 
-.sidebar .nav-item {
-  height: 32px;
-  font-size: 11px;
-  padding: 5px 8px;
-  white-space: nowrap;
-  display: grid;
-  grid-template-columns: 17px minmax(0, 1fr) auto auto;
-  gap: 10px;
-  align-items: center;
-}
-
 .sidebar .settings-button {
   font-size: 10px;
   padding: 8px;
@@ -94,10 +83,6 @@
   gap: 10px;
   text-align: left;
   justify-content: flex-start;
-}
-
-.sidebar .nav-divider {
-  margin: 9px 7px;
 }
 
 .sidebar .local-note {
@@ -126,11 +111,6 @@
   padding-top: 8px;
   font-size: 9px;
   opacity: 0.8;
-}
-
-.sync-footer .live-dot {
-  width: 5px;
-  height: 5px;
 }
 
 .toolbar {
@@ -169,11 +149,6 @@
   padding-top: 9px;
 }
 
-.terminal-gateway .button {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
 .terminal-screen {
   flex: 1;
   min-height: 0;
@@ -197,46 +172,9 @@
   padding: 4px 0;
 }
 
-.context-work-title:hover {
-  color: var(--green);
-}
-
-.context-work-meta a {
-  color: #9eaeab;
-  text-decoration: none;
-}
-
-.context-work-meta .status-pill {
-  font-size: 8px;
-  padding: 1px 5px;
-  flex: none;
-  margin-left: 0;
-}
-
 .context-work-meta .icon-button {
   font-size: 13px;
   padding: 0 4px;
-}
-
-.agent-results-section .artifact-row {
-  gap: 2px 5px;
-  grid-template-columns: minmax(0, 1fr) 30px;
-  min-height: 28px;
-  height: 28px;
-  padding: 3px 0;
-  position: relative;
-  padding-right: 20px;
-}
-
-.agent-results-section .artifact-format {
-  grid-column: 2;
-  grid-row: 1;
-  font-size: 8px;
-}
-
-.agent-results-section .artifact-sessions,
-.agent-results-section .artifact-row > .icon-button {
-  display: none;
 }
 
 .history-row {
@@ -265,10 +203,6 @@
   white-space: nowrap;
   cursor: pointer;
   font-size: 11px;
-}
-
-.history-title:hover {
-  color: var(--green);
 }
 
 .history-work,
@@ -351,10 +285,6 @@
   gap: 9px;
 }
 
-.schedule-enabled input {
-  width: 15px;
-}
-
 #artifact-viewer {
   position: fixed;
   inset: 0;
@@ -373,11 +303,6 @@
   min-height: 0;
   overflow: auto;
   max-height: none;
-}
-
-#artifact-viewer .dialog-heading,
-#artifact-viewer-actions {
-  flex-shrink: 0;
 }
 
 #artifact-preview > .briefing-body {
@@ -437,6 +362,197 @@
   .history-time {
     display: none;
   }
+}
+
+main {
+  margin-left: 0;
+}
+
+.artifact-row {
+  min-height: 34px;
+}
+
+.agent-results-section .artifact-row {
+  gap: 2px 5px;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 0;
+  position: relative;
+  padding-right: 20px;
+}
+
+/* Changes are a scan list: one compact line, with timestamps first. */
+.change-row {
+  grid-template-columns: 94px minmax(0, 1fr) minmax(0, max-content) 20px;
+  gap: 8px;
+  min-height: 27px;
+  padding: 2px 5px;
+}
+
+.change-row time.change-timestamp {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 20px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.change-timestamp small {
+  font-size: 9px;
+}
+
+.change-row .change-transitions {
+  grid-column: 3;
+  grid-row: 1;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 5px;
+  max-width: min(35vw, 350px);
+  overflow: hidden;
+}
+
+.change-row .change-transition-group {
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.change-row .change-read {
+  grid-column: 4;
+  grid-row: 1;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+#artifact-preview .artifact-image {
+  object-fit: contain;
+  margin: 0 auto;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Rosé Pine main — palette and ANSI reference: rosepinetheme.com / rose-pine/ghostty. */
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  accent-color: var(--iris);
+}
+
+.context-work-meta a {
+  color: #9eaeab;
+  text-decoration: none;
+}
+
+select,
+input,
+textarea,
+dialog,
+.button,
+.search,
+.connection-row,
+.performance-panel,
+.log-details,
+.work-picker {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.terminal-gateway .button {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+dialog input,
+dialog textarea,
+dialog label select,
+.form-tabs,
+.settings-section > code,
+.briefing-body pre {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.schedule-enabled input {
+  width: 15px;
+}
+
+.primary {
+  background: var(--iris);
+  color: var(--bg);
+  border-color: var(--iris);
+}
+
+.primary:hover {
+  background: var(--rose);
+}
+
+.brand-icon {
+  background: var(--iris);
+  color: var(--bg);
+}
+
+.brand-icon span {
+  color: #524f67;
+}
+
+.nav-divider,
+.brand .private {
+  border-color: var(--line);
+}
+
+.sidebar .nav-divider {
+  margin: 9px 7px;
+}
+
+.nav-label,
+.history-time,
+.history-work,
+.artifact-time,
+.artifact-format,
+.skill-timing,
+.agent-type,
+.change-ref,
+.change-arrow,
+.nav-item b,
+.skill-name small,
+.change-timestamp small {
+  color: var(--muted);
+}
+
+.agent-results-section .artifact-format {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 8px;
+}
+
+.nav-item {
+  color: var(--muted);
+}
+
+.sidebar .nav-item {
+  height: 32px;
+  font-size: 11px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
 }
 
 @media (max-width: 760px) {
@@ -501,42 +617,34 @@
   }
 }
 
-main {
-  margin-left: 0;
+.live-dot,
+.dot.ready {
+  background: var(--foam);
+}
+
+.sync-footer .live-dot {
+  width: 5px;
+  height: 5px;
 }
 
 .agent-context-grid .row {
   height: auto;
 }
 
-.agent-context-grid .row-bar {
-  overflow: hidden;
+.linear-mark {
+  color: var(--iris);
 }
 
-.artifact-row {
-  min-height: 34px;
+.row-title,
+.context-work-title,
+.history-title,
+.change-title,
+.artifact-title {
+  color: var(--text);
 }
 
-/* Changes are a scan list: one compact line, with timestamps first. */
-.change-row {
-  grid-template-columns: 94px minmax(0, 1fr) minmax(0, max-content) 20px;
-  gap: 8px;
-  min-height: 27px;
-  padding: 2px 5px;
-}
-
-.change-row time.change-timestamp {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  line-height: 20px;
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.change-timestamp small {
-  font-size: 9px;
+.history-title:hover {
+  color: var(--green);
 }
 
 .change-row .change-title {
@@ -545,39 +653,6 @@ main {
   font-size: 11px;
   grid-template-columns: 130px minmax(0, 1fr);
   gap: 8px;
-}
-
-.change-row .change-transitions {
-  grid-column: 3;
-  grid-row: 1;
-  flex-flow: row nowrap;
-  align-items: center;
-  gap: 5px;
-  max-width: min(35vw, 350px);
-  overflow: hidden;
-}
-
-.change-row .change-transition-group {
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.change-row .change-transitions .status-pill,
-.change-row .change-transitions .ci-pill {
-  width: auto;
-  max-width: 105px;
-  font-size: 9px;
-  line-height: 16px;
-  padding: 0 5px;
-}
-
-.change-row .change-read {
-  grid-column: 4;
-  grid-row: 1;
-  width: 20px;
-  height: 20px;
-  min-height: 20px;
-  padding: 0;
 }
 
 @media (max-width: 1000px) {
@@ -612,150 +687,6 @@ main {
   }
 }
 
-#artifact-preview .artifact-image {
-  object-fit: contain;
-  margin: 0 auto;
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-}
-
-/* Rosé Pine main — palette and ANSI reference: rosepinetheme.com / rose-pine/ghostty. */
-
-body {
-  background: var(--bg);
-  color: var(--text);
-}
-
-button,
-a,
-input,
-select,
-textarea {
-  accent-color: var(--iris);
-}
-
-select,
-input,
-textarea,
-.button,
-.search,
-dialog,
-.connection-row,
-.performance-panel,
-.log-details,
-.work-picker {
-  background: var(--panel);
-  color: var(--text);
-  border-color: var(--line);
-}
-
-dialog input,
-dialog textarea,
-dialog label select,
-.form-tabs,
-.settings-section > code,
-.briefing-body pre {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.primary {
-  background: var(--iris);
-  color: var(--bg);
-  border-color: var(--iris);
-}
-
-.primary:hover {
-  background: var(--rose);
-}
-
-.brand-icon {
-  background: var(--iris);
-  color: var(--bg);
-}
-
-.brand-icon span {
-  color: #524f67;
-}
-
-.brand .private,
-.nav-divider {
-  border-color: var(--line);
-}
-
-.nav-label,
-.nav-item b,
-.history-time,
-.history-work,
-.artifact-time,
-.artifact-format,
-.skill-name small,
-.skill-timing,
-.agent-type,
-.change-ref,
-.change-timestamp small,
-.change-arrow {
-  color: var(--muted);
-}
-
-.nav-item {
-  color: var(--muted);
-}
-
-.nav-item.active,
-.nav-item:hover:not(.active),
-.nav-item:focus-visible,
-.scope-chip[aria-pressed="true"],
-.command-result.selected,
-.form-tabs label:has(input:checked),
-.session-filter-bar button.selected,
-.work-option:has(input:checked) {
-  background: var(--overlay);
-  color: var(--text);
-}
-
-.nav-item.active b {
-  color: var(--iris);
-}
-
-.live-dot,
-.dot.ready {
-  background: var(--foam);
-}
-
-.linear-mark {
-  color: var(--iris);
-}
-
-.row-bar,
-.session-card,
-.metric,
-.hidden-items .row-bar,
-.hidden-items .session-card {
-  background: var(--panel);
-  border-color: var(--line);
-}
-
-.row:hover .row-bar,
-.session-card:hover,
-.session-card:focus-within,
-.history-row:hover,
-.skill-row:hover,
-.result-table tr:hover {
-  background: var(--overlay);
-}
-
-.row-title,
-.context-work-title,
-.history-title,
-.change-title,
-.artifact-title {
-  color: var(--text);
-}
-
 .maintenance-title,
 .change-title.maintenance-title {
   color: var(--muted);
@@ -772,17 +703,39 @@ dialog label select,
   border-color: var(--line);
 }
 
+.row-bar,
+.session-card,
+.metric,
+.hidden-items .row-bar,
+.hidden-items .session-card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.agent-context-grid .row-bar {
+  overflow: hidden;
+}
+
+.session-card:hover,
+.session-card:focus-within,
+.history-row:hover,
+.skill-row:hover,
+.result-table tr:hover,
+.row:hover .row-bar {
+  background: var(--overlay);
+}
+
 .group-count,
 .source-icon,
-.source-icon.linear,
-.source-icon.notes,
 .runtime-pill,
 .agent-link,
-.agent-link.claude,
 .agent-icon,
+.briefing-body code,
+.source-icon.linear,
+.source-icon.notes,
+.agent-link.claude,
 .agent-icon.claude,
-.agent-icon.codex,
-.briefing-body code {
+.agent-icon.codex {
   background: var(--overlay);
   color: var(--muted);
 }
@@ -792,6 +745,13 @@ dialog label select,
   background: var(--overlay);
   color: var(--muted);
   border-color: var(--line);
+}
+
+.context-work-meta .status-pill {
+  font-size: 8px;
+  padding: 1px 5px;
+  flex: none;
+  margin-left: 0;
 }
 
 .status-pill.needs-review {
@@ -804,52 +764,6 @@ dialog label select,
   background: #332c32;
   color: var(--gold);
   border-color: #574635;
-}
-
-.status-pill.blocked,
-.inline-error,
-.log-outcome.failure {
-  background: #372333;
-  color: var(--love);
-  border-color: #68364d;
-}
-
-.status-pill.done,
-.status-pill.ready-to-merge,
-.log-outcome.success {
-  background: #21313e;
-  color: var(--foam);
-  border-color: #355565;
-}
-
-.github-role.mine {
-  background: #21313e;
-  color: var(--foam);
-}
-
-.github-role.review {
-  background: #2c2540;
-  color: var(--iris);
-}
-
-.ci-pill.passed,
-.ci-mark.passed {
-  color: var(--foam);
-}
-
-.ci-pill.failed,
-.ci-mark.failed {
-  color: var(--love);
-}
-
-.ci-pill.pending,
-.ci-mark.pending {
-  color: var(--gold);
-}
-
-.icon-button:hover:not(:disabled),
-.agent-link:hover:not(:disabled) {
-  background: var(--overlay);
 }
 
 .result-table th,
@@ -895,12 +809,6 @@ dialog label select,
   border-color: transparent;
 }
 
-.live-agent:hover,
-.live-agent.selected {
-  background: var(--overlay);
-  border-color: #524f67;
-}
-
 .live-agent-words strong {
   font-size: 10px;
   font-weight: 500;
@@ -917,18 +825,6 @@ dialog label select,
   flex-shrink: 0;
   font-size: 9px;
   color: var(--muted);
-}
-
-.agent-state-dot.working {
-  background: var(--foam);
-}
-
-.agent-state-dot.waiting {
-  background: var(--iris);
-}
-
-.agent-state-dot.needs-input {
-  background: var(--gold);
 }
 
 .live-bar-empty {
@@ -1015,10 +911,6 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-.compact-launcher summary:hover {
-  background: var(--overlay);
-}
-
 .launch-popover {
   position: absolute;
   right: 0;
@@ -1058,10 +950,6 @@ summary::-webkit-details-marker {
   padding: 2px 0;
 }
 
-.launch-popover select:last-child {
-  margin-bottom: 0;
-}
-
 .agent-page .page-heading,
 .agent-page .sync-footer {
   display: none;
@@ -1093,13 +981,6 @@ summary::-webkit-details-marker {
   margin-bottom: 14px;
 }
 
-.agent-context-grid .section-heading h3 {
-  margin: 0;
-  font-size: 10px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
 .agent-results-section .artifact-title {
   grid-column: 1;
   grid-row: 1;
@@ -1121,6 +1002,10 @@ summary::-webkit-details-marker {
   white-space: nowrap;
   text-decoration: none;
   font-size: 10px;
+}
+
+.context-work-title:hover {
+  color: var(--green);
 }
 
 .context-work-meta {
@@ -1163,10 +1048,6 @@ summary::-webkit-details-marker {
   padding: 0 4px;
 }
 
-.inline-attach summary:hover {
-  color: var(--iris);
-}
-
 .inline-attach-form {
   position: absolute;
   right: 0;
@@ -1197,12 +1078,6 @@ summary::-webkit-details-marker {
   font-size: 10px;
 }
 
-.inline-attach-form .inline-error {
-  font-size: 10px;
-  margin: 6px 0 0;
-  padding: 5px;
-}
-
 #folder-dialog {
   position: fixed;
   inset: 54px 12px auto auto;
@@ -1215,40 +1090,13 @@ summary::-webkit-details-marker {
   box-shadow: 0 12px 40px #0006;
 }
 
-#folder-dialog .eyebrow,
-#folder-reason {
+#folder-reason,
+#folder-dialog .eyebrow {
   display: none;
-}
-
-#folder-dialog h2 {
-  font-size: 13px;
-}
-
-#folder-dialog label {
-  font-size: 10px;
-  margin: 10px 0;
-}
-
-#folder-dialog select,
-#folder-dialog input {
-  font-size: 11px;
-  padding: 6px;
 }
 
 #folder-dialog .dialog-actions {
   margin-top: 10px;
-}
-
-#folder-dialog .button {
-  font-size: 10px;
-  padding: 5px 9px;
-}
-
-/* Focus mode never owns Escape: the CLI keeps its native interrupt behavior. */
-.terminal-focused #agent-topbar,
-.terminal-focused .sidebar,
-.terminal-focused .agent-context-grid {
-  display: none !important;
 }
 
 .terminal-focused .shell {
@@ -1265,11 +1113,6 @@ summary::-webkit-details-marker {
   margin-bottom: 5px;
   border: 0;
   padding: 0;
-}
-
-.terminal-focused .agent-heading h2 {
-  font-size: 11px;
-  color: var(--muted);
 }
 
 @media (max-width: 1050px) {
@@ -1315,9 +1158,9 @@ summary::-webkit-details-marker {
 
 /* xterm’s vendor viewport defaults to black; fill partial-cell space with the app surface. */
 .xterm,
+.terminal-screen,
 .xterm .xterm-viewport,
-.xterm .xterm-scrollable-element,
-.terminal-screen {
+.xterm .xterm-scrollable-element {
   background-color: var(--bg) !important;
 }
 
@@ -1355,16 +1198,6 @@ summary::-webkit-details-marker {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.worktree-entry > summary small {
-  color: var(--muted);
-  font-size: 8px;
-  white-space: nowrap;
-}
-
-.worktree-entry > summary:hover {
-  color: var(--rose);
 }
 
 .worktree-path {
@@ -1450,23 +1283,9 @@ summary::-webkit-details-marker {
   font-size: 12px;
 }
 
-.location-choice:hover,
-.location-choice.selected {
-  background: #403d52;
-}
-
 .location-hint {
   font-size: 10px;
   color: var(--muted);
-}
-
-.sidebar .nav-item > span {
-  flex: 0 0 17px;
-  width: 17px;
-}
-
-.sidebar .nav-item b {
-  font-size: 10px;
 }
 
 .sidebar .nav-shortcut {
@@ -1485,20 +1304,13 @@ summary::-webkit-details-marker {
   font-size: 9px;
 }
 
-.launch-popover:has(#location-prompt:not([hidden])) #launch-folder,
-.launch-popover:has(#location-prompt:not([hidden])) label[for="launch-folder"] {
+.launch-popover:has(#location-prompt:not([hidden])) label[for="launch-folder"],
+.launch-popover:has(#location-prompt:not([hidden])) #launch-folder {
   display: none;
 }
 
-/* Noun-based shortcuts share the Find & act keycap style. */
-
-.sidebar .nav-item > b {
-  grid-column: 3;
-  margin-left: 0;
-}
-
-.sidebar .nav-shortcut,
-.agent-shortcut {
+.agent-shortcut,
+.sidebar .nav-shortcut {
   font: 9px/14px monospace;
   color: var(--muted);
   border: 1px solid var(--line);
@@ -1526,7 +1338,6 @@ summary::-webkit-details-marker {
 }
 
 /* One compact title bar: native window controls, agent tabs, and a reserved +. */
-
 .mac-titlebar .agent-topbar {
   padding-left: 90px;
 }
@@ -1568,53 +1379,11 @@ summary::-webkit-details-marker {
   height: 26px;
 }
 
-/* Tabs share the bar evenly; the selected tab grows to fit its title and the others share the rest. */
-.agent-tab:has(.selected) {
-  background: var(--overlay);
-  border-color: color-mix(in srgb, var(--muted) 45%, var(--line));
-  min-width: max-content;
-  flex-shrink: 0;
-}
-
-.agent-tab:has(.selected) .live-agent-words strong {
-  max-width: 420px;
-}
-
-.agent-tab:hover {
-  background: var(--overlay);
-}
-
-.agent-tab .live-agent {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
-  width: auto;
-  padding: 3px 23px 3px 7px;
-  gap: 6px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding-right: 23px;
-  height: 24px;
-  padding-block: 2px;
-}
-
 .agent-tab .live-agent-words {
   flex: 1 1 50px;
   min-width: 0;
   gap: 0;
   display: block;
-}
-
-.agent-tab .live-agent-words strong {
-  font-size: 10px;
-  display: block;
-  line-height: 20px;
-}
-
-.agent-tab .live-agent-words small {
-  font-size: 8px;
-  line-height: 10px;
 }
 
 .agent-tab .agent-shortcut {
@@ -1640,13 +1409,6 @@ summary::-webkit-details-marker {
   opacity: 0.65;
 }
 
-.agent-tab-close:hover,
-.agent-tab-close:focus-visible {
-  background: #524f67;
-  color: var(--text);
-  opacity: 1;
-}
-
 .agent-topbar .compact-launcher #new-note {
   font-size: 20px;
   display: grid;
@@ -1661,29 +1423,13 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-.tabs-tight .live-agent small,
-.tabs-tight .live-agent-state,
-.tabs-tight .agent-shortcut {
-  display: none;
-}
-
 .tabs-crowded .skills-inbox {
   display: none;
-}
-
-.mac-titlebar .terminal-focused #agent-topbar {
-  display: flex !important;
-  background: var(--bg);
-  border-bottom: 0;
 }
 
 .mac-titlebar .terminal-focused #agent-topbar > * {
   visibility: hidden;
   pointer-events: none;
-}
-
-.mac-titlebar .terminal-focused .shell {
-  min-height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
 }
 
 /* Primary work navigation scrolls; activity and diagnostics stay at the bottom. */
@@ -1745,6 +1491,11 @@ summary::-webkit-details-marker {
   min-width: 0;
 }
 
+.sidebar .nav-item > span {
+  flex: 0 0 17px;
+  width: 17px;
+}
+
 .source-subnav b {
   font-weight: 400;
   font-size: 9px;
@@ -1753,14 +1504,14 @@ summary::-webkit-details-marker {
   color: var(--muted);
 }
 
-.source-subnav button:hover,
-.source-subnav button.active {
-  background: var(--overlay);
-  color: var(--text);
+.sidebar .nav-item b {
+  font-size: 10px;
 }
 
-.source-subnav button.active b {
-  color: var(--iris);
+/* Noun-based shortcuts share the Find & act keycap style. */
+.sidebar .nav-item > b {
+  grid-column: 3;
+  margin-left: 0;
 }
 
 @media (max-width: 760px) {
@@ -1791,12 +1542,6 @@ summary::-webkit-details-marker {
   list-style: none;
   cursor: pointer;
   position: relative;
-}
-
-.sharing-menu > summary:hover,
-.sharing-menu[open] > summary {
-  color: var(--text);
-  background: var(--overlay);
 }
 
 #sharing-unread {
@@ -1839,11 +1584,6 @@ summary::-webkit-details-marker {
   gap: 8px;
   font-size: 12px;
   margin: 10px 0;
-}
-
-.sharing-field .ui-field {
-  min-width: 0;
-  width: 100%;
 }
 
 .sharing-popover textarea.ui-field {
@@ -1909,33 +1649,12 @@ summary::-webkit-details-marker {
   overflow: auto;
 }
 
-.sharing-person.ui-control[data-variant] {
-  display: flex;
-  justify-content: flex-start;
-  width: 100%;
-  text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
 .sharing-entry {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--line);
   padding: 5px 0;
   gap: 8px;
-}
-
-.sharing-entry-open.ui-control[data-variant] {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  background: transparent;
-  padding: 6px;
-  white-space: normal;
 }
 
 .sharing-entry strong {
@@ -1973,18 +1692,6 @@ summary::-webkit-details-marker {
   overflow: auto;
 }
 
-.sharing-popover details > summary {
-  font-size: 12px;
-  cursor: pointer;
-  margin: 8px 0;
-}
-
-.sharing-import-options .ui-field {
-  min-width: 0;
-  max-width: 100%;
-  flex: 1 1 130px;
-}
-
 .sharing-popover [hidden] {
   display: none !important;
 }
@@ -2015,15 +1722,6 @@ summary::-webkit-details-marker {
 
 .gcp-login-status > div {
   overflow-wrap: anywhere;
-}
-
-.gcp-login-status [data-status="succeeded"] {
-  color: var(--foam);
-}
-
-.gcp-login-status [data-status="failed"],
-.gcp-login-status [data-status="timed_out"] {
-  color: var(--love);
 }
 
 .gcp-login-status button {
@@ -2090,10 +1788,6 @@ summary::-webkit-details-marker {
   min-width: 0;
 }
 
-.resource-entry > summary:hover {
-  color: var(--accent);
-}
-
 .resource-entry strong {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2132,10 +1826,6 @@ summary::-webkit-details-marker {
   font-size: 11px;
 }
 
-.resource-expiry.due {
-  color: var(--warning, var(--gold));
-}
-
 .resource-metadata {
   color: var(--muted);
   margin-top: 6px;
@@ -2154,25 +1844,6 @@ summary::-webkit-details-marker {
   font-size: 11px;
   color: var(--muted);
   padding: 8px 0;
-}
-
-.agent-context-grid .work-section-toggle {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0;
-  line-height: 1;
-}
-
-.agent-context-grid .work-section-toggle:hover {
-  color: var(--text);
 }
 
 .work-section-chevron {
@@ -2242,12 +1913,6 @@ summary::-webkit-details-marker {
   outline-offset: 0;
 }
 
-.artifact-path .text-button {
-  font-size: 10px;
-  padding: 1px 3px;
-  flex-shrink: 0;
-}
-
 #artifact-viewer-actions {
   gap: 6px 12px;
   margin-bottom: 10px;
@@ -2259,15 +1924,6 @@ summary::-webkit-details-marker {
   align-items: center;
   border-top: 1px solid var(--line);
   margin-top: 5px;
-}
-
-.sidebar-utility-buttons .settings-button {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  padding: 8px 4px 8px 8px;
-  font-size: 10px;
-  white-space: nowrap;
 }
 
 .restart-panel {
@@ -2294,12 +1950,6 @@ summary::-webkit-details-marker {
   gap: 12px;
 }
 
-.restart-modes [aria-pressed="true"] {
-  color: var(--iris);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
 .restart-panel p {
   line-height: 1.5;
   margin: 7px 0;
@@ -2323,10 +1973,6 @@ summary::-webkit-details-marker {
   padding: 4px 8px;
 }
 
-.restart-panel .inline-error:empty {
-  display: none;
-}
-
 #restart-result {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2335,11 +1981,6 @@ summary::-webkit-details-marker {
 
 #restart-result[data-status="failed"] {
   color: var(--love);
-}
-
-/* A dot means attention, never ordinary activity. Keep activity text on the right. */
-.agent-state-dot.attention {
-  background: var(--gold);
 }
 
 .agent-title-input {
@@ -2381,12 +2022,6 @@ summary::-webkit-details-marker {
   min-width: 0;
 }
 
-.github-reviewer-chip:hover,
-.github-reviewer-chip:focus-visible {
-  color: var(--text);
-  background: var(--overlay);
-}
-
 .github-review-panel {
   position: fixed;
   width: 310px;
@@ -2404,10 +2039,6 @@ summary::-webkit-details-marker {
 
 .github-review-panel .section-heading {
   margin-bottom: 10px;
-}
-
-.github-review-panel .section-heading strong {
-  font-size: 12px;
 }
 
 .github-review-people {
@@ -2436,13 +2067,6 @@ summary::-webkit-details-marker {
   display: flex;
   gap: 5px;
   margin: 10px 0;
-}
-
-.github-review-panel .github-review-form input {
-  min-width: 0;
-  width: 150px;
-  min-height: 28px;
-  height: 28px;
 }
 
 .github-review-panel .button {
@@ -2484,17 +2108,6 @@ summary::-webkit-details-marker {
 
 .agent-sidebar-collapsed .agent-workspace {
   grid-template-columns: minmax(0, 1fr);
-}
-
-.agent-sidebar-collapsed .agent-context-grid {
-  display: none;
-}
-
-/* The agent sidebar uses spacing and hover feedback instead of separator rules. */
-
-.agent-context-grid
-  :is(.resource-entry, .context-work-row, .worktree-entry, .artifact-row) {
-  border-bottom: 0;
 }
 
 /* The notification belongs to the label, not an extra sidebar grid cell. */
@@ -2548,6 +2161,23 @@ summary::-webkit-details-marker {
   padding: 6px 8px;
 }
 
+/* Focus mode never owns Escape: the CLI keeps its native interrupt behavior. */
+.terminal-focused .sidebar,
+.terminal-focused .agent-context-grid,
+.terminal-focused #agent-topbar {
+  display: none !important;
+}
+
+.mac-titlebar .terminal-focused #agent-topbar {
+  display: flex !important;
+  background: var(--bg);
+  border-bottom: 0;
+}
+
+.agent-sidebar-collapsed .agent-context-grid {
+  display: none;
+}
+
 .agent-context-grid > section {
   border-top: 0;
   border-bottom: 0;
@@ -2572,62 +2202,10 @@ summary::-webkit-details-marker {
   min-width: 0;
 }
 
-.agent-context-grid .work-section-chevron {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 28px;
-  flex: none;
-  font-size: inherit;
-}
-
-.work-section-chevron .agent-control-icon {
-  width: 12px;
-  height: 12px;
-}
-
-.work-section-toggle[aria-expanded="true"] .work-section-chevron svg {
-  transform: rotate(90deg);
-}
-
-.agent-context-grid .work-section-toggle small {
-  margin: 0;
-  font-size: 9px;
-  line-height: 1;
-  font-weight: 400;
-}
-
-.agent-context-grid .inline-attach {
-  justify-self: end;
-  width: 28px;
-  height: 28px;
-}
-
-.agent-context-grid .inline-attach > summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  line-height: 1;
-  list-style: none;
-}
-
-.agent-context-grid .inline-attach > summary::-webkit-details-marker {
-  display: none;
-}
-
 /* Compact GitHub dependency tree; base PRs precede dependent branches. */
 .github-stack-row {
   margin-left: calc(var(--stack-depth, 0) * 16px);
   position: relative;
-}
-
-.github-stack-row.stack-child {
-  border-left: 1px solid var(--line);
-  padding-left: 6px;
 }
 
 .stack-parent-note {
@@ -2655,10 +2233,6 @@ summary::-webkit-details-marker {
   font-variant-numeric: tabular-nums;
 }
 
-.git-file-row:hover {
-  background: var(--overlay);
-}
-
 .git-file-path {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2677,12 +2251,6 @@ summary::-webkit-details-marker {
   margin: 0 0 8px;
 }
 
-.github-inline-stack > .group-header {
-  font-size: 10px;
-  margin: 6px 0 4px;
-  color: var(--iris);
-}
-
 .github-stack-badge {
   display: inline-block;
   flex: none;
@@ -2694,11 +2262,6 @@ summary::-webkit-details-marker {
   font-size: 10px;
   line-height: 16px;
   vertical-align: 1px;
-}
-
-.row-title.draft-title,
-.row-title.draft-title .commit-prefix {
-  color: var(--muted);
 }
 
 .row-title.draft-title .pr-title-part:hover {
@@ -2715,24 +2278,11 @@ summary::-webkit-details-marker {
   overflow: auto;
 }
 
-#command-dialog .dialog-heading {
-  margin-bottom: 12px;
-  align-items: center;
-}
-
 #command-title {
   font-size: 16px;
   margin: 0;
   font-weight: 600;
   letter-spacing: -0.3px;
-}
-
-#command-dialog .close-dialog {
-  height: 26px;
-  width: 26px;
-  padding: 0;
-  font-size: 20px;
-  border: 0;
 }
 
 #command-query {
@@ -2753,19 +2303,6 @@ summary::-webkit-details-marker {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
-
-#command-results .command-result {
-  padding: 9px 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  white-space: normal;
-  flex-shrink: 0;
-}
-
-#command-results .command-result.selected {
-  border-color: #52436b;
-  background: var(--overlay);
 }
 
 .palette-result-heading {
@@ -2797,12 +2334,6 @@ summary::-webkit-details-marker {
   font-size: 10px;
   color: var(--muted);
   margin-top: 5px;
-}
-
-.palette-result-meta .status-pill {
-  font-size: 9px;
-  padding: 0 5px;
-  min-width: 0;
 }
 
 .palette-directory {
@@ -2839,34 +2370,6 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-#command-actions > .button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  min-height: 30px;
-  font-size: 11px;
-  border-radius: 5px;
-  text-decoration: none;
-  color: var(--text);
-  line-height: 16px;
-}
-
-#command-actions > .button:focus-visible {
-  outline: 2px solid var(--iris);
-  outline-offset: 2px;
-  background: var(--overlay);
-}
-
-#command-actions > .button:hover {
-  background: var(--overlay);
-}
-
-.git-header-actions > .text-button {
-  font-size: 10px;
-  padding: 3px 4px;
-}
-
 button.git-file-row {
   border: 0;
   background: transparent;
@@ -2888,16 +2391,6 @@ button.git-file-row {
   box-sizing: border-box;
 }
 
-#diff-review-dialog[open] {
-  display: flex;
-  flex-direction: column;
-}
-
-#diff-review-dialog .dialog-heading {
-  flex-shrink: 0;
-  margin-bottom: 10px;
-}
-
 #diff-review-title {
   font-size: 14px;
   margin: 0;
@@ -2911,9 +2404,9 @@ button.git-file-row {
   gap: 12px;
 }
 
+.diff-review-notes,
 #diff-review-files,
-#diff-review-body,
-.diff-review-notes {
+#diff-review-body {
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -2933,15 +2426,211 @@ button.git-file-row {
   flex-shrink: 0;
 }
 
-.review-file.selected {
-  background: var(--overlay);
-  color: var(--iris);
-}
-
 .diff-review-notes label {
   font-size: 10px;
   color: var(--muted);
   margin: 0 0 5px;
+}
+
+.nav-item.active,
+.nav-item:focus-visible,
+.scope-chip[aria-pressed="true"],
+.command-result.selected,
+.session-filter-bar button.selected,
+.work-option:has(input:checked),
+.form-tabs label:has(input:checked),
+.nav-item:hover:not(.active) {
+  background: var(--overlay);
+  color: var(--text);
+}
+
+.nav-item.active b {
+  color: var(--iris);
+}
+
+.inline-error,
+.status-pill.blocked,
+.log-outcome.failure {
+  background: #372333;
+  color: var(--love);
+  border-color: #68364d;
+}
+
+.status-pill.done,
+.status-pill.ready-to-merge,
+.log-outcome.success {
+  background: #21313e;
+  color: var(--foam);
+  border-color: #355565;
+}
+
+.github-role.mine {
+  background: #21313e;
+  color: var(--foam);
+}
+
+.github-role.review {
+  background: #2c2540;
+  color: var(--iris);
+}
+
+.ci-pill.passed,
+.ci-mark.passed {
+  color: var(--foam);
+}
+
+.ci-pill.failed,
+.ci-mark.failed {
+  color: var(--love);
+}
+
+.ci-pill.pending,
+.ci-mark.pending {
+  color: var(--gold);
+}
+
+.live-agent:hover,
+.live-agent.selected {
+  background: var(--overlay);
+  border-color: #524f67;
+}
+
+.agent-state-dot.working {
+  background: var(--foam);
+}
+
+.agent-state-dot.waiting {
+  background: var(--iris);
+}
+
+.agent-state-dot.needs-input {
+  background: var(--gold);
+}
+
+.agent-context-grid .section-heading h3 {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.inline-attach-form .inline-error {
+  font-size: 10px;
+  margin: 6px 0 0;
+  padding: 5px;
+}
+
+#folder-dialog label {
+  font-size: 10px;
+  margin: 10px 0;
+}
+
+.location-choice:hover,
+.location-choice.selected {
+  background: #403d52;
+}
+
+/* Tabs share the bar evenly; the selected tab grows to fit its title and the others share the rest. */
+.agent-tab:has(.selected) {
+  background: var(--overlay);
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--line));
+  min-width: max-content;
+  flex-shrink: 0;
+}
+
+.agent-tab:hover {
+  background: var(--overlay);
+}
+
+.agent-tab .live-agent {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  width: auto;
+  padding: 3px 23px 3px 7px;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-right: 23px;
+  height: 24px;
+  padding-block: 2px;
+}
+
+.source-subnav button.active b {
+  color: var(--iris);
+}
+
+.sharing-field .ui-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.sharing-import-options .ui-field {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 130px;
+}
+
+.artifact-path .text-button {
+  font-size: 10px;
+  padding: 1px 3px;
+  flex-shrink: 0;
+}
+
+.sidebar-utility-buttons .settings-button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 8px 4px 8px 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.restart-panel .inline-error:empty {
+  display: none;
+}
+
+.agent-context-grid .work-section-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 28px;
+  flex: none;
+  font-size: inherit;
+}
+
+.work-section-chevron .agent-control-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.agent-context-grid .inline-attach {
+  justify-self: end;
+  width: 28px;
+  height: 28px;
+}
+
+.github-stack-row.stack-child {
+  border-left: 1px solid var(--line);
+  padding-left: 6px;
+}
+
+#command-results .command-result.selected {
+  border-color: #52436b;
+  background: var(--overlay);
+}
+
+.palette-result-meta .status-pill {
+  font-size: 9px;
+  padding: 0 5px;
+  min-width: 0;
+}
+
+.git-header-actions > .text-button {
+  font-size: 10px;
+  padding: 3px 4px;
 }
 
 .diff-review-notes textarea {
@@ -2955,6 +2644,45 @@ button.git-file-row {
   margin: 5px 0 12px;
   font-size: 11px;
   padding: 5px 8px;
+}
+
+#folder-dialog .button {
+  font-size: 10px;
+  padding: 5px 9px;
+}
+
+#command-dialog .close-dialog {
+  height: 26px;
+  width: 26px;
+  padding: 0;
+  font-size: 20px;
+  border: 0;
+}
+
+#command-results .command-result {
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  white-space: normal;
+  flex-shrink: 0;
+}
+
+#command-actions > .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  min-height: 30px;
+  font-size: 11px;
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--text);
+  line-height: 16px;
+}
+
+#diff-review-dialog[open] {
+  display: flex;
+  flex-direction: column;
 }
 
 .review-comment {
@@ -3034,18 +2762,6 @@ button.git-file-row {
   height: 12px;
 }
 
-.agent-tab:hover .agent-tab-snooze,
-.agent-tab:focus-within .agent-tab-snooze {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.agent-tab-snooze:hover,
-.agent-tab-snooze:focus-visible {
-  background: #524f67;
-  color: var(--text);
-}
-
 .snoozed-agents {
   position: relative;
   flex: 0 0 auto;
@@ -3068,12 +2784,6 @@ button.git-file-row {
 
 .snoozed-agents > summary::-webkit-details-marker {
   display: none;
-}
-
-.snoozed-agents > summary:hover,
-.snoozed-agents[open] > summary {
-  background: var(--overlay);
-  color: var(--iris);
 }
 
 .snoozed-agent-list {
@@ -3126,8 +2836,8 @@ button.git-file-row {
   max-width: 100%;
 }
 
-.snoozed-agent-open small,
-.snoozed-empty {
+.snoozed-empty,
+.snoozed-agent-open small {
   font-size: 10px;
   color: var(--muted);
 }
@@ -3167,6 +2877,12 @@ button.git-file-row {
   padding: 5px 9px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.source-subnav button:hover,
+.source-subnav button.active {
+  background: var(--overlay);
+  color: var(--text);
 }
 
 .diff-review-modes button[aria-pressed="true"] {
@@ -3256,6 +2972,96 @@ button.git-file-row {
   top: 3px;
 }
 
+.agent-tab-close:hover,
+.agent-tab-close:focus-visible {
+  background: #524f67;
+  color: var(--text);
+  opacity: 1;
+}
+
+.gcp-login-status [data-status="succeeded"] {
+  color: var(--foam);
+}
+
+.gcp-login-status [data-status="failed"],
+.gcp-login-status [data-status="timed_out"] {
+  color: var(--love);
+}
+
+.resource-expiry.due {
+  color: var(--warning, var(--gold));
+}
+
+.agent-context-grid .work-section-toggle {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0;
+  line-height: 1;
+}
+
+.agent-context-grid .work-section-toggle:hover {
+  color: var(--text);
+}
+
+.restart-modes [aria-pressed="true"] {
+  color: var(--iris);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* A dot means attention, never ordinary activity. Keep activity text on the right. */
+.agent-state-dot.attention {
+  background: var(--gold);
+}
+
+.github-reviewer-chip:hover,
+.github-reviewer-chip:focus-visible {
+  color: var(--text);
+  background: var(--overlay);
+}
+
+/* The agent sidebar uses spacing and hover feedback instead of separator rules. */
+.agent-context-grid
+  :is(.resource-entry, .context-work-row, .worktree-entry, .artifact-row) {
+  border-bottom: 0;
+}
+
+.github-inline-stack > .group-header {
+  font-size: 10px;
+  margin: 6px 0 4px;
+  color: var(--iris);
+}
+
+.row-title.draft-title,
+.row-title.draft-title .commit-prefix {
+  color: var(--muted);
+}
+
+.review-file.selected {
+  background: var(--overlay);
+  color: var(--iris);
+}
+
+.agent-tab-snooze:hover,
+.agent-tab-snooze:focus-visible {
+  background: #524f67;
+  color: var(--text);
+}
+
+.agent-tab:hover .agent-tab-snooze,
+.agent-tab:focus-within .agent-tab-snooze {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .git-worktree-select {
   width: 100%;
   font-size: 10px;
@@ -3311,17 +3117,6 @@ button.git-file-row {
   flex-shrink: 0;
 }
 
-.resource-entry > summary:hover .detach-link,
-.worktree-entry > summary:hover .detach-link,
-.context-work-row:hover .detach-link,
-.detach-link:focus-visible {
-  opacity: 1;
-}
-
-.snoozed-agents.has-due > summary {
-  color: var(--gold);
-}
-
 .snooze-schedule {
   display: flex;
   gap: 5px;
@@ -3338,6 +3133,23 @@ button.git-file-row {
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 3px;
+}
+
+.launch-popover select:last-child {
+  margin-bottom: 0;
+}
+
+.github-review-panel .github-review-form input {
+  min-width: 0;
+  width: 150px;
+  min-height: 28px;
+  height: 28px;
+}
+
+#folder-dialog select,
+#folder-dialog input {
+  font-size: 11px;
+  padding: 6px;
 }
 
 .agent-menu {
@@ -3373,10 +3185,6 @@ button.git-file-row {
   border-radius: 3px;
 }
 
-.agent-menu-options > .text-button:hover {
-  background: var(--overlay);
-}
-
 .worktree-observed {
   display: block;
   color: var(--muted);
@@ -3410,13 +3218,8 @@ button.git-file-row {
   display: none;
 }
 
-.git-tree-folder > .git-file-row {
-  width: 100%;
-}
-
-.git-tree-folder > summary:hover {
-  background: var(--overlay);
-  color: var(--text);
+.agent-context-grid .inline-attach > summary::-webkit-details-marker {
+  display: none;
 }
 
 #diff-review-files {
@@ -3426,21 +3229,10 @@ button.git-file-row {
   display: block;
 }
 
-.artifact-row:hover .detach-link {
-  opacity: 1;
-}
-
 .context-stale {
   font-size: 9px;
   color: var(--gold);
   white-space: nowrap;
-}
-
-.agent-results-section .artifact-row > .detach-link {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 .agent-page .agent-heading[hidden] {
@@ -3465,6 +3257,10 @@ button.git-file-row {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.mac-titlebar .terminal-focused .shell {
+  min-height: calc(calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height));
+}
+
 .active-agent-tab {
   overflow: visible;
 }
@@ -3481,15 +3277,6 @@ button.git-file-row {
   height: 0;
 }
 
-.agent-tab .agent-menu > summary {
-  display: none;
-}
-
-.agent-tab .agent-menu .agent-control-icon {
-  width: 13px;
-  height: 13px;
-}
-
 .agent-tab .agent-menu-options {
   position: fixed;
   top: calc(var(--titlebar-height) + 3px);
@@ -3501,25 +3288,6 @@ button.git-file-row {
 .terminal-focused .embedded-terminal {
   min-height: 0;
   height: calc(calc(100dvh / var(--ui-scale, 1)) - 8px);
-}
-
-.mac-titlebar .terminal-focused .embedded-terminal {
-  height: calc(
-    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 8px
-  );
-}
-
-.sidebar .nav-item > .sidebar-icon,
-.sidebar .settings-button > .sidebar-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  color: var(--muted);
-  margin: 0;
 }
 
 .sidebar-icon svg {
@@ -3543,6 +3311,15 @@ button.git-file-row {
 .action-palette-header h2 {
   font-size: 14px;
   margin: 0;
+}
+
+.terminal-focused .agent-heading h2 {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+#folder-dialog h2 {
+  font-size: 13px;
 }
 
 #action-context {
@@ -3591,6 +3368,20 @@ button.git-file-row {
 .action-command-heading strong {
   font-size: 12px;
   font-weight: 500;
+}
+
+.agent-tab .live-agent-words strong {
+  font-size: 10px;
+  display: block;
+  line-height: 20px;
+}
+
+.github-review-panel .section-heading strong {
+  font-size: 12px;
+}
+
+.agent-tab:has(.selected) .live-agent-words strong {
+  max-width: 420px;
 }
 
 .action-command-heading kbd {
@@ -3654,10 +3445,6 @@ button.git-file-row {
   align-items: center;
 }
 
-.sidebar .nav-item.active > .sidebar-icon {
-  color: var(--text);
-}
-
 .sidebar #settings {
   gap: 8px;
   white-space: nowrap;
@@ -3667,15 +3454,6 @@ button.git-file-row {
 .sidebar #command-open {
   padding: 8px;
   gap: 10px;
-}
-
-.agent-topbar .compact-launcher summary {
-  display: grid;
-  place-items: center;
-  width: 14px;
-  height: 26px;
-  padding: 0;
-  line-height: 1;
 }
 
 .agent-topbar .skills-inbox {
@@ -3688,42 +3466,12 @@ button.git-file-row {
   border: 0;
 }
 
-.agent-topbar
-  :is(
-    #new-note,
-    #launch-options > summary,
-    .skills-inbox,
-    .sharing-menu > summary,
-    .snoozed-agents > summary
-  )
-  svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-#diff-review-dialog.quick-file-review {
-  position: fixed;
-  inset: var(--inspector-top, 48px) var(--inspector-right, 8px) auto
-    var(--inspector-left, 8px);
-  width: auto;
-  height: var(--inspector-height, 60dvh);
-  margin: 0;
-  max-height: none;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  box-shadow: 0 12px 40px #0006;
-  z-index: 45;
-  background: var(--overlay);
-  overflow: visible;
-  animation: inspect-in 0.1s ease-out;
-}
-
 .quick-file-review .diff-review-layout {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.quick-file-review #diff-review-files,
-.quick-file-review .review-file-heading {
+.quick-file-review .review-file-heading,
+.quick-file-review #diff-review-files {
   display: none;
 }
 
@@ -3774,18 +3522,6 @@ button.git-file-row {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #diff-review-dialog.quick-file-review {
-    animation: none;
-  }
-}
-
-.sidebar #connection-notice {
-  margin: 4px 0;
-
-  --notice-body-height: 80px;
-}
-
 #diff-review-composer {
   position: fixed;
   z-index: 70;
@@ -3818,23 +3554,73 @@ button.git-file-row {
   max-height: 25dvh;
 }
 
+.quick-file-review .dialog-heading {
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#artifact-viewer-actions,
+#artifact-viewer .dialog-heading {
+  flex-shrink: 0;
+}
+
+#command-dialog .dialog-heading {
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+#diff-review-dialog .dialog-heading {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+#diff-review-dialog.quick-file-review {
+  position: fixed;
+  inset: var(--inspector-top, 48px) var(--inspector-right, 8px) auto
+    var(--inspector-left, 8px);
+  width: auto;
+  height: var(--inspector-height, 60dvh);
+  margin: 0;
+  max-height: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 12px 40px #0006;
+  z-index: 45;
+  background: var(--overlay);
+  overflow: visible;
+  animation: inspect-in 0.1s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #diff-review-dialog.quick-file-review {
+    animation: none;
+  }
+}
+
+.sidebar #connection-notice {
+  margin: 4px 0;
+
+  --notice-body-height: 80px;
+}
+
 #diff-review-composer .button {
   font-size: 11px;
   padding: 5px 9px;
   margin-right: 12px;
 }
 
-.quick-file-review .dialog-heading {
-  gap: 8px;
-  margin-bottom: 6px;
+#command-actions > .button:focus-visible {
+  outline: 2px solid var(--iris);
+  outline-offset: 2px;
+  background: var(--overlay);
+}
+
+#command-actions > .button:hover {
+  background: var(--overlay);
 }
 
 .quick-file-review #diff-review-subtitle {
   display: none;
-}
-
-.quick-file-review .diff-review-footer {
-  padding-top: 5px;
 }
 
 .quick-file-review #diff-review-send {
@@ -3858,6 +3644,10 @@ button.git-file-row {
   position: relative;
 }
 
+.quick-file-review .diff-review-footer {
+  padding-top: 5px;
+}
+
 #diff-review-drawer {
   flex-shrink: 0;
 }
@@ -3871,18 +3661,6 @@ button.git-file-row {
   flex-shrink: 0;
   font-size: 11px;
   white-space: nowrap;
-}
-
-#diff-review-history > summary {
-  list-style: none;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 5px 0;
-}
-
-#diff-review-history[open] > summary {
-  color: var(--text);
 }
 
 .review-history-choice {
@@ -3937,26 +3715,6 @@ button.git-file-row {
   overflow-wrap: anywhere;
 }
 
-.review-history-panel .review-drawer-heading {
-  gap: 12px;
-}
-
-.review-history-panel .review-drawer-heading .text-button {
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-#diff-review-drawer > summary {
-  list-style: none;
-  cursor: pointer;
-  background: var(--iris);
-  color: var(--bg);
-  border-radius: 5px;
-  padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
 #diff-review-drawer > summary::after {
   content: "⌃";
   margin-left: 8px;
@@ -3987,6 +3745,10 @@ button.git-file-row {
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 12px;
+}
+
+.review-history-panel .review-drawer-heading {
+  gap: 12px;
 }
 
 .review-drawer-heading .icon-button {
@@ -4081,8 +3843,41 @@ button.git-file-row {
   padding: 3px;
 }
 
+.agent-menu-options > .text-button:hover {
+  background: var(--overlay);
+}
+
+.review-history-panel .review-drawer-heading .text-button {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .review-assessment > small {
   padding-right: 44px;
+}
+
+.worktree-entry > summary small {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.agent-tab .live-agent-words small {
+  font-size: 8px;
+  line-height: 10px;
+}
+
+.tabs-tight .live-agent-state,
+.tabs-tight .agent-shortcut,
+.tabs-tight .live-agent small {
+  display: none;
+}
+
+.agent-context-grid .work-section-toggle small {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 400;
 }
 
 .context-work-ci {
@@ -4105,11 +3900,6 @@ button.git-file-row {
   padding: 0;
 }
 
-.investigate-ci .agent-control-icon {
-  width: 13px;
-  height: 13px;
-}
-
 .context-ci-error {
   display: block;
   color: var(--gold);
@@ -4119,10 +3909,6 @@ button.git-file-row {
 
 #diff-review-dialog:not(.quick-file-review) {
   padding: 0 12px 10px;
-}
-
-.mac-titlebar #diff-review-dialog:not(.quick-file-review) > .dialog-heading {
-  padding-left: 82px;
 }
 
 #diff-review-dialog:not(.quick-file-review) .dialog-heading > div:first-child {
@@ -4196,12 +3982,94 @@ button.git-file-row {
   color: var(--muted);
 }
 
-.context-work-meta > a:first-child {
-  min-width: 0;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sharing-popover details > summary {
+  font-size: 12px;
+  cursor: pointer;
+  margin: 8px 0;
+}
+
+.compact-launcher summary:hover {
+  background: var(--overlay);
+}
+
+.inline-attach summary:hover {
+  color: var(--iris);
+}
+
+.worktree-entry > summary:hover {
+  color: var(--rose);
+}
+
+.sharing-menu > summary:hover,
+.sharing-menu[open] > summary {
+  color: var(--text);
+  background: var(--overlay);
+}
+
+.resource-entry > summary:hover {
+  color: var(--accent);
+}
+
+.agent-context-grid .inline-attach > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 1;
+  list-style: none;
+}
+
+.snoozed-agents > summary:hover,
+.snoozed-agents[open] > summary {
+  background: var(--overlay);
+  color: var(--iris);
+}
+
+.snoozed-agents.has-due > summary {
+  color: var(--gold);
+}
+
+.git-tree-folder > summary:hover {
+  background: var(--overlay);
+  color: var(--text);
+}
+
+.agent-tab .agent-menu > summary {
+  display: none;
+}
+
+.agent-topbar .compact-launcher summary {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+}
+
+#diff-review-history > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 0;
+}
+
+#diff-review-drawer > summary {
+  list-style: none;
+  cursor: pointer;
+  background: var(--iris);
+  color: var(--bg);
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+#diff-review-history[open] > summary {
+  color: var(--text);
 }
 
 .context-work-heading {
@@ -4227,8 +4095,12 @@ button.git-file-row {
   min-height: var(--titlebar-height);
 }
 
-#diff-review-dialog:not(.quick-file-review) .dialog-heading > div:first-child,
-#diff-review-dialog:not(.quick-file-review) .diff-review-heading-actions {
+.mac-titlebar #diff-review-dialog:not(.quick-file-review) > .dialog-heading {
+  padding-left: 82px;
+}
+
+#diff-review-dialog:not(.quick-file-review) .diff-review-heading-actions,
+#diff-review-dialog:not(.quick-file-review) .dialog-heading > div:first-child {
   height: 100%;
   align-items: center;
 }
@@ -4304,12 +4176,73 @@ button.git-file-row {
   order: 1;
 }
 
+.detach-link:focus-visible,
+.context-work-row:hover .detach-link {
+  opacity: 1;
+}
+
+.artifact-row:hover .detach-link {
+  opacity: 1;
+}
+
+.agent-results-section .artifact-row > .detach-link {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.resource-entry > summary:hover .detach-link,
+.worktree-entry > summary:hover .detach-link {
+  opacity: 1;
+}
+
 .context-work-meta > .status-pill {
   order: 2;
 }
 
+.change-row .change-transitions .status-pill,
+.change-row .change-transitions .ci-pill {
+  width: auto;
+  max-width: 105px;
+  font-size: 9px;
+  line-height: 16px;
+  padding: 0 5px;
+}
+
+.sharing-person.ui-control[data-variant] {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .context-work-meta > .icon-button {
   order: 3;
+}
+
+.agent-results-section .artifact-sessions,
+.agent-results-section .artifact-row > .icon-button {
+  display: none;
+}
+
+.icon-button:hover:not(:disabled),
+.agent-link:hover:not(:disabled) {
+  background: var(--overlay);
+}
+
+.sharing-entry-open.ui-control[data-variant] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  padding: 6px;
+  white-space: normal;
 }
 
 .context-ci-progress,
@@ -4391,12 +4324,12 @@ button.git-file-row {
   vertical-align: middle;
 }
 
-.review-assessment summary > .review-author-pill {
-  margin-right: 6px;
-}
-
 .review-comment-head > .review-author-pill {
   flex-shrink: 0;
+}
+
+.review-assessment summary > .review-author-pill {
+  margin-right: 6px;
 }
 
 .review-comment-markdown {
@@ -4426,6 +4359,14 @@ button.git-file-row {
 
 .review-comment-markdown a {
   color: var(--foam);
+}
+
+.context-work-meta > a:first-child {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .review-comment-markdown ul,
@@ -4476,10 +4417,40 @@ button.git-file-row {
   column-gap: 6px;
 }
 
+.git-file-row:hover {
+  background: var(--overlay);
+}
+
+.git-tree-folder > .git-file-row {
+  width: 100%;
+}
+
+.investigate-ci .agent-control-icon {
+  width: 13px;
+  height: 13px;
+}
+
 .review-file-count > svg {
   display: block;
   width: 12px;
   height: 12px;
+  flex-shrink: 0;
+}
+
+.work-section-toggle[aria-expanded="true"] .work-section-chevron svg {
+  transform: rotate(90deg);
+}
+
+.agent-topbar
+  :is(
+    #new-note,
+    #launch-options > summary,
+    .skills-inbox,
+    .sharing-menu > summary,
+    .snoozed-agents > summary
+  )
+  svg {
+  display: block;
   flex-shrink: 0;
 }
 
@@ -4511,6 +4482,34 @@ button.git-file-row {
 .titlebar-open-editor .agent-control-icon {
   width: 16px;
   height: 16px;
+}
+
+.agent-tab .agent-menu .agent-control-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.mac-titlebar .terminal-focused .embedded-terminal {
+  height: calc(
+    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 8px
+  );
+}
+
+.sidebar .nav-item > .sidebar-icon,
+.sidebar .settings-button > .sidebar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.sidebar .nav-item.active > .sidebar-icon {
+  color: var(--text);
 }
 
 .titlebar-open-editor:disabled {

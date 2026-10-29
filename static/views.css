@@ -255,11 +255,6 @@
   display: none;
 }
 
-.saved-view-add-menu > summary:hover {
-  color: var(--text);
-  background: var(--overlay);
-}
-
 .saved-view-add-options {
   position: absolute;
   z-index: 2;
@@ -292,6 +287,11 @@
 .saved-view-options > summary {
   cursor: pointer;
   padding: 5px 0;
+}
+
+.saved-view-add-menu > summary:hover {
+  color: var(--text);
+  background: var(--overlay);
 }
 
 .saved-view-options > input {

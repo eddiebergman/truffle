@@ -32,23 +32,9 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:disabled {
-  cursor: wait;
-  opacity: 0.5;
-}
-
 button,
 a {
   touch-action: manipulation;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 3px;
 }
 
 a {
@@ -65,6 +51,11 @@ button,
 select {
   border: 1px solid var(--line);
   background: transparent;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 button:hover {
@@ -399,15 +390,6 @@ h1 {
   line-height: 18px;
 }
 
-.search input {
-  background: none;
-  border: 0;
-  color: var(--text);
-  font-size: 11px;
-  width: 100%;
-  outline: none;
-}
-
 .search:focus-within {
   border-color: #7b9c89;
 }
@@ -454,10 +436,6 @@ select {
   margin-left: 4px;
 }
 
-.row:hover {
-  border-color: #4a515b;
-}
-
 .source-icon.linear {
   background: #222130;
   color: #b8abe8;
@@ -468,10 +446,6 @@ select {
   background: #232820;
   color: #b8c8a7;
   border-color: #373e31;
-}
-
-.row-title:hover {
-  color: var(--green);
 }
 
 button.row-title {
@@ -550,10 +524,6 @@ button.row-title {
 }
 
 .pin-button.pinned {
-  color: var(--green);
-}
-
-.row-open:hover {
   color: var(--green);
 }
 
@@ -689,6 +659,24 @@ dialog label select {
 
 dialog textarea {
   resize: vertical;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.search input {
+  background: none;
+  border: 0;
+  color: var(--text);
+  font-size: 11px;
+  width: 100%;
+  outline: none;
 }
 
 dialog .optional {
@@ -848,13 +836,13 @@ dialog .optional {
     flex-shrink: 0;
   }
 
-  .brand .private,
   .workspace,
   .nav-label,
   .nav-divider,
   .nav-item b,
-  .sidebar-bottom .local-note,
-  .settings-button span {
+  .settings-button span,
+  .brand .private,
+  .sidebar-bottom .local-note {
     display: none;
   }
 
@@ -925,14 +913,14 @@ dialog .optional {
     gap: 10px;
   }
 
-  .sync-footer > div > span:last-child,
-  .footer-divider {
-    display: none;
-  }
-
   .demo-banner span {
     display: block;
     margin: 5px 0 0;
+  }
+
+  .footer-divider,
+  .sync-footer > div > span:last-child {
+    display: none;
   }
 
   .button {
@@ -1142,10 +1130,6 @@ a.ci-check-name:hover {
   color: #c6a596;
 }
 
-.session-card-title:hover {
-  color: var(--green);
-}
-
 .runtime-pill {
   border: 1px solid #354239;
   color: #a4b7ab;
@@ -1318,10 +1302,6 @@ a.ci-check-name:hover {
   padding-bottom: 15px;
 }
 
-.item-sessions .session-card-title {
-  font-size: 12px;
-}
-
 .project-controls {
   display: flex;
   gap: 8px;
@@ -1414,6 +1394,10 @@ a.ci-check-name:hover {
   font-size: 15px;
   padding: 4px;
   display: block !important;
+}
+
+.row-open:hover {
+  color: var(--green);
 }
 
 .dialog-actions .text-button {
@@ -1592,6 +1576,10 @@ a.ci-check-name:hover {
   overflow-wrap: normal;
 }
 
+.row-title:hover {
+  color: var(--green);
+}
+
 .row-meta > :not(.ref) {
   display: none;
 }
@@ -1669,6 +1657,14 @@ a.ci-check-name:hover {
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: normal;
+}
+
+.session-card-title:hover {
+  color: var(--green);
+}
+
+.item-sessions .session-card-title {
+  font-size: 12px;
 }
 
 .session-work-summary {
@@ -1869,17 +1865,8 @@ a.ci-check-name:hover {
   width: fit-content;
 }
 
-.hidden-items > summary:hover {
-  color: var(--green);
-}
-
 .hidden-items .visibility-button {
   color: var(--green);
-}
-
-.hidden-items .row,
-.hidden-items .session-card {
-  background: #14171a;
 }
 
 .hidden-items .form-hint {
@@ -1894,7 +1881,6 @@ a.ci-check-name:hover {
 }
 
 /* Repository/project chips stay on one horizontally scrollable line after search. */
-
 .toolbar .search {
   flex: 0 1 230px;
   min-width: 140px;
@@ -1968,18 +1954,6 @@ a.ci-check-name:hover {
   border: 1px solid #35404a;
 }
 
-.github-role.mine {
-  color: #acd7bc;
-  border-color: #354e40;
-  background: #1d2b23;
-}
-
-.github-role.review {
-  color: #c3b3e8;
-  border-color: #483a60;
-  background: #282034;
-}
-
 @media (max-width: 760px) {
   .github-role {
     font-size: 8px;
@@ -2005,6 +1979,27 @@ a.ci-check-name:hover {
   background: transparent;
   border: 0;
   border-radius: 0;
+}
+
+.row:hover {
+  border-color: #4a515b;
+}
+
+.hidden-items .row,
+.hidden-items .session-card {
+  background: #14171a;
+}
+
+.github-role.mine {
+  color: #acd7bc;
+  border-color: #354e40;
+  background: #1d2b23;
+}
+
+.github-role.review {
+  color: #c3b3e8;
+  border-color: #483a60;
+  background: #282034;
 }
 
 .row-codes {
@@ -2076,10 +2071,6 @@ a.ci-check-name:hover {
 .row-actions .item-agent-links {
   width: 23px;
   min-width: 0;
-}
-
-.row-actions .item-agent-links .agent-link:not(.item-agent-action) {
-  display: none;
 }
 
 .row-actions .ci-slot {
@@ -2388,11 +2379,6 @@ a.ci-check-name:hover {
   text-decoration: underline;
 }
 
-#item-sentry-links a {
-  display: block;
-  margin-block: 6px;
-}
-
 .sentry-impact {
   font-size: 9px;
   color: #a99bb0;
@@ -2579,10 +2565,6 @@ a.ci-check-name:hover {
   min-width: 150px;
 }
 
-#snoozed-items summary {
-  cursor: pointer;
-}
-
 @media (max-width: 760px) {
   .change-row time {
     margin-left: 0;
@@ -2698,10 +2680,6 @@ a.ci-check-name:hover {
   margin: 5px 0;
 }
 
-.briefing-body li > p {
-  margin: 5px 0;
-}
-
 .briefing-body strong {
   color: #ecedf1;
   font-weight: 650;
@@ -2716,6 +2694,11 @@ a.ci-check-name:hover {
 
 .briefing-body a:hover {
   color: #d4e2f5;
+}
+
+#item-sentry-links a {
+  display: block;
+  margin-block: 6px;
 }
 
 .briefing-body code {
@@ -2795,13 +2778,6 @@ a.ci-check-name:hover {
   list-style: none;
 }
 
-.briefing-body .task-list-item > input,
-.briefing-body .task-list-item > p > input {
-  margin: 0 7px 0 -20px;
-  accent-color: var(--green);
-  vertical-align: middle;
-}
-
 /* Changes: time, state transition, then the source-linked title. */
 .change-row {
   border-bottom: 1px solid var(--line);
@@ -2842,16 +2818,6 @@ a.ci-check-name:hover {
 .change-arrow {
   font-size: 11px;
   color: #626e7b;
-}
-
-.change-title:hover {
-  color: var(--green);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.change-title.maintenance-title {
-  color: #929ba7;
 }
 
 .change-read {
@@ -2961,6 +2927,16 @@ a.ci-check-name:hover {
   grid-template-columns: 145px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+}
+
+.change-title:hover {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.change-title.maintenance-title {
+  color: #929ba7;
 }
 
 .change-ref {
@@ -3329,6 +3305,13 @@ a.ci-check-name:hover {
   width: auto;
 }
 
+.briefing-body .task-list-item > input,
+.briefing-body .task-list-item > p > input {
+  margin: 0 7px 0 -20px;
+  accent-color: var(--green);
+  vertical-align: middle;
+}
+
 #session-artifacts {
   margin-top: 18px;
 }
@@ -3440,6 +3423,10 @@ a.ci-check-name:hover {
   color: var(--muted);
 }
 
+.briefing-body li > p {
+  margin: 5px 0;
+}
+
 .desktop-connection pre {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -3480,8 +3467,8 @@ a.ci-check-name:hover {
   border-color: #668472;
 }
 
-.nav-item:hover:not(.active),
-.nav-item:focus-visible {
+.nav-item:focus-visible,
+.nav-item:hover:not(.active) {
   background: #24312b;
   color: #deeee3;
 }
@@ -3491,6 +3478,10 @@ a.ci-check-name:hover {
   background: #35493d;
   color: #e0f6e7;
   border-radius: 4px;
+}
+
+.row-actions .item-agent-links .agent-link:not(.item-agent-action) {
+  display: none;
 }
 
 .performance-panel {
@@ -3505,6 +3496,14 @@ a.ci-check-name:hover {
   cursor: pointer;
   color: #b9d2c3;
   font-size: 12px;
+}
+
+.hidden-items > summary:hover {
+  color: var(--green);
+}
+
+#snoozed-items summary {
+  cursor: pointer;
 }
 
 .performance-actions {
@@ -3540,12 +3539,12 @@ a.ci-check-name:hover {
   border-bottom: 1px solid var(--line);
 }
 
-.performance-table th:first-child,
-.performance-table td:first-child {
-  text-align: left;
-}
-
 .performance-table th {
   color: var(--muted);
   font-weight: 500;
+}
+
+.performance-table th:first-child,
+.performance-table td:first-child {
+  text-align: left;
 }

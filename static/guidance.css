@@ -41,11 +41,6 @@
   margin-left: auto;
 }
 
-.guidance-tip button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
 .guidance-announcement {
   position: absolute;
   width: 1px;
@@ -142,6 +137,11 @@
   top: 0;
   background: var(--panel);
   border-radius: 3px;
+}
+
+.guidance-tip button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .chat-attachment-strip small {

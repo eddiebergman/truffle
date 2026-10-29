@@ -207,8 +207,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   font-size: 13px;
 }
 
-.quick-action-editor textarea,
-.settings-client-example {
+.settings-client-example,
+.quick-action-editor textarea {
   font:
     12px/1.7 ui-monospace,
     SFMono-Regular,
@@ -306,12 +306,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 
 .preferences-page .form-hint {
   color: var(--muted);
-}
-
-.preferences-page input:focus,
-.preferences-page select:focus,
-.preferences-page textarea:focus {
-  outline-color: var(--iris);
 }
 
 #custom-quick-actions .quick-action-button {
@@ -502,6 +496,12 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   max-width: 230px;
 }
 
+.preferences-page input:focus,
+.preferences-page select:focus,
+.preferences-page textarea:focus {
+  outline-color: var(--iris);
+}
+
 .preference-control input[type="checkbox"] {
   min-height: 0;
   accent-color: var(--iris);
@@ -660,10 +660,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   flex-wrap: wrap;
 }
 
-.preferences-page .preferences-footer #settings-error:empty {
-  display: none;
-}
-
 .preferences-page .preferences-footer #settings-status {
   white-space: normal;
 }
@@ -671,6 +667,10 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 .preferences-page .preferences-footer #settings-error {
   flex: 1;
   min-width: 160px;
+}
+
+.preferences-page .preferences-footer #settings-error:empty {
+  display: none;
 }
 
 @media (max-width: 850px) {

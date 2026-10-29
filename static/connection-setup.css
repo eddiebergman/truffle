@@ -53,16 +53,16 @@
   color: var(--text);
 }
 
-.connection-setup-status:empty,
-.connection-setup-preview:empty {
-  display: none;
-}
-
 .connection-setup-preview {
   margin-top: 16px;
   border-top: 1px solid var(--line);
   padding-top: 14px;
   font-size: 12px;
+}
+
+.connection-setup-status:empty,
+.connection-setup-preview:empty {
+  display: none;
 }
 
 .connection-setup-preview ul {
