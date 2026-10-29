@@ -261,16 +261,6 @@ main {
   min-width: 0;
 }
 
-.topbar {
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 43px;
-  font-size: 11px;
-  color: #b0b4bc;
-}
-
 .breadcrumb {
   color: #6f7681;
 }
@@ -880,10 +870,6 @@ dialog .optional {
     margin-left: 200px;
   }
 
-  .topbar {
-    padding: 0 26px;
-  }
-
   .metric small {
     font-size: 9px;
   }
@@ -942,10 +928,6 @@ dialog .optional {
 
   main {
     margin-left: 70px;
-  }
-
-  .topbar {
-    padding: 0 20px;
   }
 
   h1 {
@@ -1560,11 +1542,6 @@ a.ci-check-name:hover {
   padding: 24px 30px;
 }
 
-.topbar {
-  height: 48px;
-  padding-inline: 30px;
-}
-
 .page-heading {
   margin-bottom: 18px;
   gap: 15px;
@@ -1822,11 +1799,6 @@ a.ci-check-name:hover {
 @media (max-width: 760px) {
   .content {
     padding: 18px 12px;
-  }
-
-  .topbar {
-    height: 42px;
-    padding-inline: 12px;
   }
 
   .page-heading {
