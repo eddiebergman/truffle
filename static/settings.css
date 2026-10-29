@@ -70,8 +70,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   padding: 0;
   overflow: hidden;
   z-index: 90;
-
-  /* Settings share the app palette, with a navigation rail and an editor-style user scope. */
   border-radius: 7px;
   inset: var(--titlebar-height, 32px) 0 0;
   border: 0;
@@ -358,6 +356,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   border-radius: 4px;
 }
 
+/* Settings share the app palette, with a navigation rail and an editor-style user scope. */
 .preferences-layout {
   display: grid;
   flex: 1;
