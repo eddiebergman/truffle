@@ -70,17 +70,17 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   padding: 0;
   overflow: hidden;
   z-index: 90;
+
+  /* Settings share the app palette, with a navigation rail and an editor-style user scope. */
+  border-radius: 7px;
+  inset: var(--titlebar-height, 32px) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 #settings-dialog.preferences-page[open] {
   display: flex;
   flex-direction: column;
-}
-
-.preferences-heading {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
 }
 
 .preferences-heading h1 {
@@ -104,17 +104,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   padding: 0;
 }
 
-.preferences-layout {
-  display: grid;
-  flex: 1;
-  min-height: 0;
-}
-
-.preferences-nav {
-  border-right: 1px solid var(--line);
-  overflow: auto;
-}
-
 .preferences-nav button {
   width: 100%;
   text-align: left;
@@ -123,23 +112,11 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   border-radius: 6px;
   color: var(--muted);
   background: transparent;
-}
-
-.preferences-nav button[aria-current="true"] {
-  color: var(--text);
-}
-
-.preferences-body {
-  overflow: auto;
-  min-width: 0;
-}
-
-.preferences-panel {
-  margin: 0 auto 30px;
-}
-
-.preferences-panel h2 {
-  margin: 0 0 20px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
 }
 
 .preferences-panel p {
@@ -159,10 +136,9 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   margin: 0;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
-}
-
-.preference-label {
-  flex: 1;
+  min-height: 86px;
+  padding: 18px 0;
+  align-items: center;
 }
 
 .preference-control {
@@ -170,7 +146,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  flex: 0 0 340px;
+  flex: 0 0 230px;
+  align-self: center;
 }
 
 .preference-control :is(input, select) {
@@ -184,28 +161,19 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   width: 82px;
 }
 
-.preference-control input[type="checkbox"] {
-  min-height: 0;
-  accent-color: var(--iris);
-}
-
 .preference-control small {
   font-size: 11px;
   color: var(--muted);
-}
-
-.preference-reset {
-  color: var(--muted);
-  flex-shrink: 0;
 }
 
 .preferences-footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 24px;
+  padding: 10px 24px;
   border-top: 1px solid var(--line);
   flex-shrink: 0;
+  background: var(--bg);
 }
 
 .preferences-footer #settings-status {
@@ -223,10 +191,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   max-height: 70px;
   overflow: auto;
   color: var(--love);
-}
-
-.preferences-footer .button {
-  white-space: nowrap;
 }
 
 .preferences-footer #settings-save {
@@ -305,16 +269,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   display: none;
 }
 
-#custom-quick-actions .quick-action-button {
-  font-size: 11px;
-  width: 100%;
-  padding: 8px 12px;
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
 #sidebar-notices:has(+ #custom-quick-actions:not(:empty)) {
   margin-top: 0;
 }
@@ -335,7 +289,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   }
 
   .preference-control {
-    flex: 0 0 auto;
     width: 100%;
     justify-content: flex-start;
   }
@@ -345,7 +298,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   }
 
   .preferences-footer {
-    padding: 12px;
+    padding-inline: 12px;
   }
 }
 
@@ -364,6 +317,13 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 #custom-quick-actions .quick-action-button {
+  font-size: 11px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -398,15 +358,10 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   border-radius: 4px;
 }
 
-/* Settings share the app palette, with a navigation rail and an editor-style user scope. */
-#settings-dialog.preferences-page {
-  border-radius: 7px;
-  inset: var(--titlebar-height, 32px) 0 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-
 .preferences-layout {
+  display: grid;
+  flex: 1;
+  min-height: 0;
   grid-template-columns: 245px minmax(0, 1fr);
 }
 
@@ -419,6 +374,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preferences-nav {
+  border-right: 1px solid var(--line);
+  overflow: auto;
   padding: 0 10px 16px;
   background: var(--panel);
 }
@@ -447,14 +404,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   background: var(--bg);
 }
 
-.preferences-nav button {
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-}
-
 .settings-chevron {
   font-size: 16px;
   color: var(--muted);
@@ -462,6 +411,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preferences-nav button[aria-current="true"] {
+  color: var(--text);
   background: var(--overlay);
 }
 
@@ -470,6 +420,9 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preferences-heading {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
   padding: 18px 30px;
   border-bottom: 0;
   gap: 10px;
@@ -505,26 +458,25 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preferences-body {
+  overflow: auto;
+  min-width: 0;
   padding: 14px 30px 38px;
   flex: 1;
 }
 
 .preferences-panel {
+  margin: 0 auto 30px;
   max-width: none;
 }
 
 .preferences-panel h2 {
+  margin: 0 0 20px;
   font-size: 19px;
   margin-bottom: 18px;
 }
 
-.preference-row {
-  min-height: 86px;
-  padding: 18px 0;
-  align-items: center;
-}
-
 .preference-label {
+  flex: 1;
   display: block;
   min-width: 0;
 }
@@ -544,11 +496,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   max-width: 680px;
 }
 
-.preference-control {
-  flex-basis: 230px;
-  align-self: center;
-}
-
 .preference-control input,
 .preference-control select {
   font-size: 12px;
@@ -557,6 +504,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preference-control input[type="checkbox"] {
+  min-height: 0;
+  accent-color: var(--iris);
   appearance: none;
   width: 30px;
   height: 18px;
@@ -589,6 +538,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 }
 
 .preference-reset {
+  color: var(--muted);
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -604,12 +555,8 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   opacity: 1;
 }
 
-.preferences-footer {
-  background: var(--bg);
-  padding-block: 10px;
-}
-
 .preferences-footer .button {
+  white-space: nowrap;
   padding-block: 5px;
   font-size: 12px;
 }
