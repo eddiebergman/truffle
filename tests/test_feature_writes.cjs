@@ -1,219 +1,1581 @@
-const {test}=require('node:test'),assert=require('node:assert/strict');
-const {evaluate}=require(require('node:path').join(__dirname,'helpers/static-script.cjs'));
-const {scriptFixture,loadMore,deferred,tick}=require(require('node:path').join(__dirname,'helpers/feature-fixture.cjs'));
-test('Sentry uses one captured UUID, exact same-name identity, and read-only recovery after accepted GET failure',async()=>{
- let gets=0;const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit')return owner.apply(payload);if(++gets===1)throw Error('GET unavailable');return owner.snapshot();}});const initial=f.snapshot();initial.sentryViews=[{id:'existing-same-name',name:'Same',filters:{}}];f.setCanonical(initial);f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Same';await f.submit(f.sentry);const id=f.calls.find(call=>call.path==='/api/edit').payload.id;assert.equal(f.uuids,1);assert.notEqual(id,'existing-same-name');assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.save.disabled,true);assert.match(f.recovery(f.sentry).message.textContent,/saved.*could not refresh.*do not repeat/);await f.submit(f.sentry);await f.recovery(f.sentry).button('Refresh view').onclick();assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);assert.equal(f.uuids,1);assert.equal(evaluate(f.c,'sentryView'),id);assert.equal(f.sentry.dialog.open,false);
+const { test } = require("node:test"),
+  assert = require("node:assert/strict");
+const { evaluate } = require(
+  require("node:path").join(__dirname, "helpers/static-script.cjs"),
+);
+const { scriptFixture, loadMore, deferred, tick } = require(
+  require("node:path").join(__dirname, "helpers/feature-fixture.cjs"),
+);
+test("Sentry uses one captured UUID, exact same-name identity, and read-only recovery after accepted GET failure", async () => {
+  let gets = 0;
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/edit") return owner.apply(payload);
+      if (++gets === 1) throw Error("GET unavailable");
+      return owner.snapshot();
+    },
+  });
+  const initial = f.snapshot();
+  initial.sentryViews = [
+    { id: "existing-same-name", name: "Same", filters: {} },
+  ];
+  f.setCanonical(initial);
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Same";
+  await f.submit(f.sentry);
+  const id = f.calls.find((call) => call.path === "/api/edit").payload.id;
+  assert.equal(f.uuids, 1);
+  assert.notEqual(id, "existing-same-name");
+  assert.equal(f.sentry.dialog.open, true);
+  assert.equal(f.sentry.save.disabled, true);
+  assert.match(
+    f.recovery(f.sentry).message.textContent,
+    /saved.*could not refresh.*do not repeat/,
+  );
+  await f.submit(f.sentry);
+  await f.recovery(f.sentry).button("Refresh view").onclick();
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+  assert.equal(f.uuids, 1);
+  assert.equal(evaluate(f.c, "sentryView"), id);
+  assert.equal(f.sentry.dialog.open, false);
 });
-test('accepted form render failure is not a failed save and cannot replay its POST',async()=>{
- const f=scriptFixture({renderFailure:true});f.c.openBriefingEditor();f.briefing.form.elements.body.value='Report';await f.submit(f.briefing);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);assert.match(f.recovery(f.briefing).message.textContent,/Briefing saved.*could not refresh/);assert.equal(f.briefing.save.disabled,true);await f.submit(f.briefing);await f.recovery(f.briefing).button('Refresh view').onclick();assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);
+test("accepted form render failure is not a failed save and cannot replay its POST", async () => {
+  const f = scriptFixture({ renderFailure: true });
+  f.c.openBriefingEditor();
+  f.briefing.form.elements.body.value = "Report";
+  await f.submit(f.briefing);
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+  assert.match(
+    f.recovery(f.briefing).message.textContent,
+    /Briefing saved.*could not refresh/,
+  );
+  assert.equal(f.briefing.save.disabled, true);
+  await f.submit(f.briefing);
+  await f.recovery(f.briefing).button("Refresh view").onclick();
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
-test('unknown accepted-on-server create stays locked after GET success and never claims an identity',async()=>{
- const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/state')return owner.snapshot();owner.apply(payload);const error=Error('POST response lost');error.status=503;throw error;}});f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Unknown';await f.submit(f.sentry);await f.recovery(f.sentry).button('Refresh view').onclick();assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.save.disabled,true);assert.match(f.recovery(f.sentry).message.textContent,/outcome is unknown/);assert.equal(evaluate(f.c,'sentryView'),'');await f.submit(f.sentry);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);
+test("unknown accepted-on-server create stays locked after GET success and never claims an identity", async () => {
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/state") return owner.snapshot();
+      owner.apply(payload);
+      const error = Error("POST response lost");
+      error.status = 503;
+      throw error;
+    },
+  });
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Unknown";
+  await f.submit(f.sentry);
+  await f.recovery(f.sentry).button("Refresh view").onclick();
+  assert.equal(f.sentry.dialog.open, true);
+  assert.equal(f.sentry.save.disabled, true);
+  assert.match(f.recovery(f.sentry).message.textContent, /outcome is unknown/);
+  assert.equal(evaluate(f.c, "sentryView"), "");
+  await f.submit(f.sentry);
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
-test('pending feature form blocks duplicates and cancel while holding native focus before disabling Close',async()=>{
- const write=deferred(),f=scriptFixture({handler:async()=>write.promise});f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Draft';f.sentry.close.focus();const pending=f.submit(f.sentry);assert.equal(f.document.activeElement,f.recovery(f.sentry).message);assert.equal(f.sentry.close.disabled,true);assert.equal(f.sentry.save.disabled,true);f.c.requestDialogClose(f.sentry.dialog);assert.equal(f.sentry.dialog.open,true);await f.submit(f.sentry);assert.equal(f.calls.length,1);const error=Error('Invalid');error.status=400;write.reject(error);await pending;assert.equal(f.sentry.form.elements.viewName.value,'Draft');assert.equal(f.sentry.save.disabled,false);assert.equal(f.sentry.close.disabled,false);assert.notEqual(f.document.activeElement,f.document.body);
+test("pending feature form blocks duplicates and cancel while holding native focus before disabling Close", async () => {
+  const write = deferred(),
+    f = scriptFixture({ handler: async () => write.promise });
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Draft";
+  f.sentry.close.focus();
+  const pending = f.submit(f.sentry);
+  assert.equal(f.document.activeElement, f.recovery(f.sentry).message);
+  assert.equal(f.sentry.close.disabled, true);
+  assert.equal(f.sentry.save.disabled, true);
+  f.c.requestDialogClose(f.sentry.dialog);
+  assert.equal(f.sentry.dialog.open, true);
+  await f.submit(f.sentry);
+  assert.equal(f.calls.length, 1);
+  const error = Error("Invalid");
+  error.status = 400;
+  write.reject(error);
+  await pending;
+  assert.equal(f.sentry.form.elements.viewName.value, "Draft");
+  assert.equal(f.sentry.save.disabled, false);
+  assert.equal(f.sentry.close.disabled, false);
+  assert.notEqual(f.document.activeElement, f.document.body);
 });
-test('Sentry local unnamed filters stay local and existing saves keep their ID regardless changed name',async()=>{
- const f=scriptFixture({prefs:{sentryView:'existing'}}),initial=f.snapshot();initial.sentryViews=[{id:'existing',name:'Old',filters:{minUsers:2}}];f.setCanonical(initial);f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Renamed';await f.submit(f.sentry);assert.equal(f.calls.find(call=>call.path==='/api/edit').payload.id,'existing');assert.equal(f.uuids,0);f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='';f.sentry.form.elements.minUsers.value='7';const posts=f.calls.filter(call=>call.path==='/api/edit').length;await f.submit(f.sentry);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,posts);assert.equal(evaluate(f.c,'sentryFilters.minUsers'),7);
+test("Sentry local unnamed filters stay local and existing saves keep their ID regardless changed name", async () => {
+  const f = scriptFixture({ prefs: { sentryView: "existing" } }),
+    initial = f.snapshot();
+  initial.sentryViews = [
+    { id: "existing", name: "Old", filters: { minUsers: 2 } },
+  ];
+  f.setCanonical(initial);
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Renamed";
+  await f.submit(f.sentry);
+  assert.equal(
+    f.calls.find((call) => call.path === "/api/edit").payload.id,
+    "existing",
+  );
+  assert.equal(f.uuids, 0);
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "";
+  f.sentry.form.elements.minUsers.value = "7";
+  const posts = f.calls.filter((call) => call.path === "/api/edit").length;
+  await f.submit(f.sentry);
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/edit").length,
+    posts,
+  );
+  assert.equal(evaluate(f.c, "sentryFilters.minUsers"), 7);
 });
-test('late Sentry completion never closes a replacement form or mutates newer selected filters',async()=>{
- const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){owner.apply(payload);return write.promise;}return owner.snapshot();}});f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='A';const pending=f.submit(f.sentry);f.sentry.dialog.close();f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='B draft';write.resolve({});await pending;assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.form.elements.viewName.value,'B draft');assert.equal(f.sentry.save.disabled,false);assert.equal(evaluate(f.c,'sentryView'),'');
+test("late Sentry completion never closes a replacement form or mutates newer selected filters", async () => {
+  const write = deferred(),
+    f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/edit") {
+          owner.apply(payload);
+          return write.promise;
+        }
+        return owner.snapshot();
+      },
+    });
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "A";
+  const pending = f.submit(f.sentry);
+  f.sentry.dialog.close();
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "B draft";
+  write.resolve({});
+  await pending;
+  assert.equal(f.sentry.dialog.open, true);
+  assert.equal(f.sentry.form.elements.viewName.value, "B draft");
+  assert.equal(f.sentry.save.disabled, false);
+  assert.equal(evaluate(f.c, "sentryView"), "");
 });
-test('briefing captures selected session and checkpoint captures its own opened session before awaiting',async()=>{
- const writes=[],f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){const write=deferred();writes.push(write);owner.apply(payload);return write.promise;}return owner.snapshot();}});f.c.openBriefingEditor();f.briefing.form.elements.record.value='chat:a';f.briefing.form.elements.body.value='A report';const briefing=f.submit(f.briefing);f.briefing.form.elements.record.value='chat:b';writes[0].resolve({});await briefing;assert.equal(f.calls.find(call=>call.path==='/api/edit').payload.id,'chat:a');assert.equal(f.briefing.dialog.open,true);
- f.c.openCheckpoint(f.c.state.sessions[0]);f.checkpoint.form.elements.done.value='A done';const checkpoint=f.submit(f.checkpoint);assert.equal(f.c.openCheckpoint(f.c.state.sessions[1]),false);f.checkpoint.dialog.close();f.c.openCheckpoint(f.c.state.sessions[1]);writes[1].resolve({});await checkpoint;assert.equal(f.calls.filter(call=>call.path==='/api/edit')[1].payload.id,'chat:a');assert.equal(f.checkpoint.dialog.open,true);assert.equal(f.$('#checkpoint-session').textContent,'B');assert.deepEqual(f.opened,[]);
+test("briefing captures selected session and checkpoint captures its own opened session before awaiting", async () => {
+  const writes = [],
+    f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/edit") {
+          const write = deferred();
+          writes.push(write);
+          owner.apply(payload);
+          return write.promise;
+        }
+        return owner.snapshot();
+      },
+    });
+  f.c.openBriefingEditor();
+  f.briefing.form.elements.record.value = "chat:a";
+  f.briefing.form.elements.body.value = "A report";
+  const briefing = f.submit(f.briefing);
+  f.briefing.form.elements.record.value = "chat:b";
+  writes[0].resolve({});
+  await briefing;
+  assert.equal(
+    f.calls.find((call) => call.path === "/api/edit").payload.id,
+    "chat:a",
+  );
+  assert.equal(f.briefing.dialog.open, true);
+  f.c.openCheckpoint(f.c.state.sessions[0]);
+  f.checkpoint.form.elements.done.value = "A done";
+  const checkpoint = f.submit(f.checkpoint);
+  assert.equal(f.c.openCheckpoint(f.c.state.sessions[1]), false);
+  f.checkpoint.dialog.close();
+  f.c.openCheckpoint(f.c.state.sessions[1]);
+  writes[1].resolve({});
+  await checkpoint;
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/edit")[1].payload.id,
+    "chat:a",
+  );
+  assert.equal(f.checkpoint.dialog.open, true);
+  assert.equal(f.$("#checkpoint-session").textContent, "B");
+  assert.deepEqual(f.opened, []);
 });
-test('checkpoint presentation recovery looks up only its captured session after a guarded successful read',async()=>{
- let gets=0;const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit')return owner.apply(payload);if(++gets===1)throw Error('Read offline');return owner.snapshot();}});f.c.openCheckpoint(f.c.state.sessions[0]);f.checkpoint.form.elements.next.value='Next';await f.submit(f.checkpoint);assert.deepEqual(f.opened,[]);await f.recovery(f.checkpoint).button('Refresh view').onclick();assert.deepEqual(f.opened,[{session:'chat:a'}]);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);
+test("checkpoint presentation recovery looks up only its captured session after a guarded successful read", async () => {
+  let gets = 0;
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/edit") return owner.apply(payload);
+      if (++gets === 1) throw Error("Read offline");
+      return owner.snapshot();
+    },
+  });
+  f.c.openCheckpoint(f.c.state.sessions[0]);
+  f.checkpoint.form.elements.next.value = "Next";
+  await f.submit(f.checkpoint);
+  assert.deepEqual(f.opened, []);
+  await f.recovery(f.checkpoint).button("Refresh view").onclick();
+  assert.deepEqual(f.opened, [{ session: "chat:a" }]);
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
-test('source changes preserve replacement focus and prevent stale local filter application',async()=>{
- const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){owner.apply(payload);return write.promise;}return owner.snapshot();}});f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Old source';const pending=f.submit(f.sentry);f.c.source='github';const outside=new f.Node('input');f.document.body.append(outside);outside.focus();write.resolve({});await pending;assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.close.disabled,false);assert.equal(f.document.activeElement,outside);assert.equal(evaluate(f.c,'sentryView'),'');
+test("source changes preserve replacement focus and prevent stale local filter application", async () => {
+  const write = deferred(),
+    f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/edit") {
+          owner.apply(payload);
+          return write.promise;
+        }
+        return owner.snapshot();
+      },
+    });
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Old source";
+  const pending = f.submit(f.sentry);
+  f.c.source = "github";
+  const outside = new f.Node("input");
+  f.document.body.append(outside);
+  outside.focus();
+  write.resolve({});
+  await pending;
+  assert.equal(f.sentry.dialog.open, true);
+  assert.equal(f.sentry.close.disabled, false);
+  assert.equal(f.document.activeElement, outside);
+  assert.equal(evaluate(f.c, "sentryView"), "");
 });
-test('local change navigation requires accepted-ready and the latest source/query/intent',async()=>{
- for(const mode of ['rejected','unknown','pending','changed-query','ready']){const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/commands/invoke'){if(mode==='rejected'||mode==='unknown'){const error=Error('Failure');error.status=mode==='rejected'?400:503;throw error;}return owner.apply(payload);}if(mode==='pending')throw Error('GET unavailable');return owner.snapshot();}});const initial=f.snapshot();initial.items=[{id:'item:a'}];f.setCanonical(initial);const button=new f.Node('button');f.document.body.append(button);if(mode==='changed-query'){const original=f.c.markChangesRead;f.c.markChangesRead=async payload=>{const result=await original(payload);f.$('#search').value='new query';return result;};}await f.c.markObservedChange({id:'change:a',itemId:'item:a'},button,true);assert.equal(f.opened.length,mode==='ready'?1:0);assert.equal(f.calls.filter(call=>call.path==='/api/commands/invoke').length,1);}
+test("local change navigation requires accepted-ready and the latest source/query/intent", async () => {
+  for (const mode of [
+    "rejected",
+    "unknown",
+    "pending",
+    "changed-query",
+    "ready",
+  ]) {
+    const f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/commands/invoke") {
+          if (mode === "rejected" || mode === "unknown") {
+            const error = Error("Failure");
+            error.status = mode === "rejected" ? 400 : 503;
+            throw error;
+          }
+          return owner.apply(payload);
+        }
+        if (mode === "pending") throw Error("GET unavailable");
+        return owner.snapshot();
+      },
+    });
+    const initial = f.snapshot();
+    initial.items = [{ id: "item:a" }];
+    f.setCanonical(initial);
+    const button = new f.Node("button");
+    f.document.body.append(button);
+    if (mode === "changed-query") {
+      const original = f.c.markChangesRead;
+      f.c.markChangesRead = async (payload) => {
+        const result = await original(payload);
+        f.$("#search").value = "new query";
+        return result;
+      };
+    }
+    await f.c.markObservedChange(
+      { id: "change:a", itemId: "item:a" },
+      button,
+      true,
+    );
+    assert.equal(f.opened.length, mode === "ready" ? 1 : 0);
+    assert.equal(
+      f.calls.filter((call) => call.path === "/api/commands/invoke").length,
+      1,
+    );
+  }
 });
-test('Sentry adopts its own exact selection before a throwing presentation and exposes read-only recovery',async()=>{
- const f=scriptFixture();f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Saved';let paints=0;f.c.render=()=>{if(++paints===2)throw Error('Filter paint failed');};f.sentry.save.focus();await f.submit(f.sentry);assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.save.disabled,true);assert.match(f.recovery(f.sentry).message.textContent,/saved.*could not refresh/);assert.equal(f.document.activeElement,f.recovery(f.sentry).button('Refresh view'));await f.recovery(f.sentry).button('Refresh view').onclick();assert.equal(f.sentry.dialog.open,false);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);
+test("Sentry adopts its own exact selection before a throwing presentation and exposes read-only recovery", async () => {
+  const f = scriptFixture();
+  f.$("#sentry-filter-open").onclick();
+  f.sentry.form.elements.viewName.value = "Saved";
+  let paints = 0;
+  f.c.render = () => {
+    if (++paints === 2) throw Error("Filter paint failed");
+  };
+  f.sentry.save.focus();
+  await f.submit(f.sentry);
+  assert.equal(f.sentry.dialog.open, true);
+  assert.equal(f.sentry.save.disabled, true);
+  assert.match(
+    f.recovery(f.sentry).message.textContent,
+    /saved.*could not refresh/,
+  );
+  assert.equal(
+    f.document.activeElement,
+    f.recovery(f.sentry).button("Refresh view"),
+  );
+  await f.recovery(f.sentry).button("Refresh view").onclick();
+  assert.equal(f.sentry.dialog.open, false);
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
-test('Snooze captures its item, freezes pending controls, and keeps an unknown result locked after refresh',async()=>{
- const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){owner.apply(payload);return write.promise;}return owner.snapshot();}});f.c.openSnooze({id:'item:a',title:'A'});f.snooze.form.elements.duration.value='change';f.snooze.save.focus();const pending=f.submit(f.snooze);f.c.requestDialogClose(f.snooze.dialog);await f.submit(f.snooze);assert.equal(f.snooze.dialog.open,true);assert.equal(f.document.activeElement,f.recovery(f.snooze).message);const error=Error('Lost response');error.status=503;write.reject(error);await pending;assert.equal(f.calls[0].payload.id,'item:a');await f.recovery(f.snooze).button('Refresh view').onclick();assert.equal(f.snooze.save.disabled,true);assert.equal(f.snooze.close.disabled,false);assert.match(f.recovery(f.snooze).message.textContent,/outcome is unknown/);await f.submit(f.snooze);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);
+test("Snooze captures its item, freezes pending controls, and keeps an unknown result locked after refresh", async () => {
+  const write = deferred(),
+    f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/edit") {
+          owner.apply(payload);
+          return write.promise;
+        }
+        return owner.snapshot();
+      },
+    });
+  f.c.openSnooze({ id: "item:a", title: "A" });
+  f.snooze.form.elements.duration.value = "change";
+  f.snooze.save.focus();
+  const pending = f.submit(f.snooze);
+  f.c.requestDialogClose(f.snooze.dialog);
+  await f.submit(f.snooze);
+  assert.equal(f.snooze.dialog.open, true);
+  assert.equal(f.document.activeElement, f.recovery(f.snooze).message);
+  const error = Error("Lost response");
+  error.status = 503;
+  write.reject(error);
+  await pending;
+  assert.equal(f.calls[0].payload.id, "item:a");
+  await f.recovery(f.snooze).button("Refresh view").onclick();
+  assert.equal(f.snooze.save.disabled, true);
+  assert.equal(f.snooze.close.disabled, false);
+  assert.match(f.recovery(f.snooze).message.textContent, /outcome is unknown/);
+  await f.submit(f.snooze);
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
-test('actual change-list title, mark-read, and mark-visible handlers use named outcome-aware writes',async()=>{
- for(const kind of ['ready','pending','rejected','unknown'])for(const action of ['title','read','all']){const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/commands/invoke'){if(['rejected','unknown'].includes(kind)){const error=Error('Write failed');error.status=kind==='rejected'?400:503;throw error;}return owner.apply(payload);}if(kind==='pending')throw Error('Read failed');return owner.snapshot();}});const initial=f.snapshot();initial.items=[{id:'item:a',title:'A'}];initial.changes=[{id:'change:a',itemId:'item:a',title:'Changed',source:'github',reference:'PR 1',message:'Open → Done',at:1}];f.setCanonical(initial);f.c.source='changes';f.c.renderFeatureView(f.c.state.items);const button=action==='all'?f.$('#feature-controls').querySelector('button'):f.$('#work-list').querySelector(action==='title'?'.change-title':'.change-read');await button.onclick({currentTarget:button});assert.equal(f.opened.length,kind==='ready'&&action==='title'?1:0);const calls=f.calls.filter(call=>call.path==='/api/commands/invoke');assert.equal(calls.length,1);assert.deepEqual(calls[0].payload,{name:'changes.mark-read',args:{ids:['change:a']}});assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,0);assert.equal(f.messages.length,1);if(kind==='pending')assert.match(f.messages[0],/do not repeat/);}
+test("actual change-list title, mark-read, and mark-visible handlers use named outcome-aware writes", async () => {
+  for (const kind of ["ready", "pending", "rejected", "unknown"])
+    for (const action of ["title", "read", "all"]) {
+      const f = scriptFixture({
+        handler: async (path, payload, owner) => {
+          if (path === "/api/commands/invoke") {
+            if (["rejected", "unknown"].includes(kind)) {
+              const error = Error("Write failed");
+              error.status = kind === "rejected" ? 400 : 503;
+              throw error;
+            }
+            return owner.apply(payload);
+          }
+          if (kind === "pending") throw Error("Read failed");
+          return owner.snapshot();
+        },
+      });
+      const initial = f.snapshot();
+      initial.items = [{ id: "item:a", title: "A" }];
+      initial.changes = [
+        {
+          id: "change:a",
+          itemId: "item:a",
+          title: "Changed",
+          source: "github",
+          reference: "PR 1",
+          message: "Open → Done",
+          at: 1,
+        },
+      ];
+      f.setCanonical(initial);
+      f.c.source = "changes";
+      f.c.renderFeatureView(f.c.state.items);
+      const button =
+        action === "all"
+          ? f.$("#feature-controls").querySelector("button")
+          : f
+              .$("#work-list")
+              .querySelector(
+                action === "title" ? ".change-title" : ".change-read",
+              );
+      await button.onclick({ currentTarget: button });
+      assert.equal(
+        f.opened.length,
+        kind === "ready" && action === "title" ? 1 : 0,
+      );
+      const calls = f.calls.filter(
+        (call) => call.path === "/api/commands/invoke",
+      );
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0].payload, {
+        name: "changes.mark-read",
+        args: { ids: ["change:a"] },
+      });
+      assert.equal(
+        f.calls.filter((call) => call.path === "/api/edit").length,
+        0,
+      );
+      assert.equal(f.messages.length, 1);
+      if (kind === "pending") assert.match(f.messages[0], /do not repeat/);
+    }
 });
-test('actual palette link preserves captured identities and never navigates on pending or replacement completion',async()=>{
- for(const mode of ['ready','pending','replacement']){const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){owner.apply(payload);if(mode==='replacement')return write.promise;return {};}if(mode==='pending')throw Error('Read failed');return owner.snapshot();}});const initial=f.snapshot();initial.items=[{id:'item:a',title:'A'},{id:'item:b',title:'B'}];f.setCanonical(initial);f.c.paintPalette=()=>{};f.$('#command-dialog').tagName='dialog';f.c.openPalette(f.c.state.items[0]);const pending=f.c.choosePalette();if(mode==='replacement')f.c.openPalette(f.c.state.items[1]);write.resolve({});await pending;assert.deepEqual(f.calls.find(call=>call.path==='/api/edit').payload.itemIds,['item:a','item:b']);assert.equal(f.opened.length,mode==='ready'?1:0);assert.equal(f.$('#command-dialog').open,mode!=='ready');if(mode==='pending'){await f.c.choosePalette();assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);}}
+test("actual palette link preserves captured identities and never navigates on pending or replacement completion", async () => {
+  for (const mode of ["ready", "pending", "replacement"]) {
+    const write = deferred(),
+      f = scriptFixture({
+        handler: async (path, payload, owner) => {
+          if (path === "/api/edit") {
+            owner.apply(payload);
+            if (mode === "replacement") return write.promise;
+            return {};
+          }
+          if (mode === "pending") throw Error("Read failed");
+          return owner.snapshot();
+        },
+      });
+    const initial = f.snapshot();
+    initial.items = [
+      { id: "item:a", title: "A" },
+      { id: "item:b", title: "B" },
+    ];
+    f.setCanonical(initial);
+    f.c.paintPalette = () => {};
+    f.$("#command-dialog").tagName = "dialog";
+    f.c.openPalette(f.c.state.items[0]);
+    const pending = f.c.choosePalette();
+    if (mode === "replacement") f.c.openPalette(f.c.state.items[1]);
+    write.resolve({});
+    await pending;
+    assert.deepEqual(
+      f.calls.find((call) => call.path === "/api/edit").payload.itemIds,
+      ["item:a", "item:b"],
+    );
+    assert.equal(f.opened.length, mode === "ready" ? 1 : 0);
+    assert.equal(f.$("#command-dialog").open, mode !== "ready");
+    if (mode === "pending") {
+      await f.c.choosePalette();
+      assert.equal(
+        f.calls.filter((call) => call.path === "/api/edit").length,
+        1,
+      );
+    }
+  }
 });
-test('related unlink refreshes only its still-open item and reports accepted presentation failure once',async()=>{
- const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit')return owner.apply(payload);throw Error('Read failed');}}),initial=f.snapshot();initial.items=[{id:'item:a',title:'A'},{id:'item:b',title:'B',source:'github'}];initial.workLinks=[['item:a','item:b']];f.setCanonical(initial);f.c.relatedRecords=()=>f.c.state.items;f.c.currentItem=f.c.state.items[0];f.$('#item-dialog').tagName='dialog';f.$('#item-dialog').showModal();f.c.renderRelatedWork(f.c.currentItem);const remove=f.$('#related-work').querySelectorAll('button').find(button=>button.textContent==='Remove manual link');await remove.onclick();assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);assert.equal(f.$('#related-work').contains(remove),true);assert.equal(remove.disabled,true);assert.match(f.messages[0],/Manual link removed.*could not refresh/);
+test("related unlink refreshes only its still-open item and reports accepted presentation failure once", async () => {
+  const f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/edit") return owner.apply(payload);
+        throw Error("Read failed");
+      },
+    }),
+    initial = f.snapshot();
+  initial.items = [
+    { id: "item:a", title: "A" },
+    { id: "item:b", title: "B", source: "github" },
+  ];
+  initial.workLinks = [["item:a", "item:b"]];
+  f.setCanonical(initial);
+  f.c.relatedRecords = () => f.c.state.items;
+  f.c.currentItem = f.c.state.items[0];
+  f.$("#item-dialog").tagName = "dialog";
+  f.$("#item-dialog").showModal();
+  f.c.renderRelatedWork(f.c.currentItem);
+  const remove = f
+    .$("#related-work")
+    .querySelectorAll("button")
+    .find((button) => button.textContent === "Remove manual link");
+  await remove.onclick();
+  assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+  assert.equal(f.$("#related-work").contains(remove), true);
+  assert.equal(remove.disabled, true);
+  assert.match(f.messages[0], /Manual link removed.*could not refresh/);
 });
-test('actual archive caller closes only accepted-ready current dialog and never treats outcome objects as booleans',async()=>{
- for(const mode of ['ready','pending','rejected','unknown','replacement']){const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit'){if(['rejected','unknown'].includes(mode)){const error=Error('Write failed');error.status=mode==='rejected'?400:503;throw error;}owner.apply(payload);if(mode==='replacement')return write.promise;return {};}if(mode==='pending')throw Error('Read failed');return owner.snapshot();}});f.c.item={id:'project:a'};f.c.currentItem=f.c.item;f.$('#item-dialog').tagName='dialog';f.$('#item-dialog').showModal();loadMore(f,['static/sessions.js'],{drop:['agentName']});f.c.renderItemSessions(f.c.item);const action=f.$('#archive-project').onclick,pending=action();await action();if(mode==='replacement')f.c.currentItem={id:'project:b'};write.resolve({});await pending;assert.equal(f.$('#item-dialog').open,mode!=='ready');assert.equal(f.$('#archive-project').disabled,mode!=='rejected');assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);assert.equal(f.messages.length,1);}
+test("actual archive caller closes only accepted-ready current dialog and never treats outcome objects as booleans", async () => {
+  for (const mode of [
+    "ready",
+    "pending",
+    "rejected",
+    "unknown",
+    "replacement",
+  ]) {
+    const write = deferred(),
+      f = scriptFixture({
+        handler: async (path, payload, owner) => {
+          if (path === "/api/edit") {
+            if (["rejected", "unknown"].includes(mode)) {
+              const error = Error("Write failed");
+              error.status = mode === "rejected" ? 400 : 503;
+              throw error;
+            }
+            owner.apply(payload);
+            if (mode === "replacement") return write.promise;
+            return {};
+          }
+          if (mode === "pending") throw Error("Read failed");
+          return owner.snapshot();
+        },
+      });
+    f.c.item = { id: "project:a" };
+    f.c.currentItem = f.c.item;
+    f.$("#item-dialog").tagName = "dialog";
+    f.$("#item-dialog").showModal();
+    loadMore(f, ["static/sessions.js"], { drop: ["agentName"] });
+    f.c.renderItemSessions(f.c.item);
+    const action = f.$("#archive-project").onclick,
+      pending = action();
+    await action();
+    if (mode === "replacement") f.c.currentItem = { id: "project:b" };
+    write.resolve({});
+    await pending;
+    assert.equal(f.$("#item-dialog").open, mode !== "ready");
+    assert.equal(f.$("#archive-project").disabled, mode !== "rejected");
+    assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+    assert.equal(f.messages.length, 1);
+  }
 });
-test('Sentry deletion completes across actual controls normalization but never overrides explicit newer selection',async()=>{
- for(const newer of [false,true]){const write=deferred(),f=scriptFixture({prefs:{sentryView:'existing',sentryFilters:{minUsers:2}},handler:async(path,payload,owner)=>{if(path==='/api/edit'){owner.apply(payload);return write.promise;}return owner.snapshot();}}),initial=f.snapshot();initial.sentryViews=[{id:'existing',name:'Old',filters:{minUsers:2}},{id:'newer',name:'New',filters:{minUsers:8}}];f.setCanonical(initial);f.c.render=()=>f.c.renderSentryControls();f.$('#sentry-filter-open').onclick();const pending=f.$('#sentry-delete').onclick();if(newer)f.$('#sentry-view').onchange({target:{value:'newer'}});write.resolve({});await pending;assert.equal(f.sentry.dialog.open,newer);assert.equal(evaluate(f.c,'sentryView'),newer?'newer':'');assert.equal(evaluate(f.c,'sentryFilters.minUsers||0'),newer?8:0);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);}
+test("Sentry deletion completes across actual controls normalization but never overrides explicit newer selection", async () => {
+  for (const newer of [false, true]) {
+    const write = deferred(),
+      f = scriptFixture({
+        prefs: { sentryView: "existing", sentryFilters: { minUsers: 2 } },
+        handler: async (path, payload, owner) => {
+          if (path === "/api/edit") {
+            owner.apply(payload);
+            return write.promise;
+          }
+          return owner.snapshot();
+        },
+      }),
+      initial = f.snapshot();
+    initial.sentryViews = [
+      { id: "existing", name: "Old", filters: { minUsers: 2 } },
+      { id: "newer", name: "New", filters: { minUsers: 8 } },
+    ];
+    f.setCanonical(initial);
+    f.c.render = () => f.c.renderSentryControls();
+    f.$("#sentry-filter-open").onclick();
+    const pending = f.$("#sentry-delete").onclick();
+    if (newer) f.$("#sentry-view").onchange({ target: { value: "newer" } });
+    write.resolve({});
+    await pending;
+    assert.equal(f.sentry.dialog.open, newer);
+    assert.equal(evaluate(f.c, "sentryView"), newer ? "newer" : "");
+    assert.equal(evaluate(f.c, "sentryFilters.minUsers||0"), newer ? 8 : 0);
+    assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+  }
 });
-test('checkpoint awaits delayed presentation and reports accepted recovery failures without repeating the write',async()=>{
- for(const recovering of [false,true]){let gets=0;const shown=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/edit')return owner.apply(payload);if(recovering&&++gets===1)throw Error('Read failed');return owner.snapshot();}});f.c.showSession=session=>{f.opened.push({session:session.id});return shown.promise;};f.c.openCheckpoint(f.c.state.sessions[0]);f.checkpoint.form.elements.next.value='Next';let settled=false;const saved=f.submit(f.checkpoint);let presentation=saved;if(recovering){await saved;presentation=f.recovery(f.checkpoint).button('Refresh view').onclick();}presentation.then(()=>{settled=true;});await tick();assert.equal(settled,false);assert.deepEqual(f.opened,[{session:'chat:a'}]);assert.equal(f.messages.length,0);shown.reject(Error('Session paint unavailable'));await presentation;assert.equal(settled,true);assert.match(f.messages.at(-1),/Checkpoint saved.*could not refresh.*do not repeat/);await f.submit(f.checkpoint);assert.equal(f.calls.filter(call=>call.path==='/api/edit').length,1);}
+test("checkpoint awaits delayed presentation and reports accepted recovery failures without repeating the write", async () => {
+  for (const recovering of [false, true]) {
+    let gets = 0;
+    const shown = deferred(),
+      f = scriptFixture({
+        handler: async (path, payload, owner) => {
+          if (path === "/api/edit") return owner.apply(payload);
+          if (recovering && ++gets === 1) throw Error("Read failed");
+          return owner.snapshot();
+        },
+      });
+    f.c.showSession = (session) => {
+      f.opened.push({ session: session.id });
+      return shown.promise;
+    };
+    f.c.openCheckpoint(f.c.state.sessions[0]);
+    f.checkpoint.form.elements.next.value = "Next";
+    let settled = false;
+    const saved = f.submit(f.checkpoint);
+    let presentation = saved;
+    if (recovering) {
+      await saved;
+      presentation = f.recovery(f.checkpoint).button("Refresh view").onclick();
+    }
+    presentation.then(() => {
+      settled = true;
+    });
+    await tick();
+    assert.equal(settled, false);
+    assert.deepEqual(f.opened, [{ session: "chat:a" }]);
+    assert.equal(f.messages.length, 0);
+    shown.reject(Error("Session paint unavailable"));
+    await presentation;
+    assert.equal(settled, true);
+    assert.match(
+      f.messages.at(-1),
+      /Checkpoint saved.*could not refresh.*do not repeat/,
+    );
+    await f.submit(f.checkpoint);
+    assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
+  }
 });
-test('Mark visible captures only filtered rendered unread IDs and leaves later arrivals unread',async()=>{
- const write=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>path==='/api/commands/invoke'?write.promise:owner.snapshot()}),initial=f.snapshot();initial.changes=[{id:'shown',title:'Needle',message:'Changed',at:1},{id:'hidden',title:'Other',message:'Changed',at:1},{id:'already',title:'Needle',message:'Changed',at:1,read:true}];f.setCanonical(initial);f.c.source='changes';f.$('#search').value='needle';f.c.renderFeatureView([]);const button=f.$('#feature-controls').querySelector('button'),pending=button.onclick({currentTarget:button});const arrived=f.snapshot();arrived.revision++;arrived.changes.push({id:'later',title:'Needle',message:'Changed',at:2});arrived.changes=arrived.changes.map(change=>change.id==='shown'?{...change,read:true}:change);f.setCanonical(arrived);write.resolve({markedIds:['shown']});await pending;assert.deepEqual(f.calls[0].payload.args.ids,['shown']);assert.equal(f.c.state.changes.find(change=>change.id==='later').read,undefined);assert.equal(f.c.state.changes.find(change=>change.id==='hidden').read,undefined);assert.equal(f.c.state.changes.find(change=>change.id==='shown').read,true);
+test("Mark visible captures only filtered rendered unread IDs and leaves later arrivals unread", async () => {
+  const write = deferred(),
+    f = scriptFixture({
+      handler: async (path, payload, owner) =>
+        path === "/api/commands/invoke" ? write.promise : owner.snapshot(),
+    }),
+    initial = f.snapshot();
+  initial.changes = [
+    { id: "shown", title: "Needle", message: "Changed", at: 1 },
+    { id: "hidden", title: "Other", message: "Changed", at: 1 },
+    { id: "already", title: "Needle", message: "Changed", at: 1, read: true },
+  ];
+  f.setCanonical(initial);
+  f.c.source = "changes";
+  f.$("#search").value = "needle";
+  f.c.renderFeatureView([]);
+  const button = f.$("#feature-controls").querySelector("button"),
+    pending = button.onclick({ currentTarget: button });
+  const arrived = f.snapshot();
+  arrived.revision++;
+  arrived.changes.push({
+    id: "later",
+    title: "Needle",
+    message: "Changed",
+    at: 2,
+  });
+  arrived.changes = arrived.changes.map((change) =>
+    change.id === "shown" ? { ...change, read: true } : change,
+  );
+  f.setCanonical(arrived);
+  write.resolve({ markedIds: ["shown"] });
+  await pending;
+  assert.deepEqual(f.calls[0].payload.args.ids, ["shown"]);
+  assert.equal(
+    f.c.state.changes.find((change) => change.id === "later").read,
+    undefined,
+  );
+  assert.equal(
+    f.c.state.changes.find((change) => change.id === "hidden").read,
+    undefined,
+  );
+  assert.equal(
+    f.c.state.changes.find((change) => change.id === "shown").read,
+    true,
+  );
 });
-test('Mark visible bounds its captured IDs at500 and disables the empty unread action',async()=>{
- const f=scriptFixture(),initial=f.snapshot();initial.changes=Array.from({length:503},(_,index)=>({id:'change:'+index,title:'Visible',message:'Changed',at:1}));f.setCanonical(initial);f.c.source='changes';f.c.renderFeatureView([]);const button=f.$('#feature-controls').querySelector('button');assert.match(button.textContent,/first 500/);await button.onclick({currentTarget:button});assert.equal(f.calls[0].payload.args.ids.length,500);assert.equal(f.c.state.changes.filter(change=>!change.read).length,3);f.$('#search').value='absent';f.c.renderFeatureView([]);assert.equal(f.$('#feature-controls').querySelector('button').disabled,true);
+test("Mark visible bounds its captured IDs at500 and disables the empty unread action", async () => {
+  const f = scriptFixture(),
+    initial = f.snapshot();
+  initial.changes = Array.from({ length: 503 }, (_, index) => ({
+    id: "change:" + index,
+    title: "Visible",
+    message: "Changed",
+    at: 1,
+  }));
+  f.setCanonical(initial);
+  f.c.source = "changes";
+  f.c.renderFeatureView([]);
+  const button = f.$("#feature-controls").querySelector("button");
+  assert.match(button.textContent, /first 500/);
+  await button.onclick({ currentTarget: button });
+  assert.equal(f.calls[0].payload.args.ids.length, 500);
+  assert.equal(f.c.state.changes.filter((change) => !change.read).length, 3);
+  f.$("#search").value = "absent";
+  f.c.renderFeatureView([]);
+  assert.equal(f.$("#feature-controls").querySelector("button").disabled, true);
 });
-function selectEnvironment(f,name){evaluate(f.c,`sentryFilters={environment:${JSON.stringify(name)}};environmentNext=0;`);}
-function environmentEntry(f,name){return evaluate(f.c,`environmentOutcomes.get(${JSON.stringify(name)})`);}
-test('environment POST snapshot never commits; accepted scheduling fences older reads and preserves newer fields',async()=>{
- const old=deferred(),posted=deferred();let gets=0;const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/sentry/environment')return posted.promise;if(++gets===1)return old.promise;const next=owner.snapshot();next.revision=3;next.notes=[{id:'newer',title:'Newer'}];next.sentryEnvironments.A={running:true};return next;}});selectEnvironment(f,'A');const reading=f.c.loadStateSnapshot(),request=f.c.ensureEnvironment();posted.resolve({revision:0,items:[],notes:[{id:'old-post'}]});await request;old.resolve({revision:0,items:[],notes:[{id:'old-get'}]});assert.equal((await reading).accepted,false);assert.equal(f.c.state.notes[0].id,'newer');assert.equal(f.c.state.revision,3);assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,1);
-});
-test('environment accepted GET failure recovers read-only even after cadence and source pause',async()=>{
- let gets=0;const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/sentry/environment')return {revision:0};if(++gets===1)throw Error('GET unavailable');const next=owner.snapshot();next.sentryEnvironments.A={running:true,nextAttempt:Date.now()/1000+300};return next;}});selectEnvironment(f,'A');await f.c.ensureEnvironment();assert.equal(environmentEntry(f,'A').kind,'accepted');evaluate(f.c,'environmentNext=0');await f.c.ensureEnvironment();assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,1);f.c.state.sources.sentry.disabled=true;await f.c.refreshEnvironmentView('A',environmentEntry(f,'A'));assert.equal(environmentEntry(f,'A'),undefined);assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,1);assert.equal(f.c.state.sentryEnvironments.A.running,true);
-});
-test('unknown environment outcome remains sticky after GET success and A→B→A; retry requires explicit action',async()=>{
- const f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/sentry/environment'){const error=Error('Response lost');error.status=503;throw error;}return owner.snapshot();}});selectEnvironment(f,'A');await f.c.ensureEnvironment();const unknown=environmentEntry(f,'A');assert.equal(unknown.kind,'unknown');await f.c.refreshEnvironmentView('A',unknown);assert.equal(environmentEntry(f,'A'),unknown);selectEnvironment(f,'B');await f.c.ensureEnvironment();selectEnvironment(f,'A');await f.c.ensureEnvironment();assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,2);f.c.renderSentryControls(false);const retry=f.$('#sentry-filter-summary').querySelectorAll('button').find(button=>button.textContent==='Retry refresh');assert.ok(retry);assert.equal(retry.disabled,false);await retry.onclick();assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,3);assert.equal(environmentEntry(f,'A').kind,'unknown');
-});
-test('late environmentA completion does not repaint B or remove B outcome; recovery never captures stale page focus',async()=>{
- const posted=deferred(),f=scriptFixture({handler:async(path,payload,owner)=>{if(path==='/api/sentry/environment')return posted.promise;throw Error('GET failed');}});selectEnvironment(f,'A');const pending=f.c.ensureEnvironment();selectEnvironment(f,'B');f.c.renderSentryControls(false);const summary=f.$('#sentry-filter-summary'),before=summary.textContent;const outside=new f.Node('input');f.document.body.append(outside);outside.focus();posted.resolve({revision:0});await pending;assert.equal(summary.textContent,before);assert.equal(f.document.activeElement,outside);assert.equal(environmentEntry(f,'A').kind,'accepted');assert.equal(environmentEntry(f,'B'),undefined);f.c.source='github';await f.c.refreshEnvironmentView('A',environmentEntry(f,'A'));assert.equal(f.calls.filter(call=>call.path==='/api/state').length,1);
-});
-test('environment disabled/backoff admission and full unresolved bound prevent provider calls without evicting outcomes',async()=>{
- const f=scriptFixture();selectEnvironment(f,'A');f.c.state.sources.sentry.disabled=true;await f.c.ensureEnvironment();assert.equal(f.calls.length,0);f.c.state.sources.sentry.disabled=false;f.c.state.sources.sentry.failures=1;f.c.state.sources.sentry.nextAttempt=Date.now()/1000+3600;await f.c.ensureEnvironment();assert.equal(f.calls.length,0);f.c.state.sources.sentry.failures=0;evaluate(f.c,"for(let i=0;i<20;i++)environmentOutcomes.set('env:'+i,{kind:'unknown',pending:false,reading:false});");await f.c.ensureEnvironment();assert.equal(f.calls.length,0);assert.equal(evaluate(f.c,'environmentOutcomes.size'),20);f.c.renderSentryControls(false);assert.match(f.$('#sentry-filter-summary').children.at(-1).textContent,/recover an earlier request/);
-});
-test('unknown environment admission fences an already pending older dashboard snapshot',async()=>{
- const old=deferred(),f=scriptFixture({handler:async(path)=>{if(path==='/api/state')return old.promise;const error=Error('Reply lost');error.status=503;throw error;}});selectEnvironment(f,'A');const reading=f.c.loadStateSnapshot(),before=f.c.state;await f.c.ensureEnvironment();assert.notEqual(f.c.state,before);old.resolve({revision:0,items:[],notes:[{id:'stale'}]});assert.equal((await reading).accepted,false);assert.equal(f.c.state.notes.length,0);assert.equal(environmentEntry(f,'A').kind,'unknown');f.c.state.sources.sentry.disabled=true;f.c.renderSentryControls(false);const retry=f.$('#sentry-filter-summary').querySelectorAll('button').find(button=>button.textContent==='Retry refresh');assert.equal(retry.disabled,true);await retry.onclick();assert.equal(f.calls.filter(call=>call.path==='/api/sentry/environment').length,1);assert.equal(environmentEntry(f,'A').kind,'unknown');
-});
-test('actual environment renderer describes paused cached or absent data without implying admitted work cancelled',async()=>{
- for(const cached of [undefined,{lastSuccess:123,itemIds:[]},{running:true,lastSuccess:123}]){const f=scriptFixture();selectEnvironment(f,'A');f.c.state.sources.sentry.disabled=true;if(cached)f.c.state.sentryEnvironments.A=cached;f.c.renderSentryControls();await tick();const summary=f.$('#sentry-filter-summary').textContent;assert.match(summary,cached?.running?/refreshing.*paused for new requests/:cached?.lastSuccess?/connection paused.*cached now/:/connection paused.*no cached data/);assert.doesNotMatch(summary,/loading/);assert.equal(f.calls.length,0);}
-});
-
-test('shared form refresh rechecks ownership after render before any completion callback',async()=>{
- const f=scriptFixture();f.briefing.dialog.showModal();const current=f.c.createFeatureForm(f.briefing.dialog,f.briefing.form,'original');let callbacks=0;
- current.result={kind:'accepted',presentation:'pending'};current.acceptedText='Original saved.';current.afterReady=()=>{callbacks++;f.briefing.dialog.close();};
- f.c.render=()=>{f.briefing.dialog.close();f.briefing.dialog.showModal();f.c.createFeatureForm(f.briefing.dialog,f.briefing.form,'replacement');f.briefing.form.elements.body.value='Replacement draft';f.briefing.form.elements.body.focus();};
- await f.c.refreshFeatureForm(current);
- assert.equal(callbacks,0);assert.equal(f.briefing.dialog.open,true);assert.equal(f.briefing.form.elements.body.value,'Replacement draft');assert.equal(f.document.activeElement,f.briefing.form.elements.body);assert.equal(f.calls.filter(call=>call.path!=='/api/state').length,0);
-});
-
-test('configured Settings, Find work and Commands retain the exact pending form until its cancel owner permits navigation',async()=>{
- for(const id of ['settings','find-work','commands']){
-  const write=deferred(),f=scriptFixture({handler:()=>write.promise});let settingsOpens=0;
-  Object.assign(f.c,{settingsCategory:'appearance',settingsBaseline:{},settingsDraft:{},settingsDirty:false,settingsSaving:false,openSettings(){throw Error('Legacy owner must not run');},loadAppSettings:()=>settingsOpens++});f.$('#settings-dialog').tagName='dialog';
-  loadMore(f,['static/settings.js','static/command-palette.js'],{drop:['openSettings']});
-  f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Unchanged draft';f.sentry.save.focus();const pending=f.submit(f.sentry),holder=f.document.activeElement,region=f.recovery(f.sentry).region;
-  f.$('#command-query').value='Unsent search';f.$('#action-query').value='Unsent commands';f.c.runConfiguredCommand(id);
-  assert.equal(f.sentry.dialog.open,true);assert.equal(f.document.activeElement,holder);assert.equal(f.recovery(f.sentry).region,region);assert.equal(f.sentry.form.elements.viewName.value,'Unchanged draft');assert.equal(f.$('#command-query').value,'Unsent search');assert.equal(f.$('#action-query').value,'Unsent commands');assert.equal(settingsOpens,0);assert.equal(f.calls.length,1);
-  const error=Error('Conflict');error.status=409;write.reject(error);await pending;assert.equal(f.sentry.dialog.open,true);assert.equal(f.sentry.form.elements.viewName.value,'Unchanged draft');
- }
-});
-test('feature opener admission precedes owner disposal, form reset and lifetime changes',async()=>{
- for(const open of ['snooze','briefing','checkpoint','sentry','palette','launch','recovery','details','project','item','skill','schedule','artifact','viewer','review']){
-  const write=deferred(),f=scriptFixture({handler:()=>write.promise});f.$('#sentry-filter-open').onclick();f.sentry.form.elements.viewName.value='Keep';const pending=f.submit(f.sentry),before=f.recovery(f.sentry).region;
-  Object.assign(f.c,{projectEditor:null,rememberReviewUI(){throw Error('Premature review disposal');},gitReviewFocusKey:()=>'',captureDialogReturn(){throw Error('Premature focus capture');},selectedGitDirectory:()=>'/repo'});
-  f.c.openItem=f.actual.openItem;loadMore(f,['static/sessions.js','static/newsletters.js','static/skills-editor.js','static/diff-review.js'],{drop:['showSession','agentName']});
-  const row={id:'captured',agent:'codex',title:'Other'};
-  const actions={snooze:()=>f.c.openSnooze(row),briefing:()=>f.c.openBriefingEditor(),checkpoint:()=>f.c.openCheckpoint(row),sentry:()=>f.$('#sentry-filter-open').onclick(),palette:()=>f.c.openPalette(),launch:()=>f.c.openLaunch(),recovery:()=>f.c.showSessionRecovery(row,'test'),details:()=>f.c.showSession(row),project:()=>f.c.openNote(),item:()=>f.c.openItem(row),skill:()=>f.c.openSkillEditor(),schedule:()=>f.c.openSkillSchedule(row),artifact:()=>f.c.editArtifact(),viewer:()=>f.c.viewArtifact(row),review:()=>f.c.openDiffReview(row)};
-  assert.equal(await actions[open](),false,open);assert.equal(f.sentry.dialog.open,true,open);assert.equal(f.recovery(f.sentry).region,before,open);assert.equal(f.sentry.form.elements.viewName.value,'Keep',open);assert.equal(f.calls.length,1,open);
-  const error=Error('Rejected');error.status=400;write.reject(error);await pending;
- }
-});
-test('focus-owned nested dialog veto wins over DOM insertion order and newly opened owners are never dismissed',()=>{
- const f=scriptFixture(),child=new f.Node('dialog'),parent=new f.Node('dialog'),field=new f.Node('input'),order=[];child.append(field);f.document.body.append(child,parent);child.open=parent.open=true;field.focus();
- child.addEventListener('cancel',event=>{order.push('child');event.preventDefault();});parent.addEventListener('cancel',()=>order.push('parent'));
- assert.equal(f.c.requestDialogNavigation(),false);assert.deepEqual(order,['child']);assert.equal(parent.open,true);assert.equal(f.document.activeElement,field);
- child.events.cancel=[];child.addEventListener('cancel',()=>{const next=new f.Node('dialog');next.addEventListener('cancel',()=>{throw Error('New modal must survive');});next.open=true;f.document.body.append(next);});
- assert.equal(f.c.requestDialogNavigation(),false);assert.equal(f.document.querySelectorAll('dialog[open]').length,2);
-});
-test('palette source links prevent browser navigation and agent launch before a protected owner permits dismissal',()=>{
- const f=scriptFixture();let opened=0;f.c.linkedSessions=()=>[];f.c.quickStart=()=>opened++;f.c.openSavedSession=()=>opened++;
- evaluate(f.c,"paletteEntries=[{item:{id:'work:one',url:'https://example.invalid/issue'}}];paletteSelected=0;paletteAnchor=null;paintPaletteActions(false);");
- const links=f.$('#command-actions').children,link=links.find(node=>node.tagName==='a'),launch=links.find(node=>node.textContent==='Start agent ↗');f.sentry.dialog.open=true;f.sentry.dialog.addEventListener('cancel',event=>event.preventDefault());let prevented=0;link.onclick({preventDefault:()=>prevented++});launch.onclick();assert.equal(prevented,1);assert.equal(opened,0);assert.equal(f.sentry.dialog.open,true);
-});
-test('Settings wrapper opens and reopens only the real preferences owner, without legacy connection mutations',async()=>{
- const f=scriptFixture();let loads=0,resets=0,paints=0;
- f.$('#settings-dialog').tagName='dialog';Object.assign(f.c,{settingsCategory:'appearance',settingsSaving:false,settingsBaseline:{},settingsDraft:{},openSettings(){throw Error('Obsolete legacy Settings owner');},loadAppSettings:async({canApply})=>{loads++;return canApply()?{values:{},revision:loads}:null;},resetSettingsDraft(){resets++;},resetSettingsFilter(){},paintSettingsBody(){paints++;},updateSettingsDirty(){}});
- loadMore(f,['static/settings.js'],{drop:['openSettings']});
- await f.c.openSettings();assert.equal(f.$('#settings-dialog').open,true);f.$('#settings-dialog').close();await f.c.openSettings();assert.equal(loads,2);assert.equal(resets,2);assert.equal(paints,2);assert.equal(f.$('#settings-dialog').open,true);
-});
-test('late preferences and theme reads cannot commit or paint over a newly opened protected dialog',async()=>{
- for(const owner of ['preferences','theme']){
-  const f=scriptFixture(),read=deferred();let committed=0,painted=0;Object.assign(f.c,{settingsCategory:'appearance',settingsSaving:false,settingsBaseline:{},settingsDraft:{},loadAppSettings:async({canApply})=>{await read.promise;if(!canApply())return null;committed++;return {};},resetSettingsDraft(){painted++;},resetSettingsFilter(){},paintSettingsBody(){painted++;},updateSettingsDirty(){}});
-  loadMore(f,['static/settings.js','static/product-tools.js']);
-  const pending=owner==='theme'?f.c.openThemeChooser():f.c.openPreferences();f.sentry.dialog.open=true;f.sentry.dialog.addEventListener('cancel',event=>event.preventDefault());f.sentry.form.elements.viewName.value='New guarded draft';f.sentry.form.elements.viewName.focus();const focused=f.document.activeElement;read.resolve();assert.equal(await pending,false);assert.equal(committed,0);assert.equal(painted,0);assert.equal(f.document.activeElement,focused);assert.equal(f.sentry.form.elements.viewName.value,'New guarded draft');assert.equal(f.sentry.dialog.open,true);assert.equal(f.$('#quick-action-picker-form').children.length,0);
- }
-});
-test('async modal context observes queued dialog transitions and releases its short-lived observer',()=>{
- const f=scriptFixture();f.sentry.dialog.open=true;const observer=f.c.MutationObserver,context=f.c.captureDialogNavigation();assert.equal(observer.activeCount,1);assert.equal(context.isCurrent(),true);f.sentry.dialog.close();f.sentry.dialog.showModal();assert.equal(context.isCurrent(),false);context.dispose();assert.equal(observer.activeCount,0);
-});
-
-test('queued native dialog mutations fence empty and same-element ABA before Settings or theme reads may commit',async()=>{
- for(const owner of ['preferences','theme'])for(const delivery of ['queued','callback'])for(const same of [false,true]){
-  if(same&&owner==='theme')continue;
-  const f=scriptFixture(),read=deferred();let commits=0,resets=0;const initial=f.$('#settings-dialog');initial.tagName='dialog';
-  Object.assign(f.c,{settingsCategory:'appearance',settingsSaving:false,settingsBaseline:{},settingsDraft:{},loadAppSettings:async({canApply})=>{await read.promise;if(!canApply())return null;commits++;return {};},resetSettingsDraft(){resets++;},resetSettingsFilter(){},paintSettingsBody(){resets++;},updateSettingsDirty(){}});
-  loadMore(f,['static/settings.js','static/product-tools.js']);
-  const pending=owner==='theme'?f.c.openThemeChooser():f.c.openPreferences(),other=same?initial:new f.Node('dialog');if(!same)f.document.body.append(other);other.showModal();other.close();if(same)other.showModal();if(delivery==='callback')f.c.MutationObserver.flush();read.resolve();assert.equal(await pending,false,owner+delivery);assert.equal(commits,0);assert.equal(resets,0);assert.equal(f.c.MutationObserver.activeCount,0);assert.equal(f.$('#quick-action-picker-form').children.length,0);
- }
-});
-test('already open Settings keeps its exact editable draft without loading or resetting',async()=>{
- const f=scriptFixture(),read=deferred();let commits=0,resets=0;f.$('#settings-dialog').tagName='dialog';f.$('#settings-dialog').showModal();
- const draft={theme:'light'};Object.assign(f.c,{settingsCategory:'appearance',settingsSaving:false,settingsBaseline:{},settingsDraft:draft,loadAppSettings:async({canApply})=>{await read.promise;if(!canApply())return null;commits++;return {};},resetSettingsDraft(){resets++;},resetSettingsFilter(){},paintSettingsBody(){resets++;},updateSettingsDirty(){}});
- loadMore(f,['static/settings.js']);const pending=f.c.openPreferences();draft.theme='Unsaved selection';read.resolve();assert.equal(await pending,true);assert.equal(draft.theme,'Unsaved selection');assert.equal(commits,0);assert.equal(resets,0);assert.equal(f.$('#settings-dialog').open,true);assert.equal(f.c.MutationObserver.activeCount,0);
-});
-test('non-dialog details disclosure does not invalidate asynchronous modal admission',()=>{
- const f=scriptFixture(),details=new f.Node('details');f.document.body.append(details);const context=f.c.captureDialogNavigation();details.open=true;details.open=false;assert.equal(context.isCurrent(),true);context.dispose();assert.equal(f.c.MutationObserver.activeCount,0);
-});
-
-test('disposing admission consumes the last queued native records before disconnect discards them',()=>{
- const f=scriptFixture(),context=f.c.captureDialogNavigation(),dialog=new f.Node('dialog');f.document.body.append(dialog);dialog.showModal();dialog.close();context.dispose();assert.equal(f.c.MutationObserver.activeCount,0);assert.equal(context.isCurrent(),false);
-});
-
-test('configured and legacy fallback Find-work toggles honor the current palette cancel owner',()=>{
- for(const path of ['configured','fallback','native']){
-  const f=scriptFixture(),dialog=f.$('#command-dialog');dialog.tagName='dialog';dialog.open=true;dialog.addEventListener('cancel',event=>event.preventDefault());Object.assign(f.c,{settingsDirty:false,settingsSaving:false,appSettings:null});
-  if(path==='configured'){loadMore(f,['static/settings.js']);f.c.runConfiguredCommand('find-work');}
-  else if(path==='fallback'){const event={metaKey:true,key:'p',shiftKey:false,preventDefault(){}};for(const handler of f.document.listeners.keydown)handler(event);}
-  else{const [handler]=loadMore(f,['static/command-palette.js']).window.listeners['truffle-ui-command'];handler({detail:'find-work'});}
-  assert.equal(dialog.open,true,path);
- }
-});
-
-function settingsNavigationFixture(){
- const f=scriptFixture(),reads=[],counts={paint:0,filter:0,apply:0},dialog=f.$('#settings-dialog'),search=f.$('#settings-search'),modified=f.$('#settings-modified'),body=f.$('#settings-body');dialog.tagName='dialog';search.tagName='input';search.value='private draft filter';modified.setAttribute('aria-pressed','true');body.scrollTop=77;
- const privateField=new f.Node('input');privateField.value='unsaved connection/sharing draft';body.remove();dialog.append(body);body.append(privateField);
- const baseline={revision:1,contentHash:'a'.repeat(64),values:{theme:'saved'}},draft={theme:'unsaved'};Object.assign(f.c,{settingsCategory:'appearance',settingsSaving:false,settingsDirty:true,settingsBaseline:baseline,settingsDraft:draft,appSettings:baseline,window:{truffleThemeCatalog:{}},structuredClone,applyAppSettings:()=>counts.apply++,filterSettings:()=>counts.filter++,paintSettingsBody:()=>counts.paint++,updateSettingsDirty(){},api:async path=>{if(path==='/api/themes')return {themes:{}};assert.equal(path,'/api/settings');const read=deferred();reads.push(read);return read.promise;}});
- loadMore(f,['static/settings.js'],{drop:['openSettings']});
- return {...f,dialog,search,modified,body,baseline,draft,privateField,reads,counts,next:{revision:2,contentHash:'b'.repeat(64),values:{theme:'latest saved'}}};
+function selectEnvironment(f, name) {
+  evaluate(
+    f.c,
+    `sentryFilters={environment:${JSON.stringify(name)}};environmentNext=0;`,
+  );
 }
-test('Settings owner reuses exact open draft and nodes: generic focus only, explicit category filter only',async()=>{
- const f=settingsNavigationFixture();f.dialog.showModal();assert.equal(await f.c.openSettings(),true);assert.equal(f.document.activeElement,f.search);assert.equal(f.search.value,'private draft filter');assert.equal(f.modified.attrs['aria-pressed'],'true');assert.equal(f.body.scrollTop,77);assert.equal(f.c.settingsCategory,'appearance');
- assert.equal(await f.c.openPreferences({category:'connections'}),true);assert.equal(f.c.settingsCategory,'connections');assert.equal(f.search.value,'');assert.equal(f.modified.attrs['aria-pressed'],'false');assert.equal(f.body.scrollTop,0);assert.equal(f.counts.filter,1);assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.c.settingsBaseline,f.baseline);assert.equal(f.privateField.parentElement,f.body);assert.equal(f.privateField.value,'unsaved connection/sharing draft');assert.equal(f.reads.length,0);assert.equal(f.counts.paint,0);
-});
-test('Settings saving, child modal and closed-form veto refuse all category/draft/filter changes and reads',async()=>{
- for(const mode of ['saving','child','veto']){
-  const f=settingsNavigationFixture();if(mode==='veto'){f.sentry.dialog.showModal();f.sentry.dialog.addEventListener('cancel',event=>event.preventDefault());f.sentry.form.elements.viewName.focus();}else{f.dialog.showModal();if(mode==='saving')f.c.settingsSaving=true;else{const child=new f.Node('dialog');child.open=true;f.document.body.append(child);child.focus();}}const focus=f.document.activeElement;
-  assert.equal(await f.c.openPreferences({category:'sharing'}),false);assert.equal(await f.c.openSettings(),false);assert.equal(f.c.settingsCategory,'appearance');assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.c.settingsBaseline,f.baseline);assert.equal(f.search.value,'private draft filter');assert.equal(f.modified.attrs['aria-pressed'],'true');assert.equal(f.document.activeElement,focus);assert.equal(f.reads.length,0);assert.equal(f.counts.paint,0);assert.equal(f.counts.filter,0);
- }
-});
-test('closed Settings commits category only after a current successful load; failed or stale loads preserve its preimage',async()=>{
- for(const mode of ['failed','modal','modal-aba','draft','draft-replaced','baseline','category','source','replaced-dialog','success']){
-  const f=settingsNavigationFixture(),pending=f.c.openPreferences({category:'sharing'});assert.equal(f.reads.length,1);assert.equal(f.c.settingsCategory,'appearance');assert.equal(f.search.value,'private draft filter');
-  if(mode==='failed')f.reads[0].reject(new Error('Metadata unavailable'));else{if(mode.startsWith('modal')){const child=new f.Node('dialog');f.document.body.append(child);child.showModal();if(mode==='modal-aba')child.close();}if(mode==='draft')f.draft.theme='newer unsaved';if(mode==='draft-replaced')f.c.settingsDraft={theme:'replacement draft'};if(mode==='replaced-dialog'){const replacement=new f.Node('dialog');f.document.body.append(replacement);const original=f.document.querySelector;f.document.querySelector=selector=>selector==='#settings-dialog'?replacement:original(selector);}if(mode==='baseline')f.c.settingsBaseline={revision:3};if(mode==='category')f.c.settingsCategory='keyboard';if(mode==='source')f.c.source='notes';f.reads[0].resolve(f.next);}
-  const accepted=await pending;assert.equal(accepted,mode==='success',mode);assert.equal(f.c.MutationObserver.activeCount,0);if(mode==='success'){assert.equal(f.dialog.open,true);assert.equal(f.c.settingsCategory,'sharing');assert.equal(f.c.settingsDraft.theme,'latest saved');assert.equal(f.search.value,'');assert.equal(f.modified.attrs['aria-pressed'],'false');assert.equal(f.counts.paint,1);}else{assert.equal(f.dialog.open,false);assert.equal(f.c.settingsCategory,mode==='category'?'keyboard':'appearance');if(mode==='draft-replaced')assert.equal(f.c.settingsDraft.theme,'replacement draft');else assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.search.value,'private draft filter');assert.equal(f.modified.attrs['aria-pressed'],'true');assert.equal(f.counts.paint,0);}assert.equal(f.privateField.value,'unsaved connection/sharing draft');
- }
-});
-test('newer admitted Settings request wins concurrent closed loads without older category or draft commit',async()=>{
- const f=settingsNavigationFixture(),first=f.c.openPreferences({category:'sharing'}),second=f.c.openPreferences({category:'agents'});assert.equal(f.reads.length,2);f.reads[0].resolve(f.next);assert.equal(await first,false);assert.equal(f.dialog.open,false);assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.c.settingsCategory,'appearance');f.reads[1].resolve({...f.next,revision:3});assert.equal(await second,true);assert.equal(f.c.settingsCategory,'agents');assert.equal(f.c.settingsBaseline.revision,3);assert.equal(f.counts.paint,1);
-});
-function installSettingsRoute(f,route){
- if(route==='page'){loadMore(f,['static/page-settings.js']);return ()=>f.c.openPageSettingsCategory('connections');}
- if(route==='appchat'){loadMore(f,['static/app-chat.js']);return ()=>f.c.appChatNavigate({type:'navigate',destination:'settings',category:'connections'});}
- f.menu=new f.Node('details');f.menu.open=true;f.document.body.append(f.menu);f.c.module={exports:{}};loadMore(f,['static/sharing.js'],{elements:{'#sharing-menu':f.menu}});return ()=>f.c.module.exports.sharingPanel.openSharingSettings();
+function environmentEntry(f, name) {
+  return evaluate(f.c, `environmentOutcomes.get(${JSON.stringify(name)})`);
 }
-test('actual page, App chat and Sharing routes honor owner refusal even when Settings is already open',async()=>{
- for(const route of ['page','appchat','sharing']){
-  const f=settingsNavigationFixture();f.dialog.showModal();f.c.settingsDirty=false;f.c.settingsSaving=true;const navigate=installSettingsRoute(f,route);if(route==='appchat')await assert.rejects(navigate(),/Settings could not open/);else assert.equal(await navigate(),route==='page'?false:undefined);assert.equal(f.c.settingsCategory,'appearance');assert.equal(f.search.value,'private draft filter');assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.counts.filter,0);assert.equal(f.reads.length,0);if(route==='sharing'){assert.equal(f.menu.open,true);assert.match(f.$('#sharing-error').querySelector('p').textContent,/Sharing settings could not open/);}
- }
+test("environment POST snapshot never commits; accepted scheduling fences older reads and preserves newer fields", async () => {
+  const old = deferred(),
+    posted = deferred();
+  let gets = 0;
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/sentry/environment") return posted.promise;
+      if (++gets === 1) return old.promise;
+      const next = owner.snapshot();
+      next.revision = 3;
+      next.notes = [{ id: "newer", title: "Newer" }];
+      next.sentryEnvironments.A = { running: true };
+      return next;
+    },
+  });
+  selectEnvironment(f, "A");
+  const reading = f.c.loadStateSnapshot(),
+    request = f.c.ensureEnvironment();
+  posted.resolve({ revision: 0, items: [], notes: [{ id: "old-post" }] });
+  await request;
+  old.resolve({ revision: 0, items: [], notes: [{ id: "old-get" }] });
+  assert.equal((await reading).accepted, false);
+  assert.equal(f.c.state.notes[0].id, "newer");
+  assert.equal(f.c.state.revision, 3);
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    1,
+  );
 });
-test('actual category routes share the no-reload owner and Sharing closes its menu only after acceptance',async()=>{
- for(const route of ['page','appchat','sharing']){const f=settingsNavigationFixture();f.dialog.showModal();f.c.settingsDirty=false;const navigate=installSettingsRoute(f,route);await navigate();assert.equal(f.c.settingsCategory,route==='sharing'?'sharing':'connections');assert.equal(f.c.settingsDraft,f.draft);assert.equal(f.c.settingsBaseline,f.baseline);assert.equal(f.counts.filter,1);assert.equal(f.counts.paint,0);assert.equal(f.reads.length,0);assert.equal(f.privateField.value,'unsaved connection/sharing draft');if(route==='sharing')assert.equal(f.menu.open,false);}
+test("environment accepted GET failure recovers read-only even after cadence and source pause", async () => {
+  let gets = 0;
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/sentry/environment") return { revision: 0 };
+      if (++gets === 1) throw Error("GET unavailable");
+      const next = owner.snapshot();
+      next.sentryEnvironments.A = {
+        running: true,
+        nextAttempt: Date.now() / 1000 + 300,
+      };
+      return next;
+    },
+  });
+  selectEnvironment(f, "A");
+  await f.c.ensureEnvironment();
+  assert.equal(environmentEntry(f, "A").kind, "accepted");
+  evaluate(f.c, "environmentNext=0");
+  await f.c.ensureEnvironment();
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    1,
+  );
+  f.c.state.sources.sentry.disabled = true;
+  await f.c.refreshEnvironmentView("A", environmentEntry(f, "A"));
+  assert.equal(environmentEntry(f, "A"), undefined);
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    1,
+  );
+  assert.equal(f.c.state.sentryEnvironments.A.running, true);
+});
+test("unknown environment outcome remains sticky after GET success and A→B→A; retry requires explicit action", async () => {
+  const f = scriptFixture({
+    handler: async (path, payload, owner) => {
+      if (path === "/api/sentry/environment") {
+        const error = Error("Response lost");
+        error.status = 503;
+        throw error;
+      }
+      return owner.snapshot();
+    },
+  });
+  selectEnvironment(f, "A");
+  await f.c.ensureEnvironment();
+  const unknown = environmentEntry(f, "A");
+  assert.equal(unknown.kind, "unknown");
+  await f.c.refreshEnvironmentView("A", unknown);
+  assert.equal(environmentEntry(f, "A"), unknown);
+  selectEnvironment(f, "B");
+  await f.c.ensureEnvironment();
+  selectEnvironment(f, "A");
+  await f.c.ensureEnvironment();
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    2,
+  );
+  f.c.renderSentryControls(false);
+  const retry = f
+    .$("#sentry-filter-summary")
+    .querySelectorAll("button")
+    .find((button) => button.textContent === "Retry refresh");
+  assert.ok(retry);
+  assert.equal(retry.disabled, false);
+  await retry.onclick();
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    3,
+  );
+  assert.equal(environmentEntry(f, "A").kind, "unknown");
+});
+test("late environmentA completion does not repaint B or remove B outcome; recovery never captures stale page focus", async () => {
+  const posted = deferred(),
+    f = scriptFixture({
+      handler: async (path, payload, owner) => {
+        if (path === "/api/sentry/environment") return posted.promise;
+        throw Error("GET failed");
+      },
+    });
+  selectEnvironment(f, "A");
+  const pending = f.c.ensureEnvironment();
+  selectEnvironment(f, "B");
+  f.c.renderSentryControls(false);
+  const summary = f.$("#sentry-filter-summary"),
+    before = summary.textContent;
+  const outside = new f.Node("input");
+  f.document.body.append(outside);
+  outside.focus();
+  posted.resolve({ revision: 0 });
+  await pending;
+  assert.equal(summary.textContent, before);
+  assert.equal(f.document.activeElement, outside);
+  assert.equal(environmentEntry(f, "A").kind, "accepted");
+  assert.equal(environmentEntry(f, "B"), undefined);
+  f.c.source = "github";
+  await f.c.refreshEnvironmentView("A", environmentEntry(f, "A"));
+  assert.equal(f.calls.filter((call) => call.path === "/api/state").length, 1);
+});
+test("environment disabled/backoff admission and full unresolved bound prevent provider calls without evicting outcomes", async () => {
+  const f = scriptFixture();
+  selectEnvironment(f, "A");
+  f.c.state.sources.sentry.disabled = true;
+  await f.c.ensureEnvironment();
+  assert.equal(f.calls.length, 0);
+  f.c.state.sources.sentry.disabled = false;
+  f.c.state.sources.sentry.failures = 1;
+  f.c.state.sources.sentry.nextAttempt = Date.now() / 1000 + 3600;
+  await f.c.ensureEnvironment();
+  assert.equal(f.calls.length, 0);
+  f.c.state.sources.sentry.failures = 0;
+  evaluate(
+    f.c,
+    "for(let i=0;i<20;i++)environmentOutcomes.set('env:'+i,{kind:'unknown',pending:false,reading:false});",
+  );
+  await f.c.ensureEnvironment();
+  assert.equal(f.calls.length, 0);
+  assert.equal(evaluate(f.c, "environmentOutcomes.size"), 20);
+  f.c.renderSentryControls(false);
+  assert.match(
+    f.$("#sentry-filter-summary").children.at(-1).textContent,
+    /recover an earlier request/,
+  );
+});
+test("unknown environment admission fences an already pending older dashboard snapshot", async () => {
+  const old = deferred(),
+    f = scriptFixture({
+      handler: async (path) => {
+        if (path === "/api/state") return old.promise;
+        const error = Error("Reply lost");
+        error.status = 503;
+        throw error;
+      },
+    });
+  selectEnvironment(f, "A");
+  const reading = f.c.loadStateSnapshot(),
+    before = f.c.state;
+  await f.c.ensureEnvironment();
+  assert.notEqual(f.c.state, before);
+  old.resolve({ revision: 0, items: [], notes: [{ id: "stale" }] });
+  assert.equal((await reading).accepted, false);
+  assert.equal(f.c.state.notes.length, 0);
+  assert.equal(environmentEntry(f, "A").kind, "unknown");
+  f.c.state.sources.sentry.disabled = true;
+  f.c.renderSentryControls(false);
+  const retry = f
+    .$("#sentry-filter-summary")
+    .querySelectorAll("button")
+    .find((button) => button.textContent === "Retry refresh");
+  assert.equal(retry.disabled, true);
+  await retry.onclick();
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/sentry/environment").length,
+    1,
+  );
+  assert.equal(environmentEntry(f, "A").kind, "unknown");
+});
+test("actual environment renderer describes paused cached or absent data without implying admitted work cancelled", async () => {
+  for (const cached of [
+    undefined,
+    { lastSuccess: 123, itemIds: [] },
+    { running: true, lastSuccess: 123 },
+  ]) {
+    const f = scriptFixture();
+    selectEnvironment(f, "A");
+    f.c.state.sources.sentry.disabled = true;
+    if (cached) f.c.state.sentryEnvironments.A = cached;
+    f.c.renderSentryControls();
+    await tick();
+    const summary = f.$("#sentry-filter-summary").textContent;
+    assert.match(
+      summary,
+      cached?.running
+        ? /refreshing.*paused for new requests/
+        : cached?.lastSuccess
+          ? /connection paused.*cached now/
+          : /connection paused.*no cached data/,
+    );
+    assert.doesNotMatch(summary, /loading/);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test("shared form refresh rechecks ownership after render before any completion callback", async () => {
+  const f = scriptFixture();
+  f.briefing.dialog.showModal();
+  const current = f.c.createFeatureForm(
+    f.briefing.dialog,
+    f.briefing.form,
+    "original",
+  );
+  let callbacks = 0;
+  current.result = { kind: "accepted", presentation: "pending" };
+  current.acceptedText = "Original saved.";
+  current.afterReady = () => {
+    callbacks++;
+    f.briefing.dialog.close();
+  };
+  f.c.render = () => {
+    f.briefing.dialog.close();
+    f.briefing.dialog.showModal();
+    f.c.createFeatureForm(f.briefing.dialog, f.briefing.form, "replacement");
+    f.briefing.form.elements.body.value = "Replacement draft";
+    f.briefing.form.elements.body.focus();
+  };
+  await f.c.refreshFeatureForm(current);
+  assert.equal(callbacks, 0);
+  assert.equal(f.briefing.dialog.open, true);
+  assert.equal(f.briefing.form.elements.body.value, "Replacement draft");
+  assert.equal(f.document.activeElement, f.briefing.form.elements.body);
+  assert.equal(f.calls.filter((call) => call.path !== "/api/state").length, 0);
+});
+
+test("configured Settings, Find work and Commands retain the exact pending form until its cancel owner permits navigation", async () => {
+  for (const id of ["settings", "find-work", "commands"]) {
+    const write = deferred(),
+      f = scriptFixture({ handler: () => write.promise });
+    let settingsOpens = 0;
+    Object.assign(f.c, {
+      settingsCategory: "appearance",
+      settingsBaseline: {},
+      settingsDraft: {},
+      settingsDirty: false,
+      settingsSaving: false,
+      openSettings() {
+        throw Error("Legacy owner must not run");
+      },
+      loadAppSettings: () => settingsOpens++,
+    });
+    f.$("#settings-dialog").tagName = "dialog";
+    loadMore(f, ["static/settings.js", "static/command-palette.js"], {
+      drop: ["openSettings"],
+    });
+    f.$("#sentry-filter-open").onclick();
+    f.sentry.form.elements.viewName.value = "Unchanged draft";
+    f.sentry.save.focus();
+    const pending = f.submit(f.sentry),
+      holder = f.document.activeElement,
+      region = f.recovery(f.sentry).region;
+    f.$("#command-query").value = "Unsent search";
+    f.$("#action-query").value = "Unsent commands";
+    f.c.runConfiguredCommand(id);
+    assert.equal(f.sentry.dialog.open, true);
+    assert.equal(f.document.activeElement, holder);
+    assert.equal(f.recovery(f.sentry).region, region);
+    assert.equal(f.sentry.form.elements.viewName.value, "Unchanged draft");
+    assert.equal(f.$("#command-query").value, "Unsent search");
+    assert.equal(f.$("#action-query").value, "Unsent commands");
+    assert.equal(settingsOpens, 0);
+    assert.equal(f.calls.length, 1);
+    const error = Error("Conflict");
+    error.status = 409;
+    write.reject(error);
+    await pending;
+    assert.equal(f.sentry.dialog.open, true);
+    assert.equal(f.sentry.form.elements.viewName.value, "Unchanged draft");
+  }
+});
+test("feature opener admission precedes owner disposal, form reset and lifetime changes", async () => {
+  for (const open of [
+    "snooze",
+    "briefing",
+    "checkpoint",
+    "sentry",
+    "palette",
+    "launch",
+    "recovery",
+    "details",
+    "project",
+    "item",
+    "skill",
+    "schedule",
+    "artifact",
+    "viewer",
+    "review",
+  ]) {
+    const write = deferred(),
+      f = scriptFixture({ handler: () => write.promise });
+    f.$("#sentry-filter-open").onclick();
+    f.sentry.form.elements.viewName.value = "Keep";
+    const pending = f.submit(f.sentry),
+      before = f.recovery(f.sentry).region;
+    Object.assign(f.c, {
+      projectEditor: null,
+      rememberReviewUI() {
+        throw Error("Premature review disposal");
+      },
+      gitReviewFocusKey: () => "",
+      captureDialogReturn() {
+        throw Error("Premature focus capture");
+      },
+      selectedGitDirectory: () => "/repo",
+    });
+    f.c.openItem = f.actual.openItem;
+    loadMore(
+      f,
+      [
+        "static/sessions.js",
+        "static/newsletters.js",
+        "static/skills-editor.js",
+        "static/diff-review.js",
+      ],
+      { drop: ["showSession", "agentName"] },
+    );
+    const row = { id: "captured", agent: "codex", title: "Other" };
+    const actions = {
+      snooze: () => f.c.openSnooze(row),
+      briefing: () => f.c.openBriefingEditor(),
+      checkpoint: () => f.c.openCheckpoint(row),
+      sentry: () => f.$("#sentry-filter-open").onclick(),
+      palette: () => f.c.openPalette(),
+      launch: () => f.c.openLaunch(),
+      recovery: () => f.c.showSessionRecovery(row, "test"),
+      details: () => f.c.showSession(row),
+      project: () => f.c.openNote(),
+      item: () => f.c.openItem(row),
+      skill: () => f.c.openSkillEditor(),
+      schedule: () => f.c.openSkillSchedule(row),
+      artifact: () => f.c.editArtifact(),
+      viewer: () => f.c.viewArtifact(row),
+      review: () => f.c.openDiffReview(row),
+    };
+    assert.equal(await actions[open](), false, open);
+    assert.equal(f.sentry.dialog.open, true, open);
+    assert.equal(f.recovery(f.sentry).region, before, open);
+    assert.equal(f.sentry.form.elements.viewName.value, "Keep", open);
+    assert.equal(f.calls.length, 1, open);
+    const error = Error("Rejected");
+    error.status = 400;
+    write.reject(error);
+    await pending;
+  }
+});
+test("focus-owned nested dialog veto wins over DOM insertion order and newly opened owners are never dismissed", () => {
+  const f = scriptFixture(),
+    child = new f.Node("dialog"),
+    parent = new f.Node("dialog"),
+    field = new f.Node("input"),
+    order = [];
+  child.append(field);
+  f.document.body.append(child, parent);
+  child.open = parent.open = true;
+  field.focus();
+  child.addEventListener("cancel", (event) => {
+    order.push("child");
+    event.preventDefault();
+  });
+  parent.addEventListener("cancel", () => order.push("parent"));
+  assert.equal(f.c.requestDialogNavigation(), false);
+  assert.deepEqual(order, ["child"]);
+  assert.equal(parent.open, true);
+  assert.equal(f.document.activeElement, field);
+  child.events.cancel = [];
+  child.addEventListener("cancel", () => {
+    const next = new f.Node("dialog");
+    next.addEventListener("cancel", () => {
+      throw Error("New modal must survive");
+    });
+    next.open = true;
+    f.document.body.append(next);
+  });
+  assert.equal(f.c.requestDialogNavigation(), false);
+  assert.equal(f.document.querySelectorAll("dialog[open]").length, 2);
+});
+test("palette source links prevent browser navigation and agent launch before a protected owner permits dismissal", () => {
+  const f = scriptFixture();
+  let opened = 0;
+  f.c.linkedSessions = () => [];
+  f.c.quickStart = () => opened++;
+  f.c.openSavedSession = () => opened++;
+  evaluate(
+    f.c,
+    "paletteEntries=[{item:{id:'work:one',url:'https://example.invalid/issue'}}];paletteSelected=0;paletteAnchor=null;paintPaletteActions(false);",
+  );
+  const links = f.$("#command-actions").children,
+    link = links.find((node) => node.tagName === "a"),
+    launch = links.find((node) => node.textContent === "Start agent ↗");
+  f.sentry.dialog.open = true;
+  f.sentry.dialog.addEventListener("cancel", (event) => event.preventDefault());
+  let prevented = 0;
+  link.onclick({ preventDefault: () => prevented++ });
+  launch.onclick();
+  assert.equal(prevented, 1);
+  assert.equal(opened, 0);
+  assert.equal(f.sentry.dialog.open, true);
+});
+test("Settings wrapper opens and reopens only the real preferences owner, without legacy connection mutations", async () => {
+  const f = scriptFixture();
+  let loads = 0,
+    resets = 0,
+    paints = 0;
+  f.$("#settings-dialog").tagName = "dialog";
+  Object.assign(f.c, {
+    settingsCategory: "appearance",
+    settingsSaving: false,
+    settingsBaseline: {},
+    settingsDraft: {},
+    openSettings() {
+      throw Error("Obsolete legacy Settings owner");
+    },
+    loadAppSettings: async ({ canApply }) => {
+      loads++;
+      return canApply() ? { values: {}, revision: loads } : null;
+    },
+    resetSettingsDraft() {
+      resets++;
+    },
+    resetSettingsFilter() {},
+    paintSettingsBody() {
+      paints++;
+    },
+    updateSettingsDirty() {},
+  });
+  loadMore(f, ["static/settings.js"], { drop: ["openSettings"] });
+  await f.c.openSettings();
+  assert.equal(f.$("#settings-dialog").open, true);
+  f.$("#settings-dialog").close();
+  await f.c.openSettings();
+  assert.equal(loads, 2);
+  assert.equal(resets, 2);
+  assert.equal(paints, 2);
+  assert.equal(f.$("#settings-dialog").open, true);
+});
+test("late preferences and theme reads cannot commit or paint over a newly opened protected dialog", async () => {
+  for (const owner of ["preferences", "theme"]) {
+    const f = scriptFixture(),
+      read = deferred();
+    let committed = 0,
+      painted = 0;
+    Object.assign(f.c, {
+      settingsCategory: "appearance",
+      settingsSaving: false,
+      settingsBaseline: {},
+      settingsDraft: {},
+      loadAppSettings: async ({ canApply }) => {
+        await read.promise;
+        if (!canApply()) return null;
+        committed++;
+        return {};
+      },
+      resetSettingsDraft() {
+        painted++;
+      },
+      resetSettingsFilter() {},
+      paintSettingsBody() {
+        painted++;
+      },
+      updateSettingsDirty() {},
+    });
+    loadMore(f, ["static/settings.js", "static/product-tools.js"]);
+    const pending =
+      owner === "theme" ? f.c.openThemeChooser() : f.c.openPreferences();
+    f.sentry.dialog.open = true;
+    f.sentry.dialog.addEventListener("cancel", (event) =>
+      event.preventDefault(),
+    );
+    f.sentry.form.elements.viewName.value = "New guarded draft";
+    f.sentry.form.elements.viewName.focus();
+    const focused = f.document.activeElement;
+    read.resolve();
+    assert.equal(await pending, false);
+    assert.equal(committed, 0);
+    assert.equal(painted, 0);
+    assert.equal(f.document.activeElement, focused);
+    assert.equal(f.sentry.form.elements.viewName.value, "New guarded draft");
+    assert.equal(f.sentry.dialog.open, true);
+    assert.equal(f.$("#quick-action-picker-form").children.length, 0);
+  }
+});
+test("async modal context observes queued dialog transitions and releases its short-lived observer", () => {
+  const f = scriptFixture();
+  f.sentry.dialog.open = true;
+  const observer = f.c.MutationObserver,
+    context = f.c.captureDialogNavigation();
+  assert.equal(observer.activeCount, 1);
+  assert.equal(context.isCurrent(), true);
+  f.sentry.dialog.close();
+  f.sentry.dialog.showModal();
+  assert.equal(context.isCurrent(), false);
+  context.dispose();
+  assert.equal(observer.activeCount, 0);
+});
+
+test("queued native dialog mutations fence empty and same-element ABA before Settings or theme reads may commit", async () => {
+  for (const owner of ["preferences", "theme"])
+    for (const delivery of ["queued", "callback"])
+      for (const same of [false, true]) {
+        if (same && owner === "theme") continue;
+        const f = scriptFixture(),
+          read = deferred();
+        let commits = 0,
+          resets = 0;
+        const initial = f.$("#settings-dialog");
+        initial.tagName = "dialog";
+        Object.assign(f.c, {
+          settingsCategory: "appearance",
+          settingsSaving: false,
+          settingsBaseline: {},
+          settingsDraft: {},
+          loadAppSettings: async ({ canApply }) => {
+            await read.promise;
+            if (!canApply()) return null;
+            commits++;
+            return {};
+          },
+          resetSettingsDraft() {
+            resets++;
+          },
+          resetSettingsFilter() {},
+          paintSettingsBody() {
+            resets++;
+          },
+          updateSettingsDirty() {},
+        });
+        loadMore(f, ["static/settings.js", "static/product-tools.js"]);
+        const pending =
+            owner === "theme" ? f.c.openThemeChooser() : f.c.openPreferences(),
+          other = same ? initial : new f.Node("dialog");
+        if (!same) f.document.body.append(other);
+        other.showModal();
+        other.close();
+        if (same) other.showModal();
+        if (delivery === "callback") f.c.MutationObserver.flush();
+        read.resolve();
+        assert.equal(await pending, false, owner + delivery);
+        assert.equal(commits, 0);
+        assert.equal(resets, 0);
+        assert.equal(f.c.MutationObserver.activeCount, 0);
+        assert.equal(f.$("#quick-action-picker-form").children.length, 0);
+      }
+});
+test("already open Settings keeps its exact editable draft without loading or resetting", async () => {
+  const f = scriptFixture(),
+    read = deferred();
+  let commits = 0,
+    resets = 0;
+  f.$("#settings-dialog").tagName = "dialog";
+  f.$("#settings-dialog").showModal();
+  const draft = { theme: "light" };
+  Object.assign(f.c, {
+    settingsCategory: "appearance",
+    settingsSaving: false,
+    settingsBaseline: {},
+    settingsDraft: draft,
+    loadAppSettings: async ({ canApply }) => {
+      await read.promise;
+      if (!canApply()) return null;
+      commits++;
+      return {};
+    },
+    resetSettingsDraft() {
+      resets++;
+    },
+    resetSettingsFilter() {},
+    paintSettingsBody() {
+      resets++;
+    },
+    updateSettingsDirty() {},
+  });
+  loadMore(f, ["static/settings.js"]);
+  const pending = f.c.openPreferences();
+  draft.theme = "Unsaved selection";
+  read.resolve();
+  assert.equal(await pending, true);
+  assert.equal(draft.theme, "Unsaved selection");
+  assert.equal(commits, 0);
+  assert.equal(resets, 0);
+  assert.equal(f.$("#settings-dialog").open, true);
+  assert.equal(f.c.MutationObserver.activeCount, 0);
+});
+test("non-dialog details disclosure does not invalidate asynchronous modal admission", () => {
+  const f = scriptFixture(),
+    details = new f.Node("details");
+  f.document.body.append(details);
+  const context = f.c.captureDialogNavigation();
+  details.open = true;
+  details.open = false;
+  assert.equal(context.isCurrent(), true);
+  context.dispose();
+  assert.equal(f.c.MutationObserver.activeCount, 0);
+});
+
+test("disposing admission consumes the last queued native records before disconnect discards them", () => {
+  const f = scriptFixture(),
+    context = f.c.captureDialogNavigation(),
+    dialog = new f.Node("dialog");
+  f.document.body.append(dialog);
+  dialog.showModal();
+  dialog.close();
+  context.dispose();
+  assert.equal(f.c.MutationObserver.activeCount, 0);
+  assert.equal(context.isCurrent(), false);
+});
+
+test("configured and legacy fallback Find-work toggles honor the current palette cancel owner", () => {
+  for (const path of ["configured", "fallback", "native"]) {
+    const f = scriptFixture(),
+      dialog = f.$("#command-dialog");
+    dialog.tagName = "dialog";
+    dialog.open = true;
+    dialog.addEventListener("cancel", (event) => event.preventDefault());
+    Object.assign(f.c, {
+      settingsDirty: false,
+      settingsSaving: false,
+      appSettings: null,
+    });
+    if (path === "configured") {
+      loadMore(f, ["static/settings.js"]);
+      f.c.runConfiguredCommand("find-work");
+    } else if (path === "fallback") {
+      const event = {
+        metaKey: true,
+        key: "p",
+        shiftKey: false,
+        preventDefault() {},
+      };
+      for (const handler of f.document.listeners.keydown) handler(event);
+    } else {
+      const [handler] = loadMore(f, ["static/command-palette.js"]).window
+        .listeners["truffle-ui-command"];
+      handler({ detail: "find-work" });
+    }
+    assert.equal(dialog.open, true, path);
+  }
+});
+
+function settingsNavigationFixture() {
+  const f = scriptFixture(),
+    reads = [],
+    counts = { paint: 0, filter: 0, apply: 0 },
+    dialog = f.$("#settings-dialog"),
+    search = f.$("#settings-search"),
+    modified = f.$("#settings-modified"),
+    body = f.$("#settings-body");
+  dialog.tagName = "dialog";
+  search.tagName = "input";
+  search.value = "private draft filter";
+  modified.setAttribute("aria-pressed", "true");
+  body.scrollTop = 77;
+  const privateField = new f.Node("input");
+  privateField.value = "unsaved connection/sharing draft";
+  body.remove();
+  dialog.append(body);
+  body.append(privateField);
+  const baseline = {
+      revision: 1,
+      contentHash: "a".repeat(64),
+      values: { theme: "saved" },
+    },
+    draft = { theme: "unsaved" };
+  Object.assign(f.c, {
+    settingsCategory: "appearance",
+    settingsSaving: false,
+    settingsDirty: true,
+    settingsBaseline: baseline,
+    settingsDraft: draft,
+    appSettings: baseline,
+    window: { truffleThemeCatalog: {} },
+    structuredClone,
+    applyAppSettings: () => counts.apply++,
+    filterSettings: () => counts.filter++,
+    paintSettingsBody: () => counts.paint++,
+    updateSettingsDirty() {},
+    api: async (path) => {
+      if (path === "/api/themes") return { themes: {} };
+      assert.equal(path, "/api/settings");
+      const read = deferred();
+      reads.push(read);
+      return read.promise;
+    },
+  });
+  loadMore(f, ["static/settings.js"], { drop: ["openSettings"] });
+  return {
+    ...f,
+    dialog,
+    search,
+    modified,
+    body,
+    baseline,
+    draft,
+    privateField,
+    reads,
+    counts,
+    next: {
+      revision: 2,
+      contentHash: "b".repeat(64),
+      values: { theme: "latest saved" },
+    },
+  };
+}
+test("Settings owner reuses exact open draft and nodes: generic focus only, explicit category filter only", async () => {
+  const f = settingsNavigationFixture();
+  f.dialog.showModal();
+  assert.equal(await f.c.openSettings(), true);
+  assert.equal(f.document.activeElement, f.search);
+  assert.equal(f.search.value, "private draft filter");
+  assert.equal(f.modified.attrs["aria-pressed"], "true");
+  assert.equal(f.body.scrollTop, 77);
+  assert.equal(f.c.settingsCategory, "appearance");
+  assert.equal(await f.c.openPreferences({ category: "connections" }), true);
+  assert.equal(f.c.settingsCategory, "connections");
+  assert.equal(f.search.value, "");
+  assert.equal(f.modified.attrs["aria-pressed"], "false");
+  assert.equal(f.body.scrollTop, 0);
+  assert.equal(f.counts.filter, 1);
+  assert.equal(f.c.settingsDraft, f.draft);
+  assert.equal(f.c.settingsBaseline, f.baseline);
+  assert.equal(f.privateField.parentElement, f.body);
+  assert.equal(f.privateField.value, "unsaved connection/sharing draft");
+  assert.equal(f.reads.length, 0);
+  assert.equal(f.counts.paint, 0);
+});
+test("Settings saving, child modal and closed-form veto refuse all category/draft/filter changes and reads", async () => {
+  for (const mode of ["saving", "child", "veto"]) {
+    const f = settingsNavigationFixture();
+    if (mode === "veto") {
+      f.sentry.dialog.showModal();
+      f.sentry.dialog.addEventListener("cancel", (event) =>
+        event.preventDefault(),
+      );
+      f.sentry.form.elements.viewName.focus();
+    } else {
+      f.dialog.showModal();
+      if (mode === "saving") f.c.settingsSaving = true;
+      else {
+        const child = new f.Node("dialog");
+        child.open = true;
+        f.document.body.append(child);
+        child.focus();
+      }
+    }
+    const focus = f.document.activeElement;
+    assert.equal(await f.c.openPreferences({ category: "sharing" }), false);
+    assert.equal(await f.c.openSettings(), false);
+    assert.equal(f.c.settingsCategory, "appearance");
+    assert.equal(f.c.settingsDraft, f.draft);
+    assert.equal(f.c.settingsBaseline, f.baseline);
+    assert.equal(f.search.value, "private draft filter");
+    assert.equal(f.modified.attrs["aria-pressed"], "true");
+    assert.equal(f.document.activeElement, focus);
+    assert.equal(f.reads.length, 0);
+    assert.equal(f.counts.paint, 0);
+    assert.equal(f.counts.filter, 0);
+  }
+});
+test("closed Settings commits category only after a current successful load; failed or stale loads preserve its preimage", async () => {
+  for (const mode of [
+    "failed",
+    "modal",
+    "modal-aba",
+    "draft",
+    "draft-replaced",
+    "baseline",
+    "category",
+    "source",
+    "replaced-dialog",
+    "success",
+  ]) {
+    const f = settingsNavigationFixture(),
+      pending = f.c.openPreferences({ category: "sharing" });
+    assert.equal(f.reads.length, 1);
+    assert.equal(f.c.settingsCategory, "appearance");
+    assert.equal(f.search.value, "private draft filter");
+    if (mode === "failed") f.reads[0].reject(new Error("Metadata unavailable"));
+    else {
+      if (mode.startsWith("modal")) {
+        const child = new f.Node("dialog");
+        f.document.body.append(child);
+        child.showModal();
+        if (mode === "modal-aba") child.close();
+      }
+      if (mode === "draft") f.draft.theme = "newer unsaved";
+      if (mode === "draft-replaced")
+        f.c.settingsDraft = { theme: "replacement draft" };
+      if (mode === "replaced-dialog") {
+        const replacement = new f.Node("dialog");
+        f.document.body.append(replacement);
+        const original = f.document.querySelector;
+        f.document.querySelector = (selector) =>
+          selector === "#settings-dialog" ? replacement : original(selector);
+      }
+      if (mode === "baseline") f.c.settingsBaseline = { revision: 3 };
+      if (mode === "category") f.c.settingsCategory = "keyboard";
+      if (mode === "source") f.c.source = "notes";
+      f.reads[0].resolve(f.next);
+    }
+    const accepted = await pending;
+    assert.equal(accepted, mode === "success", mode);
+    assert.equal(f.c.MutationObserver.activeCount, 0);
+    if (mode === "success") {
+      assert.equal(f.dialog.open, true);
+      assert.equal(f.c.settingsCategory, "sharing");
+      assert.equal(f.c.settingsDraft.theme, "latest saved");
+      assert.equal(f.search.value, "");
+      assert.equal(f.modified.attrs["aria-pressed"], "false");
+      assert.equal(f.counts.paint, 1);
+    } else {
+      assert.equal(f.dialog.open, false);
+      assert.equal(
+        f.c.settingsCategory,
+        mode === "category" ? "keyboard" : "appearance",
+      );
+      if (mode === "draft-replaced")
+        assert.equal(f.c.settingsDraft.theme, "replacement draft");
+      else assert.equal(f.c.settingsDraft, f.draft);
+      assert.equal(f.search.value, "private draft filter");
+      assert.equal(f.modified.attrs["aria-pressed"], "true");
+      assert.equal(f.counts.paint, 0);
+    }
+    assert.equal(f.privateField.value, "unsaved connection/sharing draft");
+  }
+});
+test("newer admitted Settings request wins concurrent closed loads without older category or draft commit", async () => {
+  const f = settingsNavigationFixture(),
+    first = f.c.openPreferences({ category: "sharing" }),
+    second = f.c.openPreferences({ category: "agents" });
+  assert.equal(f.reads.length, 2);
+  f.reads[0].resolve(f.next);
+  assert.equal(await first, false);
+  assert.equal(f.dialog.open, false);
+  assert.equal(f.c.settingsDraft, f.draft);
+  assert.equal(f.c.settingsCategory, "appearance");
+  f.reads[1].resolve({ ...f.next, revision: 3 });
+  assert.equal(await second, true);
+  assert.equal(f.c.settingsCategory, "agents");
+  assert.equal(f.c.settingsBaseline.revision, 3);
+  assert.equal(f.counts.paint, 1);
+});
+function installSettingsRoute(f, route) {
+  if (route === "page") {
+    loadMore(f, ["static/page-settings.js"]);
+    return () => f.c.openPageSettingsCategory("connections");
+  }
+  if (route === "appchat") {
+    loadMore(f, ["static/app-chat.js"]);
+    return () =>
+      f.c.appChatNavigate({
+        type: "navigate",
+        destination: "settings",
+        category: "connections",
+      });
+  }
+  f.menu = new f.Node("details");
+  f.menu.open = true;
+  f.document.body.append(f.menu);
+  f.c.module = { exports: {} };
+  loadMore(f, ["static/sharing.js"], { elements: { "#sharing-menu": f.menu } });
+  return () => f.c.module.exports.sharingPanel.openSharingSettings();
+}
+test("actual page, App chat and Sharing routes honor owner refusal even when Settings is already open", async () => {
+  for (const route of ["page", "appchat", "sharing"]) {
+    const f = settingsNavigationFixture();
+    f.dialog.showModal();
+    f.c.settingsDirty = false;
+    f.c.settingsSaving = true;
+    const navigate = installSettingsRoute(f, route);
+    if (route === "appchat")
+      await assert.rejects(navigate(), /Settings could not open/);
+    else assert.equal(await navigate(), route === "page" ? false : undefined);
+    assert.equal(f.c.settingsCategory, "appearance");
+    assert.equal(f.search.value, "private draft filter");
+    assert.equal(f.c.settingsDraft, f.draft);
+    assert.equal(f.counts.filter, 0);
+    assert.equal(f.reads.length, 0);
+    if (route === "sharing") {
+      assert.equal(f.menu.open, true);
+      assert.match(
+        f.$("#sharing-error").querySelector("p").textContent,
+        /Sharing settings could not open/,
+      );
+    }
+  }
+});
+test("actual category routes share the no-reload owner and Sharing closes its menu only after acceptance", async () => {
+  for (const route of ["page", "appchat", "sharing"]) {
+    const f = settingsNavigationFixture();
+    f.dialog.showModal();
+    f.c.settingsDirty = false;
+    const navigate = installSettingsRoute(f, route);
+    await navigate();
+    assert.equal(
+      f.c.settingsCategory,
+      route === "sharing" ? "sharing" : "connections",
+    );
+    assert.equal(f.c.settingsDraft, f.draft);
+    assert.equal(f.c.settingsBaseline, f.baseline);
+    assert.equal(f.counts.filter, 1);
+    assert.equal(f.counts.paint, 0);
+    assert.equal(f.reads.length, 0);
+    assert.equal(f.privateField.value, "unsaved connection/sharing draft");
+    if (route === "sharing") assert.equal(f.menu.open, false);
+  }
 });
