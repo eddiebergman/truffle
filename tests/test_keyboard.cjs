@@ -1,10 +1,13 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const vm=require('node:vm');
-const app=fs.readFileSync('static/app.js','utf8');
-const workspace=fs.readFileSync('static/workspace.js','utf8');
-function fuzzy(){const c=vm.createContext({});vm.runInContext(app.slice(app.indexOf('function fuzzyScore('),app.indexOf('function render() {')),c);return c.fuzzyScore;}
+const {browserContext,loadScripts}=require('./helpers/static-script.cjs');
+// Static scripts in index.html order, up to and without `file`.
+const pageScripts=[...fs.readFileSync('static/index.html','utf8').matchAll(/<script src="\/([^"]+)"/g)].map(match=>'static/'+match[1]).filter(file=>!file.startsWith('static/vendor/xterm')&&file!=='static/vendor/addon-fit.js');
+const scriptsBefore=file=>pageScripts.slice(0,pageScripts.findIndex(name=>name===file));
+// Run document listeners in order until one stops immediate propagation.
+function dispatch(listeners,event){let stopped=false;const stop=event.stopImmediatePropagation;event.stopImmediatePropagation=()=>{stopped=true;stop?.call(event);};for(const listener of listeners){listener(event);if(stopped)break;}}
+function fuzzy(){const c=browserContext({});loadScripts(c,['static/client.js','static/app.js']);return c.fuzzyScore;}
 test('fuzzy search accepts abbreviations and ranks contiguous words above scattered matches',()=>{
   const score=fuzzy();assert.ok(Number.isFinite(score('pymt svr','payments-server')));
   assert.ok(score('server','payments-server')>score('server','Some very early review request'));
@@ -12,14 +15,14 @@ test('fuzzy search accepts abbreviations and ranks contiguous words above scatte
   assert.ok(Number.isFinite(score('eng 1211','Clean up ENG-1211')));
 });
 function keyboard(){
-  const events={},nodes=new Map(),opened=[],moves=[];
+  const nodes=new Map(),opened=[],moves=[];
   const node=()=>({dataset:{},append(){},setAttribute(){},classList:{toggle(){}},focus(){},select(){},closest(){return null;},scrollIntoView(){},click(){},remove(){}});
   const rows=['one','two','three'].map(id=>Object.assign(node(),{dataset:{workId:id}}));
   const $=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);};
   const search=$('#search');search.oninput=()=>{};search.closest=()=>search;
-  const c=vm.createContext({$,navigator:{platform:'MacIntel'},terminalFocus:false,source:'github',githubView:'all',scopePrefs:{},document:{querySelectorAll:()=>rows,querySelector:()=>null,body:{append(link){opened.push(link.href);}},addEventListener(name,handler){events[name]=handler;}},el:node,allItems:()=>rows.map(row=>({id:row.dataset.workId,source:'github',url:'https://github.com/repo/pull/'+row.dataset.workId})),openItem:item=>moves.push(item.id),openNote:item=>moves.push(item.id),persist(){},render(){},liveCandidates:()=>[],beginAgentRename(){moves.push('rename');},openLocationPrompt(){moves.push('new');},toggleSidebar:side=>moves.push('toggle:'+side),cycleAgentTab:()=>false,runTabCommand:command=>moves.push('tab:'+command)});
-  vm.runInContext(workspace.slice(workspace.indexOf('const sidebarKeys='),workspace.indexOf("document.addEventListener('click',event=>")),c);
-  const key=(value,target=rows[0],flags={})=>{let consumed=false;events.keydown({key:value,target,isComposing:false,altKey:false,preventDefault(){consumed=true;},stopImmediatePropagation(){},...flags});return consumed;};
+  const c=browserContext({navigator:{platform:'MacIntel'},terminalFocus:false,source:'github',githubView:'all',document:{querySelectorAll:()=>rows,querySelector:selector=>selector==='dialog[open]'?null:$(selector),body:{append(link){opened.push(link.href);}}},el:node,allItems:()=>rows.map(row=>({id:row.dataset.workId,source:'github',url:'https://github.com/repo/pull/'+row.dataset.workId})),openItem:item=>moves.push(item.id),openNote:item=>moves.push(item.id),persist(){},render(){},liveCandidates:()=>[],beginAgentRename(){moves.push('rename');},openLocationPrompt(){moves.push('new');},toggleSidebar:side=>moves.push('toggle:'+side),cycleAgentTab:()=>false,runTabCommand:command=>moves.push('tab:'+command)});
+  loadScripts(c,scriptsBefore('static/workspace.js'));const host=loadScripts(c,'static/workspace.js',{elements:{'#search':search}});
+  const key=(value,target=rows[0],flags={})=>{let consumed=false;dispatch(host.document.listeners.keydown,{key:value,target,isComposing:false,altKey:false,preventDefault(){consumed=true;},stopImmediatePropagation(){},...flags});return consumed;};
   return {c,key,search,rows,opened,moves};
 }
 test('work search arrows select rows; O opens the source and Enter opens details',()=>{
@@ -53,8 +56,8 @@ test('Command-R renames only from an agent chat and preserves the shifted reload
 });
 
 test('Escape closes an open dialog before search controls or terminals consume it',()=>{
-  const c=vm.createContext({Event,document:{querySelectorAll:()=>[]}});
-  vm.runInContext(app.slice(app.indexOf('function requestDialogClose('),app.indexOf("document.addEventListener('keydown',dismissOpenDialog")),c);
+  const c=browserContext({Event,document:{querySelectorAll:()=>[]}});
+  loadScripts(c,['static/client.js','static/app.js']);
   let closed=0,prevented=0,stopped=0;const dialog={dispatchEvent:()=>true,close(){closed++;}};
   const event={key:'Escape',target:{closest:()=>dialog},preventDefault(){prevented++;},stopImmediatePropagation(){stopped++;}};
   c.dismissOpenDialog(event);assert.equal(closed,1);assert.equal(prevented,1);assert.equal(stopped,1);
@@ -62,11 +65,11 @@ test('Escape closes an open dialog before search controls or terminals consume i
   c.dismissOpenDialog({...event,target:{closest:()=>null}});assert.equal(prevented,1);
 });
 test('palette action arrows wrap while search caret keys keep their normal behavior',()=>{
-  const features=fs.readFileSync('static/features.js','utf8');let selected=0,prevented=0,chosen=0;
+  let selected=0,prevented=0,chosen=0;
   const actions=[0,1,2].map(index=>({focus(){selected=index;doc.activeElement=this;}}));
-  const doc={activeElement:actions[0]},query={},footer={querySelectorAll:()=>actions};
-  const c=vm.createContext({document:doc,$:id=>id==='#command-actions'?footer:query,choosePalette(){chosen++;},paletteEntries:[{}],paletteSelected:0});
-  vm.runInContext(features.slice(features.indexOf('function handlePaletteKey('),features.indexOf("$('#command-query').oninput=")),c);
+  const doc={activeElement:actions[0],querySelector:id=>id==='#command-actions'?footer:query},query={},footer={querySelectorAll:()=>actions};
+  const c=browserContext({document:doc,choosePalette(){chosen++;},paletteEntries:[{}],paletteSelected:0});
+  loadScripts(c,scriptsBefore('static/chat-preparation.js'));
   const event=key=>({key,target:{closest:()=>footer},preventDefault(){prevented++;}});
   c.handlePaletteKey(event('ArrowLeft'));assert.equal(selected,2);c.handlePaletteKey(event('ArrowRight'));assert.equal(selected,0);
   c.handlePaletteKey({...event('ArrowRight'),target:{closest:()=>null}});assert.equal(prevented,2);
@@ -78,13 +81,12 @@ test('Command-H and Command-L toggle the sidebars instead of navigating',()=>{co
 
 test('Escape dismisses a dialog child layer before closing the dialog itself',()=>{
  let closed=0,layers=1;const dialog={dispatchEvent:()=>true,dismissLayer(){if(layers){layers--;return true;}return false;},close(){closed++;}};
- const c=vm.createContext({Event,document:{querySelectorAll:()=>[dialog],addEventListener(){}}});
- vm.runInContext(app.slice(app.indexOf('function requestDialogClose('),app.indexOf("document.addEventListener('keydown',dismissOpenDialog,true);")),c);
+ const c=browserContext({Event,document:{querySelectorAll:()=>[dialog],addEventListener(){}}});
+ loadScripts(c,['static/client.js','static/app.js']);
  const event={key:'Escape',target:{closest:()=>dialog},preventDefault(){},stopImmediatePropagation(){}};c.dismissOpenDialog(event);assert.equal(closed,0);assert.equal(layers,0);c.dismissOpenDialog(event);assert.equal(closed,1);
 });
 
 function shortcutErrorFixture(){
- const settingsSource=fs.readFileSync('static/settings.js','utf8');
  class Node{
   constructor(tag,cls='',text=''){this.tagName=tag;this.className=cls;this.textContent=text;this.children=[];this.attrs={};this.dataset={};this.hidden=false;this.classList={add:()=>{}};}
   append(...nodes){this.children.push(...nodes);for(const node of nodes)node.parentElement=this;}
@@ -98,10 +100,10 @@ function shortcutErrorFixture(){
   focus(){this.focused=true;}
  }
  let rows=[];const footer={'#settings-save':{},'#settings-status':{}},walk=node=>[node,...node.children.flatMap(walk)],all=()=>rows.flatMap(walk);
- const document={getElementById:id=>all().find(node=>node.id===id)||null,querySelectorAll:selector=>all().filter(node=>selector==='.shortcut-input'?node.className.split(' ').includes('shortcut-input'):selector==='[data-settings-reset]'?node.dataset.settingsReset:false)};
+ const document={querySelector:id=>footer[id],getElementById:id=>all().find(node=>node.id===id)||null,querySelectorAll:selector=>all().filter(node=>selector==='.shortcut-input'?node.className.split(' ').includes('shortcut-input'):selector==='[data-settings-reset]'?node.dataset.settingsReset:false)};
  const commands=[{id:'commands',label:'Commands'},{id:'search',label:'Search'}],defaults={keybindings:{commands:'Primary+K',search:'Primary+F'}},values=structuredClone(defaults);
- const c=vm.createContext({structuredClone,document,settingsBaseline:{values:structuredClone(values)},settingsDraft:structuredClone(values),settingsSaving:false,shortcutRecording:null,filterSettings(){},appSettings:{commands,defaults,values},$:id=>footer[id],el:(tag,cls,text)=>new Node(tag,cls,text),settingsButton:(label,onclick,cls)=>Object.assign(new Node('button',cls,label),{onclick}),paintSettingsBody:()=>{rows=commands.map(command=>c.shortcutInput(command));}});
- for(const [start,end]of [['function canonicalShortcut(','function recordedShortcut('],['function settingsReset(','function settingInput('],['function shortcutInput(','function settingsPanel(']])vm.runInContext(settingsSource.slice(settingsSource.indexOf(start),settingsSource.indexOf(end)),c);
+ const c=browserContext({structuredClone,document,settingsBaseline:{values:structuredClone(values)},settingsDraft:structuredClone(values),settingsSaving:false,shortcutRecording:null,filterSettings(){},appSettings:{commands,defaults,values},el:(tag,cls,text)=>new Node(tag,cls,text),settingsButton:(label,onclick,cls)=>Object.assign(new Node('button',cls,label),{onclick}),paintSettingsBody:()=>{rows=commands.map(command=>c.shortcutInput(command));}});
+ loadScripts(c,[...scriptsBefore('static/settings.js'),'static/settings.js']);
  c.paintSettingsBody();c.updateSettingsDirty();return {c,document,footer,get rows(){return rows;},input:id=>document.getElementById('shortcut-'+id),error:id=>document.getElementById('shortcut-'+id+'-error')};
 }
 test('typed shortcut errors expose the exact persistent visible reason and retain existing descriptions',()=>{
@@ -115,12 +117,11 @@ test('shortcut reset and settings rebuild remove stale errors and their descript
 });
 
 test('configured page search consumes Cmd+F only when a visible contextual search can take focus',()=>{
- const settings=fs.readFileSync('static/settings.js','utf8'),events={},calls=[];
+ const calls=[];
  const input={getClientRects:()=>[{}],focus:()=>calls.push('focus'),select:()=>calls.push('select')};let available=true,dialog=null;
- const c=vm.createContext({appSettings:{values:{keybindings:{'page-search':'Primary+F'}}},source:'agents',$:()=>({...input,getClientRects:()=>available?[{}]:[]}),document:{querySelectorAll:()=>dialog?[dialog]:[],querySelector:()=>null,addEventListener:(name,fn)=>events[name]=fn},chordFromEvent:()=> 'Primary+F',runConfiguredCommand:id=>calls.push(id)});
- vm.runInContext(settings.slice(settings.indexOf('function focusPageSearch('),settings.indexOf("document.addEventListener('keydown',event=>{if(event.key==='/'")),c);
- vm.runInContext(settings.slice(settings.indexOf("document.addEventListener('keydown',event=>{if(!appSettings"),settings.indexOf('function settingsButton(')),c);
- const press=()=>{let prevented=0,stopped=0;events.keydown({target:{closest:()=>null},preventDefault:()=>prevented++,stopImmediatePropagation:()=>stopped++});return {prevented,stopped};};
+ const c=browserContext({appSettings:{values:{keybindings:{'page-search':'Primary+F'}}},source:'agents',document:{querySelectorAll:()=>dialog?[dialog]:[],querySelector:selector=>selector==='#search'?{...input,getClientRects:()=>available?[{}]:[]}:null},chordFromEvent:()=> 'Primary+F',runConfiguredCommand:id=>calls.push(id)});
+ loadScripts(c,scriptsBefore('static/settings.js'));const host=loadScripts(c,'static/settings.js');
+ const press=()=>{let prevented=0,stopped=0;dispatch(host.document.listeners.keydown,{target:{closest:()=>null},preventDefault:()=>prevented++,stopImmediatePropagation:()=>stopped++});return {prevented,stopped};};
  assert.deepEqual(press(),{prevented:1,stopped:1});assert.deepEqual(calls,['focus','select']);calls.length=0;
  available=false;assert.deepEqual(press(),{prevented:0,stopped:0});assert.deepEqual(calls,[]);
  dialog={querySelector:()=>null};assert.deepEqual(press(),{prevented:0,stopped:0});
