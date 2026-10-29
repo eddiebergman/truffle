@@ -174,7 +174,7 @@ function renderLiveBar(){
       if(runtime.attention){const dot=el('i','agent-state-dot attention');dot.setAttribute('aria-hidden','true');button.append(dot);}
       button.append(words);
       if(index<9){button.append(el('kbd','agent-shortcut','⌘'+(index+1)));button.setAttribute('aria-keyshortcuts','Meta+'+(index+1));}
-      button.title=`${record?.title||candidate.title} · ${runtime.summary}${runtime.attention?' · Needs your attention':''}${runtime.subagents===null?' · Subagent count unavailable':''} · ${workSummary(record)||candidate.cwd||''} · Rename ⌘R · Tab / Shift+Tab to switch${record?' · Right-click for actions':''}`;
+      button.title=`${record?.title||candidate.title} · ${runtime.summary}${runtime.attention?' · Needs your attention':''}${runtime.subagents===null?' · Subagent count unavailable':''} · ${workSummary(record)||candidate.cwd||''} · Rename ⌘R${record?' · Right-click for actions':''}`;
       if(record)tab.oncontextmenu=event=>{event.preventDefault();if(source!=='agents'||selectedAgentKey!==key)selectAgent(record,candidate);const menu=$('#live-agent-bar .agent-tab[data-agent-key="'+key+'"]')?.querySelector('.agent-menu');if(menu){menu.open=true;menu.querySelector('.text-button')?.focus();}};
       button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(source==='agents'&&selectedAgentKey===candidateKey(candidate)));button.onclick=()=>selectAgent(record,candidate);tab.append(bind(button,key,process,'tab'));
       const snooze=featureButton('',()=>snoozeAgentTab(candidate),'agent-tab-snooze');snooze.append(agentIcon('snooze'));
@@ -249,17 +249,6 @@ async function closeAgentTab(candidate,button){
     if(selectedAgentKey===candidateKey(candidate)){selectedAgentKey='';markAgentNavigation();chooseDefaultAgentSelection();}
     rememberClosedTab(candidate.recordId);persist();render();await loadInventory();toast('Terminal closed',()=>runTabCommand('reopen'));
   }catch(error){toast(error.message);button.disabled=false;await loadInventory();}
-}
-function cycleAgentTab(event){
-  if(event.key!=='Tab'||event.metaKey||event.ctrlKey||event.altKey||event.isComposing||source!=='agents')return false;
-  if(document.querySelector('dialog[open],#agent-topbar details[open],.agent-menu[open]'))return false;
-  const target=event.target,terminal=target.closest?.('.xterm');
-  if(target!==document.body&&(!terminal||target!==terminal&&!target.matches('textarea.xterm-helper-textarea')))return false;
-  const tabs=visibleAgentCandidates();if(!tabs.length)return false;
-  const current=tabs.findIndex(c=>candidateKey(c)===selectedAgentKey);
-  const index=current<0?(event.shiftKey?tabs.length-1:0):(current+(event.shiftKey?-1:1)+tabs.length)%tabs.length;
-  event.preventDefault();event.stopImmediatePropagation();
-  const candidate=tabs[index];selectAgent(recordForCandidate(candidate),candidate);terminalViews.get(candidate.recordId)?.terminal.focus();return true;
 }
 function updateTabDensity(){
   const header=$('#agent-topbar'),count=visibleAgentCandidates().length;
@@ -610,7 +599,6 @@ for(const [key,name]of Object.entries(sidebarKeys)){
 $('#new-note').title='Start session';
 document.addEventListener('keydown',event=>{
   if(event.isComposing||event.altKey)return;
-  if(cycleAgentTab(event))return;
   const primary=/Mac|iPhone|iPad/.test(navigator.platform)?event.metaKey:event.ctrlKey;
   const consume=()=>{event.preventDefault();event.stopImmediatePropagation();};
   if(primary&&!(typeof appSettings!=='undefined'&&appSettings)){

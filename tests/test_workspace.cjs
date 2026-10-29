@@ -106,25 +106,14 @@ function tabKeyboardFixture(){
  const body=node('body'),terminal=node('div','xterm',body),input=node('textarea','xterm-helper-textarea',terminal);
  const document={body,querySelector:selector=>(blocked==='dialog'&&selector.includes('dialog[open]')||['launch-options','snoozed-agents'].includes(blocked)&&selector.includes('#agent-topbar details[open]')||blocked==='agent-menu'&&selector.includes('.agent-menu[open]'))?{}:null,addEventListener:(name,handler)=>events[name]=handler};
  const c=vm.createContext({source:'agents',selectedAgentKey:'one',document,navigator:{platform:'MacIntel'},appSettings:{},workSearchSources:new Set(),visibleAgentCandidates:()=>candidates,candidateKey:x=>x.recordId,recordForCandidate:x=>x,selectAgent:(r,x)=>{selected.push(x.recordId);c.selectedAgentKey=x.recordId;},terminalViews:new Map(candidates.map(x=>[x.recordId,{terminal:{focus:()=>focused.push(x.recordId)}}]))});
- vm.runInContext(source.slice(source.indexOf('function cycleAgentTab('),source.indexOf('function updateTabDensity(')),c);
  const begin=source.indexOf("document.addEventListener('keydown',event=>{\n  if(event.isComposing||event.altKey)return;");vm.runInContext(source.slice(begin,source.indexOf("document.addEventListener('click',event=>",begin)),c);
  const press=(target=input,flags={})=>{let prevented=0,stopped=0;events.keydown({key:'Tab',target,preventDefault(){prevented++;},stopImmediatePropagation(){stopped++;},...flags});return {prevented,stopped};};
  return {c,node,body,terminal,input,candidates,selected,focused,press,block:value=>blocked=value};
 }
-test('actual keydown route cycles chats only from terminal and body origins in both directions with wrap',()=>{
- const f=tabKeyboardFixture();for(const target of [f.input,f.body,f.terminal])assert.deepEqual(f.press(target),{prevented:1,stopped:1});assert.deepEqual(f.selected,['three','four','one']);assert.deepEqual(f.focused,f.selected);
- assert.deepEqual(f.press(f.input,{shiftKey:true}),{prevented:1,stopped:1});assert.equal(f.selected.at(-1),'four');assert.deepEqual(f.press(f.body,{shiftKey:true}),{prevented:1,stopped:1});assert.equal(f.selected.at(-1),'three');
- f.c.selectedAgentKey='missing';f.press(f.input);assert.equal(f.selected.at(-1),'one');f.c.selectedAgentKey='missing';f.press(f.input,{shiftKey:true});assert.equal(f.selected.at(-1),'four');
-});
-test('actual Tab route preserves native traversal for sidebar, tab actions, toolbar, editable and custom focusable controls',()=>{
- const f=tabKeyboardFixture();const controls=[f.node('button','live-agent',f.body),f.node('button','agent-tab-close',f.body),f.node('button','agent-tab-snooze',f.body),f.node('summary','icon-button',f.body),f.node('a','nav-item',f.body),f.node('button','page-settings-gear',f.body),f.node('input','ui-field',f.body),f.node('textarea','',f.body),f.node('select','',f.body),f.node('div','contenteditable',f.body),f.node('div','custom-focusable',f.body),f.node('button','toolbar-action',f.terminal),f.node('a','',f.terminal),f.node('input','',f.terminal),f.node('textarea','ordinary-editor',f.terminal),f.node('div','custom-focusable',f.terminal),f.node('div','contenteditable',f.terminal),f.node('button','xterm-helper-textarea',f.terminal)];
- for(const control of controls)for(const shiftKey of [false,true]){assert.deepEqual(f.press(control,{shiftKey}),{prevented:0,stopped:0},control.tag+' '+control.cls);const child=f.node('span','icon',control);assert.deepEqual(f.press(child,{shiftKey}),{prevented:0,stopped:0});}assert.deepEqual(f.selected,[]);assert.deepEqual(f.focused,[]);
-});
-test('actual chat Tab cycling preserves modifier, composition, page, dialog, menu and empty-inventory guards',()=>{
- const f=tabKeyboardFixture();for(const flags of [{metaKey:true},{ctrlKey:true},{altKey:true},{isComposing:true},{key:'x'}])for(const shiftKey of [false,true])assert.deepEqual(f.press(f.input,{...flags,shiftKey}),{prevented:0,stopped:0});
- for(const kind of ['dialog','launch-options','snoozed-agents','agent-menu']){f.block(kind);assert.deepEqual(f.press(f.body),{prevented:0,stopped:0});assert.deepEqual(f.press(f.input,{shiftKey:true}),{prevented:0,stopped:0});}f.block('');f.c.source='github';assert.deepEqual(f.press(f.input),{prevented:0,stopped:0});f.c.source='agents';f.candidates.length=0;assert.deepEqual(f.press(f.input),{prevented:0,stopped:0});assert.deepEqual(f.selected,[]);assert.deepEqual(f.focused,[]);
-});
 
+test('Tab and Shift+Tab reach the terminal and page instead of switching chats',()=>{
+ const f=tabKeyboardFixture();for(const target of [f.input,f.body,f.terminal])for(const shiftKey of [false,true])assert.deepEqual(f.press(target,{shiftKey}),{prevented:0,stopped:0});assert.deepEqual(f.selected,[]);
+});
 test('agent tabs show an evidenced attention reason without guessing from an idle process',()=>{
   const info=fn('runtimeInfo','workSummary'),candidate={host:'embedded',startedAt:100};
   for(const [reason,label]of [['finished','Finished'],['approval','Approval'],['question','Question'],['failed','Failed']])assert.equal(info(candidate,{runtime:{state:'waiting',reason,at:200}}).label,label);

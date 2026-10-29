@@ -88,7 +88,7 @@ test('valid saved selection is retained when deliberate Agents navigation has ot
 });
 test('selected snooze and close choose a remaining live chat only through their action owners',async()=>{
  for(const action of ['snooze','close']){const f=fixture();for(const candidate of f.candidates)candidate.live=true;f.c.inventory={candidates:[...f.candidates],directories:[]};vm.runInContext(workspace.slice(workspace.indexOf('function liveCandidates('),workspace.indexOf('function snoozeAgentTab(')),f.c);
- if(action==='snooze'){vm.runInContext(workspace.slice(workspace.indexOf('function snoozeAgentTab('),workspace.indexOf('async function restoreSnoozedTab(')),f.c);f.c.snoozeAgentTab(f.candidates[0]);}else{f.c.rememberClosedTab=()=>{};f.c.loadInventory=async()=>f.c.inventory;vm.runInContext(workspace.slice(workspace.indexOf('async function closeAgentTab('),workspace.indexOf('function cycleAgentTab(')),f.c);await f.c.closeAgentTab(f.candidates[0],new f.Node('button'));}f.flush();assert.equal(f.c.selectedAgentKey,'embedded:b');assert.equal(f.views.get('b').node.isConnected,true);}
+ if(action==='snooze'){vm.runInContext(workspace.slice(workspace.indexOf('function snoozeAgentTab('),workspace.indexOf('async function restoreSnoozedTab(')),f.c);f.c.snoozeAgentTab(f.candidates[0]);}else{f.c.rememberClosedTab=()=>{};f.c.loadInventory=async()=>f.c.inventory;vm.runInContext(workspace.slice(workspace.indexOf('async function closeAgentTab('),workspace.indexOf('function updateTabDensity(')),f.c);await f.c.closeAgentTab(f.candidates[0],new f.Node('button'));}f.flush();assert.equal(f.c.selectedAgentKey,'embedded:b');assert.equal(f.views.get('b').node.isConnected,true);}
 });
 
 test('actual Agents sidebar handler delegates default choice to the navigation owner',()=>{
