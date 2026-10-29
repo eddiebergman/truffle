@@ -39,15 +39,16 @@ function fixture({handler,renderFailure=false,prefs={}}={}){
  return {c,Node,$,sentry,briefing,checkpoint,snooze,document,calls,messages,opened,submit,recovery,pendingClose,get renders(){return renders;},get uuids(){return serial;},setCanonical:next=>{canonical=clone(next);c.state=clone(next);},snapshot:()=>clone(canonical)};
 }
 // Load more whole scripts into a fixture. Their load-time requests never settle and
-// their load-time wiring lands on a separate fake document. Names in `drop` are
+// their load-time wiring lands on a separate fake document, except on the nodes in
+// `elements` (selector to fixture node). Names in `drop` are
 // fixture stubs that the real scripts replace. loadScripts restores the context
 // properties, which go stale once a loaded script's top-level let shadows them, so
 // refresh them from the live bindings first.
-function loadMore(f,files,{drop=[]}={}){
+function loadMore(f,files,{drop=[],elements={}}={}){
  const raw=rawContext(f.c),api=f.c.api;for(const name of drop)delete raw[name];
  for(const name of Object.keys(raw))if(/^[A-Za-z_$][\w$]*$/.test(name))raw[name]=f.c[name];
  raw.api=()=>new Promise(()=>{});
- try{return loadScripts(f.c,files);}finally{f.c.api=api;}
+ try{return loadScripts(f.c,files,{elements});}finally{f.c.api=api;}
 }
 function scriptFixture({handler,renderFailure=false,prefs={}}={}){
  const {MutationObserver,recordOpenChange}=require(require('node:path').resolve('tests/helpers/dialog-mutations.cjs'))();
