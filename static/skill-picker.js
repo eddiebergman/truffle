@@ -10,7 +10,9 @@ function skillPickerMatches(skills, query, agent) {
     tokens = words(needle),
     normalized = compact(needle),
     explicitPath = /[\\/]/.test(needle);
-  if (needle && !normalized && !explicitPath) return [];
+  if (needle && !normalized && !explicitPath) {
+    return [];
+  }
   const strong = (value) => {
     const text = lower(value);
     return (
@@ -34,21 +36,25 @@ function skillPickerMatches(skills, query, agent) {
     const identity = [skill.name, skill.commandName].filter(Boolean),
       names = [...identity, ...segments];
     let tier = -1;
-    if (!needle) tier = 0;
-    else if (identity.some((name) => compact(name) === normalized)) tier = 0;
-    else if (identity.some(strong)) tier = 1;
-    else if (
+    if (!needle) {
+      tier = 0;
+    } else if (identity.some((name) => compact(name) === normalized)) {
+      tier = 0;
+    } else if (identity.some(strong)) {
+      tier = 1;
+    } else if (
       (explicitPath && lower(skill.path).includes(needle)) ||
       segments.some(strong)
-    )
+    ) {
       tier = 2;
-    else if (
+    } else if (
       tokens.length &&
       tokens.every((token) =>
         words(skill.description).some((word) => word.startsWith(token)),
       )
-    )
+    ) {
       tier = 3;
+    }
     const score = needle
       ? Math.max(...names.map((name) => fuzzyScore(needle, name)))
       : 0;
@@ -78,7 +84,9 @@ function skillPickerMatches(skills, query, agent) {
 function installSkillPicker() {
   const dialog = $("#skill-editor"),
     form = $("#skill-editor-form");
-  if (!dialog || !form) return;
+  if (!dialog || !form) {
+    return;
+  }
   const picker = el("section", "skill-picker"),
     modes = el("div", "skill-picker-modes");
   modes.setAttribute("role", "group");
@@ -138,7 +146,9 @@ function installSkillPicker() {
     change = featureButton(
       "Change",
       () => {
-        if (!skillEditorMutable()) return;
+        if (!skillEditorMutable()) {
+          return;
+        }
         selected = null;
         input.value = "";
         paintMode();
@@ -150,27 +160,34 @@ function installSkillPicker() {
   selection.append(selectionName, selectionAgents, change);
 
   function syncSelectedAgent() {
-    if (mode !== "installed" || !selected || !skillEditorMutable()) return;
+    if (mode !== "installed" || !selected || !skillEditorMutable()) {
+      return;
+    }
     const agent = form.elements.agent,
       command = form.elements.command;
-    if (!selected.agents.includes(agent.value))
+    if (!selected.agents.includes(agent.value)) {
       agent.value = selected.agents.includes(selectedAgent)
         ? selectedAgent
         : selected.agents[0];
+    }
     const next = invocation(selected, agent.value);
     customCommandKept = Boolean(
       command.value.trim() && command.value !== generatedCommand,
     );
-    if (!customCommandKept) command.value = next;
+    if (!customCommandKept) {
+      command.value = next;
+    }
     generatedCommand = next;
     selectedAgent = agent.value;
   }
   function pills(skill) {
     const row = el("span", "skill-picker-pills");
-    for (const agent of skill.agents)
+    for (const agent of skill.agents) {
       row.append(el("span", "skill-picker-pill", agentName(agent)));
-    for (const scope of skill.sources || [])
+    }
+    for (const scope of skill.sources || []) {
       row.append(el("span", "skill-picker-pill skill-scope-pill", scope));
+    }
     return row;
   }
   function paintMode() {
@@ -182,22 +199,26 @@ function installSkillPicker() {
       option.textContent =
         label + (option.disabled ? " · unavailable for this skill" : "");
     }
-    if (mode === "installed" && selected)
-      status.textContent =
-        "Available for " +
-        selected.agents.map(agentName).join(" and ") +
-        "." +
-        (customCommandKept
-          ? " Custom command kept; check it for " +
-            agentName(form.elements.agent.value) +
-            "."
-          : "");
+    if (mode === "installed" && selected) {
+      status.textContent = `Available for ${selected.agents
+        .map(agentName)
+        .join(" and ")}.${
+        customCommandKept
+          ? ` Custom command kept; check it for ${agentName(
+              form.elements.agent.value,
+            )}.`
+          : ""
+      }`;
+    }
     installed.setAttribute("aria-pressed", String(mode === "installed"));
     file.setAttribute("aria-pressed", String(mode === "file"));
     label.hidden = status.hidden = results.hidden = mode === "file";
     selection.hidden = mode === "file" || !selected;
-    for (const field of common)
-      if (field) field.hidden = mode === "installed" && !selected;
+    for (const field of common) {
+      if (field) {
+        field.hidden = mode === "installed" && !selected;
+      }
+    }
     pathLabel.hidden = mode === "installed";
     save.disabled =
       !skillEditorMutable() || (mode === "installed" && !selected);
@@ -209,12 +230,17 @@ function installSkillPicker() {
     change.disabled = !skillEditorMutable();
   }
   function setMode(next) {
-    if (!skillEditorMutable()) return;
+    if (!skillEditorMutable()) {
+      return;
+    }
     mode = next;
     syncSelectedAgent();
     paintMode();
-    if (mode === "installed") input.focus();
-    else form.elements.skill.focus();
+    if (mode === "installed") {
+      input.focus();
+    } else {
+      form.elements.skill.focus();
+    }
   }
   function renderMatches() {
     results.replaceChildren();
@@ -228,7 +254,7 @@ function installSkillPicker() {
       form.elements.agent.value,
     );
     status.textContent = skills.length
-      ? matches.length + " matches · select one to configure"
+      ? `${matches.length} matches · select one to configure`
       : "No installed skills found. Choose File path to add one directly.";
     for (const skill of matches) {
       const button = el("button", "skill-picker-result"),
@@ -242,20 +268,24 @@ function installSkillPicker() {
       );
       button.disabled = !skillEditorMutable();
       button.onclick = () => {
-        if (!skillEditorMutable()) return;
+        if (!skillEditorMutable()) {
+          return;
+        }
         generation++;
         clearTimeout(timer);
         selected = skill;
-        if (!skill.agents.includes(form.elements.agent.value))
+        if (!skill.agents.includes(form.elements.agent.value)) {
           form.elements.agent.value = skill.agents[0];
+        }
         form.elements.title.value = skill.name;
         form.elements.skill.value = skill.path;
         generatedCommand = invocation(skill, form.elements.agent.value);
         selectedAgent = form.elements.agent.value;
         customCommandKept = false;
         form.elements.command.value = generatedCommand;
-        if (form.elements.description)
+        if (form.elements.description) {
           form.elements.description.value = skill.description;
+        }
         input.value = skill.name;
         results.replaceChildren();
         paintMode();
@@ -276,21 +306,26 @@ function installSkillPicker() {
         request !== generation ||
         !dialog.open ||
         featureForms.get(dialog) !== owner
-      )
+      ) {
         return;
+      }
       skills = catalog.skills || [];
       if (selected && skillEditorMutable()) {
         const known = skills.find((skill) => skill.path === selected.path);
         if (known) {
-          if (form.elements.command.value === invocation(known, selectedAgent))
+          if (
+            form.elements.command.value === invocation(known, selectedAgent)
+          ) {
             generatedCommand = form.elements.command.value;
+          }
           selected = known;
           syncSelectedAgent();
         }
       }
       renderMatches();
-      if (catalog.truncated)
+      if (catalog.truncated) {
         status.textContent += " · More skills may be available by file path.";
+      }
     } catch (error) {
       if (
         request === generation &&
@@ -298,28 +333,35 @@ function installSkillPicker() {
         featureForms.get(dialog) === owner
       ) {
         results.replaceChildren();
-        status.textContent =
-          "Could not discover skills: " +
-          error.message +
-          ". Choose File path to add one directly.";
+        status.textContent = `Could not discover skills: ${
+          error.message
+        }. Choose File path to add one directly.`;
       }
     }
   }
   input.oninput = () => {
-    if (!skillEditorMutable()) return;
+    if (!skillEditorMutable()) {
+      return;
+    }
     selected = null;
     paintMode();
     renderMatches();
   };
   form.elements.agent.addEventListener("change", () => {
-    if (!skillEditorMutable()) return;
+    if (!skillEditorMutable()) {
+      return;
+    }
     if (mode === "installed" && selected) {
       syncSelectedAgent();
       paintMode();
-    } else if (mode === "installed") renderMatches();
+    } else if (mode === "installed") {
+      renderMatches();
+    }
   });
   form.elements.cwd.addEventListener("input", () => {
-    if (!skillEditorMutable() || selected) return;
+    if (!skillEditorMutable() || selected) {
+      return;
+    }
     clearTimeout(timer);
     timer = setTimeout(load, 300);
   });
@@ -365,7 +407,8 @@ function installSkillPicker() {
       void load();
     }
   }).observe(dialog, { attributes: true, attributeFilter: ["open"] });
-  if (pathLabel.firstChild?.nodeType === Node.TEXT_NODE)
+  if (pathLabel.firstChild?.nodeType === Node.TEXT_NODE) {
     pathLabel.firstChild.textContent = "Skill file path";
+  }
 }
 installSkillPicker();

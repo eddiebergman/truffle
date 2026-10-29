@@ -8,7 +8,7 @@ function fixture() {
     pending = [],
     outside = { name: "untouched focus" };
   const node = (id) => {
-    if (!nodes.has(id))
+    if (!nodes.has(id)) {
       nodes.set(id, {
         textContent: "",
         title: "",
@@ -28,6 +28,7 @@ function fixture() {
           this.children = children;
         },
       });
+    }
     return nodes.get(id);
   };
   const c = browserContext({
@@ -43,7 +44,7 @@ function fixture() {
       ),
     linkedSessions: () => [],
     sessionCard() {},
-    itemFolderContexts: (item) => ["item:" + item.id],
+    itemFolderContexts: (item) => [`item:${item.id}`],
     api: async (path, args) => {
       calls.push({ path, ...args });
       return new Promise((resolve, reject) =>
@@ -132,7 +133,7 @@ test("invalid configured paths may resolve a valid fallback while no automatic f
     await tick();
     assert.equal(
       f.label.textContent,
-      cwd ? "Folder: " + cwd : "Folder: choose when launching",
+      cwd ? `Folder: ${cwd}` : "Folder: choose when launching",
     );
   }
 });
@@ -178,8 +179,11 @@ test("closed or changed-source modal rejects pending folder reads without repain
       before = JSON.stringify(f.c.state);
     f.open(project());
     const pendingText = f.label.textContent;
-    if (close) f.dialog.open = false;
-    else f.c.source = "github";
+    if (close) {
+      f.dialog.open = false;
+    } else {
+      f.c.source = "github";
+    }
     f.pending[0].resolve({
       id: "note:a",
       cwd: "/must-not-appear",

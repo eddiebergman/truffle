@@ -47,8 +47,9 @@ function sharingFixture(globals = {}) {
 }
 test("direct names normalize without requiring a directory", () => {
   assert.equal(normalizeShareHandle(" /Eddie "), "eddie");
-  for (const value of ["../eddie", "/", "//eddie", "first last", "a/b"])
+  for (const value of ["../eddie", "/", "//eddie", "first last", "a/b"]) {
     assert.equal(normalizeShareHandle(value), "");
+  }
 });
 test("autocomplete uses names and handles, never aliases or emails", () => {
   const people = [
@@ -133,8 +134,9 @@ test("sharing profiles explicitly select folder or GCS without claiming identity
     ["folder", "/shared/../outside"],
     ["gcs", "file:///shared"],
     ["other", "/shared"],
-  ])
+  ]) {
     assert.throws(() => sharingProfile(kind, root, "eddie"));
+  }
   assert.throws(() => parseSharingProfile({ ...folder, version: 2 }));
 });
 test("saving a reviewed profile uses the current local configuration CAS, never imported revisions", () => {
@@ -181,12 +183,17 @@ function sharingSettingsFixture() {
       for (const item of items) {
         item.remove?.();
         this.children.push(item);
-        if (item && typeof item === "object") item.parentNode = this;
+        if (item && typeof item === "object") {
+          item.parentNode = this;
+        }
       }
     }
     replaceChildren(...items) {
-      for (const child of this.children)
-        if (child && typeof child === "object") child.parentNode = null;
+      for (const child of this.children) {
+        if (child && typeof child === "object") {
+          child.parentNode = null;
+        }
+      }
       this.children = [];
       this.append(...items);
     }
@@ -205,12 +212,15 @@ function sharingSettingsFixture() {
       this.children.push(option);
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentNode)
-        if (node.tag === selector) return node;
+      for (let node = this; node; node = node.parentNode) {
+        if (node.tag === selector) {
+          return node;
+        }
+      }
       return null;
     }
     get isConnected() {
-      return this.tag === "document" || !!this.parentNode?.isConnected;
+      return this.tag === "document" || Boolean(this.parentNode?.isConnected);
     }
     click() {}
   }
@@ -238,13 +248,17 @@ function sharingSettingsFixture() {
       node.onclick = run;
       return node;
     },
-    Option: function (text, value) {
-      this.text = text;
-      this.value = value;
+    Option: class {
+      constructor(text, value) {
+        this.text = text;
+        this.value = value;
+      }
     },
     sharingCommand: async (name, args) => {
       calls.push({ name, args });
-      if (handler) return handler(name, args);
+      if (handler) {
+        return handler(name, args);
+      }
       if (name === "sharing.configure") {
         config = {
           ...config,
@@ -580,16 +594,18 @@ test(
       "Sharing storage type",
       "Sharing storage root",
       "Receiving inbox name",
-    ])
+    ]) {
       assert.equal(f.input(label).disabled, true);
+    }
     for (const label of [
       "Save sharing configuration",
       "Discard draft & reload",
       "Import sharing profile",
       "Export sharing profile",
       "Check inbox access",
-    ])
+    ]) {
       assert.equal(f.button(label).disabled, true);
+    }
     const before = f.calls.length;
     await f.button("Discard draft & reload").onclick();
     assert.equal(f.calls.length, before);
@@ -667,10 +683,11 @@ test("a destination-change retry error stays visible without silently starting a
     selectedAgentKey: "record:chat",
     api: async (path, { name, args }) => {
       calls.push({ path: name, payload: args });
-      if (name === "sharing.send")
+      if (name === "sharing.send") {
         throw new Error(
           "Sharing destination changed. Prepare a new share instead of retrying this send.",
         );
+      }
       return { config: { root: "/shared" }, jobs };
     },
   });
@@ -693,7 +710,9 @@ test("sharing buttons invoke named commands and preserve visible state on failur
   const f = sharingFixture({
       api: async (path, payload) => {
         requests.push({ path, payload });
-        if (reject) throw new Error("Changed destination");
+        if (reject) {
+          throw new Error("Changed destination");
+        }
         return result;
       },
     }),

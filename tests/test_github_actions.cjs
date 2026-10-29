@@ -59,7 +59,7 @@ const pr = (id, head, base, repo = "org/repo") => ({
   headRepository: repo,
   headRefName: head,
   baseRefName: base,
-  reference: "#" + id,
+  reference: `#${id}`,
   status: "needs-review",
   githubState: "OPEN",
 });
@@ -92,8 +92,9 @@ test("branch matching ignores other repos, closed PRs, ambiguous fork heads and 
     [base, { ...base, id: "duplicate" }, tip],
     [{ ...base, headRepository: "fork/repo" }, tip],
     [{ ...base, headRefName: null }, tip],
-  ])
+  ]) {
     assert.equal(githubStackGroups([tip], candidates)[0].root, null);
+  }
 });
 test("cycles fail open and branching children retain shared root", () => {
   const a = pr("1", "a", "b"),
@@ -150,17 +151,24 @@ function reviewPanelFixture() {
       }
     }
     replaceChildren(...nodes) {
-      if (this.contains(document.activeElement)) document.activeElement = body;
-      for (const node of this.children) node.parent = null;
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
+      for (const node of this.children) {
+        node.parent = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
     remove() {
-      if (this.contains(document.activeElement)) document.activeElement = body;
-      if (this.parent)
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
+      if (this.parent) {
         this.parent.children = this.parent.children.filter(
           (node) => node !== this,
         );
+      }
       this.parent = null;
     }
     contains(node) {
@@ -178,7 +186,9 @@ function reviewPanelFixture() {
       delete this.attrs[key];
     }
     focus() {
-      if (this.isConnected && !this.disabled) document.activeElement = this;
+      if (this.isConnected && !this.disabled) {
+        document.activeElement = this;
+      }
     }
   }
   const body = new Element("body"),
@@ -196,7 +206,7 @@ function reviewPanelFixture() {
     id,
     source: "github",
     kind: "Pull request",
-    reference: "#" + id.slice(-1),
+    reference: `#${id.slice(-1)}`,
     requestedReviewers: [],
     reviewerUpdatedAt: Date.now() / 1000,
     canUpdate: true,
@@ -269,7 +279,9 @@ function reviewPanelFixture() {
   };
 }
 const settle = async () => {
-  for (let i = 0; i < 8; i++) await Promise.resolve();
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+  }
 };
 const githubReceipt = (id, action, extra = {}) => ({
   id,
@@ -420,7 +432,9 @@ test("responses for a closed or replaced PR panel never repaint or clear inputs 
     assert.equal(input.value, "keep-b");
     assert.equal(f.messages.length, 0);
     assert.equal(f.renders, 0);
-    if (delayedStage === "command") assert.equal(f.requests.length, 1);
+    if (delayedStage === "command") {
+      assert.equal(f.requests.length, 1);
+    }
   }
 });
 test("remote-confirmed local-save failure keeps uncertainty text and requires Refresh rather than a mutation replay", async () => {
@@ -687,7 +701,7 @@ test("closing returns to the matching replacement chip, then stable fallback, on
         "github-reviewer-chip",
         "New reviewer chip",
       );
-      chip.dataset.focusKey = f.initial.id + ":reviewers";
+      chip.dataset.focusKey = `${f.initial.id}:reviewers`;
       f.body.append(unrelated, chip);
     }
     f.all()
@@ -810,8 +824,9 @@ test("local reviewer validation never takes outside focus or acts through a clos
     form.onsubmit({ preventDefault() {} });
     assert.equal(f.calls.length, 0);
     assert.equal(f.document.activeElement, target);
-    if (move !== "outside")
+    if (move !== "outside") {
       assert.equal(input.attrs["aria-invalid"], undefined);
+    }
   }
 });
 test("valid username syntax matches owner bounds and normalized requests while remote failures stay general", async () => {
@@ -821,7 +836,7 @@ test("valid username syntax matches owner bounds and normalized requests while r
     "a-b",
     "a--b",
     "a".repeat(39),
-    "@" + "a".repeat(39),
+    `@${"a".repeat(39)}`,
   ]) {
     const f = reviewPanelFixture();
     f.open();

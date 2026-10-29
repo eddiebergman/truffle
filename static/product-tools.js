@@ -19,24 +19,30 @@ function focusChatTerminal(record, key, view, origin, host, fallback = null) {
       !target?.isConnected ||
       target.closest("[hidden]") ||
       document.querySelector("dialog[open]")
-    )
+    ) {
       return;
+    }
     const active = document.activeElement;
     if (
       active !== origin &&
       active !== document.body &&
       active?.isConnected &&
       !target.contains(active)
-    )
+    ) {
       return;
+    }
     if (view) {
       view.resize();
       view.terminal.focus();
-    } else fallback.focus({ preventScroll: true });
+    } else {
+      fallback.focus({ preventScroll: true });
+    }
   });
 }
 async function showChatTerminal(record, { restart = false } = {}) {
-  if (chatShellRequests.has(record.id)) return;
+  if (chatShellRequests.has(record.id)) {
+    return;
+  }
   const key = selectedAgentKey,
     origin = document.activeElement,
     host = $("#agent-workspace"),
@@ -46,11 +52,12 @@ async function showChatTerminal(record, { restart = false } = {}) {
     let shell = chatShells.get(record.id);
     if (shell && (restart || terminalViews.get(shell.id)?.stopped)) {
       const view = terminalViews.get(shell.id);
-      if (restart && view?.alive)
+      if (restart && view?.alive) {
         await api("/api/shell-terminal/close", {
           id: shell.id,
           generation: view.generation,
         });
+      }
       if (view) {
         view.stopped = true;
         view.observer.disconnect();
@@ -74,14 +81,19 @@ async function showChatTerminal(record, { restart = false } = {}) {
   } catch (error) {
     toast(error.message);
   } finally {
-    if (chatShellRequests.get(record.id) === request)
+    if (chatShellRequests.get(record.id) === request) {
       chatShellRequests.delete(record.id);
+    }
   }
 }
 async function toggleChatTerminal() {
-  if (source !== "agents") return;
+  if (source !== "agents") {
+    return;
+  }
   const record = currentAgentRecord();
-  if (!record || chatShellRequests.has(record.id)) return;
+  if (!record || chatShellRequests.has(record.id)) {
+    return;
+  }
   if (openChatShells.has(record.id)) {
     const key = selectedAgentKey,
       origin = document.activeElement,
@@ -105,9 +117,9 @@ function renderChatTerminal(record, conversation) {
   if (!toggle) {
     toggle = el("button", "icon-button");
     toggle.id = "chat-terminal-toggle";
-    toggle.title =
-      "Toggle chat terminal · " +
-      shortcutLabel(setting("keybindings", {})["chat-terminal"]);
+    toggle.title = `Toggle chat terminal · ${shortcutLabel(
+      setting("keybindings", {})["chat-terminal"],
+    )}`;
     toggle.setAttribute("aria-label", "Toggle chat terminal");
     toggle.innerHTML =
       '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 9 3 3-3 3m6 0h5"/></svg>';
@@ -125,13 +137,17 @@ function renderChatTerminal(record, conversation) {
     if (panel) {
       const shell = chatShells.get(record.id),
         view = shell && terminalViews.get(shell.id);
-      if (view && panel.contains(view.node)) terminalPool.append(view.node);
+      if (view && panel.contains(view.node)) {
+        terminalPool.append(view.node);
+      }
       panel.remove();
     }
     return;
   }
   const shell = chatShells.get(record.id);
-  if (!shell) return;
+  if (!shell) {
+    return;
+  }
   if (panel && panel.dataset.shellId !== shell.id) {
     panel.remove();
     panel = null;
@@ -154,14 +170,20 @@ function renderChatTerminal(record, conversation) {
     conversation.append(panel);
   }
   const view = ensureTerminal(shell);
-  if (!panel.contains(view.node)) panel.append(view.node);
+  if (!panel.contains(view.node)) {
+    panel.append(view.node);
+  }
   requestAnimationFrame(() => {
-    if (view.node.isConnected && !view.node.closest("[hidden]")) view.resize();
+    if (view.node.isConnected && !view.node.closest("[hidden]")) {
+      view.resize();
+    }
   });
 }
 new MutationObserver(() => {
   const button = $("#chat-terminal-toggle");
-  if (button) button.hidden = source !== "agents";
+  if (button) {
+    button.hidden = source !== "agents";
+  }
 }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 let actionOutputId = "",
   actionOutputTimer = null;
@@ -205,16 +227,20 @@ async function openActionOutput(id) {
 async function refreshActionOutput() {
   clearTimeout(actionOutputTimer);
   const panel = $("#action-output-panel");
-  if (!panel || panel.hidden) return;
+  if (!panel || panel.hidden) {
+    return;
+  }
   try {
     const { jobs } = await api("/api/quick-actions"),
       rows = jobs.sort((a, b) => b.startedAt - a.startedAt);
     const select = $("#action-output-run");
     select.replaceChildren();
-    for (const row of rows)
-      select.add(new Option(row.title + " · " + row.state, row.id));
-    if (!rows.some((row) => row.id === actionOutputId))
+    for (const row of rows) {
+      select.add(new Option(`${row.title} · ${row.state}`, row.id));
+    }
+    if (!rows.some((row) => row.id === actionOutputId)) {
       actionOutputId = rows[0]?.id || "";
+    }
     select.value = actionOutputId;
     const job = rows.find((row) => row.id === actionOutputId);
     $("#action-output-meta").textContent = job
@@ -224,7 +250,7 @@ async function refreshActionOutput() {
           job.state,
           job.exitCode === null || job.exitCode === undefined
             ? null
-            : "Exit " + job.exitCode,
+            : `Exit ${job.exitCode}`,
           job.message,
         ]
           .filter(Boolean)
@@ -235,14 +261,17 @@ async function refreshActionOutput() {
       (job?.state === "running"
         ? "Running…"
         : "This command produced no output.");
-    if (rows.some((row) => row.state === "running"))
+    if (rows.some((row) => row.state === "running")) {
       actionOutputTimer = setTimeout(refreshActionOutput, 750);
+    }
   } catch (error) {
     $("#action-output-text").textContent = error.message;
   }
 }
 async function openThemeChooser() {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   const opening = {},
     navigation = captureDialogNavigation();
   openThemeChooser.current = opening;
@@ -259,8 +288,9 @@ async function openThemeChooser() {
     !baseline ||
     openThemeChooser.current !== opening ||
     !navigation.isCurrent()
-  )
+  ) {
     return false;
+  }
   const dialog = $("#quick-action-picker"),
     form = $("#quick-action-picker-form"),
     page = source;
@@ -304,8 +334,9 @@ async function openThemeChooser() {
     previewTheme(null);
   };
   const cancel = (event) => {
-    if (owns() && (current.pending || current.refreshing))
+    if (owns() && (current.pending || current.refreshing)) {
       event.preventDefault();
+    }
   };
   const idle = () =>
     current.isCurrent() &&
@@ -314,10 +345,14 @@ async function openThemeChooser() {
     !current.result?.conflict &&
     !["accepted", "unknown"].includes(current.result?.kind);
   const closed = () => {
-    if (!dialog.open) dispose();
+    if (!dialog.open) {
+      dispose();
+    }
   };
   const observer = new MutationObserver(() => {
-    if (!owns()) dispose();
+    if (!owns()) {
+      dispose();
+    }
   });
   observer.observe(form, { childList: true });
   dialog.addEventListener("cancel", cancel);
@@ -325,7 +360,9 @@ async function openThemeChooser() {
   const close = settingsButton(
     "Close",
     () => {
-      if (current.isCurrent()) requestDialogClose(dialog);
+      if (current.isCurrent()) {
+        requestDialogClose(dialog);
+      }
     },
     "button",
   );
@@ -343,27 +380,31 @@ async function openThemeChooser() {
   actions.append(close, refresh, reload);
   form.append(query, list, message, actions);
   const paintOutcome = () => {
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     const locked =
       current.result?.kind === "accepted" ||
       current.result?.kind === "unknown" ||
       current.result?.conflict;
-    freezeFeatureForm(current, !!locked);
+    freezeFeatureForm(current, Boolean(locked));
     close.disabled =
-      current.pending || current.refreshing || !!current.closeDisabled;
+      current.pending || current.refreshing || Boolean(current.closeDisabled);
     refresh.hidden = !["accepted", "unknown"].includes(current.result?.kind);
     reload.hidden = !current.result?.conflict;
     refresh.disabled = reload.disabled = current.pending || current.refreshing;
-    if (current.result?.kind === "accepted")
+    if (current.result?.kind === "accepted") {
       message.textContent =
         "Theme saved. The view could not update. Refresh the view without saving again.";
-    else if (current.result?.kind === "unknown")
+    } else if (current.result?.kind === "unknown") {
       message.textContent =
         "The theme save outcome is unknown. Refresh and inspect the saved theme before making another change. This choice will not be resubmitted.";
-    else if (current.result?.conflict)
+    } else if (current.result?.conflict) {
       message.textContent =
         "Settings changed elsewhere. No theme was saved. Reload themes before choosing again.";
-    else if (current.result) message.textContent = current.result.error;
+    } else if (current.result) {
+      message.textContent = current.result.error;
+    }
     restoreFormFocus(
       current,
       current.result?.conflict
@@ -377,50 +418,64 @@ async function openThemeChooser() {
   };
   const readCurrent = async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (!current.isCurrent()) return null;
+      if (!current.isCurrent()) {
+        return null;
+      }
       const identity = appSettings,
         next = await loadAppSettings({
           canApply: () => current.isCurrent() && appSettings === identity,
         });
-      if (!current.isCurrent()) return null;
-      if (next && !next.configError) return next;
+      if (!current.isCurrent()) {
+        return null;
+      }
+      if (next && !next.configError) {
+        return next;
+      }
     }
     throw new Error("The current settings could not be displayed.");
   };
   async function recover(conflict) {
-    if (!current.isCurrent() || current.pending || current.refreshing) return;
+    if (!current.isCurrent() || current.pending || current.refreshing) {
+      return;
+    }
     current.refreshing = true;
     holdFormFocus(form, current);
     freezeFeatureForm(current, true);
     close.disabled = refresh.disabled = reload.disabled = true;
     try {
       const next = await readCurrent();
-      if (!next || !current.isCurrent()) return;
+      if (!next || !current.isCurrent()) {
+        return;
+      }
       if (conflict) {
         baseline = next;
         current.result = null;
         draw();
         message.textContent = "Current settings loaded. Choose a theme.";
       } else if (current.result.kind === "accepted") {
-        if (unobscured()) dialog.close();
+        if (unobscured()) {
+          dialog.close();
+        }
         return;
       } else {
-        for (const button of list.querySelectorAll("button"))
+        for (const button of list.querySelectorAll("button")) {
           button.setAttribute(
             "aria-pressed",
             String(setting("theme", "") === button.dataset.themeId),
           );
+        }
         message.textContent =
           "Saved settings refreshed. The earlier save outcome remains unknown. Inspect the current theme; this choice was not resubmitted.";
       }
     } catch (error) {
-      if (current.isCurrent())
+      if (current.isCurrent()) {
         message.textContent =
           (current.result?.kind === "accepted"
             ? "Theme saved. "
             : current.result?.kind === "unknown"
               ? "The theme save outcome remains unknown. "
               : "No theme was saved. ") + error.message;
+      }
     } finally {
       current.refreshing = false;
       if (current.isCurrent()) {
@@ -446,8 +501,9 @@ async function openThemeChooser() {
       current.result?.kind === "accepted" ||
       current.result?.kind === "unknown" ||
       current.result?.conflict
-    )
+    ) {
       return;
+    }
     current.closeDisabled = close.disabled;
     current.pending = true;
     holdFormFocus(form, current);
@@ -470,7 +526,9 @@ async function openThemeChooser() {
         error: error.message,
       };
     }
-    if (current.result.kind !== "rejected") appSettings = { ...appSettings };
+    if (current.result.kind !== "rejected") {
+      appSettings = { ...appSettings };
+    }
     try {
       if (current.result.kind === "accepted" && current.isCurrent()) {
         const next = await readCurrent();
@@ -484,43 +542,50 @@ async function openThemeChooser() {
       current.result.error = error.message;
     } finally {
       current.pending = false;
-      if (current.isCurrent()) paintOutcome();
-      else {
+      if (current.isCurrent()) {
+        paintOutcome();
+      } else {
         dispose();
         if (
           current.result.kind !== "rejected" &&
           current.result.presentation !== "ready"
-        )
+        ) {
           toast(
             current.result.kind === "accepted"
               ? "Theme saved. Refresh settings to inspect it."
               : "The theme save outcome is unknown. Inspect settings before choosing again.",
           );
+        }
       }
     }
   }
   let active = null;
   const activate = (button) => {
-    if (!idle() || !button) return;
-    if (active) active.dataset.active = "false";
+    if (!idle() || !button) {
+      return;
+    }
+    if (active) {
+      active.dataset.active = "false";
+    }
     active = button;
     button.dataset.active = "true";
     button.scrollIntoView?.({ block: "nearest" });
     previewTheme(button.dataset.themeId);
   };
   const draw = () => {
-    for (const control of list.querySelectorAll("button"))
+    for (const control of list.querySelectorAll("button")) {
       current.controls.delete(control);
+    }
     list.replaceChildren();
     active = null;
     for (const theme of Object.values(window.truffleThemeCatalog).filter(
       (theme) =>
-        (theme.label + " " + theme.type)
+        `${theme.label} ${theme.type}`
           .toLowerCase()
           .includes(query.value.toLowerCase()),
     )) {
       const button = featureButton(
-        theme.label + " · " + theme.type,
+        `${theme.label} · ${theme.type}`,
         () => choose(theme),
         "theme-choice",
       );
@@ -536,11 +601,15 @@ async function openThemeChooser() {
   query.oninput = () => {
     if (idle()) {
       draw();
-      if (query.value) activate(list.querySelector("button"));
+      if (query.value) {
+        activate(list.querySelector("button"));
+      }
     }
   };
   query.onkeydown = (event) => {
-    if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+    if (!["ArrowDown", "ArrowUp"].includes(event.key)) {
+      return;
+    }
     event.preventDefault();
     const buttons = [...list.querySelectorAll("button")],
       index = buttons.indexOf(active) + (event.key === "ArrowDown" ? 1 : -1);
@@ -555,7 +624,9 @@ async function openThemeChooser() {
   };
   form.onsubmit = (event) => {
     event.preventDefault();
-    if (current.isCurrent()) (active || list.querySelector("button"))?.click();
+    if (current.isCurrent()) {
+      (active || list.querySelector("button"))?.click();
+    }
   };
   draw();
   dialog.showModal();
@@ -576,22 +647,24 @@ let sharingSettingsRenderer = 0,
   sharingSettingsRefresh = null;
 function sharingSettingsConfig(value) {
   const config = value?.config;
-  if (config?.error)
+  if (config?.error) {
     throw new Error(
       typeof config.error === "string"
         ? config.error
         : "Could not load sharing configuration.",
     );
+  }
   if (
     !config ||
     !Number.isSafeInteger(config.revision) ||
     config.revision < 0 ||
     typeof config.contentHash !== "string" ||
     !/^[a-f0-9]{64}$/.test(config.contentHash)
-  )
+  ) {
     throw new Error(
       "Could not load sharing configuration. Reload it before saving.",
     );
+  }
   return structuredClone(config);
 }
 function sharingSettingsFields(config) {
@@ -604,7 +677,7 @@ function sharingSettingsFields(config) {
 }
 async function renderSharingSettings(panel) {
   const draft = sharingSettingsDraft,
-    hadBaseline = !!draft.baseline,
+    hadBaseline = Boolean(draft.baseline),
     ticket = ++sharingSettingsRenderer,
     container = el("section", "sharing-preferences");
   panel.append(container);
@@ -615,7 +688,7 @@ async function renderSharingSettings(panel) {
     (!container.closest("dialog") || container.closest("dialog").open);
   try {
     if (!draft.baseline) {
-      if (!draft.loading)
+      if (!draft.loading) {
         draft.loading = sharingCommand("sharing.state", {})
           .then((value) => {
             draft.baseline = sharingSettingsConfig(value);
@@ -624,8 +697,11 @@ async function renderSharingSettings(panel) {
           .finally(() => {
             draft.loading = null;
           });
+      }
       await draft.loading;
-      if (!live()) return;
+      if (!live()) {
+        return;
+      }
     }
     container.replaceChildren();
     container.append(
@@ -662,14 +738,15 @@ async function renderSharingSettings(panel) {
       hint.textContent = sharingTransportHint(kind.value);
       inbox.textContent =
         root.value.trim() && handle.value.trim()
-          ? root.value.trim().replace(/\/$/, "") +
-            "/inboxes/" +
-            handle.value.replace(/^\//, "").toLowerCase() +
-            "/deliveries/"
+          ? `${root.value.trim().replace(/\/$/, "")}/inboxes/${handle.value
+              .replace(/^\//, "")
+              .toLowerCase()}/deliveries/`
           : "Configure storage and inbox to see receiving path";
     };
     const changed = () => {
-      if (!live() || draft.saving) return;
+      if (!live() || draft.saving) {
+        return;
+      }
       draft.draft = {
         kind: kind.value,
         root: root.value,
@@ -704,7 +781,9 @@ async function renderSharingSettings(panel) {
     const save = settingsButton(
       "Save sharing configuration",
       async () => {
-        if (!live() || draft.saving) return;
+        if (!live() || draft.saving) {
+          return;
+        }
         let payload;
         try {
           payload = sharingConfigurationPayload(
@@ -731,9 +810,10 @@ async function renderSharingSettings(panel) {
             draft.change++;
             draft.status =
               "Sharing configuration saved. No content was uploaded.";
-          } else
+          } else {
             draft.status =
               "Earlier sharing configuration saved. Your newer draft is still unsaved.";
+          }
         } catch (error) {
           draft.status = error.message;
         } finally {
@@ -746,7 +826,9 @@ async function renderSharingSettings(panel) {
     const check = settingsButton(
       "Check inbox access",
       async () => {
-        if (!live() || draft.saving) return;
+        if (!live() || draft.saving) {
+          return;
+        }
         check.disabled = true;
         try {
           await sharingCommand("sharing.refresh", {});
@@ -761,7 +843,9 @@ async function renderSharingSettings(panel) {
             sync();
           }
         } finally {
-          if (live()) check.disabled = draft.saving;
+          if (live()) {
+            check.disabled = draft.saving;
+          }
         }
       },
       "button",
@@ -769,16 +853,21 @@ async function renderSharingSettings(panel) {
     const reload = settingsButton(
       "Discard draft & reload",
       async () => {
-        if (!live() || draft.saving) return;
+        if (!live() || draft.saving) {
+          return;
+        }
         const operation = ++draft.operation,
           change = draft.change;
         try {
           const value = await sharingCommand("sharing.state", {});
-          if (!live() || operation !== draft.operation) return;
-          if (change !== draft.change)
+          if (!live() || operation !== draft.operation) {
+            return;
+          }
+          if (change !== draft.change) {
             throw new Error(
               "Sharing draft changed while reloading. Your edits were kept; discard and reload again to replace them.",
             );
+          }
           draft.baseline = sharingSettingsConfig(value);
           draft.draft = sharingSettingsFields(draft.baseline);
           draft.change++;
@@ -797,7 +886,9 @@ async function renderSharingSettings(panel) {
     const exportProfile = settingsButton(
       "Export sharing profile",
       () => {
-        if (!live() || draft.saving) return;
+        if (!live() || draft.saving) {
+          return;
+        }
         try {
           const profile = sharingProfile(
               draft.draft.kind,
@@ -830,18 +921,24 @@ async function renderSharingSettings(panel) {
         return;
       }
       const selected = file.files[0];
-      if (!selected) return;
+      if (!selected) {
+        return;
+      }
       const operation = ++draft.operation,
         change = draft.change;
       try {
-        if (selected.size > 65536)
+        if (selected.size > 65536) {
           throw new Error("Sharing profile exceeds 64 KiB.");
+        }
         const profile = parseSharingProfile(JSON.parse(await selected.text()));
-        if (!live() || operation !== draft.operation) return;
-        if (change !== draft.change)
+        if (!live() || operation !== draft.operation) {
+          return;
+        }
+        if (change !== draft.change) {
           throw new Error(
             "Sharing draft changed while reading the profile. Your edits were kept; import it again.",
           );
+        }
         draft.draft = {
           kind: profile.transport.kind,
           root: profile.transport.root,
@@ -863,7 +960,9 @@ async function renderSharingSettings(panel) {
     const importProfile = settingsButton(
       "Import sharing profile",
       () => {
-        if (live() && !draft.saving) file.click();
+        if (live() && !draft.saving) {
+          file.click();
+        }
       },
       "text-button",
     );
@@ -887,8 +986,9 @@ async function renderSharingSettings(panel) {
         exportProfile,
         importProfile,
         file,
-      ])
+      ]) {
         control.disabled = draft.saving;
+      }
       status.textContent =
         draft.status ||
         (dirty()
@@ -896,7 +996,9 @@ async function renderSharingSettings(panel) {
           : "Sharing configuration is saved.");
     }
     sharingSettingsRefresh = () => {
-      if (live()) sync();
+      if (live()) {
+        sync();
+      }
     };
     sync();
     if (hadBaseline && !draft.saving && !dirty()) {
@@ -909,8 +1011,9 @@ async function renderSharingSettings(panel) {
             operation !== draft.operation ||
             change !== draft.change ||
             draft.saving
-          )
+          ) {
             return;
+          }
           draft.baseline = sharingSettingsConfig(value);
           draft.draft = sharingSettingsFields(draft.baseline);
           draft.status = "";
@@ -924,14 +1027,17 @@ async function renderSharingSettings(panel) {
         });
     }
   } catch (error) {
-    if (live())
+    if (live()) {
       container.replaceChildren(el("p", "inline-error", error.message));
+    }
   }
 }
 
 let onboardingOffered = false;
 async function maybeOfferOnboarding() {
-  if (onboardingOffered || !state) return;
+  if (onboardingOffered || !state) {
+    return;
+  }
   onboardingOffered = true;
   if (!(state.items || []).length && !(state.sessions || []).length) {
     try {
@@ -939,8 +1045,9 @@ async function maybeOfferOnboarding() {
       if (
         !setup.progress.completed &&
         !Object.keys(setup.progress.steps || {}).length
-      )
+      ) {
         await window.openAppChatSetup();
+      }
     } catch (error) {
       console.warn("Setup unavailable:", error.message);
     }

@@ -34,22 +34,26 @@ function updateResultPresentationContext() {
   }
 }
 function resultPresentationGuard() {
-  if (typeof settingsDirty !== "undefined" && settingsDirty)
+  if (typeof settingsDirty !== "undefined" && settingsDirty) {
     throw new Error(
       "Save or discard your Settings changes, then show these results.",
     );
-  if (document.querySelector("dialog[open]"))
+  }
+  if (document.querySelector("dialog[open]")) {
     throw new Error("Close the open dialog, then show these results.");
-  if ($("#app-chat-setup") && !$("#app-chat-setup").hidden)
+  }
+  if ($("#app-chat-setup") && !$("#app-chat-setup").hidden) {
     throw new Error("Close setup, then show these results.");
+  }
 }
 async function applyResultPresentation(
   value,
   { isCurrent = () => true, focusResults = false } = {},
 ) {
   const command = appChatCommand(value);
-  if (!["saved-view", "display-items"].includes(command.type))
+  if (!["saved-view", "display-items"].includes(command.type)) {
     throw new Error("Unsupported result presentation.");
+  }
   resultPresentationGuard();
   updateResultPresentationContext();
   const signature = presentationLastSignature,
@@ -70,17 +74,21 @@ async function applyResultPresentation(
   };
   if (command.type === "saved-view") {
     await loadSavedViews();
-    if (!current())
+    if (!current()) {
       throw new Error("The page changed. Choose Show results again.");
+    }
     resultPresentationGuard();
-    if (savedViewsError)
-      throw new Error("Saved views could not refresh. " + savedViewsError);
-    if (!savedViewsDocument?.views.some((view) => view.id === command.id))
+    if (savedViewsError) {
+      throw new Error(`Saved views could not refresh. ${savedViewsError}`);
+    }
+    if (!savedViewsDocument?.views.some((view) => view.id === command.id)) {
       throw new Error("This saved view is no longer available.");
+    }
     activateSavedView(command.id);
   } else {
-    if (!current())
+    if (!current()) {
       throw new Error("The page changed. Choose Show results again.");
+    }
     resultPresentationGuard();
     showChatResults(command);
   }
@@ -100,8 +108,9 @@ async function applyResultPresentation(
         target?.isConnected &&
         !target.disabled &&
         target.getClientRects().length
-      )
+      ) {
         target.focus({ preventScroll: true });
+      }
     }
   }
 }
@@ -130,35 +139,43 @@ function presentationRead(value) {
     value.pending.length > 8 ||
     !Array.isArray(value.receipts) ||
     value.receipts.length > 40
-  )
+  ) {
     throw new Error("Invalid pending results.");
+  }
   const ids = new Set(),
     pending = value.pending.map((row) => {
       if (
         !presentationRequestId(row?.requestId) ||
         ids.has(row.requestId.toLowerCase())
-      )
+      ) {
         throw new Error("Invalid pending result identity.");
+      }
       ids.add(row.requestId.toLowerCase());
       const command = appChatCommand(row.presentation);
-      if (!["saved-view", "display-items"].includes(command.type))
+      if (!["saved-view", "display-items"].includes(command.type)) {
         throw new Error("Unsupported pending results.");
+      }
       return { requestId: row.requestId, presentation: command };
     });
   const receipts = value.receipts.map((row) => {
     if (
       !presentationRequestId(row?.requestId) ||
       !["queued", "shown", "dismissed"].includes(row.status)
-    )
+    ) {
       throw new Error("Invalid result acknowledgement.");
+    }
     return { requestId: row.requestId, status: row.status };
   });
   return { pending, receipts };
 }
 function ensurePresentationNotice() {
-  if (presentationNotice?.host.isConnected) return presentationNotice;
+  if (presentationNotice?.host.isConnected) {
+    return presentationNotice;
+  }
   const parent = $("#sidebar-notices");
-  if (!parent) return null;
+  if (!parent) {
+    return null;
+  }
   const host = el("section", "ui-notice agent-results-notice"),
     header = el("div", "ui-notice-header"),
     title = el("strong", "ui-notice-title", "Agent results ready"),
@@ -200,32 +217,43 @@ function presentationCommands() {
         : "Results were dismissed.";
     return {
       verb: entry.expired ? "dismiss" : entry.outcome ? "retry" : "show",
-      noun: "agent results · " + presentationLabel(entry),
+      noun: `agent results · ${presentationLabel(entry)}`,
       detail: entry.expired
-        ? status +
-          " Dismiss this local notice; the acknowledgement receipt has expired."
+        ? `${
+            status
+          } Dismiss this local notice; the acknowledgement receipt has expired.`
         : entry.outcome
-          ? status +
-            " Retry acknowledgement only; results will not be displayed again."
+          ? `${
+              status
+            } Retry acknowledgement only; results will not be displayed again.`
           : "Show these selected results, then acknowledge that they were shown.",
       run: async () => {
-        if (presentationAction)
+        if (presentationAction) {
           throw new Error("Wait for the current result action to finish.");
+        }
         await showPendingPresentation(entry, { focusResults: true });
-        if (pendingPresentations.get(entry.requestId) === entry && entry.error)
+        if (
+          pendingPresentations.get(entry.requestId) === entry &&
+          entry.error
+        ) {
           throw new Error(String(entry.error).slice(0, 500));
+        }
       },
     };
   });
 }
 function paintPendingPresentations() {
   const ui = ensurePresentationNotice();
-  if (!ui) return;
+  if (!ui) {
+    return;
+  }
   const entry =
     [...pendingPresentations.values()].find((row) => row.outcome) ||
     pendingPresentations.values().next().value;
   ui.host.hidden = !entry;
-  if (!entry) return;
+  if (!entry) {
+    return;
+  }
   ui.title.textContent =
     entry.outcome === "shown"
       ? "Agent results shown"
@@ -234,23 +262,24 @@ function paintPendingPresentations() {
         : "Agent results ready";
   const label = presentationLabel(entry);
   ui.message.textContent = entry.expired
-    ? (entry.outcome === "shown"
-        ? "Results were shown. "
-        : "Results were dismissed. ") +
-      "The acknowledgement receipt is no longer available. You can dismiss this local notice."
+    ? `${
+        entry.outcome === "shown"
+          ? "Results were shown. "
+          : "Results were dismissed. "
+      }The acknowledgement receipt is no longer available. You can dismiss this local notice.`
     : entry.error ||
       (entry.outcome
         ? "Acknowledgement pending. Retry only acknowledges this result."
         : label +
           (pendingPresentations.size > 1
-            ? " · " + pendingPresentations.size + " pending"
+            ? ` · ${pendingPresentations.size} pending`
             : ""));
   ui.show.textContent = entry.expired
     ? "Dismiss notice"
     : entry.outcome
       ? "Retry acknowledgement"
       : "Show";
-  ui.dismiss.hidden = !!entry.outcome;
+  ui.dismiss.hidden = Boolean(entry.outcome);
   ui.show.disabled = ui.dismiss.disabled = presentationAction;
   ui.show.onclick = () => showPendingPresentation(entry);
   ui.dismiss.onclick = () => dismissPendingPresentation(entry);
@@ -263,24 +292,30 @@ async function acknowledgePresentation(entry) {
   if (
     receipt?.requestId !== entry.requestId ||
     receipt.status !== entry.outcome
-  )
+  ) {
     throw new Error(
       "The result acknowledgement could not be confirmed. Retry acknowledgement.",
     );
-  if (pendingPresentations.get(entry.requestId) === entry)
+  }
+  if (pendingPresentations.get(entry.requestId) === entry) {
     completePresentation(entry.requestId);
+  }
 }
 async function actOnPendingPresentation(
   entry,
   outcome,
   { focusResults = false } = {},
 ) {
-  if (presentationAction || pendingPresentations.get(entry.requestId) !== entry)
+  if (
+    presentationAction ||
+    pendingPresentations.get(entry.requestId) !== entry
+  ) {
     return;
+  }
   presentationAction = true;
   entry.error = "";
   const ui = ensurePresentationNotice(),
-    ownedFocus = !!ui?.host.contains(document.activeElement);
+    ownedFocus = Boolean(ui?.host.contains(document.activeElement));
   if (ownedFocus) {
     ui.message.tabIndex = -1;
     ui.message.focus({ preventScroll: true });
@@ -292,20 +327,22 @@ async function actOnPendingPresentation(
       return;
     }
     if (!entry.outcome) {
-      if (outcome === "shown")
+      if (outcome === "shown") {
         await applyResultPresentation(entry.presentation, {
           isCurrent: () => pendingPresentations.get(entry.requestId) === entry,
           focusResults,
         });
+      }
       entry.outcome = outcome;
     }
     await acknowledgePresentation(entry);
   } catch (error) {
     entry.error = entry.outcome
-      ? (entry.outcome === "shown"
-          ? "Results were shown. "
-          : "Results were dismissed. ") +
-        "Acknowledgement failed. Retry acknowledgement; the results will not be shown again."
+      ? `${
+          entry.outcome === "shown"
+            ? "Results were shown. "
+            : "Results were dismissed. "
+        }Acknowledgement failed. Retry acknowledgement; the results will not be shown again.`
       : error.message;
   } finally {
     presentationAction = false;
@@ -316,8 +353,9 @@ async function actOnPendingPresentation(
           ? document.querySelector(".chat-search-form input")
           : $("#search")
         : ui.show;
-      if (target && !target.disabled && !target.hidden)
+      if (target && !target.disabled && !target.hidden) {
         target.focus({ preventScroll: true });
+      }
     }
   }
 }
@@ -328,10 +366,15 @@ function dismissPendingPresentation(entry) {
   return actOnPendingPresentation(entry, "dismissed");
 }
 function refreshPresentations({ force = false } = {}) {
-  if (!state) return Promise.resolve();
-  if (presentationPoll) return presentationPoll;
-  if (!force && Date.now() - presentationLastPoll < 5000)
+  if (!state) {
     return Promise.resolve();
+  }
+  if (presentationPoll) {
+    return presentationPoll;
+  }
+  if (!force && Date.now() - presentationLastPoll < 5000) {
+    return Promise.resolve();
+  }
   presentationLastPoll = Date.now();
   const epoch = presentationReadEpoch;
   presentationPoll = (async () => {
@@ -342,34 +385,44 @@ function refreshPresentations({ force = false } = {}) {
           args: {},
         }),
       );
-      if (epoch !== presentationReadEpoch) return;
+      if (epoch !== presentationReadEpoch) {
+        return;
+      }
       const pendingIds = new Set(result.pending.map((row) => row.requestId)),
         receiptIds = new Set(result.receipts.map((row) => row.requestId));
-      for (const [id, entry] of pendingPresentations)
+      for (const [id, entry] of pendingPresentations) {
         if (!pendingIds.has(id)) {
-          if (!entry.outcome) pendingPresentations.delete(id);
-          else if (!receiptIds.has(id)) entry.expired = true;
+          if (!entry.outcome) {
+            pendingPresentations.delete(id);
+          } else if (!receiptIds.has(id)) {
+            entry.expired = true;
+          }
         }
+      }
       const completed = new Set(
         result.receipts
           .filter((row) => row.status !== "queued")
           .map((row) => row.requestId),
       );
-      for (const receipt of result.receipts)
-        if (receipt.status !== "queued")
+      for (const receipt of result.receipts) {
+        if (receipt.status !== "queued") {
           completePresentation(receipt.requestId);
+        }
+      }
       // A local shown/dismissed entry stays ACK-only until its terminal receipt is read.
-      for (const row of result.pending)
+      for (const row of result.pending) {
         if (
           !completed.has(row.requestId) &&
           !pendingPresentations.has(row.requestId) &&
           pendingPresentations.size < 8
-        )
+        ) {
           pendingPresentations.set(row.requestId, {
             ...row,
             outcome: null,
             error: "",
           });
+        }
+      }
       paintPendingPresentations();
     } catch {
       /* Preserve the last safe notice; ordinary polling does not interrupt work. */

@@ -8,7 +8,7 @@
     timer = null,
     pending = false;
   function paint() {
-    const running = !!current?.running,
+    const running = Boolean(current?.running),
       cooling = (current?.cooldownUntil || 0) * 1000 > Date.now();
     button.disabled = pending || running || cooling;
     button.setAttribute("aria-busy", String(running));
@@ -17,7 +17,7 @@
       : "GCP login";
     panel.hidden = !current?.runId;
     for (const key of ["cli", "adc"]) {
-      const row = $("#gcp-login-" + key),
+      const row = $(`#gcp-login-${key}`),
         task = current?.[key];
       const labels = {
         running: "Browser…",
@@ -26,29 +26,27 @@
         cancelled: "Cancelled",
         timed_out: "Timed out",
       };
-      row.textContent =
-        (key === "cli" ? "CLI" : "ADC") +
-        " · " +
-        (labels[task?.status] || "Waiting");
+      row.textContent = `${key === "cli" ? "CLI" : "ADC"} · ${
+        labels[task?.status] || "Waiting"
+      }`;
       row.dataset.status = task?.status || "";
       row.title = task?.message || "";
       row.setAttribute(
         "aria-label",
-        (key === "cli"
-          ? "Google Cloud CLI"
-          : "Application Default Credentials") +
-          ": " +
-          (task?.message || "Waiting"),
+        `${
+          key === "cli" ? "Google Cloud CLI" : "Application Default Credentials"
+        }: ${task?.message || "Waiting"}`,
       );
     }
     cancel.hidden = !running;
-    cancel.disabled = !!current?.cancelling;
+    cancel.disabled = Boolean(current?.cancelling);
     cancel.textContent = current?.cancelling ? "Cancelling…" : "Cancel login";
   }
   function schedule() {
     clearTimeout(timer);
-    if (current?.running || (current?.cooldownUntil || 0) * 1000 > Date.now())
+    if (current?.running || (current?.cooldownUntil || 0) * 1000 > Date.now()) {
       timer = setTimeout(load, 1000);
+    }
   }
   async function load() {
     try {
@@ -56,8 +54,9 @@
       paint();
       schedule();
     } catch (error) {
-      if (current?.running) timer = setTimeout(load, 5000);
-      else if (error.message.includes("Not found")) {
+      if (current?.running) {
+        timer = setTimeout(load, 5000);
+      } else if (error.message.includes("Not found")) {
         button.disabled = true;
         button.title =
           "Restart the updated Truffle service to enable GCP login.";
@@ -65,7 +64,9 @@
     }
   }
   button.onclick = async () => {
-    if (pending || current?.running) return;
+    if (pending || current?.running) {
+      return;
+    }
     pending = true;
     paint();
     try {

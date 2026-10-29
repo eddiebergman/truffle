@@ -11,7 +11,9 @@ const defaults = JSON.parse(
 );
 // Replace what a const object of a loaded script holds, so tests can set its state.
 const replaceContents = (target, value) => {
-  for (const key of Object.keys(target)) delete target[key];
+  for (const key of Object.keys(target)) {
+    delete target[key];
+  }
   Object.assign(target, value);
 };
 function fixture({ prefs = {}, responses = [] } = {}) {
@@ -38,12 +40,17 @@ function fixture({ prefs = {}, responses = [] } = {}) {
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
     replaceChildren(...nodes) {
-      if (this.children.some((node) => node.contains(document.activeElement)))
+      if (this.children.some((node) => node.contains(document.activeElement))) {
         document.activeElement = document.body;
-      for (const node of this.children) node.parentElement = null;
+      }
+      for (const node of this.children) {
+        node.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -57,7 +64,9 @@ function fixture({ prefs = {}, responses = [] } = {}) {
       (this.listeners[type] ??= []).push(callback);
     }
     dispatchEvent(event) {
-      for (const callback of this.listeners[event.type] || []) callback(event);
+      for (const callback of this.listeners[event.type] || []) {
+        callback(event);
+      }
       return !event.defaultPrevented;
     }
     get disabled() {
@@ -65,8 +74,9 @@ function fixture({ prefs = {}, responses = [] } = {}) {
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document.activeElement === this)
+      if (value && document.activeElement === this) {
         document.activeElement = document.body;
+      }
     }
     matches(selector) {
       return selector
@@ -82,23 +92,30 @@ function fixture({ prefs = {}, responses = [] } = {}) {
         );
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (node.matches(selector)) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (node.matches(selector)) {
+          return node;
+        }
+      }
       return null;
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     getClientRects() {
       let node = this;
       while (node) {
-        if (node.hidden) return [];
+        if (node.hidden) {
+          return [];
+        }
         node = node.parentElement;
       }
       return this.isConnected ? [{}] : [];
     }
     focus(options) {
-      if (this.disabled) return;
+      if (this.disabled) {
+        return;
+      }
       this.focused = true;
       this.focusOptions = options;
       document.activeElement = this;
@@ -123,15 +140,19 @@ function fixture({ prefs = {}, responses = [] } = {}) {
     }
     close() {
       this.open = false;
-      for (const callback of this.listeners.close || []) callback();
+      for (const callback of this.listeners.close || []) {
+        callback();
+      }
     }
     remove() {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      if (this.parentElement)
+      }
+      if (this.parentElement) {
         this.parentElement.children = this.parentElement.children.filter(
           (node) => node !== this,
         );
+      }
       this.parentElement = null;
     }
     insertAdjacentElement(_, node) {
@@ -171,7 +192,9 @@ function fixture({ prefs = {}, responses = [] } = {}) {
     api: async (path, payload) => {
       calls.push({ path, payload });
       const next = responses.shift();
-      if (next instanceof Error) throw next;
+      if (next instanceof Error) {
+        throw next;
+      }
       return next;
     },
     render: () => renders++,
@@ -242,8 +265,9 @@ test("typed nested filters apply AND/OR and reject missing negative fields", () 
   for (const filter of [
     predicate("notIn", "status", ["done"]),
     predicate("containsNone", "relations", ["reviews"]),
-  ])
+  ]) {
     assert.equal(c.matchesSavedViewFilter(filter, {}), false);
+  }
   assert.equal(
     c.matchesSavedViewFilter(
       predicate("containsNone", "relations", ["reviews"]),
@@ -282,11 +306,12 @@ test("typed nested filters apply AND/OR and reject missing negative fields", () 
 test("lifecycle includes unknown Active states, Completed is explicit, source parents constrain views", () => {
   const { c } = fixture(),
     base = { parent: "all", filter: { op: "all", conditions: [] } };
-  for (const status of ["todo", "unknown", undefined])
+  for (const status of ["todo", "unknown", undefined]) {
     assert.equal(
       c.savedViewMatches({ ...base, lifecycle: "active" }, { status }),
       true,
     );
+  }
   assert.equal(
     c.savedViewMatches({ ...base, lifecycle: "active" }, { status: "done" }),
     false,
@@ -331,10 +356,13 @@ test("validation rejects executable or malformed predicates and bounded document
     predicate("in", "status", ["done", "done"]),
     { op: "equals", field: "source", value: true },
     { op: "all", conditions: [], script: "true" },
-  ])
+  ]) {
     assert.throws(() => c.validateSavedViewFilter(filter));
+  }
   let filter = { op: "all", conditions: [] };
-  for (let i = 0; i < 5; i++) filter = { op: "all", conditions: [filter] };
+  for (let i = 0; i < 5; i++) {
+    filter = { op: "all", conditions: [filter] };
+  }
   assert.throws(() => c.validateSavedViewFilter(filter));
   const doc = { ...defaults, contentHash: "a".repeat(64) };
   c.validateSavedViewsDocument(doc);
@@ -350,7 +378,7 @@ test("validation rejects executable or malformed predicates and bounded document
       ...doc,
       views: Array.from({ length: 65 }, (_, i) => ({
         ...doc.views[0],
-        id: "view-" + i,
+        id: `view-${i}`,
       })),
     }),
   );
@@ -664,7 +692,9 @@ test("Reload adopts changed saved definitions for clean snapshots and preserves 
     const f = fixture({ responses: [changed] });
     f.setDoc(initial);
     f.c.activateSavedView("github-mine");
-    if (dirty) f.c.currentSavedViewState().draft.query = "local query";
+    if (dirty) {
+      f.c.currentSavedViewState().draft.query = "local query";
+    }
     await f.c.loadSavedViews();
     const state = f.c.currentSavedViewState();
     if (dirty) {
@@ -730,7 +760,7 @@ function control(node, label) {
   const found = descendants(node).find(
     (child) => child.attrs?.["aria-label"] === label,
   );
-  assert.ok(found, "Missing control: " + label);
+  assert.ok(found, `Missing control: ${label}`);
   return found;
 }
 test("compact rule rows keep exact values in removable chips and pending text is applied without Enter", () => {
@@ -833,11 +863,12 @@ test("date filters use strict calendars and timestamps with deterministic rollin
       [cutoff - 0.001, false],
       [now, true],
       [now + 1, false],
-    ])
+    ]) {
       assert.equal(
         c.matchesSavedViewFilter(within, { [field]: timestamp }, now),
         expected,
       );
+    }
     assert.equal(
       c.matchesSavedViewFilter(older, { [field]: cutoff }, now),
       false,
@@ -881,12 +912,13 @@ test("date filters use strict calendars and timestamps with deterministic rollin
       "2026-02-30T00:00:00Z",
       "2026-10-27T24:00:00Z",
       "2026-10-27T00:00:60Z",
-    ])
+    ]) {
       assert.equal(
         c.matchesSavedViewFilter(after, { [field]: timestamp }, now),
         false,
         String(timestamp),
       );
+    }
   }
   for (const date of [
     "2026-02-29",
@@ -894,7 +926,7 @@ test("date filters use strict calendars and timestamps with deterministic rollin
     "2026-13-01",
     "2026-1-01",
     "2026-10-27T00:00:00Z",
-  ])
+  ]) {
     assert.throws(
       () =>
         c.validateSavedViewFilter({
@@ -904,11 +936,13 @@ test("date filters use strict calendars and timestamps with deterministic rollin
         }),
       /valid UTC/,
     );
-  for (const date of ["2024-02-29", "0000-02-29"])
+  }
+  for (const date of ["2024-02-29", "0000-02-29"]) {
     assert.doesNotThrow(() =>
       c.validateSavedViewFilter({ op: "beforeDate", field: "updatedAt", date }),
     );
-  for (const days of [0, 3651, 1.5, "7", null])
+  }
+  for (const days of [0, 3651, 1.5, "7", null]) {
     assert.throws(
       () =>
         c.validateSavedViewFilter({
@@ -918,6 +952,7 @@ test("date filters use strict calendars and timestamps with deterministic rollin
         }),
       /valid UTC/,
     );
+  }
   assert.throws(
     () =>
       c.validateSavedViewFilter({ op: "withinLast", field: "status", days: 7 }),
@@ -1007,7 +1042,7 @@ function editorButton(dialog, label) {
   const button = descendants(dialog).find(
     (node) => node.tagName === "button" && node.textContent === label,
   );
-  assert.ok(button, "Missing " + label);
+  assert.ok(button, `Missing ${label}`);
   return button;
 }
 function editorFixture(responses = []) {
@@ -1142,7 +1177,7 @@ test("pending deletion ignores duplicate confirmation", async () => {
 test("Yesterday uses named-zone calendar boundaries across spring and fall DST changes", () => {
   const { c } = fixture(),
     seconds = (text) => Date.parse(text) / 1000;
-  for (const field of ["updatedAt", "createdAt"])
+  for (const field of ["updatedAt", "createdAt"]) {
     for (const [now, start, end] of [
       ["2026-03-30T00:30:00Z", "2026-03-28T23:00:00Z", "2026-03-29T22:00:00Z"],
       ["2026-10-26T00:30:00Z", "2026-10-24T22:00:00Z", "2026-10-25T23:00:00Z"],
@@ -1159,13 +1194,15 @@ test("Yesterday uses named-zone calendar boundaries across spring and fall DST c
         [seconds(start), true],
         [seconds(end) - 0.001, true],
         [seconds(end), false],
-      ])
+      ]) {
         assert.equal(
           c.matchesSavedViewFilter(filter, { [field]: at }, seconds(now)),
           expected,
-          field + " " + now + " " + at,
+          `${field} ${now} ${at}`,
         );
+      }
     }
+  }
   const filter = {
       op: "calendarPeriod",
       field: "updatedAt",
@@ -1183,7 +1220,7 @@ test("Yesterday uses named-zone calendar boundaries across spring and fall DST c
     ),
     false,
   );
-  for (const at of ["2026-10-25T00:30:00Z", "2026-10-25T01:30:00Z"])
+  for (const at of ["2026-10-25T00:30:00Z", "2026-10-25T01:30:00Z"]) {
     assert.equal(
       c.matchesSavedViewFilter(
         filter,
@@ -1192,6 +1229,7 @@ test("Yesterday uses named-zone calendar boundaries across spring and fall DST c
       ),
       true,
     );
+  }
 });
 test("calendar weeks start Monday in the selected zone and Today does not assume UTC", () => {
   const { c } = fixture(),
@@ -1259,11 +1297,12 @@ test("calendar weeks start Monday in the selected zone and Today does not assume
     NaN,
     Infinity,
     "2026-02-30T00:00:00Z",
-  ])
+  ]) {
     assert.equal(
       c.matchesSavedViewFilter(filter, { updatedAt: timestamp }, dayNow),
       false,
     );
+  }
 });
 test("calendar schema rejects invalid zones, periods and stale fields and preserves nested evaluation now", () => {
   const { c } = fixture(),
@@ -1283,11 +1322,12 @@ test("calendar schema rejects invalid zones, periods and stale fields and preser
     { field: "status" },
     { days: 1 },
     { date: "2026-10-27" },
-  ])
+  ]) {
     assert.throws(
       () => c.validateSavedViewFilter({ ...base, ...patch }),
       /calendar period/,
     );
+  }
   const now = Date.parse("2026-10-27T12:00:00Z") / 1000;
   assert.equal(
     c.matchesSavedViewFilter(
@@ -1354,12 +1394,13 @@ test("Since yesterday includes both calendar days while Yesterday excludes today
     ["2026-03-29T22:00:00Z", true],
     ["2026-03-30T21:59:59Z", true],
     ["2026-03-30T22:00:00Z", false],
-  ])
+  ]) {
     assert.equal(
       c.matchesSavedViewFilter(filter, { createdAt: at }, now),
       expected,
       at,
     );
+  }
   assert.equal(
     c.matchesSavedViewFilter(
       { ...filter, period: "yesterday" },
@@ -1441,10 +1482,13 @@ test("Reload preserves conflicting or removed editor drafts and permits only exp
       revision: 7,
       contentHash: "b".repeat(64),
     };
-    if (change === "removed")
+    if (change === "removed") {
       fresh.views = fresh.views.filter((view) => view.id !== "github-mine");
-    else if (change === "name") fresh.views[0].name = "Renamed remotely";
-    else fresh.views[0].query = "remote query";
+    } else if (change === "name") {
+      fresh.views[0].name = "Renamed remotely";
+    } else {
+      fresh.views[0].query = "remote query";
+    }
     const f = editorFixture([fresh]);
     editorButton(f.dialog, "Delete view").onclick();
     await editorButton(f.dialog, "Reload views").onclick();
@@ -1532,7 +1576,7 @@ test("filter badge counts direct agent predicates and nested rules, including a 
     f.c.renderSavedViewControls();
     assert.equal(
       host.children[1].textContent,
-      "Filters" + (count ? " · " + count : ""),
+      `Filters${count ? ` · ${count}` : ""}`,
     );
     assert.equal(host.children[1].title, f.c.savedViewSummary(filter));
   }
@@ -1738,7 +1782,9 @@ test("programmatic rule addition preserves outside or existing rule focus withou
       document.activeElement,
       outside ? previous : control(builder, "Filter field"),
     );
-    if (!outside) assert.equal(document.activeElement.value, "source");
+    if (!outside) {
+      assert.equal(document.activeElement.value, "source");
+    }
   }
 });
 
@@ -1805,7 +1851,7 @@ test("saved view action variants follow explicit intent when all displayed butto
   f.c.activateSavedView("github-mine");
   const button = f.c.savedViewButton;
   f.c.savedViewButton = (label, ...args) =>
-    button("Translated " + label, ...args);
+    button(`Translated ${label}`, ...args);
   f.c.openSavedViewEditor();
   const dialog = f.document.body.children.at(-1);
   for (const [label, variant] of [
@@ -1816,7 +1862,7 @@ test("saved view action variants follow explicit intent when all displayed butto
     ["Reload views", "secondary"],
     ["Apply filters", "secondary"],
   ]) {
-    const action = editorButton(dialog, "Translated " + label);
+    const action = editorButton(dialog, `Translated ${label}`);
     assert.match(action.className, /ui-control/);
     assert.equal(action.dataset.variant, variant, label);
   }
@@ -1895,7 +1941,9 @@ test("sidebar focus does not move into hidden, disabled, detached, or obscured r
   for (const mode of ["hidden", "disabled", "detached", "modal"]) {
     const f = sidebarFixture();
     f.host.children[0].focus();
-    if (mode === "hidden") f.host.visibility = "hidden";
+    if (mode === "hidden") {
+      f.host.visibility = "hidden";
+    }
     if (mode === "disabled") {
       const button = f.c.savedViewButton;
       f.c.savedViewButton = (...args) =>
@@ -1904,8 +1952,9 @@ test("sidebar focus does not move into hidden, disabled, detached, or obscured r
     if (mode === "detached") {
       f.host.parentElement = null;
     }
-    if (mode === "modal")
+    if (mode === "modal") {
       f.elements.set("dialog[open]", new f.Element("dialog"));
+    }
     f.c.renderSavedViewSidebar();
     assert.equal(f.document.activeElement, f.document.body);
   }
@@ -2172,7 +2221,9 @@ test("Save rejection never steals focus from App chat or a new modal", async () 
         modal ? "dialog" : "div",
         modal ? "" : "app-chat-panel",
       );
-    if (modal) host.open = true;
+    if (modal) {
+      host.open = true;
+    }
     host.append(outside);
     f.document.body.append(host);
     outside.focus();
@@ -2185,7 +2236,9 @@ test("accepted Save and Delete paint failures remain locked and recover through 
   for (const action of ["Save changes", "Save as new view", "Confirm delete"]) {
     const f = editorFixture(),
       deleting = action === "Confirm delete";
-    if (deleting) editorButton(f.dialog, "Delete view").onclick();
+    if (deleting) {
+      editorButton(f.dialog, "Delete view").onclick();
+    }
     const button = editorButton(f.dialog, action);
     button.focus();
     let writes = 0,
@@ -2237,7 +2290,7 @@ test("accepted Save and Delete paint failures remain locked and recover through 
   }
 });
 test("late accepted saves and deletes keep canonical persistence without activating or closing replacement editors", async () => {
-  for (const action of ["Save changes", "Confirm delete"])
+  for (const action of ["Save changes", "Confirm delete"]) {
     for (const replacement of [false, true]) {
       const f = editorFixture(),
         old = f.dialog,
@@ -2245,8 +2298,9 @@ test("late accepted saves and deletes keep canonical persistence without activat
         before = JSON.stringify(f.c.currentSavedViewState());
       let paints = 0;
       f.c.render = () => paints++;
-      if (action === "Confirm delete")
+      if (action === "Confirm delete") {
         editorButton(old, "Delete view").onclick();
+      }
       let sent;
       f.c.api = async (path, payload) => {
         sent = payload;
@@ -2274,6 +2328,7 @@ test("late accepted saves and deletes keep canonical persistence without activat
         assert.equal(control(newer, "View name").disabled, false);
       }
     }
+  }
 });
 test("Reload shares pending freeze and owned focus while preserving the independent filter draft", async () => {
   const f = editorFixture(),

@@ -2,13 +2,15 @@
 "use strict";
 // Browser storage written before the rename used mydash-prefixed keys.
 try {
-  for (const key of Object.keys(localStorage))
+  for (const key of Object.keys(localStorage)) {
     if (key.startsWith("mydash")) {
-      const renamed = "truffle" + key.slice(6);
-      if (localStorage.getItem(renamed) === null)
+      const renamed = `truffle${key.slice(6)}`;
+      if (localStorage.getItem(renamed) === null) {
         localStorage.setItem(renamed, localStorage.getItem(key));
+      }
       localStorage.removeItem(key);
     }
+  }
 } catch {
   // Storage can be unavailable; the old keys stay as they are.
 }
@@ -22,7 +24,9 @@ function createDashboardClient({
   function failure(message, data, status) {
     const error = new Error(message);
     error.data = data;
-    if (Number.isInteger(status)) error.status = status;
+    if (Number.isInteger(status)) {
+      error.status = status;
+    }
     return error;
   }
   async function request(path, payload) {
@@ -59,32 +63,42 @@ function createDashboardClient({
       throw failure("Cannot reach the local truffle service.", {});
     }
     onConnection(status !== 503);
-    if (status < 200 || status >= 300)
+    if (status < 200 || status >= 300) {
       throw failure(data.error || "Request failed. Try again.", data, status);
+    }
     return data;
   }
   function artifactUrl(id) {
-    if (!/^[a-f0-9]{24}$/i.test(id)) throw new Error("Invalid artifact ID.");
-    return native ? "truffle-artifact://localhost/" + id : "/artifacts/" + id;
+    if (!/^[a-f0-9]{24}$/i.test(id)) {
+      throw new Error("Invalid artifact ID.");
+    }
+    return native ? `truffle-artifact://localhost/${id}` : `/artifacts/${id}`;
   }
   async function readArtifact(id) {
     const path = artifactUrl(id);
-    if (native) return native("read_artifact", { id });
+    if (native) {
+      return native("read_artifact", { id });
+    }
     const response = await fetcher(path);
-    if (!response.ok) throw new Error("Artifact unavailable.");
+    if (!response.ok) {
+      throw new Error("Artifact unavailable.");
+    }
     return response.text();
   }
   async function copyText(text) {
-    if (native) return native("copy_text", { text: await text });
-    if (!clipboard?.writeText)
+    if (native) {
+      return native("copy_text", { text: await text });
+    }
+    if (!clipboard?.writeText) {
       throw new Error(
         "Clipboard access is unavailable. Select the text and copy it.",
       );
+    }
     if (
       typeof text !== "string" &&
       clipboard.write &&
       typeof ClipboardItem !== "undefined"
-    )
+    ) {
       return clipboard.write([
         new ClipboardItem({
           "text/plain": Promise.resolve(text).then(
@@ -92,49 +106,65 @@ function createDashboardClient({
           ),
         }),
       ]);
+    }
     return clipboard.writeText(await text);
   }
   async function copyArtifactImage(id) {
     const url = artifactUrl(id);
-    if (native) return native("copy_artifact_image", { id });
-    if (!clipboard?.write || typeof ClipboardItem === "undefined")
+    if (native) {
+      return native("copy_artifact_image", { id });
+    }
+    if (!clipboard?.write || typeof ClipboardItem === "undefined") {
       throw new Error("This browser cannot copy images. Try the desktop app.");
+    }
     const image = (async () => {
       const response = await fetcher(url);
-      if (!response.ok) throw new Error("Artifact unavailable.");
+      if (!response.ok) {
+        throw new Error("Artifact unavailable.");
+      }
       const blob = await response.blob();
       if (
         !["image/png", "image/jpeg", "image/webp"].includes(blob.type) ||
         blob.size > 10 * 1024 * 1024
-      )
+      ) {
         throw new Error("Unsupported clipboard image.");
+      }
       return clipboardPNG(blob);
     })();
     // Pass the promise immediately, preserving Safari's user-gesture requirement.
     return clipboard.write([new ClipboardItem({ "image/png": image })]);
   }
   async function restartPreview() {
-    if (!native) throw new Error("Restart controls require the desktop app.");
+    if (!native) {
+      throw new Error("Restart controls require the desktop app.");
+    }
     return native("restart_dashboard_preview");
   }
   async function restartStatus() {
-    if (!native) throw new Error("Restart controls require the desktop app.");
+    if (!native) {
+      throw new Error("Restart controls require the desktop app.");
+    }
     return native("restart_dashboard_status");
   }
   async function restartStart({ mode, confirmed = false, snapshot }) {
-    if (!native) throw new Error("Restart controls require the desktop app.");
+    if (!native) {
+      throw new Error("Restart controls require the desktop app.");
+    }
     if (
       !["service", "terminals"].includes(mode) ||
       typeof snapshot !== "string"
-    )
+    ) {
       throw new Error("Review the restart first.");
+    }
     return native("restart_dashboard_start", { mode, confirmed, snapshot });
   }
   async function openDiff(path) {
-    if (!native)
+    if (!native) {
       throw new Error("Open in Zed is available in the desktop app.");
-    if (typeof path !== "string" || !path.startsWith("/"))
+    }
+    if (typeof path !== "string" || !path.startsWith("/")) {
       throw new Error("The agent has no absolute working directory.");
+    }
     return native("open_git_diff_in_zed", { path });
   }
   return {
@@ -147,7 +177,9 @@ function createDashboardClient({
     restartStatus,
     restartStart,
     openDiff,
-    isDesktop: !!native,
+    isDesktop: Boolean(native),
   };
 }
-if (typeof module !== "undefined") module.exports = { createDashboardClient };
+if (typeof module !== "undefined") {
+  module.exports = { createDashboardClient };
+}

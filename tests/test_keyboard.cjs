@@ -8,7 +8,7 @@ const pageScripts = [
     .readFileSync("static/index.html", "utf8")
     .matchAll(/<script src="\/([^"]+)"/g),
 ]
-  .map((match) => "static/" + match[1])
+  .map((match) => `static/${match[1]}`)
   .filter(
     (file) =>
       !file.startsWith("static/vendor/xterm") &&
@@ -29,7 +29,9 @@ function dispatch(listeners, event) {
   };
   for (const listener of listeners) {
     listener(event);
-    if (stopped) break;
+    if (stopped) {
+      break;
+    }
   }
 }
 function fuzzy() {
@@ -70,7 +72,9 @@ function keyboard() {
     Object.assign(node(), { dataset: { workId: id } }),
   );
   const $ = (id) => {
-    if (!nodes.has(id)) nodes.set(id, node());
+    if (!nodes.has(id)) {
+      nodes.set(id, node());
+    }
     return nodes.get(id);
   };
   const search = $("#search");
@@ -96,7 +100,7 @@ function keyboard() {
       rows.map((row) => ({
         id: row.dataset.workId,
         source: "github",
-        url: "https://github.com/repo/pull/" + row.dataset.workId,
+        url: `https://github.com/repo/pull/${row.dataset.workId}`,
       })),
     openItem: (item) => moves.push(item.id),
     openNote: (item) => moves.push(item.id),
@@ -109,9 +113,9 @@ function keyboard() {
     openLocationPrompt() {
       moves.push("new");
     },
-    toggleSidebar: (side) => moves.push("toggle:" + side),
+    toggleSidebar: (side) => moves.push(`toggle:${side}`),
     cycleAgentTab: () => false,
-    runTabCommand: (command) => moves.push("tab:" + command),
+    runTabCommand: (command) => moves.push(`tab:${command}`),
   });
   loadScripts(c, scriptsBefore("static/workspace.js"));
   const host = loadScripts(c, "static/workspace.js", {
@@ -174,8 +178,9 @@ test("sidebar shortcuts use noun initials and preserve standard editing keys", (
   assert.equal(f.c.source, "agents");
   f.key("l", f.rows[0], { metaKey: true, shiftKey: true });
   assert.equal(f.c.source, "linear");
-  for (const key of ["a", "c", "v"])
+  for (const key of ["a", "c", "v"]) {
     assert.equal(f.key(key, f.rows[0], { metaKey: true }), false);
+  }
 });
 
 test("browser tab keys and All work use the expected modifiers", () => {
@@ -329,7 +334,9 @@ function shortcutErrorFixture() {
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
     contains(node) {
       return (
@@ -337,8 +344,11 @@ function shortcutErrorFixture() {
       );
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (selector === "[hidden]" && node.hidden) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (selector === "[hidden]" && node.hidden) {
+          return node;
+        }
+      }
       return null;
     }
     setAttribute(key, value) {
@@ -409,8 +419,8 @@ function shortcutErrorFixture() {
     get rows() {
       return rows;
     },
-    input: (id) => document.getElementById("shortcut-" + id),
-    error: (id) => document.getElementById("shortcut-" + id + "-error"),
+    input: (id) => document.getElementById(`shortcut-${id}`),
+    error: (id) => document.getElementById(`shortcut-${id}-error`),
   };
 }
 test("typed shortcut errors expose the exact persistent visible reason and retain existing descriptions", () => {
@@ -429,7 +439,7 @@ test("typed shortcut errors expose the exact persistent visible reason and retai
   assert.equal(input.getAttribute("aria-invalid"), "true");
   assert.equal(
     input.getAttribute("aria-describedby"),
-    "existing-help " + error.id,
+    `existing-help ${error.id}`,
   );
   assert.equal(f.footer["#settings-save"].disabled, true);
   input.value = "Primary+Alt+F";

@@ -2,9 +2,12 @@
 "use strict";
 function workViewRequest(items, metadata, question) {
   const itemIds = [...new Set(items.map((item) => item.id))];
-  if (!itemIds.length) throw new Error("There are no items in this view.");
-  if (itemIds.length > 4096)
+  if (!itemIds.length) {
+    throw new Error("There are no items in this view.");
+  }
+  if (itemIds.length > 4096) {
     throw new Error("Narrow this view to at most 4,096 items.");
+  }
   return {
     source: metadata.source,
     itemIds,
@@ -12,8 +15,10 @@ function workViewRequest(items, metadata, question) {
     question: question.trim(),
   };
 }
-if (typeof module !== "undefined") module.exports = { workViewRequest };
-if (typeof document !== "undefined")
+if (typeof module !== "undefined") {
+  module.exports = { workViewRequest };
+}
+if (typeof document !== "undefined") {
   (() => {
     const toggle = $("#ask-view"),
       form = $("#ask-view-form"),
@@ -46,7 +51,9 @@ if (typeof document !== "undefined")
       toggle.disabled = pending || !visibleWorkItems.length;
       toggle.setAttribute("aria-expanded", String(open && allowed));
       form.hidden = !open || !allowed;
-      if (!allowed) return;
+      if (!allowed) {
+        return;
+      }
       const manual = $("#launch-folder").value,
         hints = visibleWorkItems.map(folderHint);
       const repositories = new Set(
@@ -74,16 +81,19 @@ if (typeof document !== "undefined")
           : repositoryFolder || inventory.workRoot) ||
         "";
       const auto = folder.options[0];
-      if (auto)
-        auto.textContent = "Auto · " + (automatic.split("/").pop() || "code");
+      if (auto) {
+        auto.textContent = `Auto · ${automatic.split("/").pop() || "code"}`;
+      }
       $("#ask-view-count").textContent =
-        visibleWorkItems.length + " matching items · snapshot on send";
+        `${visibleWorkItems.length} matching items · snapshot on send`;
       question.placeholder = "Ask about these items, or describe a task…";
       submit.disabled =
         pending || !visibleWorkItems.length || !question.value.trim();
     }
     toggle.onclick = () => {
-      if (pending) return;
+      if (pending) {
+        return;
+      }
       open = !open;
       if (open) {
         agent.value = $("#quick-agent").value;
@@ -97,7 +107,9 @@ if (typeof document !== "undefined")
         folder.value = previous;
         update();
         question.focus();
-      } else update();
+      } else {
+        update();
+      }
     };
     $("#ask-view-close").onclick = () => {
       if (!pending) {
@@ -116,7 +128,9 @@ if (typeof document !== "undefined")
     question.onkeydown = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
-        if (!submit.disabled) form.requestSubmit();
+        if (!submit.disabled) {
+          form.requestSubmit();
+        }
       } else if (event.key === "Escape" && !pending) {
         event.preventDefault();
         open = false;
@@ -126,7 +140,9 @@ if (typeof document !== "undefined")
     };
     form.onsubmit = async (event) => {
       event.preventDefault();
-      if (pending || !question.value.trim()) return;
+      if (pending || !question.value.trim()) {
+        return;
+      }
       pending = true;
       error.hidden = true;
       update();
@@ -156,8 +172,9 @@ if (typeof document !== "undefined")
           invalidateSnapshot();
           await loadStateSnapshot({ attempts: 2 });
           prepared = state.sessions.find((s) => s.id === savedSessionId);
-          if (!prepared)
+          if (!prepared) {
             throw new Error("The saved view session is unavailable.");
+          }
         }
         open = false;
         update();
@@ -166,11 +183,13 @@ if (typeof document !== "undefined")
           persist();
           render();
           toast(
-            "Preview saved with " +
-              frozen.itemIds.length +
-              " items · no agent launched",
+            `Preview saved with ${
+              frozen.itemIds.length
+            } items · no agent launched`,
           );
-        } else await openSavedSession(prepared);
+        } else {
+          await openSavedSession(prepared);
+        }
       } catch (problem) {
         open = true;
         error.textContent =
@@ -186,9 +205,12 @@ if (typeof document !== "undefined")
     };
     registerRenderHook("view-agent", update, { order: 60 });
     window.addEventListener("truffle-service-restarted", () => {
-      if (!prepared) frozen = null;
+      if (!prepared) {
+        frozen = null;
+      }
       error.hidden = true;
       update();
     });
     update();
   })();
+}

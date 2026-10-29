@@ -3,14 +3,19 @@ function settingsProfileChanges(current, proposed, approval) {
   const rows = [];
   for (const [key, after] of Object.entries(proposed)) {
     const before = current[key];
-    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      continue;
+    }
     const policy = approval?.[key] === "routine" ? "routine" : "user";
-    if (key === "keybindings")
+    if (key === "keybindings") {
       for (const [id, chord] of Object.entries(after)) {
-        if (before[id] !== chord)
+        if (before[id] !== chord) {
           rows.push({ key, id, before: before[id], after: chord, policy });
+        }
       }
-    else rows.push({ key, before, after, policy });
+    } else {
+      rows.push({ key, before, after, policy });
+    }
   }
   return rows;
 }
@@ -18,9 +23,13 @@ function settingsProfilePatch(baseline, rows) {
   const patch = {};
   for (const row of rows) {
     if (row.id) {
-      if (!patch.keybindings) patch.keybindings = { ...baseline.keybindings };
+      if (!patch.keybindings) {
+        patch.keybindings = { ...baseline.keybindings };
+      }
       patch.keybindings[row.id] = row.after;
-    } else patch[row.key] = structuredClone(row.after);
+    } else {
+      patch[row.key] = structuredClone(row.after);
+    }
   }
   return patch;
 }
@@ -30,8 +39,12 @@ function renderSettingsProfilePreview(
 ) {
   const make = (tag, text, cls) => {
     const n = document.createElement(tag);
-    if (text) n.textContent = text;
-    if (cls) n.className = cls;
+    if (text) {
+      n.textContent = text;
+    }
+    if (cls) {
+      n.className = cls;
+    }
     return n;
   };
   const root = make("section", null, "settings-profile-import");
@@ -40,8 +53,9 @@ function renderSettingsProfilePreview(
     "data-private",
     "data-agent-private",
     "data-agent-context-exclude",
-  ])
+  ]) {
     root.setAttribute(marker, "true");
+  }
   container.append(root);
   const paste = make("textarea");
   paste.rows = 4;
@@ -53,8 +67,9 @@ function renderSettingsProfilePreview(
     "data-private",
     "data-agent-private",
     "data-agent-context-exclude",
-  ])
+  ]) {
     paste.setAttribute(marker, "true");
+  }
   const file = make("input");
   file.type = "file";
   file.accept = ".json,application/json";
@@ -77,7 +92,9 @@ function renderSettingsProfilePreview(
     b.dataset.variant = "secondary";
     b.type = "button";
     b.onclick = () => {
-      if (!disposed && !busy) return run();
+      if (!disposed && !busy) {
+        return run();
+      }
     };
     return b;
   };
@@ -105,8 +122,9 @@ function renderSettingsProfilePreview(
       !review ||
       review.stale ||
       !review.rows.some((row) => row.checkbox.checked);
-    for (const row of review?.rows || [])
+    for (const row of review?.rows || []) {
       row.checkbox.disabled = busy || disposed || review.stale;
+    }
   };
   const clear = () => {
     review = null;
@@ -120,8 +138,9 @@ function renderSettingsProfilePreview(
     profile = null;
     update();
     try {
-      if (new TextEncoder().encode(raw).length > 65536)
+      if (new TextEncoder().encode(raw).length > 65536) {
         throw new Error("Profile exceeds 64 KiB.");
+      }
       try {
         profile = JSON.parse(raw);
       } catch {
@@ -141,39 +160,48 @@ function renderSettingsProfilePreview(
     candidate,
     { expectedRevision, expectedContentHash } = {},
   ) {
-    if (disposed) return;
+    if (disposed) {
+      return;
+    }
     const ticket = ++generation;
     busy = true;
     clear();
     status.textContent = "Validating settings profile…";
     update();
     try {
-      if (new TextEncoder().encode(JSON.stringify(candidate)).length > 65536)
+      if (new TextEncoder().encode(JSON.stringify(candidate)).length > 65536) {
         throw new Error("Profile exceeds 64 KiB.");
+      }
       const current = await api("/api/settings");
-      if (disposed || ticket !== generation) return;
+      if (disposed || ticket !== generation) {
+        return;
+      }
       if (
         expectedRevision !== undefined &&
         (current.revision !== expectedRevision ||
           current.contentHash !== expectedContentHash)
-      )
+      ) {
         throw new Error(
           "Settings changed since this proposal. Refresh the preview and choose changes again.",
         );
+      }
       const merged = mergeSettingsProfile(current.values, candidate),
         result = await api("/api/settings/preview", {
           revision: current.revision,
           contentHash: current.contentHash,
           patch: merged,
         });
-      if (disposed || ticket !== generation) return;
+      if (disposed || ticket !== generation) {
+        return;
+      }
       if (
         result.revision !== current.revision ||
         result.contentHash !== current.contentHash
-      )
+      ) {
         throw new Error(
           "Settings changed. Refresh the preview before applying.",
         );
+      }
       const rows = settingsProfileChanges(
         current.values,
         result.values,
@@ -200,8 +228,10 @@ function renderSettingsProfilePreview(
       );
       for (const row of rows) {
         const label = row.id
-          ? ((current.commands || []).find((command) => command.id === row.id)
-              ?.label || row.id) + " shortcut"
+          ? `${
+              (current.commands || []).find((command) => command.id === row.id)
+                ?.label || row.id
+            } shortcut`
           : (current.fields || []).find((field) => field.key === row.key)
               ?.label || row.key;
         const card = make("div", null, "settings-profile-change"),
@@ -239,14 +269,13 @@ function renderSettingsProfilePreview(
         card.append(heading, diff);
         preview.append(card);
       }
-      status.textContent =
-        rows.length +
-        " change" +
-        (rows.length === 1 ? "" : "s") +
-        " previewed. Nothing has been applied.";
+      status.textContent = `${rows.length} change${
+        rows.length === 1 ? "" : "s"
+      } previewed. Nothing has been applied.`;
     } catch (error) {
-      if (!disposed && ticket === generation)
+      if (!disposed && ticket === generation) {
         fail(error.message || "Profile could not be previewed.");
+      }
     } finally {
       if (!disposed && ticket === generation) {
         busy = false;
@@ -255,9 +284,13 @@ function renderSettingsProfilePreview(
     }
   }
   async function applySelected() {
-    if (!review || review.stale || disposed) return;
+    if (!review || review.stale || disposed) {
+      return;
+    }
     const selected = review.rows.filter((row) => row.checkbox.checked);
-    if (!selected.length) return;
+    if (!selected.length) {
+      return;
+    }
     const expected = review,
       ticket = ++generation;
     busy = true;
@@ -265,7 +298,9 @@ function renderSettingsProfilePreview(
     update();
     try {
       const current = await api("/api/settings");
-      if (disposed || ticket !== generation) return;
+      if (disposed || ticket !== generation) {
+        return;
+      }
       if (
         current.revision !== expected.revision ||
         current.contentHash !== expected.contentHash
@@ -281,14 +316,18 @@ function renderSettingsProfilePreview(
         contentHash: expected.contentHash,
         patch,
       });
-      if (disposed || ticket !== generation) return;
+      if (disposed || ticket !== generation) {
+        return;
+      }
       clear();
       profile = null;
       status.textContent = "Selected settings applied.";
       await loadAppSettings();
     } catch (error) {
       if (!disposed && ticket === generation) {
-        if (review) review.stale = true;
+        if (review) {
+          review.stale = true;
+        }
         fail(
           error.message ||
             "Settings could not be applied. Refresh the preview to retry.",
@@ -305,7 +344,9 @@ function renderSettingsProfilePreview(
     const selected = file.files?.[0];
     file.value = "";
     paste.value = "";
-    if (!selected || disposed) return;
+    if (!selected || disposed) {
+      return;
+    }
     if (selected.size > 65536) {
       profile = null;
       clear();
@@ -333,7 +374,9 @@ function renderSettingsProfilePreview(
   const dialog = container.closest("dialog"),
     onClose = () => root.disposeProfileImport();
   root.disposeProfileImport = () => {
-    if (disposed) return;
+    if (disposed) {
+      return;
+    }
     disposed = true;
     generation++;
     paste.value = "";

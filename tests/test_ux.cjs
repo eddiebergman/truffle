@@ -37,7 +37,9 @@ test("scheduled snoozes become due without restoring tabs or waking agents", () 
     const next = new Date(c.nextSnoozeTime(name));
     assert.ok(next.getTime() > Date.now());
     assert.equal(next.getHours(), 9);
-    if (name === "monday") assert.equal(next.getDay(), 1);
+    if (name === "monday") {
+      assert.equal(next.getDay(), 1);
+    }
   }
   assert.equal(c.nextSnoozeTime("none"), null);
 });
@@ -131,8 +133,9 @@ function detachFixture({
     }),
     api: async (path, p) => {
       calls.push(structuredClone(p));
-      if (!p.context)
+      if (!p.context) {
         return { context: { revision, resources: structuredClone(resources) } };
+      }
       if (p.context.revision !== revision) {
         const error = new Error("changed");
         error.status = 409;
@@ -147,13 +150,17 @@ function detachFixture({
         resources = [{ resourceKey: "B" }];
         revision = "concurrent";
       }
-      if (refreshError) throw new Error("read failed");
+      if (refreshError) {
+        throw new Error("read failed");
+      }
       return { accepted: true };
     },
     render() {},
     toast: (message, action) => {
       messages.push(message);
-      if (action) undo = action;
+      if (action) {
+        undo = action;
+      }
     },
   });
   let toastNode;
@@ -279,10 +286,11 @@ test("artifact detach and Undo refresh the actual library used by the result pro
           artifacts: [{ id: "artifact", sessionIds: linked ? ["record"] : [] }],
         };
       }
-      if (!p.context)
+      if (!p.context) {
         return {
           context: { revision, artifactIds: linked ? ["artifact"] : [] },
         };
+      }
       assert.equal(p.context.revision, revision);
       linked = p.context.artifactIds.includes("artifact");
       revision = linked ? "restored" : "removed";
@@ -295,7 +303,9 @@ test("artifact detach and Undo refresh the actual library used by the result pro
       rendered = rows;
     },
     toast: (_message, action) => {
-      if (action) undo = action;
+      if (action) {
+        undo = action;
+      }
     },
   });
   loadScripts(c, [

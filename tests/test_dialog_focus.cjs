@@ -11,13 +11,22 @@ function fixture() {
   const matches = (node, selector) =>
     selector.split(",").some((part) => {
       part = part.trim();
-      if (part === "[hidden]") return node.hidden;
-      if (part === "dialog:not([open])")
+      if (part === "[hidden]") {
+        return node.hidden;
+      }
+      if (part === "dialog:not([open])") {
         return node.tagName === "dialog" && !node.open;
-      if (part === "[data-focus-key]") return !!node.dataset.focusKey;
-      if (part.startsWith("#")) return node.id === part.slice(1);
+      }
+      if (part === "[data-focus-key]") {
+        return Boolean(node.dataset.focusKey);
+      }
+      if (part.startsWith("#")) {
+        return node.id === part.slice(1);
+      }
       const open = part.endsWith("[open]");
-      if (open) part = part.slice(0, -6);
+      if (open) {
+        part = part.slice(0, -6);
+      }
       return (
         (!open || node.open) &&
         (part.startsWith(".")
@@ -45,7 +54,7 @@ function fixture() {
       };
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     get firstChild() {
       return this.children[0];
@@ -63,8 +72,11 @@ function fixture() {
     insertBefore(node, before) {
       node.remove();
       const index = this.children.indexOf(before);
-      if (index < 0) this.children.push(node);
-      else this.children.splice(index, 0, node);
+      if (index < 0) {
+        this.children.push(node);
+      } else {
+        this.children.splice(index, 0, node);
+      }
       node.parentElement = this;
     }
     prepend(...nodes) {
@@ -83,9 +95,12 @@ function fixture() {
       }
     }
     replaceChildren(...nodes) {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentElement = null;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -109,7 +124,9 @@ function fixture() {
     closest(selector) {
       let node = this;
       while (node) {
-        if (matches(node, selector)) return node;
+        if (matches(node, selector)) {
+          return node;
+        }
         node = node.parentElement;
       }
       return null;
@@ -118,8 +135,9 @@ function fixture() {
       return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
     }
     getClientRects() {
-      if (!this.isConnected || this.closest("[hidden],dialog:not([open])"))
+      if (!this.isConnected || this.closest("[hidden],dialog:not([open])")) {
         return [];
+      }
       let child = this,
         parent = this.parentElement;
       while (parent) {
@@ -127,8 +145,9 @@ function fixture() {
           parent.tagName === "details" &&
           !parent.open &&
           child.tagName !== "summary"
-        )
+        ) {
           return [];
+        }
         child = parent;
         parent = parent.parentElement;
       }
@@ -145,7 +164,9 @@ function fixture() {
       this.focusOptions = options;
     }
     dispatchEvent(event) {
-      for (const fn of this.events[event.type] || []) fn(event);
+      for (const fn of this.events[event.type] || []) {
+        fn(event);
+      }
       return !event.defaultPrevented;
     }
     add(node) {
@@ -162,12 +183,17 @@ function fixture() {
       this.show();
     }
     close() {
-      if (!this.open) return;
+      if (!this.open) {
+        return;
+      }
       this.open = false;
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
+      }
       queued.push(() => {
-        for (const fn of this.events.close || []) fn();
+        for (const fn of this.events.close || []) {
+          fn();
+        }
       });
     }
   }
@@ -203,13 +229,16 @@ function fixture() {
     ["#diff-review-dialog", dialog],
   ]);
   const $ = (selector, root) => {
-    if (root) return root.querySelector(selector);
+    if (root) {
+      return root.querySelector(selector);
+    }
     if (
       [".agent-heading", ".agent-conversation", ".agent-context-grid"].includes(
         selector,
       )
-    )
+    ) {
       return pane.querySelector(selector);
+    }
     if (!ids.has(selector)) {
       const node = new Node("div");
       node.id = selector.slice(1);
@@ -225,8 +254,9 @@ function fixture() {
     getComputedStyle: (node) => {
       let current = node;
       while (current) {
-        if (current.style.visibility === "hidden")
+        if (current.style.visibility === "hidden") {
           return { visibility: "hidden" };
+        }
         current = current.parentElement;
       }
       return { visibility: "visible" };
@@ -316,7 +346,9 @@ function fixture() {
     context,
     $,
     flush: () => {
-      while (queued.length) queued.shift()();
+      while (queued.length) {
+        queued.shift()();
+      }
     },
     reviewButton: () =>
       context
@@ -421,7 +453,9 @@ test("actual feedback success closes review after its snapshot render and return
     loadStateSnapshot: async () => ({ accepted: true }),
     refreshChatDispatch: async (_receipt, { canPresent, refresh }) => {
       await refresh();
-      if (canPresent()) f.c.render();
+      if (canPresent()) {
+        f.c.render();
+      }
       return true;
     },
     window: { truffleGuidance: { complete() {} } },
@@ -442,8 +476,11 @@ test("review close never steals external, terminal or new-modal focus", async ()
     await f.c.openDiffReview(f.record, undefined, "/repo");
     const outside = new f.Node(tag);
     f.document.body.append(outside);
-    if (tag === "dialog") outside.showModal();
-    else outside.focus();
+    if (tag === "dialog") {
+      outside.showModal();
+    } else {
+      outside.focus();
+    }
     f.dialog.close();
     f.flush();
     assert.equal(f.document.activeElement, outside);
@@ -518,10 +555,18 @@ test("nested return is restricted to an open original parent and visible enabled
     const replacement = new f.Node("button");
     replacement.dataset.focusKey = "nested";
     parent.append(replacement);
-    if (state === "closed") parent.open = false;
-    if (state === "hidden") parent.hidden = true;
-    if (state === "css-hidden") parent.style.visibility = "hidden";
-    if (state === "disabled") replacement.disabled = true;
+    if (state === "closed") {
+      parent.open = false;
+    }
+    if (state === "hidden") {
+      parent.hidden = true;
+    }
+    if (state === "css-hidden") {
+      parent.style.visibility = "hidden";
+    }
+    if (state === "disabled") {
+      replacement.disabled = true;
+    }
     if (state === "new-modal") {
       const next = new f.Node("dialog");
       f.document.body.append(next);
@@ -589,17 +634,28 @@ test("local diff repaint preserves outside focus and refuses stale chat, root, s
       f.document.body.append(expected);
       expected.focus();
     }
-    if (change === "chat") f.c.selectedAgentKey = "record:other";
-    if (change === "root") f.record.cwd = "/other";
-    if (change === "source") f.c.source = "github";
+    if (change === "chat") {
+      f.c.selectedAgentKey = "record:other";
+    }
+    if (change === "root") {
+      f.record.cwd = "/other";
+    }
+    if (change === "source") {
+      f.c.source = "github";
+    }
     if (change === "modal") {
       const modal = new f.Node("dialog");
       f.document.body.append(modal);
       modal.open = true;
     }
-    if (change === "detached") f.context.remove();
+    if (change === "detached") {
+      f.context.remove();
+    }
     evaluate(f.c, "gitDiffViews.get('chat\\0/repo').paint();");
-    if (change === "detached") assert.equal(f.document.activeElement, file);
-    else assert.equal(f.document.activeElement, expected);
+    if (change === "detached") {
+      assert.equal(f.document.activeElement, file);
+    } else {
+      assert.equal(f.document.activeElement, expected);
+    }
   }
 });

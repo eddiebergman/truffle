@@ -13,17 +13,31 @@ function buildBundleIndex(items = allItems()) {
   bundleIndex = new Map();
   bundleCatalog = new Map();
   linkedSessionIndex = new Map();
-  for (const item of state.relatedItems || []) bundleCatalog.set(item.id, item);
-  for (const session of state.sessions || [])
-    for (const item of session.items) bundleCatalog.set(item.id, item);
-  for (const item of items) bundleCatalog.set(item.id, item);
-  for (const bundle of state.bundles || [])
-    for (const key of bundle.itemIds) bundleIndex.set(key, bundle.itemIds);
+  for (const item of state.relatedItems || []) {
+    bundleCatalog.set(item.id, item);
+  }
   for (const session of state.sessions || []) {
-    if (session.archivedAt) continue;
+    for (const item of session.items) {
+      bundleCatalog.set(item.id, item);
+    }
+  }
+  for (const item of items) {
+    bundleCatalog.set(item.id, item);
+  }
+  for (const bundle of state.bundles || []) {
+    for (const key of bundle.itemIds) {
+      bundleIndex.set(key, bundle.itemIds);
+    }
+  }
+  for (const session of state.sessions || []) {
+    if (session.archivedAt) {
+      continue;
+    }
     for (const ref of session.items) {
       const id = ref.id;
-      if (!linkedSessionIndex.has(id)) linkedSessionIndex.set(id, new Set());
+      if (!linkedSessionIndex.has(id)) {
+        linkedSessionIndex.set(id, new Set());
+      }
       linkedSessionIndex.get(id).add(session);
     }
   }
@@ -54,9 +68,11 @@ const featureForms = new Map(),
 function disposeFeatureForm(dialog) {
   const current = featureForms.get(dialog);
   featureForms.delete(dialog);
-  if (current)
-    for (const [control, disabled] of current.controls)
+  if (current) {
+    for (const [control, disabled] of current.controls) {
       control.disabled = disabled;
+    }
+  }
   dialog.querySelector("[data-feature-write]")?.remove();
   dialog.setAttribute("aria-busy", "false");
 }
@@ -83,10 +99,14 @@ function createFeatureForm(dialog, form, target) {
   if (!featureFormDialogs.has(dialog)) {
     featureFormDialogs.add(dialog);
     dialog.addEventListener("cancel", (event) => {
-      if (featureForms.get(dialog)?.pending) event.preventDefault();
+      if (featureForms.get(dialog)?.pending) {
+        event.preventDefault();
+      }
     });
     dialog.addEventListener("close", () => {
-      if (!dialog.open) disposeFeatureForm(dialog);
+      if (!dialog.open) {
+        disposeFeatureForm(dialog);
+      }
     });
   }
   const region = el("div");
@@ -108,7 +128,9 @@ function createFeatureForm(dialog, form, target) {
   const inspect = featureButton(
     "Close and inspect this view",
     () => {
-      if (current.isCurrent() && !current.pending) dialog.close();
+      if (current.isCurrent() && !current.pending) {
+        dialog.close();
+      }
     },
     "ui-control",
   );
@@ -136,10 +158,12 @@ function freezeFeatureForm(current, locked) {
     if (
       control.dataset.featureRecovery ||
       control.closest("#app-chat-panel,.xterm")
-    )
+    ) {
       continue;
-    if (!current.controls.has(control))
+    }
+    if (!current.controls.has(control)) {
       current.controls.set(control, control.disabled);
+    }
     control.disabled = control.classList.contains("close-dialog")
       ? current.pending
       : locked || current.controls.get(control);
@@ -150,7 +174,9 @@ function freezeFeatureForm(current, locked) {
   );
 }
 function presentFeatureFormResult(current) {
-  if (!current.isCurrent()) return;
+  if (!current.isCurrent()) {
+    return;
+  }
   const locked = ["accepted", "unknown"].includes(current.result.kind);
   freezeFeatureForm(current, locked);
   current.ui.message.textContent = localWriteMessage(
@@ -181,19 +207,25 @@ async function refreshFeatureForm(current) {
     current.pending ||
     current.refreshing ||
     !["accepted", "unknown"].includes(current.result?.kind)
-  )
+  ) {
     return;
+  }
   current.refreshing = true;
   holdFormFocus(current.host, current);
   freezeFeatureForm(current, true);
   current.ui.refresh.disabled = true;
   try {
     const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted)
+    if (!snapshot.accepted) {
       throw new Error("The dashboard changed while refreshing.");
-    if (!current.isCurrent()) return;
+    }
+    if (!current.isCurrent()) {
+      return;
+    }
     render();
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     if (current.result.kind === "accepted") {
       await current.afterReady();
       toast(
@@ -202,22 +234,24 @@ async function refreshFeatureForm(current) {
           current.acceptedText,
         ),
       );
-    } else
+    } else {
       current.ui.message.textContent =
         "The save outcome is unknown. The view was refreshed. Inspect it before saving again; this draft was not resubmitted.";
+    }
   } catch {
-    if (current.isCurrent())
+    if (current.isCurrent()) {
       current.ui.message.textContent = localWriteMessage(
         current.result,
         current.acceptedText,
       );
-    else if (current.result.kind === "accepted")
+    } else if (current.result.kind === "accepted") {
       toast(
         localWriteMessage(
           { kind: "accepted", presentation: "pending" },
           current.acceptedText,
         ),
       );
+    }
   } finally {
     current.refreshing = false;
     if (current.isCurrent()) {
@@ -239,7 +273,9 @@ async function refreshFeatureForm(current) {
   }
 }
 async function submitFeatureForm(current, payload, acceptedText, afterReady) {
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   current.pending = true;
   current.afterReady = afterReady;
   current.acceptedText = acceptedText;
@@ -250,8 +286,9 @@ async function submitFeatureForm(current, payload, acceptedText, afterReady) {
   current.pending = false;
   current.result = result;
   if (!current.isCurrent()) {
-    if (featureForms.get(current.dialog) === current && current.dialog.open)
+    if (featureForms.get(current.dialog) === current && current.dialog.open) {
       freezeFeatureForm(current, true);
+    }
     toast(localWriteMessage(result, acceptedText));
     return;
   }
@@ -268,8 +305,11 @@ async function submitFeatureForm(current, payload, acceptedText, afterReady) {
       };
     }
   }
-  if (current.isCurrent()) presentFeatureFormResult(current);
-  else toast(localWriteMessage(result, acceptedText));
+  if (current.isCurrent()) {
+    presentFeatureFormResult(current);
+  } else {
+    toast(localWriteMessage(result, acceptedText));
+  }
 }
 async function featureWrite(
   payload,
@@ -281,16 +321,20 @@ async function featureWrite(
     write = () => mutate(payload),
   } = {},
 ) {
-  if (button?.disabled) return;
+  if (button?.disabled) {
+    return;
+  }
   const page = source;
-  if (button) button.disabled = true;
+  if (button) {
+    button.disabled = true;
+  }
   let result = await write();
   if (
     result.kind === "accepted" &&
     result.presentation === "ready" &&
     source === page &&
     isCurrent()
-  )
+  ) {
     try {
       afterReady?.();
     } catch (error) {
@@ -300,8 +344,10 @@ async function featureWrite(
         error: error.message,
       };
     }
-  if (result.kind === "rejected" && button?.isConnected)
+  }
+  if (result.kind === "rejected" && button?.isConnected) {
     button.disabled = false;
+  }
   toast(localWriteMessage(result, acceptedText));
   return result;
 }
@@ -323,7 +369,9 @@ function markObservedChange(change, button, open = false) {
     afterReady: () => {
       if (open) {
         const item = allItems().find((row) => row.id === itemId);
-        if (item) openItem(item);
+        if (item) {
+          openItem(item);
+        }
       }
     },
   });
@@ -373,7 +421,9 @@ function renderRelatedWork(item) {
                 remove.isConnected,
               afterReady: () => {
                 const latest = allItems().find((row) => row.id === item.id);
-                if (latest) renderRelatedWork(latest);
+                if (latest) {
+                  renderRelatedWork(latest);
+                }
               },
             },
           ),
@@ -388,7 +438,9 @@ function renderRelatedWork(item) {
   $("#snooze-open").onclick = () => openSnooze(item);
 }
 function openSnooze(item) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   disposeFeatureForm($("#snooze-dialog"));
   $("#snooze-form").reset();
   $("#snooze-title").textContent = item.title;
@@ -406,7 +458,9 @@ $("#snooze-form").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget,
     current = featureForms.get($("#snooze-dialog"));
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   const choice = form.elements.duration.value;
   const payload = {
     action: "snooze",
@@ -460,7 +514,9 @@ function renderSnoozed(items) {
     ].includes(source) || !rows.length;
   $("#snoozed-summary").textContent = `Snoozed · ${rows.length}`;
   list.replaceChildren();
-  if (section.hidden || !section.open) return;
+  if (section.hidden || !section.open) {
+    return;
+  }
   for (const item of rows) {
     const row = el("div", "snoozed-row"),
       value = state.snoozes[item.id];
@@ -490,28 +546,38 @@ function renderSnoozed(items) {
   }
 }
 $("#snoozed-items").ontoggle = () => {
-  if (state) renderSnoozed(allItems());
+  if (state) {
+    renderSnoozed(allItems());
+  }
 };
 function matchesSentry(item, page = source) {
-  if (page !== "sentry") return true;
+  if (page !== "sentry") {
+    return true;
+  }
   if (
     Number(item.userCount || 0) < Number(sentryFilters.minUsers || 0) ||
     Number(item.eventCount || 0) < Number(sentryFilters.minEvents || 0)
-  )
+  ) {
     return false;
-  if (sentryFilters.level && item.level !== sentryFilters.level) return false;
+  }
+  if (sentryFilters.level && item.level !== sentryFilters.level) {
+    return false;
+  }
   if (
     sentryFilters.category &&
     (item.category || "error") !== sentryFilters.category
-  )
+  ) {
     return false;
+  }
   if (
     sentryFilters.days &&
     !(Date.parse(item.lastSeen) > Date.now() - sentryFilters.days * 86400000)
-  )
+  ) {
     return false;
-  if (sentryFilters.environment && !environmentMembers.has(item.id))
+  }
+  if (sentryFilters.environment && !environmentMembers.has(item.id)) {
     return false;
+  }
   return true;
 }
 let environmentRequest = null,
@@ -527,17 +593,22 @@ async function refreshEnvironmentView(name, entry) {
     environmentOutcomes.get(name) !== entry ||
     entry.pending ||
     entry.reading
-  )
+  ) {
     return;
+  }
   entry.reading = true;
   try {
     const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted)
+    if (!snapshot.accepted) {
       throw new Error("The dashboard changed while refreshing.");
-    if (!currentEnvironment(name) || environmentOutcomes.get(name) !== entry)
+    }
+    if (!currentEnvironment(name) || environmentOutcomes.get(name) !== entry) {
       return;
+    }
     render();
-    if (entry.kind === "accepted") environmentOutcomes.delete(name);
+    if (entry.kind === "accepted") {
+      environmentOutcomes.delete(name);
+    }
   } catch {
     /* The request outcome stays unresolved; recovery only reads cached state. */
   } finally {
@@ -546,8 +617,9 @@ async function refreshEnvironmentView(name, entry) {
       currentEnvironment(name) &&
       (!environmentOutcomes.has(name) ||
         environmentOutcomes.get(name) === entry)
-    )
+    ) {
       renderSentryControls(false);
+    }
   }
 }
 async function ensureEnvironment() {
@@ -559,17 +631,21 @@ async function ensureEnvironment() {
     environmentOutcomes.has(name) ||
     environmentOutcomes.size >= 20 ||
     Date.now() < environmentNext
-  )
+  ) {
     return;
+  }
   const cached = state.sentryEnvironments?.[name],
     sourceInfo = state.sources.sentry;
   if (
     sourceInfo?.disabled === true ||
     (sourceInfo?.failures && sourceInfo.nextAttempt > Date.now() / 1000) ||
     state.sentryEnvNextAttempt > Date.now() / 1000
-  )
+  ) {
     return;
-  if (cached?.running || cached?.nextAttempt > Date.now() / 1000) return;
+  }
+  if (cached?.running || cached?.nextAttempt > Date.now() / 1000) {
+    return;
+  }
   const entry = { kind: "pending", pending: true, reading: false };
   environmentOutcomes.set(name, entry);
   environmentRequest = entry;
@@ -580,18 +656,25 @@ async function ensureEnvironment() {
     );
     entry.pending = false;
     entry.kind = result.kind;
-    if (environmentRequest === entry) environmentRequest = null;
+    if (environmentRequest === entry) {
+      environmentRequest = null;
+    }
     if (
       result.kind === "rejected" ||
       (result.kind === "accepted" && result.presentation === "ready")
-    )
+    ) {
       environmentOutcomes.delete(name);
+    }
     if (currentEnvironment(name)) {
-      if (result.kind === "rejected") toast(result.error);
+      if (result.kind === "rejected") {
+        toast(result.error);
+      }
       renderSentryControls(false);
     }
   } finally {
-    if (environmentRequest === entry) environmentRequest = null;
+    if (environmentRequest === entry) {
+      environmentRequest = null;
+    }
   }
 }
 function retryEnvironment(name, entry) {
@@ -602,15 +685,17 @@ function retryEnvironment(name, entry) {
     entry.pending ||
     entry.reading ||
     environmentRequest
-  )
+  ) {
     return;
+  }
   // A separate explicit user action is required after an unknown request outcome.
   const info = state.sources.sentry;
   if (
     info?.disabled === true ||
     (info?.failures && info.nextAttempt > Date.now() / 1000)
-  )
+  ) {
     return;
+  }
   environmentOutcomes.delete(name);
   environmentNext = 0;
   return ensureEnvironment();
@@ -620,7 +705,9 @@ function renderSentryControls(requestEnvironment = true) {
     state.sentryEnvironments?.[sentryFilters.environment]?.itemIds || [],
   );
   $("#sentry-controls").hidden = source !== "sentry";
-  if (source !== "sentry") return;
+  if (source !== "sentry") {
+    return;
+  }
   const select = $("#sentry-view");
   select.replaceChildren(
     new Option("All issues", ""),
@@ -628,38 +715,51 @@ function renderSentryControls(requestEnvironment = true) {
   );
   if (sentryView && !state.sentryViews.some((x) => x.id === sentryView)) {
     const current = featureForms.get($("#sentry-filter-dialog"));
-    if (current?.isCurrent() && current.selection === sentryView)
+    if (current?.isCurrent() && current.selection === sentryView) {
       current.selection = "";
+    }
     sentryView = "";
   }
-  if (!sentryView && Object.values(sentryFilters).some(Boolean))
+  if (!sentryView && Object.values(sentryFilters).some(Boolean)) {
     select.add(new Option("Custom filter", "custom"));
+  }
   select.value =
     sentryView || (Object.values(sentryFilters).some(Boolean) ? "custom" : "");
   const parts = [];
-  if (sentryFilters.minUsers) parts.push(`≥ ${sentryFilters.minUsers} users`);
-  if (sentryFilters.minEvents)
+  if (sentryFilters.minUsers) {
+    parts.push(`≥ ${sentryFilters.minUsers} users`);
+  }
+  if (sentryFilters.minEvents) {
     parts.push(`≥ ${sentryFilters.minEvents} events`);
-  if (sentryFilters.days) parts.push(`Seen within ${sentryFilters.days}d`);
-  if (sentryFilters.level) parts.push(sentryFilters.level);
-  if (sentryFilters.category) parts.push(sentryFilters.category);
+  }
+  if (sentryFilters.days) {
+    parts.push(`Seen within ${sentryFilters.days}d`);
+  }
+  if (sentryFilters.level) {
+    parts.push(sentryFilters.level);
+  }
+  if (sentryFilters.category) {
+    parts.push(sentryFilters.category);
+  }
   if (sentryFilters.environment) {
     const cached = state.sentryEnvironments?.[sentryFilters.environment],
       paused = state.sources.sentry?.disabled === true;
     const status = cached?.running
-      ? "refreshing…" + (paused ? " · connection paused for new requests" : "")
+      ? `refreshing…${paused ? " · connection paused for new requests" : ""}`
       : paused
         ? cached?.lastSuccess
-          ? "connection paused · cached " + relative(cached.lastSuccess)
+          ? `connection paused · cached ${relative(cached.lastSuccess)}`
           : "connection paused · no cached data"
         : cached?.error ||
           (cached?.lastSuccess
-            ? "cached " + relative(cached.lastSuccess)
+            ? `cached ${relative(cached.lastSuccess)}`
             : state.sources.sentry?.failures
               ? "waiting for connection retry"
               : "loading…");
     parts.push(`${sentryFilters.environment} · ${status}`);
-    if (requestEnvironment) void ensureEnvironment();
+    if (requestEnvironment) {
+      void ensureEnvironment();
+    }
   }
   const summary = $("#sentry-filter-summary");
   summary.textContent = parts.join(" · ");
@@ -672,7 +772,7 @@ function renderSentryControls(requestEnvironment = true) {
       : entry.kind === "unknown"
         ? "Environment refresh outcome unknown; showing last loaded data."
         : "Environment request accepted; showing last loaded data.";
-    summary.append(el("span", "", " · " + text));
+    summary.append(el("span", "", ` · ${text}`));
     if (!entry.pending) {
       const refresh = featureButton(
         "Refresh view",
@@ -690,13 +790,13 @@ function renderSentryControls(requestEnvironment = true) {
         const info = state.sources.sentry;
         retry.disabled =
           entry.reading ||
-          !!environmentRequest ||
+          Boolean(environmentRequest) ||
           info?.disabled === true ||
-          !!(info?.failures && info.nextAttempt > Date.now() / 1000);
+          Boolean(info?.failures && info.nextAttempt > Date.now() / 1000);
         summary.append(retry);
       }
     }
-  } else if (name && environmentOutcomes.size >= 20)
+  } else if (name && environmentOutcomes.size >= 20) {
     summary.append(
       el(
         "span",
@@ -704,6 +804,7 @@ function renderSentryControls(requestEnvironment = true) {
         " · Environment requests paused: recover an earlier request first.",
       ),
     );
+  }
 }
 $("#sentry-view").onchange = (event) => {
   sentryView = event.target.value;
@@ -713,7 +814,9 @@ $("#sentry-view").onchange = (event) => {
   render();
 };
 $("#sentry-filter-open").onclick = () => {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   const dialog = $("#sentry-filter-dialog");
   disposeFeatureForm(dialog);
   const form = $("#sentry-filter-form");
@@ -725,10 +828,11 @@ $("#sentry-filter-open").onclick = () => {
     "level",
     "category",
     "environment",
-  ])
+  ]) {
     form.elements[key].value =
       sentryFilters[key] ??
       (["days", "minUsers", "minEvents"].includes(key) ? 0 : "");
+  }
   const view = state.sentryViews.find((row) => row.id === sentryView),
     selection = sentryView;
   form.elements.viewName.value = view?.name || "";
@@ -738,7 +842,7 @@ $("#sentry-filter-open").onclick = () => {
     form,
     view?.id || crypto.randomUUID(),
   );
-  current.existing = !!view;
+  current.existing = Boolean(view);
   current.selection = selection;
   current.targetCurrent = () => sentryView === current.selection;
   dialog.showModal();
@@ -747,35 +851,44 @@ $("#sentry-filter-form").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget,
     current = featureForms.get($("#sentry-filter-dialog"));
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   const filters = {};
-  for (const key of ["minUsers", "minEvents", "days"])
+  for (const key of ["minUsers", "minEvents", "days"]) {
     filters[key] = Number(form.elements[key].value);
-  for (const key of ["level", "category", "environment"])
+  }
+  for (const key of ["level", "category", "environment"]) {
     filters[key] = form.elements[key].value.trim();
+  }
   const name = form.elements.viewName.value.trim(),
     id = current.target;
   const apply = () => {
-    if (name && !state.sentryViews.some((view) => view.id === id))
+    if (name && !state.sentryViews.some((view) => view.id === id)) {
       throw new Error("The saved filter is unavailable in the refreshed view.");
+    }
     sentryFilters = filters;
     current.selection = sentryView = name ? id : "";
     persist();
     render();
     $("#sentry-filter-dialog").close();
   };
-  if (name)
+  if (name) {
     await submitFeatureForm(
       current,
       { action: "save-sentry-view", id, name, filters },
       "Sentry filter saved.",
       apply,
     );
-  else apply();
+  } else {
+    apply();
+  }
 };
 $("#sentry-clear").onclick = () => {
   const current = featureForms.get($("#sentry-filter-dialog"));
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   sentryFilters = {};
   sentryView = "";
   persist();
@@ -784,7 +897,9 @@ $("#sentry-clear").onclick = () => {
 };
 $("#sentry-delete").onclick = async () => {
   const current = featureForms.get($("#sentry-filter-dialog"));
-  if (!featureFormMutable(current) || !current.existing) return;
+  if (!featureFormMutable(current) || !current.existing) {
+    return;
+  }
   const id = current.target;
   await submitFeatureForm(
     current,
@@ -801,32 +916,39 @@ $("#sentry-delete").onclick = async () => {
 };
 function changePill(value) {
   const lower = value.toLowerCase();
-  if (lower.startsWith("ci "))
+  if (lower.startsWith("ci ")) {
     return el(
       "span",
-      "ci-pill " + (lower.includes("fail") ? "failed" : "passed"),
+      `ci-pill ${lower.includes("fail") ? "failed" : "passed"}`,
       value,
     );
+  }
   let status = "todo";
-  if (Object.hasOwn(labels, lower)) status = lower;
-  else if (/merge conflict|blocked/.test(lower)) status = "blocked";
-  else if (
+  if (Object.hasOwn(labels, lower)) {
+    status = lower;
+  } else if (/merge conflict|blocked/.test(lower)) {
+    status = "blocked";
+  } else if (
     /merged|closed|resolved|completed|done|cancel|duplicate|ignored|archived/.test(
       lower,
     )
-  )
+  ) {
     status = "done";
-  else if (/draft/.test(lower)) status = "draft";
-  else if (/approved|ready to merge/.test(lower)) status = "ready-to-merge";
-  else if (/changes requested|in progress|started/.test(lower))
+  } else if (/draft/.test(lower)) {
+    status = "draft";
+  } else if (/approved|ready to merge/.test(lower)) {
+    status = "ready-to-merge";
+  } else if (/changes requested|in progress|started/.test(lower)) {
     status = "in-progress";
-  else if (/review/.test(lower)) status = "needs-review";
+  } else if (/review/.test(lower)) {
+    status = "needs-review";
+  }
   const caption = /merge conflict/.test(lower)
     ? "Conflict"
     : lower === "your review requested"
       ? "Review requested"
       : labels[lower] || value;
-  return el("span", "status-pill " + status, caption);
+  return el("span", `status-pill ${status}`, caption);
 }
 function renderFeatureView(items) {
   const active = items.filter(
@@ -849,7 +971,9 @@ function renderFeatureView(items) {
     "artifacts",
   ].includes(source);
   controls.replaceChildren();
-  if (controls.hidden) return false;
+  if (controls.hidden) {
+    return false;
+  }
   const query = $("#search").value.toLowerCase(),
     list = $("#work-list");
   list.replaceChildren();
@@ -880,17 +1004,20 @@ function renderFeatureView(items) {
     for (const reason of [...new Set(rows.flatMap((x) => x.actionReasons))]) {
       const group = el("div", "group"),
         matching = rows.filter((x) => x.actionReasons[0] === reason);
-      if (!matching.length) continue;
+      if (!matching.length) {
+        continue;
+      }
       group.append(
         el("h2", "group-header", `${reason} · ${matching.length}`),
         ...matching.map(renderRow),
       );
       list.append(group);
     }
-    if (!rows.length)
+    if (!rows.length) {
       list.append(
         el("p", "feature-empty", "Nothing needs your move in this view."),
       );
+    }
   } else if (source === "changes") {
     const visible = (state.changes || []).filter((x) =>
         [x.title, x.message, x.reference]
@@ -923,7 +1050,7 @@ function renderFeatureView(items) {
       mark,
     );
     for (const change of visible) {
-      const row = el("article", "change-row" + (change.read ? " read" : ""));
+      const row = el("article", `change-row${change.read ? " read" : ""}`);
       const current = items.find((x) => x.id === change.itemId);
       const stamp = el("time", "change-timestamp");
       stamp.dateTime = new Date(change.at * 1000).toISOString();
@@ -953,14 +1080,16 @@ function renderFeatureView(items) {
         el("span", "change-ref", reference),
         el("span", "change-title-text", change.title),
       );
-      title.title = reference + " · " + change.title;
-      title.setAttribute("aria-label", reference + " · " + change.title);
+      title.title = `${reference} · ${change.title}`;
+      title.setAttribute("aria-label", `${reference} · ${change.title}`);
       if (change.url) {
         title.href = change.url;
         title.target = "_blank";
         title.rel = "noopener noreferrer";
         title.onclick = () => {
-          if (!change.read) void markObservedChange(change, title);
+          if (!change.read) {
+            void markObservedChange(change, title);
+          }
         };
       } else {
         title.type = "button";
@@ -970,16 +1099,20 @@ function renderFeatureView(items) {
         /^(?:chore|build|ci|style)(?:\([^)]*\))?!?:|^(?:update|bump)\s/i.test(
           change.title,
         )
-      )
+      ) {
         title.classList.add("maintenance-title");
-      if (current?.hidden || current?.snoozed)
+      }
+      if (current?.hidden || current?.snoozed) {
         title.title += current.hidden ? " · Hidden work" : " · Snoozed work";
+      }
       const transitions = el("div", "change-transitions");
       for (const part of change.message.split(" · ")) {
         const group = el("span", "change-transition-group"),
           pair = part.split(" → ");
         pair.forEach((value, index) => {
-          if (index) group.append(el("span", "change-arrow", "→"));
+          if (index) {
+            group.append(el("span", "change-arrow", "→"));
+          }
           const pill = changePill(value);
           pill.title = value;
           group.append(pill);
@@ -994,12 +1127,14 @@ function renderFeatureView(items) {
           "icon-button change-read",
         );
         read.title = "Mark read";
-        read.setAttribute("aria-label", "Mark change read: " + change.title);
+        read.setAttribute("aria-label", `Mark change read: ${change.title}`);
         row.append(read);
-      } else row.append(el("span", "change-read read-indicator", "✓"));
+      } else {
+        row.append(el("span", "change-read read-indicator", "✓"));
+      }
       list.append(row);
     }
-    if (!list.children.length)
+    if (!list.children.length) {
       list.append(
         el(
           "p",
@@ -1007,6 +1142,7 @@ function renderFeatureView(items) {
           "No changes observed yet. Future syncs will record status, CI, review, and conflict changes here.",
         ),
       );
+    }
   } else {
     controls.append(
       featureButton("Generate briefing ↗", () => $("#summarize-work").click()),
@@ -1027,7 +1163,7 @@ function renderFeatureView(items) {
       const card = el("article", "briefing-card");
       card.append(el("h2", "", dated(report.at)));
       const session = state.sessions.find((x) => x.id === report.sessionId);
-      if (session)
+      if (session) {
         card.append(
           featureButton(
             "Continue review ↗",
@@ -1035,19 +1171,20 @@ function renderFeatureView(items) {
             "text-button",
           ),
         );
+      }
       const syncs = Object.entries(report.sourceTimes || {}).map(
         ([key, value]) =>
           `${sourceNames[key]}: ${value ? dated(value) : "not synced"}`,
       );
       card.append(
-        el("p", "form-hint", "Cache at review start: " + syncs.join(" · ")),
+        el("p", "form-hint", `Cache at review start: ${syncs.join(" · ")}`),
       );
       const body = el("div", "briefing-body");
       appendReportText(body, report.body);
       card.append(body);
       list.append(card);
     }
-    if (!list.children.length)
+    if (!list.children.length) {
       list.append(
         el(
           "p",
@@ -1055,6 +1192,7 @@ function renderFeatureView(items) {
           "Your next Summarize report will appear here when the agent saves it. Existing reports can be pasted above.",
         ),
       );
+    }
   }
   return true;
 }
@@ -1074,7 +1212,9 @@ function openBriefingEditor() {
     toast("Start Summarize first to create a Work review session.");
     return;
   }
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   const form = $("#briefing-form");
   form.reset();
   form.elements.record.replaceChildren(
@@ -1094,7 +1234,9 @@ $("#briefing-form").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget,
     current = featureForms.get($("#briefing-dialog"));
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   const id = form.elements.record.value,
     body = form.elements.body.value;
   current.target = id;
@@ -1107,12 +1249,15 @@ $("#briefing-form").onsubmit = async (event) => {
   );
 };
 function openCheckpoint(session) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   disposeFeatureForm($("#checkpoint-dialog"));
   const form = $("#checkpoint-form");
   form.reset();
-  for (const key of ["done", "blocked", "next"])
+  for (const key of ["done", "blocked", "next"]) {
     form.elements[key].value = session.checkpoint?.[key] || "";
+  }
   $("#checkpoint-session").textContent = session.title;
   createFeatureForm($("#checkpoint-dialog"), form, session.id);
   $("#checkpoint-dialog").showModal();
@@ -1130,8 +1275,8 @@ function renderCheckpoint(session) {
   section.replaceChildren(el("h3", "", "Handoff checkpoint"));
   if (session.checkpoint) {
     section.append(el("p", "form-hint", dated(session.checkpoint.at)));
-    for (const key of ["done", "blocked", "next"])
-      if (session.checkpoint[key])
+    for (const key of ["done", "blocked", "next"]) {
+      if (session.checkpoint[key]) {
         section.append(
           el(
             "strong",
@@ -1144,7 +1289,9 @@ function renderCheckpoint(session) {
           ),
           el("p", "checkpoint-text", session.checkpoint[key]),
         );
-  } else
+      }
+    }
+  } else {
     section.append(
       el(
         "p",
@@ -1152,6 +1299,7 @@ function renderCheckpoint(session) {
         "Save where you left off. New agents can update this checkpoint with the local helper.",
       ),
     );
+  }
   section.append(
     featureButton(
       "Edit checkpoint",
@@ -1164,15 +1312,19 @@ $("#checkpoint-form").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget,
     current = featureForms.get($("#checkpoint-dialog"));
-  if (!featureFormMutable(current)) return;
+  if (!featureFormMutable(current)) {
+    return;
+  }
   const id = current.target,
     payload = { action: "checkpoint", id };
-  for (const key of ["done", "blocked", "next"])
+  for (const key of ["done", "blocked", "next"]) {
     payload[key] = form.elements[key].value;
+  }
   await submitFeatureForm(current, payload, "Checkpoint saved.", () => {
     const session = state.sessions.find((row) => row.id === id);
-    if (!session)
+    if (!session) {
       throw new Error("The saved chat is unavailable in this view.");
+    }
     $("#checkpoint-dialog").close();
     return showSession(session);
   });
@@ -1183,7 +1335,9 @@ let paletteAnchor = null,
   paletteGeneration = 0,
   paletteMutationBlocked = false;
 function openPalette(anchor = null) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   paletteGeneration++;
   paletteMutationBlocked = false;
   paletteAnchor = anchor;
@@ -1202,13 +1356,15 @@ function renderPalette() {
     title: `${workReference(item) || sourceNames[item.source]} · ${item.title}`,
     extra: item.project || "",
   }));
-  if (!paletteAnchor)
-    for (const session of state.sessions || [])
+  if (!paletteAnchor) {
+    for (const session of state.sessions || []) {
       entries.push({
         session,
         title: session.title,
         extra: `${agentName(session.agent)} · ${session.cwd}`,
       });
+    }
+  }
   paletteEntries = entries
     .filter(
       (x) =>
@@ -1217,9 +1373,9 @@ function renderPalette() {
     )
     .sort(
       (a, b) =>
-        Number(!!b.session) - Number(!!a.session) ||
-        Number(!!b.item?.actionReasons?.length) -
-          Number(!!a.item?.actionReasons?.length),
+        Number(Boolean(b.session)) - Number(Boolean(a.session)) ||
+        Number(Boolean(b.item?.actionReasons?.length)) -
+          Number(Boolean(a.item?.actionReasons?.length)),
     )
     .slice(0, 40);
   paletteSelected = 0;
@@ -1232,34 +1388,40 @@ function paletteMetadata(entry) {
     session = entry.session;
   if (item) {
     meta.append(
-      el("span", "status-pill " + item.status, workStatusLabel(item)),
+      el("span", `status-pill ${item.status}`, workStatusLabel(item)),
       el("span", "", item.project || sourceNames[item.source]),
     );
     const role = githubRole(item);
-    if (role) meta.append(el("span", "", role.label));
+    if (role) {
+      meta.append(el("span", "", role.label));
+    }
     if (item.ci) {
       const info = ciInfo(item.ci);
-      meta.append(el("span", "ci-mark " + item.ci.state, info.label));
+      meta.append(el("span", `ci-mark ${item.ci.state}`, info.label));
     }
-    if (item.eventCount)
+    if (item.eventCount) {
       meta.append(
-        el("span", "", Number(item.eventCount).toLocaleString() + " events"),
+        el("span", "", `${Number(item.eventCount).toLocaleString()} events`),
       );
-    if (item.hidden || item.snoozed)
+    }
+    if (item.hidden || item.snoozed) {
       meta.append(el("span", "", item.hidden ? "Hidden" : "Snoozed"));
+    }
   } else {
     meta.append(
       el("span", "palette-agent", agentName(session.agent)),
       el("span", "", sessionRuntime(session).label),
       el("span", "palette-directory", session.cwd || ""),
     );
-    if (session.archivedAt) meta.append(el("span", "", "Archived"));
+    if (session.archivedAt) {
+      meta.append(el("span", "", "Archived"));
+    }
   }
   const updated = item?.updatedAt || session?.updatedAt;
   const time =
     typeof updated === "number" ? updated : Date.parse(updated) / 1000;
   if (Number.isFinite(time) && time > 0) {
-    const date = el("span", "palette-updated", "Updated " + relative(time));
+    const date = el("span", "palette-updated", `Updated ${relative(time)}`);
     date.title = dated(time);
     meta.append(date);
   }
@@ -1276,13 +1438,13 @@ function paintPalette() {
         paintPalette();
         choosePalette();
       },
-      "command-result" + (index === paletteSelected ? " selected" : ""),
+      `command-result${index === paletteSelected ? " selected" : ""}`,
     );
     button.setAttribute("role", "option");
     button.setAttribute("aria-selected", String(index === paletteSelected));
-    button.id = "command-option-" + index;
+    button.id = `command-option-${index}`;
     const title = el("div", "palette-result-heading");
-    if (entry.item)
+    if (entry.item) {
       title.append(
         el(
           "span",
@@ -1290,7 +1452,9 @@ function paintPalette() {
           workReference(entry.item) || sourceNames[entry.item.source],
         ),
       );
-    else title.append(el("span", "palette-reference", "Agent"));
+    } else {
+      title.append(el("span", "palette-reference", "Agent"));
+    }
     title.append(
       el(
         "span",
@@ -1303,7 +1467,7 @@ function paintPalette() {
   });
   $("#command-query").setAttribute(
     "aria-activedescendant",
-    paletteEntries.length ? "command-option-" + paletteSelected : "",
+    paletteEntries.length ? `command-option-${paletteSelected}` : "",
   );
   $("#command-hint").textContent = paletteEntries.length
     ? `↑↓ results · Enter actions · ←→ actions · Esc close · ${paletteEntries.length}${paletteEntries.length === 40 ? "+" : ""} ${paletteEntries.length === 1 ? "match" : "matches"}`
@@ -1312,9 +1476,13 @@ function paintPalette() {
 }
 async function choosePalette() {
   const entry = paletteEntries[paletteSelected];
-  if (!entry) return;
+  if (!entry) {
+    return;
+  }
   if (paletteAnchor) {
-    if (paletteMutationBlocked) return;
+    if (paletteMutationBlocked) {
+      return;
+    }
     paletteMutationBlocked = true;
     const id = paletteAnchor.id,
       itemId = entry.item.id,
@@ -1336,8 +1504,9 @@ async function choosePalette() {
           },
         },
       );
-    if (paletteGeneration === generation && result.kind === "rejected")
+    if (paletteGeneration === generation && result.kind === "rejected") {
       paletteMutationBlocked = false;
+    }
     return;
   }
   paintPaletteActions(true);
@@ -1349,11 +1518,15 @@ function paintPaletteActions(focus) {
   actions.replaceChildren();
   preview.replaceChildren();
   preview.hidden = true;
-  if (!entry || paletteAnchor) return;
+  if (!entry || paletteAnchor) {
+    return;
+  }
   if (entry.session) {
     actions.append(
       featureButton("Continue agent ↗", () => {
-        if (requestDialogNavigation()) return openSavedSession(entry.session);
+        if (requestDialogNavigation()) {
+          return openSavedSession(entry.session);
+        }
       }),
       featureButton("Details", () => showSession(entry.session)),
       featureButton("Edit checkpoint", () => openCheckpoint(entry.session)),
@@ -1367,15 +1540,18 @@ function paintPaletteActions(focus) {
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.onclick = (event) => {
-        if (!requestDialogNavigation()) event.preventDefault();
+        if (!requestDialogNavigation()) {
+          event.preventDefault();
+        }
       };
       actions.append(link);
     }
     const session = linkedSessions(item)[0];
     actions.append(
       featureButton(session ? "Continue agent ↗" : "Start agent ↗", () => {
-        if (requestDialogNavigation())
+        if (requestDialogNavigation()) {
           return session ? openSavedSession(session) : quickStart(item);
+        }
       }),
     );
     const generation = paletteGeneration,
@@ -1399,23 +1575,29 @@ function paintPaletteActions(focus) {
       hide,
     );
     const reviewers = (item.requestedReviewers || []).map(
-      (person) => "@" + person.login,
+      (person) => `@${person.login}`,
     );
-    if (reviewers.length)
-      preview.append(el("span", "", "Reviewers: " + reviewers.join(", ")));
-    if (session)
+    if (reviewers.length) {
+      preview.append(el("span", "", `Reviewers: ${reviewers.join(", ")}`));
+    }
+    if (session) {
       preview.append(
-        el("span", "", agentName(session.agent) + " · " + session.title),
+        el("span", "", `${agentName(session.agent)} · ${session.title}`),
       );
-    if (item.actionReasons?.length)
+    }
+    if (item.actionReasons?.length) {
       preview.append(el("span", "", item.actionReasons.join(" · ")));
+    }
     preview.hidden = !preview.childElementCount;
   }
-  if (focus) actions.querySelector("button,a")?.focus();
+  if (focus) {
+    actions.querySelector("button,a")?.focus();
+  }
 }
 function handlePaletteKey(event) {
-  if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey)
+  if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey) {
     return;
+  }
   if (["ArrowDown", "ArrowUp"].includes(event.key)) {
     event.preventDefault();
     paletteSelected =
@@ -1440,7 +1622,9 @@ function handlePaletteKey(event) {
         "button:not(:disabled),a[href]",
       ),
     ];
-    if (!actions.length) return;
+    if (!actions.length) {
+      return;
+    }
     event.preventDefault();
     const index = actions.indexOf(document.activeElement);
     actions[
@@ -1461,8 +1645,11 @@ document.addEventListener("keydown", (event) => {
     !event.shiftKey
   ) {
     event.preventDefault();
-    if ($("#command-dialog").open) requestDialogClose($("#command-dialog"));
-    else openPalette();
+    if ($("#command-dialog").open) {
+      requestDialogClose($("#command-dialog"));
+    } else {
+      openPalette();
+    }
   }
 });
 
@@ -1473,7 +1660,9 @@ let logData = null,
 const logFilters = { source: "", outcome: "failure" },
   openLogEntries = new Set();
 async function loadLogs(force = false) {
-  if (logLoading || (!force && Date.now() - logLastFetch < 8000)) return;
+  if (logLoading || (!force && Date.now() - logLastFetch < 8000)) {
+    return;
+  }
   logLoading = true;
   logLastFetch = Date.now();
   try {
@@ -1483,7 +1672,9 @@ async function loadLogs(force = false) {
     logLoadError = error.message;
   } finally {
     logLoading = false;
-    if (source === "logs") render();
+    if (source === "logs") {
+      render();
+    }
   }
 }
 function logAppChatRows(entry) {
@@ -1496,7 +1687,9 @@ function logAppChatRows(entry) {
 }
 function logSummary(entry) {
   if (entry.source === "app-chat") {
-    if (entry.outcome === "success") return "App chat completed";
+    if (entry.outcome === "success") {
+      return "App chat completed";
+    }
     const reasons = {
         spawn_failed: "Could not start the CLI",
         process_failed: "CLI process failed",
@@ -1523,11 +1716,12 @@ function logSummary(entry) {
     const stage = stages[entry.diagnostics?.stage];
     return (
       (reasons[entry.diagnostics?.code] || "App chat failed") +
-      (stage ? " · " + stage : "")
+      (stage ? ` · ${stage}` : "")
     );
   }
-  if (entry.outcome === "success")
-    return `${entry.operation === "environment-sync" ? "Environment sync" : "Sync"} completed${entry.itemCount !== undefined ? " · " + Number(entry.itemCount).toLocaleString() + " items" : ""}`;
+  if (entry.outcome === "success") {
+    return `${entry.operation === "environment-sync" ? "Environment sync" : "Sync"} completed${entry.itemCount !== undefined ? ` · ${Number(entry.itemCount).toLocaleString()} items` : ""}`;
+  }
   const reasons = {
     timeout: "Request timed out",
     dns: "DNS lookup failed",
@@ -1547,8 +1741,8 @@ function logSummary(entry) {
   };
   return (
     (reasons[entry.kind] || "Sync failed · reason not recorded") +
-    (entry.httpStatus ? " · HTTP " + entry.httpStatus : "") +
-    (entry.page ? " · page " + entry.page : "")
+    (entry.httpStatus ? ` · HTTP ${entry.httpStatus}` : "") +
+    (entry.page ? ` · page ${entry.page}` : "")
   );
 }
 function renderLogsView(list, controls, query) {
@@ -1613,8 +1807,8 @@ function renderLogsView(list, controls, query) {
       "Local diagnostics · auto-refresh while open · latest 500 retained entries",
     ),
   );
-  for (const [key, value] of Object.entries(state.sources))
-    if (value.error && !value.disabled)
+  for (const [key, value] of Object.entries(state.sources)) {
+    if (value.error && !value.disabled) {
       list.append(
         el(
           "p",
@@ -1622,6 +1816,8 @@ function renderLogsView(list, controls, query) {
           `${sourceNames[key]}: ${value.error} Next retry: ${dated(value.nextAttempt)}.`,
         ),
       );
+    }
+  }
   list.append(
     el(
       "p",
@@ -1629,9 +1825,12 @@ function renderLogsView(list, controls, query) {
       "data/logs/sync.jsonl · 512 KiB × 3 files · tokens, queries, and response bodies are excluded. Times below use your local timezone.",
     ),
   );
-  if (typeof renderPerformancePanel === "function")
+  if (typeof renderPerformancePanel === "function") {
     list.append(renderPerformancePanel());
-  if (logLoadError) list.append(el("p", "log-current-error", logLoadError));
+  }
+  if (logLoadError) {
+    list.append(el("p", "log-current-error", logLoadError));
+  }
   const rows = (logData?.entries || []).filter(
     (entry) =>
       (!logFilters.source || entry.source === logFilters.source) &&
@@ -1658,9 +1857,14 @@ function renderLogsView(list, controls, query) {
     const details = el("details", "log-entry");
     details.open = openLogEntries.has(key);
     details.ontoggle = () => {
-      if (!details.isConnected) return;
-      if (details.open) openLogEntries.add(key);
-      else openLogEntries.delete(key);
+      if (!details.isConnected) {
+        return;
+      }
+      if (details.open) {
+        openLogEntries.add(key);
+      } else {
+        openLogEntries.delete(key);
+      }
     };
     const summary = el("summary", "log-summary"),
       date = new Date(entry.time),
@@ -1692,7 +1896,7 @@ function renderLogsView(list, controls, query) {
     }
     const badge = el(
       "span",
-      "log-outcome " + (entry.outcome === "success" ? "success" : "failure"),
+      `log-outcome ${entry.outcome === "success" ? "success" : "failure"}`,
       entry.outcome === "success" ? "Success" : "Failure",
     );
     const diagnosticRows =
@@ -1700,7 +1904,7 @@ function renderLogsView(list, controls, query) {
       duration =
         diagnosticRows.find(([label]) => label === "Duration")?.[1] ||
         (entry.elapsedMs !== undefined
-          ? (entry.elapsedMs / 1000).toFixed(1) + "s"
+          ? `${(entry.elapsedMs / 1000).toFixed(1)}s`
           : "");
     summary.append(
       time,
@@ -1721,7 +1925,7 @@ function renderLogsView(list, controls, query) {
       entry.source !== "app-chat" &&
       entry.outcome === "failure" &&
       !entry.kind
-    )
+    ) {
       body.append(
         el(
           "p",
@@ -1729,6 +1933,7 @@ function renderLogsView(list, controls, query) {
           "This older entry retained sync timing but no request-level cause. New failures include transport, deadline, and source-specific details.",
         ),
       );
+    }
     const labels = {
       transport: "Transport",
       phase: "Request phase",
@@ -1752,15 +1957,19 @@ function renderLogsView(list, controls, query) {
     };
     const values = el("dl", "log-fields");
     if (entry.source === "app-chat") {
-      for (const [label, value] of diagnosticRows)
+      for (const [label, value] of diagnosticRows) {
         values.append(el("dt", "", label), el("dd", "", value));
-    } else
-      for (const [field, label] of Object.entries(labels))
-        if (entry[field] !== undefined && entry[field] !== null)
+      }
+    } else {
+      for (const [field, label] of Object.entries(labels)) {
+        if (entry[field] !== undefined && entry[field] !== null) {
           values.append(
             el("dt", "", label),
             el("dd", "", String(entry[field])),
           );
+        }
+      }
+    }
     const displayedEntry =
       entry.source === "app-chat"
         ? {
@@ -1792,9 +2001,9 @@ function renderLogsView(list, controls, query) {
           toast("Log entry copied.");
         } catch {
           toast(
-            "Copy unavailable. Expand " +
-              (entry.source === "app-chat" ? "Diagnostic JSON" : "Raw JSON") +
-              " to select the entry.",
+            `Copy unavailable. Expand ${
+              entry.source === "app-chat" ? "Diagnostic JSON" : "Raw JSON"
+            } to select the entry.`,
           );
         }
       },
@@ -1804,7 +2013,7 @@ function renderLogsView(list, controls, query) {
     details.append(body);
     list.append(details);
   }
-  if (!rows.length)
+  if (!rows.length) {
     list.append(
       el(
         "p",
@@ -1818,9 +2027,13 @@ function renderLogsView(list, controls, query) {
               : "No logs loaded yet.",
       ),
     );
-  if (focused)
-    for (const control of controls.querySelectorAll("[data-focus-key]"))
-      if (control.dataset.focusKey === focused)
+  }
+  if (focused) {
+    for (const control of controls.querySelectorAll("[data-focus-key]")) {
+      if (control.dataset.focusKey === focused) {
         control.focus({ preventScroll: true });
+      }
+    }
+  }
   loadLogs();
 }

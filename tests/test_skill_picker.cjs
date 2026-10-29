@@ -52,7 +52,7 @@ function picker() {
 const skill = (name, description = "", extra = {}) => ({
   name,
   description,
-  path: "/Users/reviewer/.agents/skills/" + name + "/SKILL.md",
+  path: `/Users/reviewer/.agents/skills/${name}/SKILL.md`,
   agents: ["codex"],
   ...extra,
 });
@@ -150,7 +150,7 @@ test("name abbreviation and omitted-letter typo fallback remain available when t
 test("empty searches keep compatible agent ordering and the result limit", () => {
   const find = picker(),
     skills = Array.from({ length: 45 }, (_, index) =>
-      skill("skill-" + index, "", {
+      skill(`skill-${index}`, "", {
         agents: index === 44 ? ["codex"] : ["claude"],
       }),
     );
@@ -186,7 +186,9 @@ function installedPickerFixture(catalog, { load } = {}) {
       );
     }
     replaceChildren(...children) {
-      if (this.children.some((child) => child.contains(active))) active = body;
+      if (this.children.some((child) => child.contains(active))) {
+        active = body;
+      }
       this.children = [];
       this.append(...children);
     }
@@ -197,8 +199,9 @@ function installedPickerFixture(catalog, { load } = {}) {
       (this.listeners[name] ??= []).push(handler);
     }
     dispatch(name) {
-      for (const handler of this.listeners[name] || [])
+      for (const handler of this.listeners[name] || []) {
         handler({ target: this });
+      }
     }
     focus() {
       active = this;
@@ -308,7 +311,9 @@ function installedPickerFixture(catalog, { load } = {}) {
       Object.assign(elements.title, { value: prefill.title || "" });
       Object.assign(elements.skill, { value: prefill.path || "" });
       Object.assign(elements.command, { value: prefill.command || "" });
-      if (prefill.agent) elements.agent.value = prefill.agent;
+      if (prefill.agent) {
+        elements.agent.value = prefill.agent;
+      }
       dialog.open = true;
       observer();
       await Promise.resolve();

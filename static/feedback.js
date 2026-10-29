@@ -8,7 +8,9 @@
     writing = writing
       .catch(() => {})
       .then(async () => {
-        if (!value) return;
+        if (!value) {
+          return;
+        }
         try {
           value.progress = await api("/api/feedback", {
             revision: value.progress.revision,
@@ -48,7 +50,9 @@
         conversation.scrollTop <=
         2;
     change();
-    if (follow) conversation.scrollTop = conversation.scrollHeight;
+    if (follow) {
+      conversation.scrollTop = conversation.scrollHeight;
+    }
   }
   window.openFeedbackDraft = (draft = {}) => {
     if (!value) {
@@ -75,17 +79,14 @@
     body.setAttribute("aria-label", "Issue description");
     error.setAttribute("role", "alert");
     const open = link(
-      value.config.repository + "/issues/new",
+      `${value.config.repository}/issues/new`,
       "Open GitHub draft",
     );
     const update = () => {
-      open.href =
-        value.config.repository +
-        "/issues/new?" +
-        new URLSearchParams({
-          title: title.value,
-          body: body.value,
-        }).toString();
+      open.href = `${value.config.repository}/issues/new?${new URLSearchParams({
+        title: title.value,
+        body: body.value,
+      }).toString()}`;
     };
     title.oninput = body.oninput = update;
     update();
@@ -94,15 +95,15 @@
         "Ask the app assistant",
         () => {
           try {
-            if (typeof window.prepareAppChatMessage !== "function")
+            if (typeof window.prepareAppChatMessage !== "function") {
               throw new Error(
                 "App chat is unavailable. Your feedback is kept here.",
               );
+            }
             window.prepareAppChatMessage(
-              "Help me draft a Truffle issue about: " +
-                title.value +
-                "\n\n" +
-                body.value,
+              `Help me draft a Truffle issue about: ${title.value}\n\n${
+                body.value
+              }`,
             );
             error.textContent = "";
             dialog.addEventListener(
@@ -111,8 +112,9 @@
                 if (
                   !document.querySelector("dialog[open]") &&
                   !$("#app-chat-panel")?.hidden
-                )
+                ) {
                   $(".app-chat-form")?.querySelector("textarea")?.focus();
+                }
               },
               { once: true },
             );
@@ -157,7 +159,9 @@
   feedback.title = "Report an issue or ask the assistant for help";
   $(".app-chat-new")?.before(feedback);
   async function check() {
-    if (!value || document.hidden || value.demo) return;
+    if (!value || document.hidden || value.demo) {
+      return;
+    }
     if (Date.now() - visitAt > 3600000) {
       visitAt = Date.now();
       await mark("visit").catch(() => {});
@@ -206,10 +210,13 @@
       document.activeElement?.closest(
         'input,textarea,[contenteditable="true"],.embedded-terminal',
       )
-    )
+    ) {
       return;
+    }
     let dialog = $("#feedback-star");
-    if (dialog) return;
+    if (dialog) {
+      return;
+    }
     dialog = el("dialog", "feedback-dialog");
     dialog.id = "feedback-star";
     let opened = false;
@@ -221,8 +228,9 @@
       dialog.close();
     };
     dialog.onclose = () => {
-      if (!opened && value.progress.star === "unseen")
+      if (!opened && value.progress.star === "unseen") {
         void mark("star-dismiss").catch(() => {});
+      }
     };
     dialog.append(
       el("h2", "", value.config.starTitle),
@@ -247,6 +255,8 @@
   void load();
   setInterval(check, 5000);
   setInterval(() => {
-    if (!document.hidden) void load();
+    if (!document.hidden) {
+      void load();
+    }
   }, 60000);
 })();

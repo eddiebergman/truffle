@@ -19,14 +19,17 @@ let chatPreparationStorageError = "";
 try {
   const raw = localStorage.getItem(chatPreparationKey);
   if (raw !== null) {
-    if (raw.length > 65536) throw new Error();
+    if (raw.length > 65536) {
+      throw new Error();
+    }
     const saved = JSON.parse(raw);
     if (
       saved.version !== 1 ||
       !Array.isArray(saved.attempts) ||
       saved.attempts.length > 64
-    )
+    ) {
       throw new Error();
+    }
     const ids = new Set();
     for (const entry of saved.attempts) {
       if (
@@ -46,8 +49,9 @@ try {
         (entry.openReceipt !== undefined &&
           entry.openReceipt !== null &&
           !savedSessionOpenReceipt(entry.openReceipt, entry.recordId))
-      )
+      ) {
         throw new Error();
+      }
       ids.add(entry.requestId);
       chatPreparations.set(entry.target, {
         target: entry.target,
@@ -66,8 +70,9 @@ try {
     "Local chat recovery is unavailable or invalid. Earlier preparation or open requests may have occurred. Inspect History before clearing this local recovery data.";
 }
 function chatPreparationContext() {
-  if (chatPreparationStorageError || chatPreparations.size > 64)
+  if (chatPreparationStorageError || chatPreparations.size > 64) {
     return { availability: "unavailable" };
+  }
   const attempts = [...chatPreparations.values()],
     requestIds = new Set();
   if (
@@ -83,15 +88,19 @@ function chatPreparationContext() {
         typeof attempt.pending !== "boolean" ||
         typeof attempt.openAttempted !== "boolean" ||
         (attempt.openAttempted && !attempt.recordId)
-      )
+      ) {
         return true;
+      }
       const id = attempt.requestId.toLowerCase();
-      if (requestIds.has(id)) return true;
+      if (requestIds.has(id)) {
+        return true;
+      }
       requestIds.add(id);
       return false;
     })
-  )
+  ) {
     return { availability: "unavailable" };
+  }
   const dialogs = [...document.querySelectorAll("dialog[open]")].filter(
       (dialog) => dialog.isConnected,
     ),
@@ -137,7 +146,9 @@ const chatRecoveryKindLabels = {
   view: "View chat",
 };
 function inspectChatRecovery(dialog, lifetime, attempt, requestId) {
-  if (!dialog.open || lifetime !== chatRecoveryLifetime) return false;
+  if (!dialog.open || lifetime !== chatRecoveryLifetime) {
+    return false;
+  }
   if (
     chatPreparations.get(attempt.target) !== attempt ||
     attempt.requestId !== requestId ||
@@ -147,7 +158,9 @@ function inspectChatRecovery(dialog, lifetime, attempt, requestId) {
     return false;
   }
   requestDialogClose(dialog);
-  if (dialog.open) return false;
+  if (dialog.open) {
+    return false;
+  }
   if (
     chatPreparations.get(attempt.target) !== attempt ||
     attempt.requestId !== requestId ||
@@ -167,18 +180,26 @@ function inspectChatRecovery(dialog, lifetime, attempt, requestId) {
 function captureUnavailableRecovery() {
   try {
     const raw = localStorage.getItem(chatPreparationKey);
-    if ((raw !== null && typeof raw !== "string") || chatPreparations.size > 64)
+    if (
+      (raw !== null && typeof raw !== "string") ||
+      chatPreparations.size > 64
+    ) {
       return null;
+    }
     const entries = [...chatPreparations],
       serialized = JSON.stringify(entries);
-    if (serialized.length > 65536) return null;
+    if (serialized.length > 65536) {
+      return null;
+    }
     return { raw, entries, serialized, error: chatPreparationStorageError };
   } catch {
     return null;
   }
 }
 function unavailableRecoveryUnchanged(baseline) {
-  if (!baseline) return false;
+  if (!baseline) {
+    return false;
+  }
   try {
     if (
       chatPreparationStorageError !== baseline.error ||
@@ -187,21 +208,26 @@ function unavailableRecoveryUnchanged(baseline) {
         ([key, attempt]) => chatPreparations.get(key) !== attempt,
       ) ||
       JSON.stringify([...chatPreparations]) !== baseline.serialized
-    )
+    ) {
       return false;
+    }
     return localStorage.getItem(chatPreparationKey) === baseline.raw;
   } catch {
     return false;
   }
 }
 function inspectUnavailableChatRecovery(dialog, lifetime) {
-  if (!dialog.open || lifetime !== chatRecoveryLifetime) return false;
+  if (!dialog.open || lifetime !== chatRecoveryLifetime) {
+    return false;
+  }
   if (chatPreparationContext().availability !== "unavailable") {
     paintChatRecoveryList(dialog);
     return false;
   }
   requestDialogClose(dialog);
-  if (dialog.open) return false;
+  if (dialog.open) {
+    return false;
+  }
   const attempt = {
     target: "unavailable-recovery",
     requestId: "00000000-0000-0000-0000-000000000000",
@@ -276,13 +302,15 @@ function paintChatRecoveryList(dialog) {
       identity = el(
         "code",
         "chat-recovery-id",
-        requestId.slice(0, 8) + "…" + requestId.slice(-4),
+        `${requestId.slice(0, 8)}…${requestId.slice(-4)}`,
       ),
       pill = el("span", "runtime-pill unknown", phase);
     identity.title = requestId;
-    identity.setAttribute("aria-label", "Request " + requestId);
+    identity.setAttribute("aria-label", `Request ${requestId}`);
     summary.append(heading);
-    if (title !== chatRecoveryKindLabels[attempt.kind]) summary.append(kind);
+    if (title !== chatRecoveryKindLabels[attempt.kind]) {
+      summary.append(kind);
+    }
     summary.append(identity, pill);
     const inspect = featureButton(
       "Inspect",
@@ -290,10 +318,7 @@ function paintChatRecoveryList(dialog) {
       "ui-control",
     );
     inspect.dataset.variant = "secondary";
-    inspect.setAttribute(
-      "aria-label",
-      "Inspect " + title + " request " + requestId,
-    );
+    inspect.setAttribute("aria-label", `Inspect ${title} request ${requestId}`);
     inspect.disabled = attempt.pending;
     row.append(summary, inspect);
     list.append(row);
@@ -305,9 +330,12 @@ function openChatRecovery() {
     [...document.querySelectorAll("dialog[open]")].some(
       (open) => open !== dialog,
     )
-  )
+  ) {
     return false;
-  if (dialog?.open) return true;
+  }
+  if (dialog?.open) {
+    return true;
+  }
   if (!dialog) {
     dialog = el("dialog");
     dialog.id = "chat-recovery-dialog";
@@ -333,7 +361,9 @@ function openChatRecovery() {
     const update = featureButton(
         "Update local list",
         () => {
-          if (dialog.open) paintChatRecoveryList(dialog);
+          if (dialog.open) {
+            paintChatRecoveryList(dialog);
+          }
         },
         "ui-control",
       ),
@@ -354,7 +384,9 @@ function openChatRecovery() {
   return true;
 }
 function persistChatPreparations() {
-  if (chatPreparationStorageError) throw new Error(chatPreparationStorageError);
+  if (chatPreparationStorageError) {
+    throw new Error(chatPreparationStorageError);
+  }
   const attempts = [...chatPreparations.values()].map((entry) => ({
     target: entry.target,
     requestId: entry.requestId,
@@ -366,10 +398,11 @@ function persistChatPreparations() {
       : {}),
   }));
   const text = JSON.stringify({ version: 1, attempts });
-  if (text.length > 65536)
+  if (text.length > 65536) {
     throw new Error(
       "Chat recovery storage is full. Inspect earlier requests first.",
     );
+  }
   try {
     localStorage.setItem(chatPreparationKey, text);
   } catch {
@@ -439,18 +472,20 @@ function preparationReceipt(attempt, value) {
     value.kind !== attempt.kind ||
     !preparationUUID(value.recordId) ||
     typeof value.reused !== "boolean"
-  )
+  ) {
     throw new Error("The prepared chat identity could not be confirmed.");
-  if (attempt.recordId && attempt.recordId !== value.recordId)
+  }
+  if (attempt.recordId && attempt.recordId !== value.recordId) {
     throw new Error(
       "The prepared chat identity changed. Inspect History before continuing.",
     );
+  }
   attempt.recordId = value.recordId;
   attempt.reused = value.reused;
   persistChatPreparations();
 }
 function preparationMessage(attempt) {
-  if (attempt.openAttempted)
+  if (attempt.openAttempted) {
     return savedSessionOpenMessage(
       savedSessionOpenState(attempt.recordId) || {
         receipt: attempt.openReceipt || {
@@ -459,6 +494,7 @@ function preparationMessage(attempt) {
         },
       },
     );
+  }
   return attempt.recordId
     ? "The chat was prepared locally. Opening it is a separate action."
     : "The preparation outcome is unknown. Check preparation or inspect History. This request will not be submitted again.";
@@ -489,14 +525,17 @@ function preparationSurface(host) {
   return { dialog, form: dialog.querySelector("form") };
 }
 function closePreparationSurfaces(ui, context) {
-  for (const dialog of [...context.dialogs, ui.dialog])
+  for (const dialog of [...context.dialogs, ui.dialog]) {
     if (dialog.open) {
       context.closed.add(dialog);
       dialog.close();
     }
+  }
 }
 function preparationUI(attempt, context, options) {
-  const unavailable = !!(chatPreparationStorageError || options.unavailable),
+  const unavailable = Boolean(
+      chatPreparationStorageError || options.unavailable,
+    ),
     unavailableBaseline = unavailable ? captureUnavailableRecovery() : null;
   const { dialog, form } = preparationSurface(options.host);
   disposeFeatureForm(dialog);
@@ -510,7 +549,9 @@ function preparationUI(attempt, context, options) {
   ui.acceptedText = "Chat prepared.";
   ui.ui.inspect.textContent = "Inspect History";
   ui.ui.inspect.onclick = () => {
-    if (!ui.isCurrent() || attempt.pending) return;
+    if (!ui.isCurrent() || attempt.pending) {
+      return;
+    }
     context.closed.add(dialog);
     dialog.close();
     source = "sessions";
@@ -529,7 +570,9 @@ function preparationUI(attempt, context, options) {
       ? "Clear local recovery data"
       : "Clear inspected request",
     () => {
-      if (!ui.isCurrent() || attempt.pending) return;
+      if (!ui.isCurrent() || attempt.pending) {
+        return;
+      }
       confirmation.hidden = false;
     },
     "ui-control",
@@ -560,7 +603,9 @@ function preparationUI(attempt, context, options) {
     confirm = featureButton(
       "Confirm clear",
       () => {
-        if (!ui.isCurrent() || attempt.pending) return;
+        if (!ui.isCurrent() || attempt.pending) {
+          return;
+        }
         const existing = chatPreparations.get(attempt.target) === attempt;
         try {
           if (unavailable) {
@@ -580,7 +625,9 @@ function preparationUI(attempt, context, options) {
             persistChatPreparations();
           }
         } catch (error) {
-          if (existing) chatPreparations.set(attempt.target, attempt);
+          if (existing) {
+            chatPreparations.set(attempt.target, attempt);
+          }
           ui.ui.message.textContent = error.message;
           return;
         }
@@ -614,18 +661,24 @@ function preparationUI(attempt, context, options) {
   ui.confirmButton = confirm;
   ui.keepButton = keep;
   ui.clearBlocked = unavailable && !unavailableBaseline;
-  if (ui.clearBlocked)
+  if (ui.clearBlocked) {
     ui.unavailableError =
       "Local recovery data could not be captured safely. Close this dialog and inspect Chat recovery again before clearing.";
+  }
   ui.ui.refresh.onclick = () => checkChatPreparation(attempt, ui);
-  if (!dialog.open) dialog.showModal();
-  if (!options.host && context.current())
+  if (!dialog.open) {
+    dialog.showModal();
+  }
+  if (!options.host && context.current()) {
     ui.ui.message.focus({ preventScroll: true });
+  }
   paintPreparationRecovery(attempt, ui);
   return ui;
 }
 function paintPreparationRecovery(attempt, ui) {
-  if (!ui.isCurrent()) return;
+  if (!ui.isCurrent()) {
+    return;
+  }
   ui.pending = attempt.pending;
   ui.result = {
     kind: attempt.recordId ? "accepted" : "unknown",
@@ -640,8 +693,8 @@ function paintPreparationRecovery(attempt, ui) {
   ui.ui.refresh.hidden = false;
   ui.ui.refresh.disabled =
     attempt.pending ||
-    !!chatPreparationStorageError ||
-    !!ui.options.unavailable;
+    Boolean(chatPreparationStorageError) ||
+    Boolean(ui.options.unavailable);
   ui.ui.inspect.hidden = false;
   ui.ui.inspect.disabled = attempt.pending;
   ui.openButton.textContent = attempt.openAttempted
@@ -670,21 +723,25 @@ async function readPreparedChat(attempt) {
       "The chat was prepared, but its view could not refresh. Use Refresh view; do not create another chat.",
     );
   }
-  if (!snapshot.accepted || !agents)
+  if (!snapshot.accepted || !agents) {
     throw new Error(
       "The chat was prepared, but its view could not refresh. Use Refresh view; do not create another chat.",
     );
+  }
   const record = state.sessions.find(
     (record) => record.id === attempt.recordId,
   );
-  if (!record)
+  if (!record) {
     throw new Error(
       "The exact prepared chat is not in the loaded view. Refresh or inspect History; do not create another chat.",
     );
+  }
   return record;
 }
 function adoptPreparationOpen(attempt, record) {
-  if (!attempt.openAttempted || savedSessionOpenState(record.id)) return;
+  if (!attempt.openAttempted || savedSessionOpenState(record.id)) {
+    return;
+  }
   const receipt = attempt.openReceipt || {
     recordId: record.id,
     status: "unknown",
@@ -692,10 +749,11 @@ function adoptPreparationOpen(attempt, record) {
     localSaved: false,
     terminal: { state: "unconfirmed" },
   };
-  if (!adoptSavedSessionOpen(receipt, record.id))
+  if (!adoptSavedSessionOpen(receipt, record.id)) {
     throw new Error(
       "The earlier open outcome is unavailable. Inspect History before another open request.",
     );
+  }
 }
 function focusPreparedTerminal(record, candidate, returnFocus) {
   if (
@@ -704,8 +762,9 @@ function focusPreparedTerminal(record, candidate, returnFocus) {
     candidate.recordId !== record.id ||
     selectedAgentKey !== candidateKey(candidate) ||
     document.querySelector("dialog[open]")
-  )
+  ) {
     return;
+  }
   const observed = inventory.candidates.find(
       (current) =>
         current.host === "embedded" &&
@@ -720,22 +779,25 @@ function focusPreparedTerminal(record, candidate, returnFocus) {
     !view?.node.isConnected ||
     !$("#agent-workspace").contains(view.node) ||
     (view.generation && view.generation !== candidate.generation)
-  )
+  ) {
     return;
+  }
   if (
     active &&
     active !== document.body &&
     active !== returnFocus &&
     active.isConnected &&
     !view.node.contains(active)
-  )
+  ) {
     return;
+  }
   if (
     active &&
     !view.node.contains(active) &&
     active.matches('input,textarea,select,[contenteditable="true"]')
-  )
+  ) {
     return;
+  }
   view.terminal.focus();
 }
 async function openPreparedChat(attempt, ui, record = null) {
@@ -744,8 +806,9 @@ async function openPreparedChat(attempt, ui, record = null) {
     chatPreparationStorageError ||
     attempt.pending ||
     !ui.isCurrent()
-  )
+  ) {
     return { status: "stale", attempt };
+  }
   attempt.error = "";
   attempt.pending = true;
   ui.pending = true;
@@ -753,7 +816,9 @@ async function openPreparedChat(attempt, ui, record = null) {
   paintPreparationRecovery(attempt, ui);
   try {
     record = record || (await readPreparedChat(attempt));
-    if (!ui.isCurrent()) return { status: "stale", attempt };
+    if (!ui.isCurrent()) {
+      return { status: "stale", attempt };
+    }
     adoptPreparationOpen(attempt, record);
     if (!attempt.openAttempted) {
       attempt.openAttempted = true;
@@ -778,7 +843,9 @@ async function openPreparedChat(attempt, ui, record = null) {
       savedSessionOpenState(record.id)?.receipt,
       record.id,
     );
-    if (receipt) attempt.openReceipt = receipt;
+    if (receipt) {
+      attempt.openReceipt = receipt;
+    }
     const done = savedSessionOpenState(record.id)?.resolved === true;
     persistChatPreparations();
     if (ui.isCurrent() && outcome.presentation === "ready") {
@@ -792,7 +859,9 @@ async function openPreparedChat(attempt, ui, record = null) {
         selectAgent(outcome.record, outcome.candidate);
         focusPreparedTerminal(outcome.record, outcome.candidate, returnFocus);
       }
-      if (done) finishChatPreparation(attempt);
+      if (done) {
+        finishChatPreparation(attempt);
+      }
     }
     return { status: "opened", record, outcome };
   } catch (error) {
@@ -802,18 +871,21 @@ async function openPreparedChat(attempt, ui, record = null) {
         attempt.pending = false;
         ui.pending = false;
         preparationUI(attempt, ui.context, ui.options);
-      } else
+      } else {
         toast(
           "The chat open request was recorded, but its view could not finish opening. Use the original chat action or inspect History; do not create another chat.",
         );
+      }
     }
     return { status: "recovery", attempt, error };
   } finally {
     attempt.pending = false;
     ui.pending = false;
-    if (ui.isCurrent()) paintPreparationRecovery(attempt, ui);
-    else if (featureForms.get(ui.dialog) === ui && ui.dialog.open)
+    if (ui.isCurrent()) {
+      paintPreparationRecovery(attempt, ui);
+    } else if (featureForms.get(ui.dialog) === ui && ui.dialog.open) {
       freezeFeatureForm(ui, true);
+    }
   }
 }
 async function checkChatPreparation(attempt, ui) {
@@ -822,8 +894,9 @@ async function checkChatPreparation(attempt, ui) {
     chatPreparationStorageError ||
     attempt.pending ||
     !ui.isCurrent()
-  )
+  ) {
     return;
+  }
   attempt.pending = true;
   ui.pending = true;
   holdFormFocus(ui.host, ui);
@@ -846,20 +919,24 @@ async function checkChatPreparation(attempt, ui) {
       preparationReceipt(attempt, value);
     }
     await readPreparedChat(attempt);
-    if (ui.isCurrent()) render();
-    attempt.error =
-      "The exact prepared chat is available. " +
-      (attempt.openAttempted
+    if (ui.isCurrent()) {
+      render();
+    }
+    attempt.error = `The exact prepared chat is available. ${
+      attempt.openAttempted
         ? "Check its existing open request; do not start another."
-        : "Choose Open prepared chat to open it.");
+        : "Choose Open prepared chat to open it."
+    }`;
   } catch (error) {
     attempt.error = error.message;
   } finally {
     attempt.pending = false;
     ui.pending = false;
-    if (ui.isCurrent()) paintPreparationRecovery(attempt, ui);
-    else if (featureForms.get(ui.dialog) === ui && ui.dialog.open)
+    if (ui.isCurrent()) {
+      paintPreparationRecovery(attempt, ui);
+    } else if (featureForms.get(ui.dialog) === ui && ui.dialog.open) {
       freezeFeatureForm(ui, true);
+    }
   }
 }
 async function prepareSavedChat(
@@ -889,10 +966,11 @@ async function prepareSavedChat(
     return { status: "blocked", attempt };
   }
   if (!attempt) {
-    if (chatPreparations.size >= 64)
+    if (chatPreparations.size >= 64) {
       throw new Error(
         "Inspect earlier chat preparation requests before preparing another.",
       );
+    }
     attempt = {
       target,
       kind,
@@ -908,9 +986,13 @@ async function prepareSavedChat(
       throw error;
     }
   }
-  if (attempt.pending) return { status: "pending", attempt };
+  if (attempt.pending) {
+    return { status: "pending", attempt };
+  }
   const ui = preparationUI(attempt, context, { host, button, onPrepared });
-  if (!fresh) return { status: "recovery", attempt };
+  if (!fresh) {
+    return { status: "recovery", attempt };
+  }
   attempt.pending = true;
   ui.pending = true;
   holdFormFocus(ui.host, ui);
@@ -920,7 +1002,7 @@ async function prepareSavedChat(
     let value;
     try {
       value = await api("/api/commands/invoke", {
-        name: "chats.prepare." + kind,
+        name: `chats.prepare.${kind}`,
         args: { ...args, requestId: attempt.requestId },
       });
     } catch (error) {
@@ -942,12 +1024,18 @@ async function prepareSavedChat(
       return { status: "prepared", attempt, record };
     }
     render();
-    if (!ui.isCurrent()) return { status: "prepared", attempt, record };
+    if (!ui.isCurrent()) {
+      return { status: "prepared", attempt, record };
+    }
     await onPrepared?.(record);
-    if (!ui.isCurrent()) return { status: "prepared", attempt, record };
+    if (!ui.isCurrent()) {
+      return { status: "prepared", attempt, record };
+    }
     attempt.pending = false;
     ui.pending = false;
-    if (open) return await openPreparedChat(attempt, ui, record);
+    if (open) {
+      return await openPreparedChat(attempt, ui, record);
+    }
     finishChatPreparation(attempt);
     closePreparationSurfaces(ui, context);
     toast("Session link saved. No agent was started.");
@@ -964,7 +1052,9 @@ async function prepareSavedChat(
         ui.ui.message.textContent = error.message;
         ui.openButton.hidden = true;
         ui.clearButton.hidden = true;
-      } else paintPreparationRecovery(attempt, ui);
+      } else {
+        paintPreparationRecovery(attempt, ui);
+      }
     }
     return {
       status: attempt.rejected ? "rejected" : "recovery",
@@ -976,9 +1066,11 @@ async function prepareSavedChat(
     attempt.pending = false;
     ui.pending = false;
     if (featureForms.get(ui.dialog) === ui && ui.dialog.open) {
-      if (attempt.rejected && ui.isCurrent()) presentFeatureFormResult(ui);
-      else if (ui.isCurrent()) paintPreparationRecovery(attempt, ui);
-      else {
+      if (attempt.rejected && ui.isCurrent()) {
+        presentFeatureFormResult(ui);
+      } else if (ui.isCurrent()) {
+        paintPreparationRecovery(attempt, ui);
+      } else {
         freezeFeatureForm(ui, true);
         ui.ui.message.textContent =
           attempt.error || preparationMessage(attempt);

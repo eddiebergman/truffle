@@ -9,8 +9,12 @@ function createConfigurationRefresh({
     failures = new Set();
   let pending = null;
   return function refreshConfiguration() {
-    if (blocked()) return Promise.resolve(false);
-    if (pending) return pending;
+    if (blocked()) {
+      return Promise.resolve(false);
+    }
+    if (pending) {
+      return pending;
+    }
     pending = (async () => {
       try {
         const status = await fetchStatus();
@@ -18,11 +22,14 @@ function createConfigurationRefresh({
           status?.version !== 1 ||
           !status.resources ||
           typeof status.resources !== "object"
-        )
+        ) {
           throw new Error("Unsupported configuration status.");
+        }
         failures.delete("status");
         for (const [name, load] of Object.entries(resources)) {
-          if (blocked()) return false;
+          if (blocked()) {
+            return false;
+          }
           const resource = status.resources[name];
           if (
             !resource ||
@@ -40,7 +47,9 @@ function createConfigurationRefresh({
             continue;
           }
           try {
-            if ((await load()) === false) continue;
+            if ((await load()) === false) {
+              continue;
+            }
             applied.set(name, resource.token);
             failures.delete(name);
           } catch {
@@ -67,8 +76,9 @@ function createConfigurationRefresh({
 function configurationRefreshBlocked() {
   return settingsDirty || Boolean(document.querySelector("dialog[open]"));
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = { createConfigurationRefresh };
+}
 if (typeof window !== "undefined") {
   const canApply = () => !configurationRefreshBlocked();
   const refreshConfiguration = createConfigurationRefresh({
@@ -77,38 +87,53 @@ if (typeof window !== "undefined") {
     resources: {
       settings: async () => {
         const next = await loadAppSettings({ canApply });
-        if (!canApply()) return false;
-        if (!next || next.configError)
+        if (!canApply()) {
+          return false;
+        }
+        if (!next || next.configError) {
           throw new Error("Invalid settings configuration.");
+        }
       },
       views: async () => {
         const next = await loadSavedViews({ canApply });
-        if (!canApply()) return false;
-        if (!next || savedViewsError) throw new Error("Invalid saved views.");
+        if (!canApply()) {
+          return false;
+        }
+        if (!next || savedViewsError) {
+          throw new Error("Invalid saved views.");
+        }
       },
       pageSettings: async () => {
         const next = await loadPageSettings({ canApply });
-        if (!canApply()) return false;
-        if (!next) throw new Error("Page visibility could not load.");
+        if (!canApply()) {
+          return false;
+        }
+        if (!next) {
+          throw new Error("Page visibility could not load.");
+        }
       },
     },
     onError: (name) =>
       toast(
-        "Could not refresh " +
+        `Could not refresh ${
           {
             settings: "settings",
             views: "saved views",
             pageSettings: "page visibility",
             status: "configuration status",
-          }[name] +
-          ". Changes will be retried.",
+          }[name]
+        }. Changes will be retried.`,
       ),
   });
   window.refreshConfiguration = refreshConfiguration;
   window.addEventListener("focus", () => {
-    if (!document.hidden) void refreshConfiguration();
+    if (!document.hidden) {
+      void refreshConfiguration();
+    }
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void refreshConfiguration();
+    if (!document.hidden) {
+      void refreshConfiguration();
+    }
   });
 }

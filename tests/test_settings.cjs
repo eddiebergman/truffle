@@ -13,7 +13,7 @@ const pageScripts = [
     .readFileSync("static/index.html", "utf8")
     .matchAll(/<script src="\/([^"]+)"/g),
 ]
-  .map((match) => "static/" + match[1])
+  .map((match) => `static/${match[1]}`)
   .filter(
     (file) =>
       !file.startsWith("static/vendor/xterm") &&
@@ -33,7 +33,9 @@ function dispatch(listeners, event) {
   };
   for (const listener of listeners || []) {
     listener(event);
-    if (stopped) break;
+    if (stopped) {
+      break;
+    }
   }
 }
 test("keyboard chords match saved command syntax across modifiers", () => {
@@ -149,8 +151,9 @@ test("typed shortcuts normalize modifiers and expose reserved and duplicate assi
     "Control+K",
     "Primary+F5",
     "Primary++",
-  ])
+  ]) {
     assert.equal(c.canonicalShortcut(value), null, value);
+  }
   assert.match(
     c.shortcutValidationMessage("primary+k", "search"),
     /Command menu/,
@@ -245,9 +248,9 @@ test("Tab, Escape and repeated Record cancel without changing the saved draft", 
   for (const cancellation of ["Tab", "Escape", "button"]) {
     const { c, listeners, button, input, key } = recorderContext();
     await c.startShortcutRecording(button, input, "commands");
-    if (cancellation === "button")
+    if (cancellation === "button") {
       await c.startShortcutRecording(button, input, "commands");
-    else {
+    } else {
       const event = key(cancellation);
       listeners.keydown(event);
       assert.equal(Boolean(event.prevented), cancellation === "Escape");
@@ -265,8 +268,9 @@ test("closing during native recording startup restores native shortcuts in order
     desktop: true,
     invoke: async (_name, args) => {
       calls.push(args.recording);
-      if (args.recording)
+      if (args.recording) {
         await new Promise((resolve) => (resolveStart = resolve));
+      }
     },
   });
   const start = c.startShortcutRecording(button, input, "commands");
@@ -283,7 +287,9 @@ test("native recording failures restore editable input and report the failure", 
   const { c, error, button, input } = recorderContext({
     desktop: true,
     invoke: async (_name, args) => {
-      if (args.recording) throw new Error("Unavailable");
+      if (args.recording) {
+        throw new Error("Unavailable");
+      }
     },
   });
   await c.startShortcutRecording(button, input, "commands");
@@ -533,7 +539,9 @@ test("saving a draft uses its captured identity, preserves conflicts and seriali
       activeElement: null,
       body: {},
       querySelector: (id) => {
-        if (!nodes.has(id)) nodes.set(id, { textContent: "" });
+        if (!nodes.has(id)) {
+          nodes.set(id, { textContent: "" });
+        }
         return nodes.get(id);
       },
     },
@@ -620,11 +628,15 @@ function settingsSaveFixture() {
     }
     append(...children) {
       this.children.push(...children);
-      for (const child of children) child.parentElement = this;
+      for (const child of children) {
+        child.parentElement = this;
+      }
     }
     prepend(...children) {
       this.children.unshift(...children);
-      for (const child of children) child.parentElement = this;
+      for (const child of children) {
+        child.parentElement = this;
+      }
     }
     replaceChildren(...children) {
       this.children = [];
@@ -636,8 +648,11 @@ function settingsSaveFixture() {
       );
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (selector === "[hidden]" && node.hidden) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (selector === "[hidden]" && node.hidden) {
+          return node;
+        }
+      }
       return null;
     }
     setAttribute(key, value) {
@@ -671,25 +686,29 @@ function settingsSaveFixture() {
     blur() {
       if (document.activeElement === this) {
         document.activeElement = body;
-        for (let node = this; node; node = node.parentElement)
+        for (let node = this; node; node = node.parentElement) {
           node.listeners?.focusout?.();
+        }
       }
     }
     focus(options) {
       const previous = document.activeElement;
       document.activeElement = this;
       this.focusOptions = options;
-      if (previous !== this)
-        for (let node = previous; node; node = node.parentElement)
+      if (previous !== this) {
+        for (let node = previous; node; node = node.parentElement) {
           node.listeners?.focusout?.();
+        }
+      }
     }
     set disabled(value) {
       this.frozen = value;
-      if (value && document.activeElement === this)
+      if (value && document.activeElement === this) {
         document.activeElement = body;
+      }
     }
     get disabled() {
-      return !!this.frozen;
+      return Boolean(this.frozen);
     }
   }
   document.querySelectorAll = (selector) =>
@@ -713,7 +732,7 @@ function settingsSaveFixture() {
   for (const id of ["settings-error", "settings-status", "settings-save"]) {
     const node = new Node("button");
     node.id = id;
-    footer.set("#" + id, node);
+    footer.set(`#${id}`, node);
   }
   const settingsBody = new Node("div");
   footer.set("#settings-body", settingsBody);
@@ -747,9 +766,11 @@ function settingsSaveFixture() {
     el: (...args) => new Node(...args),
     settingsButton: (label, run, cls) =>
       Object.assign(new Node("button", cls, label), { onclick: run }),
-    Option: function (text, value) {
-      this.text = text;
-      this.value = value;
+    Option: class {
+      constructor(text, value) {
+        this.text = text;
+        this.value = value;
+      }
     },
     shortcutValidationMessage: () => "",
     canonicalShortcut: (value) => value,
@@ -779,7 +800,11 @@ function settingsSaveFixture() {
   let routine, quickPanel;
   // The real paint draws the quick actions in the Actions panel; theme and shortcut controls are drawn directly.
   function draw() {
-    for (const node of nodes) if (node.draftNode) node.isConnected = false;
+    for (const node of nodes) {
+      if (node.draftNode) {
+        node.isConnected = false;
+      }
+    }
     const start = nodes.length;
     routine = c.settingInput(["appearance", "theme", "Theme", "text", ""]);
     c.shortcutInput({ id: "commands", label: "Commands" });
@@ -787,7 +812,9 @@ function settingsSaveFixture() {
     quickPanel = settingsBody.children.find(
       (panel) => panel.dataset.category === "actions",
     );
-    for (const node of nodes.slice(start)) node.draftNode = true;
+    for (const node of nodes.slice(start)) {
+      node.draftNode = true;
+    }
   }
   // The actual import control is a draft control in this fixture's connected document.
   draw();
@@ -853,8 +880,9 @@ test(
       ...f.quickInputs(),
       f.quickButton("Add quick action"),
       f.file,
-    ])
+    ]) {
       assert.equal(node.disabled, true);
+    }
     assert.equal(f.independent.disabled, false);
     f.edit("later");
     const shortcut = f.node("shortcut-commands");
@@ -937,7 +965,9 @@ test(
       f.api(() => pending.promise);
       const saving = f.c.savePreferences();
       await new Promise((resolve) => setImmediate(resolve));
-      if (moveFocus) f.independent.focus();
+      if (moveFocus) {
+        f.independent.focus();
+      }
       pending.reject(
         new Error("Settings changed elsewhere. Reload before saving."),
       );
@@ -1324,7 +1354,7 @@ test("Reset ends only matching shortcut recording and updates existing checkbox 
 });
 
 test("Settings filter context bounds Unicode and reads only search, toggle and the preference dirty flag", () => {
-  const search = { value: "😀".repeat(200) + "界private-tail" },
+  const search = { value: `${"😀".repeat(200)}界private-tail` },
     modified = {
       getAttribute: (key) => (key === "aria-pressed" ? "true" : null),
     },
@@ -1332,8 +1362,12 @@ test("Settings filter context bounds Unicode and reads only search, toggle and t
     document = {
       querySelector: (selector) => {
         selectors.push(selector);
-        if (selector === "#settings-search") return search;
-        if (selector === "#settings-modified") return modified;
+        if (selector === "#settings-search") {
+          return search;
+        }
+        if (selector === "#settings-modified") {
+          return modified;
+        }
         throw Error("Private form control must not be read");
       },
     },
@@ -1407,9 +1441,13 @@ function reviewSkillFixture() {
   f.Node.prototype.replaceChildren = function (...children) {
     const disconnect = (node) => {
       node.isConnected = false;
-      for (const child of node.children) disconnect(child);
+      for (const child of node.children) {
+        disconnect(child);
+      }
     };
-    for (const child of this.children) disconnect(child);
+    for (const child of this.children) {
+      disconnect(child);
+    }
     this.children = [];
     this.append(...children);
   };
@@ -1418,8 +1456,9 @@ function reviewSkillFixture() {
   };
   f.Node.prototype.close = function () {
     this.open = false;
-    if (this.contains(f.document.activeElement))
+    if (this.contains(f.document.activeElement)) {
       f.document.activeElement = f.document.body;
+    }
     this.listeners?.close?.();
   };
   const originalQuery = f.document.querySelectorAll;
@@ -1483,7 +1522,7 @@ test("review skill selection updates only exact Claude/Codex control and draft, 
     ["codexReviewCommand", "$"],
   ]) {
     const f = reviewSkillFixture(),
-      input = f.node("preference-" + key),
+      input = f.node(`preference-${key}`),
       sharing = f.independent,
       connection = f.connection;
     input.focus();
@@ -1493,8 +1532,8 @@ test("review skill selection updates only exact Claude/Codex control and draft, 
     const button = f.results()[0];
     button.focus();
     button.onclick();
-    assert.equal(f.c.settingsDraft[key], prefix + "team-review");
-    assert.equal(input.value, prefix + "team-review");
+    assert.equal(f.c.settingsDraft[key], `${prefix}team-review`);
+    assert.equal(input.value, `${prefix}team-review`);
     assert.equal(f.node(input.id), input);
     assert.equal(f.c.settingsDirty, true);
     assert.equal(f.picker.open, false);
@@ -1507,7 +1546,7 @@ test("review skill selection updates only exact Claude/Codex control and draft, 
   }
 });
 test("review skill picker ignores stale catalog or selection after close, reopen, replaced draft or source field, or Save", async () => {
-  for (const stage of ["catalog", "selection"])
+  for (const stage of ["catalog", "selection"]) {
     for (const change of [
       "close",
       "reopen",
@@ -1526,38 +1565,52 @@ test("review skill picker ignores stale catalog or selection after close, reopen
         await opening;
       }
       const oldButton = f.results()[0];
-      if (change === "close") f.picker.close();
-      if (change === "settings-close") f.dialog.close();
+      if (change === "close") {
+        f.picker.close();
+      }
+      if (change === "settings-close") {
+        f.dialog.close();
+      }
       if (change === "reopen") {
         f.picker.close();
         f.api(async () => f.catalog);
         await f.start("codexReviewCommand");
       }
-      if (change === "draft")
+      if (change === "draft") {
         f.c.settingsDraft = structuredClone(f.c.settingsDraft);
-      if (change === "baseline")
+      }
+      if (change === "baseline") {
         f.c.settingsBaseline = structuredClone(f.c.settingsBaseline);
-      if (change === "field-value") input.value = "newer direct edit";
+      }
+      if (change === "field-value") {
+        input.value = "newer direct edit";
+      }
       if (change === "field") {
         input.isConnected = false;
         const replacement = new f.Node("input");
         replacement.id = input.id;
         replacement.value = "";
       }
-      if (change === "saving") f.c.settingsSaving = true;
+      if (change === "saving") {
+        f.c.settingsSaving = true;
+      }
       if (stage === "catalog") {
         f.pending.resolve(f.catalog);
         await opening;
-      } else oldButton.onclick();
+      } else {
+        oldButton.onclick();
+      }
       assert.equal(f.c.settingsDraft.claudeReviewCommand, "", stage + change);
       assert.equal(
         input.value,
         change === "field-value" ? "newer direct edit" : "",
       );
       assert.deepEqual(f.counts(), { paints: 0, disposals: 0 });
-      if (stage === "catalog" && change !== "reopen")
+      if (stage === "catalog" && change !== "reopen") {
         assert.equal(f.results().length, 0);
+      }
     }
+  }
 });
 test("review skill selection follows Modified visibility and only restores picker-owned focus", async () => {
   for (const move of ["owned", "outside", "default", "child"]) {
@@ -1594,8 +1647,9 @@ test("review skill selection follows Modified visibility and only restores picke
         f.document.activeElement,
         move === "outside" ? outside : move === "default" ? f.modified : input,
       );
-      if (move === "default")
+      if (move === "default") {
         assert.equal(input.closest("[hidden]") !== null, true);
+      }
     }
     assert.equal(f.token.value, "private unsaved token");
     assert.deepEqual(f.counts(), { paints: 0, disposals: 0 });

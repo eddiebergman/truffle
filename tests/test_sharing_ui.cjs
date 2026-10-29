@@ -25,18 +25,22 @@ function fixture() {
     }
     append(...children) {
       for (const child of children) {
-        if (child.parentNode)
+        if (child.parentNode) {
           child.parentNode.children = child.parentNode.children.filter(
             (n) => n !== child,
           );
+        }
         child.parentNode = this;
         this.children.push(child);
       }
     }
     replaceChildren(...children) {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentNode = null;
+      }
+      for (const child of this.children) {
+        child.parentNode = null;
+      }
       this.children = [];
       this.append(...children);
     }
@@ -65,9 +69,12 @@ function fixture() {
       return this.attrs[name] ?? null;
     }
     matches(selector) {
-      if (selector.startsWith("#")) return this.id === selector.slice(1);
-      if (selector.startsWith("."))
+      if (selector.startsWith("#")) {
+        return this.id === selector.slice(1);
+      }
+      if (selector.startsWith(".")) {
         return this.className.split(/\s+/).includes(selector.slice(1));
+      }
       return this.tagName === selector.toUpperCase();
     }
     querySelectorAll(selector) {
@@ -91,7 +98,9 @@ function fixture() {
     dispatch(type, event = {}) {
       event.target ??= this;
       for (const entry of [...(this.listeners.get(type) || [])]) {
-        if (entry.once) this.removeEventListener(type, entry.fn);
+        if (entry.once) {
+          this.removeEventListener(type, entry.fn);
+        }
         entry.fn(event);
       }
     }
@@ -99,7 +108,9 @@ function fixture() {
       return this._open;
     }
     set open(value) {
-      if (this._open === value) return;
+      if (this._open === value) {
+        return;
+      }
       this._open = value;
       this.dispatch("toggle");
     }
@@ -111,7 +122,9 @@ function fixture() {
       this.dispatch("close");
     }
     focus() {
-      if (document.activeElement === this) return;
+      if (document.activeElement === this) {
+        return;
+      }
       document.activeElement = this;
       this.onfocus?.();
     }
@@ -153,10 +166,12 @@ function fixture() {
   const c = browserContext({
     document,
     console,
-    Option: function (text, value) {
-      const n = new Node("option", "", text);
-      n.value = value;
-      return n;
+    Option: class {
+      constructor(text, value) {
+        const n = new Node("option", "", text);
+        n.value = value;
+        return n;
+      }
     },
     el: (...args) => new Node(...args),
     state: {
@@ -196,7 +211,7 @@ function fixture() {
     toast: (message) => messages.push(message),
     selectAgent: (record) => {
       selected.push(record.id);
-      c.selectedAgentKey = "record:" + record.id;
+      c.selectedAgentKey = `record:${record.id}`;
     },
     navigator: { clipboard: { writeText: async () => {} } },
     setInterval: (callback) => intervals.push(callback),
@@ -212,17 +227,25 @@ function fixture() {
     api: async (path, payload) => {
       if (path !== "/api/commands/invoke") {
         calls.push({ path, args: payload });
-        if (handlers[path]) return handlers[path](payload);
-        if (path === "/api/state") return JSON.parse(JSON.stringify(c.state));
-        if (path === "/api/agents") return c.inventory;
-        assert.fail("Unexpected API " + path);
+        if (handlers[path]) {
+          return handlers[path](payload);
+        }
+        if (path === "/api/state") {
+          return JSON.parse(JSON.stringify(c.state));
+        }
+        if (path === "/api/agents") {
+          return c.inventory;
+        }
+        assert.fail(`Unexpected API ${path}`);
       }
       calls.push({
         name: payload.name,
         args: JSON.parse(JSON.stringify(payload.args)),
       });
-      if (handlers[payload.name]) return handlers[payload.name](payload.args);
-      if (payload.name === "chats.open")
+      if (handlers[payload.name]) {
+        return handlers[payload.name](payload.args);
+      }
+      if (payload.name === "chats.open") {
         return {
           status: "accepted",
           recordId: payload.args.recordId,
@@ -230,8 +253,10 @@ function fixture() {
           localSaved: true,
           terminal: { state: "acknowledged" },
         };
-      if (payload.name === "sharing.job")
+      }
+      if (payload.name === "sharing.job") {
         return { preview: { title: "Prepared context", resources: [] } };
+      }
       return JSON.parse(JSON.stringify(server));
     },
   });
@@ -262,7 +287,7 @@ function fixture() {
           (n.textContent === label || n.attrs["aria-label"] === label),
       );
   const input = (id, value) => {
-    const node = document.querySelector("#" + id);
+    const node = document.querySelector(`#${id}`);
     node.value = value;
     node.oninput?.();
     return node;
@@ -322,10 +347,11 @@ test("sharing uses shared controls, labels and Settings owner without a duplicat
   const f = fixture();
   await f.open();
   assert.equal(f.document.querySelector("#sharing-config"), null);
-  for (const id of ["sharing-recipient", "sharing-message"])
+  for (const id of ["sharing-recipient", "sharing-message"]) {
     assert.ok(
-      f.document.querySelector("#" + id).className.includes("ui-field"),
+      f.document.querySelector(`#${id}`).className.includes("ui-field"),
     );
+  }
   assert.equal(f.find("Close sharing").dataset.size, "icon");
   assert.equal(f.find("Sharing settings").dataset.size, "icon");
   assert.equal(
@@ -643,7 +669,7 @@ test("receiving assistant and folder survive Inbox switches and reopen for the s
     { id: "incoming-b", title: "Incoming B" },
   ];
   f.handlers["sharing.preview"] = (args) => {
-    const id = "preview-" + args.deliveryId;
+    const id = `preview-${args.deliveryId}`;
     f.server.jobs.push({
       id,
       kind: "preview",
@@ -692,11 +718,11 @@ test("draft cache keeps bounded recent chat state without using persistent stora
   const f = fixture();
   await f.open();
   for (let index = 0; index < 22; index++) {
-    const id = "chat-" + index;
+    const id = `chat-${index}`;
     f.c.state.sessions.push({ id, title: id });
-    f.c.selectedAgentKey = "record:" + id;
+    f.c.selectedAgentKey = `record:${id}`;
     f.hooks.get("sharing:initial-load")();
-    f.input("sharing-message", "Draft " + index);
+    f.input("sharing-message", `Draft ${index}`);
   }
   f.c.selectedAgentKey = "record:chat-0";
   f.hooks.get("sharing:initial-load")();
@@ -866,7 +892,7 @@ async function receivingFixture() {
     { id: "incoming-b", title: "Incoming B" },
   ];
   f.handlers["sharing.preview"] = (args) => {
-    const id = "preview-" + args.deliveryId;
+    const id = `preview-${args.deliveryId}`;
     f.server.jobs = f.server.jobs.filter((job) => job.id !== id);
     f.server.jobs.push({
       id,
@@ -925,9 +951,13 @@ test("background import completion never opens over another entry and provides a
       pending = deferred();
     f.handlers["sharing.import"] = () => pending.promise;
     const importing = f.find("Import into new chat").onclick();
-    if (leave === "delivery") await f.openDelivery("Incoming B");
-    else if (leave === "tab") f.find("Share").onclick();
-    else f.menu.open = false;
+    if (leave === "delivery") {
+      await f.openDelivery("Incoming B");
+    } else if (leave === "tab") {
+      f.find("Share").onclick();
+    } else {
+      f.menu.open = false;
+    }
     f.server.jobs.push({
       id: "import-a",
       kind: "import",
@@ -949,8 +979,12 @@ test("background import completion never opens over another entry and provides a
       f.calls.some((call) => call.path === "/api/state"),
       false,
     );
-    if (leave === "close") await f.open();
-    if (leave === "tab") f.find("Inbox").onclick();
+    if (leave === "close") {
+      await f.open();
+    }
+    if (leave === "tab") {
+      f.find("Inbox").onclick();
+    }
     assert.deepEqual(f.selected, []);
     const open = f.find("Open imported chat: Incoming A");
     assert.ok(open);
@@ -1033,9 +1067,11 @@ test("changing tab, closing the menu or selecting another chat during import ope
     f.handlers["/api/state"] = () => read.promise;
     const opening = f.find("Open imported chat").onclick();
     await f.tick();
-    if (change === "tab") f.find("Share").onclick();
-    else if (change === "close") f.menu.open = false;
-    else if (change.startsWith("page")) {
+    if (change === "tab") {
+      f.find("Share").onclick();
+    } else if (change === "close") {
+      f.menu.open = false;
+    } else if (change.startsWith("page")) {
       f.c.source = "github";
       f.hooks.get("sharing:initial-load")();
       if (change === "page-return") {
@@ -1060,8 +1096,12 @@ test("changing tab, closing the menu or selecting another chat during import ope
       f.calls.some((call) => call.name === "chats.open"),
       false,
     );
-    if (change === "chat") assert.equal(f.c.selectedAgentKey, "record:b");
-    if (change === "page") assert.equal(f.c.source, "github");
+    if (change === "chat") {
+      assert.equal(f.c.selectedAgentKey, "record:b");
+    }
+    if (change === "page") {
+      assert.equal(f.c.source, "github");
+    }
   }
 });
 test("imported chat opening rejects stale snapshots, retries bounded reads and preserves newer metadata", async () => {
@@ -1091,13 +1131,14 @@ test("imported chat opening rejects stale snapshots, retries bounded reads and p
     await f.tick();
     assert.equal(reads.length, 2);
     assert.equal(f.c.state.sessions[0].title, "Newer A");
-    if (exhausted)
+    if (exhausted) {
       f.c.state = {
         ...f.c.state,
         sessions: f.c.state.sessions.map((record) =>
           record.id === "a" ? { ...record, title: "Newest A" } : record,
         ),
       };
+    }
     reads[1].resolve({
       revision: "fresh",
       sessions: [

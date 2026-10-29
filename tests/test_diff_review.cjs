@@ -10,10 +10,11 @@ const {
 // Load diff-review.js after the scripts it uses. A test `$` becomes document.querySelector, since app.js owns `$`.
 function reviewContext(globals, files = []) {
   const { $: lookup, ...rest } = globals;
-  if (lookup !== undefined)
+  if (lookup !== undefined) {
     rest.document = Object.assign(rest.document ?? {}, {
       querySelector: lookup,
     });
+  }
   const c = browserContext(rest);
   loadScripts(c, [
     "static/client.js",
@@ -35,7 +36,9 @@ function adapterContext(globals) {
     ...globals,
   });
   vm.runInContext(code, rawContext(c));
-  for (const [name, value] of Object.entries(globals)) c[name] = value;
+  for (const [name, value] of Object.entries(globals)) {
+    c[name] = value;
+  }
   return c;
 }
 test("continuous loading keeps other files available after an unsupported file and never mounts a closed review", async () => {
@@ -64,7 +67,9 @@ test("continuous loading keeps other files available after an unsupported file a
     reviewState: current,
     $: (id) => (id === "#diff-review-dialog" ? dialog : root),
     cachedReviewFile: async (record, file) => {
-      if (file === "binary") throw new Error("Binary file");
+      if (file === "binary") {
+        throw new Error("Binary file");
+      }
       return { path: file };
     },
     reviewRenderer: { mount: (node, data) => mounted.push(data.path) },
@@ -277,7 +282,9 @@ test("Enter adds a review comment while Shift-Enter, composition and held keys d
   const button = {
     disabled: false,
     click() {
-      if (!this.disabled) clicked++;
+      if (!this.disabled) {
+        clicked++;
+      }
     },
   };
   const c = reviewContext({
@@ -308,8 +315,9 @@ test("Enter adds a review comment while Shift-Enter, composition and held keys d
     { metaKey: true },
     { altKey: true },
     { key: "a" },
-  ])
+  ]) {
     c.reviewCommentKeydown(key(extra));
+  }
   assert.equal(clicked, 1);
   assert.equal(prevented, 1);
   c.reviewCommentKeydown(key({ repeat: true }));
@@ -445,7 +453,7 @@ test("full review chooses full presentation before configuring the title and lay
   const nodes = new Map(),
     settings = [];
   const node = (id) => {
-    if (!nodes.has(id))
+    if (!nodes.has(id)) {
       nodes.set(id, {
         classList: { toggle() {} },
         replaceChildren() {},
@@ -453,6 +461,7 @@ test("full review chooses full presentation before configuring the title and lay
         remove() {},
         showModal() {},
       });
+    }
     return nodes.get(id);
   };
   const c = reviewContext({
@@ -786,13 +795,24 @@ function reviewFocusFixture() {
   const matches = (node, selector) =>
     selector.split(",").some((part) => {
       part = part.trim();
-      if (part === "a[href]")
+      if (part === "a[href]") {
         return node.tag === "a" && node.attrs.href !== undefined;
-      if (part === "[hidden]") return node.hidden;
-      if (part === "dialog[open]") return node.tag === "dialog" && node.open;
-      if (part === "details[open]") return node.tag === "details" && node.open;
-      if (part === "[data-review-entry]") return !!node.dataset.reviewEntry;
-      if (part === "[data-review-control]") return !!node.dataset.reviewControl;
+      }
+      if (part === "[hidden]") {
+        return node.hidden;
+      }
+      if (part === "dialog[open]") {
+        return node.tag === "dialog" && node.open;
+      }
+      if (part === "details[open]") {
+        return node.tag === "details" && node.open;
+      }
+      if (part === "[data-review-entry]") {
+        return Boolean(node.dataset.reviewEntry);
+      }
+      if (part === "[data-review-control]") {
+        return Boolean(node.dataset.reviewControl);
+      }
       return false;
     });
   class Node {
@@ -833,7 +853,7 @@ function reviewFocusFixture() {
       return this.tag.toUpperCase();
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     contains(node) {
       return (
@@ -853,9 +873,12 @@ function reviewFocusFixture() {
       }
     }
     replaceChildren(...children) {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentElement = null;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.append(...children);
     }
@@ -869,12 +892,17 @@ function reviewFocusFixture() {
       return this.querySelectorAll(selector)[0] || null;
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (matches(node, selector)) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (matches(node, selector)) {
+          return node;
+        }
+      }
       return null;
     }
     getClientRects() {
-      if (!this.isConnected || this.closest("[hidden]")) return [];
+      if (!this.isConnected || this.closest("[hidden]")) {
+        return [];
+      }
       let child = this;
       for (
         let parent = this.parentElement;
@@ -884,8 +912,9 @@ function reviewFocusFixture() {
         if (
           (parent.tag === "dialog" && !parent.open) ||
           (parent.tag === "details" && !parent.open && child.tag !== "summary")
-        )
+        ) {
           return [];
+        }
         child = parent;
       }
       return [{}];
@@ -914,7 +943,9 @@ function reviewFocusFixture() {
   dialog.open = true;
   document.body.append(dialog);
   const $ = (selector) => {
-    if (selector === "#diff-review-dialog") return dialog;
+    if (selector === "#diff-review-dialog") {
+      return dialog;
+    }
     if (!nodes.has(selector)) {
       const node = new Node(
         selector === "#diff-review-drawer-toggle" ? "summary" : "div",
@@ -960,7 +991,7 @@ function reviewFocusFixture() {
       Event,
       URL,
       reviewState: current,
-      $: $,
+      $,
       el: (...args) => new Node(...args),
       reviewAuthorPill: (author) => new Node("span", "", author),
       pendingReviewAssessments: (d) => d.assessments || [],
@@ -1041,7 +1072,9 @@ test("actual remove handlers move to next equivalent, previous equivalent, then 
     const f = reviewFocusFixture(),
       ids = kind === "comment" ? ["two", "three", "one"] : ["b", "c", "a"],
       remaining = kind === "comment" ? ["three", "one"] : ["c", "a"];
-    for (const id of ["a", "b", "c"]) f.row("assessment", id).open = true;
+    for (const id of ["a", "b", "c"]) {
+      f.row("assessment", id).open = true;
+    }
     for (let index = 0; index < ids.length; index++) {
       const id = ids[index],
         button = f.control(kind, id, "remove");
@@ -1113,8 +1146,11 @@ test("review redraw never takes focus from outside, child dialog, a closed dialo
         f.document.activeElement = target;
       }
     };
-    if (move.startsWith("paint-")) f.c.paintReviewDispatch = change;
-    else change();
+    if (move.startsWith("paint-")) {
+      f.c.paintReviewDispatch = change;
+    } else {
+      change();
+    }
     const draft = structuredClone(f.draft);
     draft.revision++;
     f.requests[0].resolve(f.response(draft));
@@ -1150,7 +1186,9 @@ test("actual safe Markdown body links preserve exact destination and duplicate o
         "[First](https://example.test/a?x=1&y=2) [Other](https://example.test/b) [Again](https://example.test/a?x=1&y=2)";
     f.current.draft[key].find((row) => row.id === id).text = text;
     f.c.paintReviewComments();
-    if (kind === "assessment") f.row(kind, id).open = true;
+    if (kind === "assessment") {
+      f.row(kind, id).open = true;
+    }
     const links = f.row(kind, id).querySelectorAll("a[href]");
     assert.equal(links.length, 3);
     assert.equal(
@@ -1163,9 +1201,9 @@ test("actual safe Markdown body links preserve exact destination and duplicate o
     draft.revision++;
     draft[key].reverse();
     draft[key].find((row) => row.id === id).text =
-      "[New unrelated](https://example.test/new) " +
-      text +
-      " https://example.test/linkified";
+      `[New unrelated](https://example.test/new) ${
+        text
+      } https://example.test/linkified`;
     f.requests[0].resolve(f.response(draft));
     await pending;
     const next = f.row(kind, id).querySelectorAll("a[href]");
@@ -1251,8 +1289,9 @@ test("closed outer details blocks nested controls despite nonempty bounds, allow
     outer.open = false;
     for (const node of f
       .row("assessment", "b")
-      .querySelectorAll("[data-review-control]"))
+      .querySelectorAll("[data-review-control]")) {
       node.getClientRects = () => [{}];
+    }
     toggle.getClientRects = () => [{}];
   };
   f.c.paintReviewComments();
@@ -1267,8 +1306,9 @@ test("closed outer details blocks nested controls despite nonempty bounds, allow
     outer.open = false;
     for (const node of f
       .row("assessment", "b")
-      .querySelectorAll("[data-review-control]"))
+      .querySelectorAll("[data-review-control]")) {
       node.getClientRects = () => [{}];
+    }
   };
   f.c.paintReviewComments();
   assert.notEqual(f.document.activeElement, toggle);

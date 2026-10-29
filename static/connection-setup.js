@@ -26,26 +26,36 @@ function connectionSetupPayload(
   provider,
   { token = "", source = "manual", org = "", base = "" } = {},
 ) {
-  if (!connectionSetupProviders.some((item) => item.id === provider))
+  if (!connectionSetupProviders.some((item) => item.id === provider)) {
     throw new Error("Unknown connection provider.");
+  }
   const payload = { provider, source };
   if (source === "manual") {
-    if (!token.trim()) throw new Error("Enter a token first.");
+    if (!token.trim()) {
+      throw new Error("Enter a token first.");
+    }
     payload.token = token.trim();
-  } else if (source !== "github-cli" || provider !== "github")
+  } else if (source !== "github-cli" || provider !== "github") {
     throw new Error("GitHub CLI is available only for GitHub.");
+  }
   if (provider === "sentry") {
     payload.org = org.trim();
     payload.base = base;
-    if (!payload.org) throw new Error("Enter the Sentry organization slug.");
+    if (!payload.org) {
+      throw new Error("Enter the Sentry organization slug.");
+    }
   }
   return payload;
 }
 window.renderConnectionSetup = async function (container, { onSaved } = {}) {
   const make = (tag, text, className) => {
     const node = document.createElement(tag);
-    if (text) node.textContent = text;
-    if (className) node.className = className;
+    if (text) {
+      node.textContent = text;
+    }
+    if (className) {
+      node.className = className;
+    }
     return node;
   };
   const native = window.__TAURI__?.core,
@@ -65,25 +75,33 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
   const setBusy = (value) => {
     busy = value;
     root.setAttribute("aria-busy", String(value));
-    for (const control of controls)
+    for (const control of controls) {
       control.disabled = value || !view.available || disposed;
+    }
   };
   const clearPreview = () => {
     pending = null;
-    for (const preview of previews) preview.replaceChildren();
+    for (const preview of previews) {
+      preview.replaceChildren();
+    }
   };
   const cancel = async () => {
     clearPreview();
-    if (invoke) await invoke("connection_setup_cancel");
+    if (invoke) {
+      await invoke("connection_setup_cancel");
+    }
   };
   const dialog = container.closest("dialog"),
     onClose = () => void root.disposeConnectionSetup().catch(() => {});
   root.disposeConnectionSetup = async () => {
-    if (disposed) return;
+    if (disposed) {
+      return;
+    }
     disposed = true;
     setBusy(false);
-    for (const input of root.querySelectorAll('input[type="password"]'))
+    for (const input of root.querySelectorAll('input[type="password"]')) {
       input.value = "";
+    }
     dialog?.removeEventListener("close", onClose);
     await cancel();
   };
@@ -92,19 +110,23 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
     try {
       view = await invoke("connection_setup_view");
     } catch (error) {
-      if (!disposed)
-        status.textContent =
-          "Secure connection setup is unavailable: " + String(error);
+      if (!disposed) {
+        status.textContent = `Secure connection setup is unavailable: ${String(error)}`;
+      }
     }
   }
-  if (disposed) return root;
+  if (disposed) {
+    return root;
+  }
   const action = (label, handler, { primary = false } = {}) => {
     const button = make("button", label, "ui-control connection-setup-button");
     button.type = "button";
     button.dataset.variant = primary ? "primary" : "secondary";
     controls.push(button);
     button.onclick = async (event) => {
-      if (!event.isTrusted || busy || disposed || !view.available) return;
+      if (!event.isTrusted || busy || disposed || !view.available) {
+        return;
+      }
       setBusy(true);
       status.textContent = "";
       try {
@@ -117,7 +139,7 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
     };
     return button;
   };
-  if (!view.available)
+  if (!view.available) {
     root.append(
       make(
         "p",
@@ -125,7 +147,7 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
         "form-hint",
       ),
     );
-  else
+  } else {
     root.append(
       make(
         "p",
@@ -133,11 +155,12 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
         "form-hint",
       ),
     );
+  }
   for (const provider of connectionSetupProviders) {
     const configured = view.providers.find((item) => item.id === provider.id),
       card = make("section", null, "connection-setup-card"),
       heading = make("h4", provider.label),
-      link = make("a", "Create a " + provider.label + " token");
+      link = make("a", `Create a ${provider.label} token`);
     link.href = provider.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
@@ -145,7 +168,7 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
     const summary = make(
       "p",
       configured?.configured
-        ? "Saved account: " + configured.identity
+        ? `Saved account: ${configured.identity}`
         : "No connection saved through this setup.",
       "connection-setup-account",
     );
@@ -156,12 +179,12 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
     input.autocomplete = "off";
     input.spellcheck = false;
     input.maxLength = 8192;
-    input.setAttribute("aria-label", provider.label + " API token");
+    input.setAttribute("aria-label", `${provider.label} API token`);
     input.setAttribute("data-agent-context-exclude", "true");
     input.setAttribute("data-private", "true");
     input.setAttribute("autocapitalize", "off");
     input.setAttribute("autocorrect", "off");
-    input.name = "connection-" + provider.id + "-secret";
+    input.name = `connection-${provider.id}-secret`;
     input.className = "ui-field";
     controls.push(input);
     tokenLabel.append(input);
@@ -200,18 +223,23 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
     preview.setAttribute("aria-live", "polite");
     previews.push(preview);
     const offerImport = () => {
-      if (importButton) return;
+      if (importButton) {
+        return;
+      }
       importButton = action("Import work items", async () => {
         const refreshed = await api("/api/connections/reload", {
           provider: provider.id,
           activate: true,
         });
-        if (refreshed.errors?.[provider.id])
+        if (refreshed.errors?.[provider.id]) {
           throw new Error(refreshed.errors[provider.id]);
-        status.textContent =
-          provider.label +
-          " import requested. Available work items depend on your account and token permissions.";
-        if (onSaved) await onSaved(provider.id);
+        }
+        status.textContent = `${
+          provider.label
+        } import requested. Available work items depend on your account and token permissions.`;
+        if (onSaved) {
+          await onSaved(provider.id);
+        }
       });
       buttons.append(importButton);
     };
@@ -220,7 +248,9 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
       input.value = "";
       clearPreview();
       await invoke("connection_setup_cancel");
-      if (disposed) return;
+      if (disposed) {
+        return;
+      }
       const payload = connectionSetupPayload(provider.id, {
         token: entered,
         source,
@@ -242,11 +272,14 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
         ),
       );
       const list = make("ul");
-      for (const name of result.teams || [])
-        list.append(make("li", "Team: " + name));
-      for (const name of result.resources || []) list.append(make("li", name));
+      for (const name of result.teams || []) {
+        list.append(make("li", `Team: ${name}`));
+      }
+      for (const name of result.resources || []) {
+        list.append(make("li", name));
+      }
       preview.append(make("p", result.resourceLabel || "Resources"), list);
-      if (!(result.resources || []).length)
+      if (!(result.resources || []).length) {
         preview.append(
           make(
             "p",
@@ -254,7 +287,8 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
             "form-hint",
           ),
         );
-      if (result.truncated)
+      }
+      if (result.truncated) {
         preview.append(
           make(
             "p",
@@ -262,6 +296,7 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
             "form-hint",
           ),
         );
+      }
       preview.append(
         make(
           "p",
@@ -273,8 +308,9 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
         action(
           "Save connection",
           async () => {
-            if (pending !== result)
+            if (pending !== result) {
               throw new Error("Validate this connection again before saving.");
+            }
             view = await invoke("connection_setup_commit", {
               payload: {
                 previewId: result.previewId,
@@ -282,25 +318,29 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
               },
             });
             clearPreview();
-            summary.textContent = "Saved account: " + result.identity;
+            summary.textContent = `Saved account: ${result.identity}`;
             try {
               const refreshed = await api("/api/connections/reload", {
                 provider: provider.id,
               });
-              if (refreshed.errors?.[provider.id])
+              if (refreshed.errors?.[provider.id]) {
                 throw new Error(refreshed.errors[provider.id]);
+              }
             } catch (error) {
-              status.textContent =
-                "Saved in Keychain. The service could not activate this connection: " +
-                String(error?.message || error);
+              status.textContent = `Saved in Keychain. The service could not activate this connection: ${String(
+                error?.message || error,
+              )}`;
               return;
             }
             offerImport();
             status.textContent =
               view.warning ||
-              provider.label +
-                " connection saved in macOS Keychain. Existing synchronization settings still apply.";
-            if (onSaved) await onSaved(provider.id);
+              `${
+                provider.label
+              } connection saved in macOS Keychain. Existing synchronization settings still apply.`;
+            if (onSaved) {
+              await onSaved(provider.id);
+            }
           },
           { primary: true },
         ),
@@ -323,13 +363,14 @@ window.renderConnectionSetup = async function (container, { onSaved } = {}) {
         ),
       );
     }
-    if (configured?.configured) offerImport();
+    if (configured?.configured) {
+      offerImport();
+    }
     buttons.append(
-      action("Skip " + provider.label, async () => {
+      action(`Skip ${provider.label}`, async () => {
         input.value = "";
         await cancel();
-        status.textContent =
-          provider.label + " skipped. Existing connections remain unchanged.";
+        status.textContent = `${provider.label} skipped. Existing connections remain unchanged.`;
       }),
     );
     card.append(buttons, preview);

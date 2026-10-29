@@ -10,8 +10,12 @@ test("Sentry uses one captured UUID, exact same-name identity, and read-only rec
   let gets = 0;
   const f = scriptFixture({
     handler: async (path, payload, owner) => {
-      if (path === "/api/edit") return owner.apply(payload);
-      if (++gets === 1) throw Error("GET unavailable");
+      if (path === "/api/edit") {
+        return owner.apply(payload);
+      }
+      if (++gets === 1) {
+        throw Error("GET unavailable");
+      }
       return owner.snapshot();
     },
   });
@@ -57,7 +61,9 @@ test("accepted form render failure is not a failed save and cannot replay its PO
 test("unknown accepted-on-server create stays locked after GET success and never claims an identity", async () => {
   const f = scriptFixture({
     handler: async (path, payload, owner) => {
-      if (path === "/api/state") return owner.snapshot();
+      if (path === "/api/state") {
+        return owner.snapshot();
+      }
       owner.apply(payload);
       const error = Error("POST response lost");
       error.status = 503;
@@ -193,8 +199,12 @@ test("checkpoint presentation recovery looks up only its captured session after 
   let gets = 0;
   const f = scriptFixture({
     handler: async (path, payload, owner) => {
-      if (path === "/api/edit") return owner.apply(payload);
-      if (++gets === 1) throw Error("Read offline");
+      if (path === "/api/edit") {
+        return owner.apply(payload);
+      }
+      if (++gets === 1) {
+        throw Error("Read offline");
+      }
       return owner.snapshot();
     },
   });
@@ -249,7 +259,9 @@ test("local change navigation requires accepted-ready and the latest source/quer
           }
           return owner.apply(payload);
         }
-        if (mode === "pending") throw Error("GET unavailable");
+        if (mode === "pending") {
+          throw Error("GET unavailable");
+        }
         return owner.snapshot();
       },
     });
@@ -284,7 +296,9 @@ test("Sentry adopts its own exact selection before a throwing presentation and e
   f.sentry.form.elements.viewName.value = "Saved";
   let paints = 0;
   f.c.render = () => {
-    if (++paints === 2) throw Error("Filter paint failed");
+    if (++paints === 2) {
+      throw Error("Filter paint failed");
+    }
   };
   f.sentry.save.focus();
   await f.submit(f.sentry);
@@ -334,7 +348,7 @@ test("Snooze captures its item, freezes pending controls, and keeps an unknown r
   assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);
 });
 test("actual change-list title, mark-read, and mark-visible handlers use named outcome-aware writes", async () => {
-  for (const kind of ["ready", "pending", "rejected", "unknown"])
+  for (const kind of ["ready", "pending", "rejected", "unknown"]) {
     for (const action of ["title", "read", "all"]) {
       const f = scriptFixture({
         handler: async (path, payload, owner) => {
@@ -346,7 +360,9 @@ test("actual change-list title, mark-read, and mark-visible handlers use named o
             }
             return owner.apply(payload);
           }
-          if (kind === "pending") throw Error("Read failed");
+          if (kind === "pending") {
+            throw Error("Read failed");
+          }
           return owner.snapshot();
         },
       });
@@ -392,8 +408,11 @@ test("actual change-list title, mark-read, and mark-visible handlers use named o
         0,
       );
       assert.equal(f.messages.length, 1);
-      if (kind === "pending") assert.match(f.messages[0], /do not repeat/);
+      if (kind === "pending") {
+        assert.match(f.messages[0], /do not repeat/);
+      }
     }
+  }
 });
 test("actual palette link preserves captured identities and never navigates on pending or replacement completion", async () => {
   for (const mode of ["ready", "pending", "replacement"]) {
@@ -402,10 +421,14 @@ test("actual palette link preserves captured identities and never navigates on p
         handler: async (path, payload, owner) => {
           if (path === "/api/edit") {
             owner.apply(payload);
-            if (mode === "replacement") return write.promise;
+            if (mode === "replacement") {
+              return write.promise;
+            }
             return {};
           }
-          if (mode === "pending") throw Error("Read failed");
+          if (mode === "pending") {
+            throw Error("Read failed");
+          }
           return owner.snapshot();
         },
       });
@@ -419,7 +442,9 @@ test("actual palette link preserves captured identities and never navigates on p
     f.$("#command-dialog").tagName = "dialog";
     f.c.openPalette(f.c.state.items[0]);
     const pending = f.c.choosePalette();
-    if (mode === "replacement") f.c.openPalette(f.c.state.items[1]);
+    if (mode === "replacement") {
+      f.c.openPalette(f.c.state.items[1]);
+    }
     write.resolve({});
     await pending;
     assert.deepEqual(
@@ -440,7 +465,9 @@ test("actual palette link preserves captured identities and never navigates on p
 test("related unlink refreshes only its still-open item and reports accepted presentation failure once", async () => {
   const f = scriptFixture({
       handler: async (path, payload, owner) => {
-        if (path === "/api/edit") return owner.apply(payload);
+        if (path === "/api/edit") {
+          return owner.apply(payload);
+        }
         throw Error("Read failed");
       },
     }),
@@ -484,10 +511,14 @@ test("actual archive caller closes only accepted-ready current dialog and never 
               throw error;
             }
             owner.apply(payload);
-            if (mode === "replacement") return write.promise;
+            if (mode === "replacement") {
+              return write.promise;
+            }
             return {};
           }
-          if (mode === "pending") throw Error("Read failed");
+          if (mode === "pending") {
+            throw Error("Read failed");
+          }
           return owner.snapshot();
         },
       });
@@ -500,7 +531,9 @@ test("actual archive caller closes only accepted-ready current dialog and never 
     const action = f.$("#archive-project").onclick,
       pending = action();
     await action();
-    if (mode === "replacement") f.c.currentItem = { id: "project:b" };
+    if (mode === "replacement") {
+      f.c.currentItem = { id: "project:b" };
+    }
     write.resolve({});
     await pending;
     assert.equal(f.$("#item-dialog").open, mode !== "ready");
@@ -531,7 +564,9 @@ test("Sentry deletion completes across actual controls normalization but never o
     f.c.render = () => f.c.renderSentryControls();
     f.$("#sentry-filter-open").onclick();
     const pending = f.$("#sentry-delete").onclick();
-    if (newer) f.$("#sentry-view").onchange({ target: { value: "newer" } });
+    if (newer) {
+      f.$("#sentry-view").onchange({ target: { value: "newer" } });
+    }
     write.resolve({});
     await pending;
     assert.equal(f.sentry.dialog.open, newer);
@@ -546,8 +581,12 @@ test("checkpoint awaits delayed presentation and reports accepted recovery failu
     const shown = deferred(),
       f = scriptFixture({
         handler: async (path, payload, owner) => {
-          if (path === "/api/edit") return owner.apply(payload);
-          if (recovering && ++gets === 1) throw Error("Read failed");
+          if (path === "/api/edit") {
+            return owner.apply(payload);
+          }
+          if (recovering && ++gets === 1) {
+            throw Error("Read failed");
+          }
           return owner.snapshot();
         },
       });
@@ -632,7 +671,7 @@ test("Mark visible bounds its captured IDs at500 and disables the empty unread a
   const f = scriptFixture(),
     initial = f.snapshot();
   initial.changes = Array.from({ length: 503 }, (_, index) => ({
-    id: "change:" + index,
+    id: `change:${index}`,
     title: "Visible",
     message: "Changed",
     at: 1,
@@ -664,8 +703,12 @@ test("environment POST snapshot never commits; accepted scheduling fences older 
   let gets = 0;
   const f = scriptFixture({
     handler: async (path, payload, owner) => {
-      if (path === "/api/sentry/environment") return posted.promise;
-      if (++gets === 1) return old.promise;
+      if (path === "/api/sentry/environment") {
+        return posted.promise;
+      }
+      if (++gets === 1) {
+        return old.promise;
+      }
       const next = owner.snapshot();
       next.revision = 3;
       next.notes = [{ id: "newer", title: "Newer" }];
@@ -691,8 +734,12 @@ test("environment accepted GET failure recovers read-only even after cadence and
   let gets = 0;
   const f = scriptFixture({
     handler: async (path, payload, owner) => {
-      if (path === "/api/sentry/environment") return { revision: 0 };
-      if (++gets === 1) throw Error("GET unavailable");
+      if (path === "/api/sentry/environment") {
+        return { revision: 0 };
+      }
+      if (++gets === 1) {
+        throw Error("GET unavailable");
+      }
       const next = owner.snapshot();
       next.sentryEnvironments.A = {
         running: true,
@@ -762,7 +809,9 @@ test("late environmentA completion does not repaint B or remove B outcome; recov
   const posted = deferred(),
     f = scriptFixture({
       handler: async (path) => {
-        if (path === "/api/sentry/environment") return posted.promise;
+        if (path === "/api/sentry/environment") {
+          return posted.promise;
+        }
         throw Error("GET failed");
       },
     });
@@ -814,7 +863,9 @@ test("unknown environment admission fences an already pending older dashboard sn
   const old = deferred(),
     f = scriptFixture({
       handler: async (path) => {
-        if (path === "/api/state") return old.promise;
+        if (path === "/api/state") {
+          return old.promise;
+        }
         const error = Error("Reply lost");
         error.status = 503;
         throw error;
@@ -852,7 +903,9 @@ test("actual environment renderer describes paused cached or absent data without
     const f = scriptFixture();
     selectEnvironment(f, "A");
     f.c.state.sources.sentry.disabled = true;
-    if (cached) f.c.state.sentryEnvironments.A = cached;
+    if (cached) {
+      f.c.state.sentryEnvironments.A = cached;
+    }
     f.c.renderSentryControls();
     await tick();
     const summary = f.$("#sentry-filter-summary").textContent;
@@ -1122,7 +1175,9 @@ test("late preferences and theme reads cannot commit or paint over a newly opene
       settingsDraft: {},
       loadAppSettings: async ({ canApply }) => {
         await read.promise;
-        if (!canApply()) return null;
+        if (!canApply()) {
+          return null;
+        }
         committed++;
         return {};
       },
@@ -1170,10 +1225,12 @@ test("async modal context observes queued dialog transitions and releases its sh
 });
 
 test("queued native dialog mutations fence empty and same-element ABA before Settings or theme reads may commit", async () => {
-  for (const owner of ["preferences", "theme"])
-    for (const delivery of ["queued", "callback"])
+  for (const owner of ["preferences", "theme"]) {
+    for (const delivery of ["queued", "callback"]) {
       for (const same of [false, true]) {
-        if (same && owner === "theme") continue;
+        if (same && owner === "theme") {
+          continue;
+        }
         const f = scriptFixture(),
           read = deferred();
         let commits = 0,
@@ -1187,7 +1244,9 @@ test("queued native dialog mutations fence empty and same-element ABA before Set
           settingsDraft: {},
           loadAppSettings: async ({ canApply }) => {
             await read.promise;
-            if (!canApply()) return null;
+            if (!canApply()) {
+              return null;
+            }
             commits++;
             return {};
           },
@@ -1204,11 +1263,17 @@ test("queued native dialog mutations fence empty and same-element ABA before Set
         const pending =
             owner === "theme" ? f.c.openThemeChooser() : f.c.openPreferences(),
           other = same ? initial : new f.Node("dialog");
-        if (!same) f.document.body.append(other);
+        if (!same) {
+          f.document.body.append(other);
+        }
         other.showModal();
         other.close();
-        if (same) other.showModal();
-        if (delivery === "callback") f.c.MutationObserver.flush();
+        if (same) {
+          other.showModal();
+        }
+        if (delivery === "callback") {
+          f.c.MutationObserver.flush();
+        }
         read.resolve();
         assert.equal(await pending, false, owner + delivery);
         assert.equal(commits, 0);
@@ -1216,6 +1281,8 @@ test("queued native dialog mutations fence empty and same-element ABA before Set
         assert.equal(f.c.MutationObserver.activeCount, 0);
         assert.equal(f.$("#quick-action-picker-form").children.length, 0);
       }
+    }
+  }
 });
 test("already open Settings keeps its exact editable draft without loading or resetting", async () => {
   const f = scriptFixture(),
@@ -1232,7 +1299,9 @@ test("already open Settings keeps its exact editable draft without loading or re
     settingsDraft: draft,
     loadAppSettings: async ({ canApply }) => {
       await read.promise;
-      if (!canApply()) return null;
+      if (!canApply()) {
+        return null;
+      }
       commits++;
       return {};
     },
@@ -1302,7 +1371,9 @@ test("configured and legacy fallback Find-work toggles honor the current palette
         shiftKey: false,
         preventDefault() {},
       };
-      for (const handler of f.document.listeners.keydown) handler(event);
+      for (const handler of f.document.listeners.keydown) {
+        handler(event);
+      }
     } else {
       const [handler] = loadMore(f, ["static/command-palette.js"]).window
         .listeners["truffle-ui-command"];
@@ -1350,7 +1421,9 @@ function settingsNavigationFixture() {
     paintSettingsBody: () => counts.paint++,
     updateSettingsDirty() {},
     api: async (path) => {
-      if (path === "/api/themes") return { themes: {} };
+      if (path === "/api/themes") {
+        return { themes: {} };
+      }
       assert.equal(path, "/api/settings");
       const read = deferred();
       reads.push(read);
@@ -1409,8 +1482,9 @@ test("Settings saving, child modal and closed-form veto refuse all category/draf
       f.sentry.form.elements.viewName.focus();
     } else {
       f.dialog.showModal();
-      if (mode === "saving") f.c.settingsSaving = true;
-      else {
+      if (mode === "saving") {
+        f.c.settingsSaving = true;
+      } else {
         const child = new f.Node("dialog");
         child.open = true;
         f.document.body.append(child);
@@ -1449,17 +1523,23 @@ test("closed Settings commits category only after a current successful load; fai
     assert.equal(f.reads.length, 1);
     assert.equal(f.c.settingsCategory, "appearance");
     assert.equal(f.search.value, "private draft filter");
-    if (mode === "failed") f.reads[0].reject(new Error("Metadata unavailable"));
-    else {
+    if (mode === "failed") {
+      f.reads[0].reject(new Error("Metadata unavailable"));
+    } else {
       if (mode.startsWith("modal")) {
         const child = new f.Node("dialog");
         f.document.body.append(child);
         child.showModal();
-        if (mode === "modal-aba") child.close();
+        if (mode === "modal-aba") {
+          child.close();
+        }
       }
-      if (mode === "draft") f.draft.theme = "newer unsaved";
-      if (mode === "draft-replaced")
+      if (mode === "draft") {
+        f.draft.theme = "newer unsaved";
+      }
+      if (mode === "draft-replaced") {
         f.c.settingsDraft = { theme: "replacement draft" };
+      }
       if (mode === "replaced-dialog") {
         const replacement = new f.Node("dialog");
         f.document.body.append(replacement);
@@ -1467,9 +1547,15 @@ test("closed Settings commits category only after a current successful load; fai
         f.document.querySelector = (selector) =>
           selector === "#settings-dialog" ? replacement : original(selector);
       }
-      if (mode === "baseline") f.c.settingsBaseline = { revision: 3 };
-      if (mode === "category") f.c.settingsCategory = "keyboard";
-      if (mode === "source") f.c.source = "notes";
+      if (mode === "baseline") {
+        f.c.settingsBaseline = { revision: 3 };
+      }
+      if (mode === "category") {
+        f.c.settingsCategory = "keyboard";
+      }
+      if (mode === "source") {
+        f.c.source = "notes";
+      }
       f.reads[0].resolve(f.next);
     }
     const accepted = await pending;
@@ -1488,9 +1574,11 @@ test("closed Settings commits category only after a current successful load; fai
         f.c.settingsCategory,
         mode === "category" ? "keyboard" : "appearance",
       );
-      if (mode === "draft-replaced")
+      if (mode === "draft-replaced") {
         assert.equal(f.c.settingsDraft.theme, "replacement draft");
-      else assert.equal(f.c.settingsDraft, f.draft);
+      } else {
+        assert.equal(f.c.settingsDraft, f.draft);
+      }
       assert.equal(f.search.value, "private draft filter");
       assert.equal(f.modified.attrs["aria-pressed"], "true");
       assert.equal(f.counts.paint, 0);
@@ -1542,9 +1630,11 @@ test("actual page, App chat and Sharing routes honor owner refusal even when Set
     f.c.settingsDirty = false;
     f.c.settingsSaving = true;
     const navigate = installSettingsRoute(f, route);
-    if (route === "appchat")
+    if (route === "appchat") {
       await assert.rejects(navigate(), /Settings could not open/);
-    else assert.equal(await navigate(), route === "page" ? false : undefined);
+    } else {
+      assert.equal(await navigate(), route === "page" ? false : undefined);
+    }
     assert.equal(f.c.settingsCategory, "appearance");
     assert.equal(f.search.value, "private draft filter");
     assert.equal(f.c.settingsDraft, f.draft);
@@ -1576,6 +1666,8 @@ test("actual category routes share the no-reload owner and Sharing closes its me
     assert.equal(f.counts.paint, 0);
     assert.equal(f.reads.length, 0);
     assert.equal(f.privateField.value, "unsaved connection/sharing draft");
-    if (route === "sharing") assert.equal(f.menu.open, false);
+    if (route === "sharing") {
+      assert.equal(f.menu.open, false);
+    }
   }
 });

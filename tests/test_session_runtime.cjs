@@ -37,7 +37,7 @@ test("unregistered same-agent chats report only the lifecycle of their own stabl
   });
 });
 test("null undefined empty and malformed conversation identities never correlate unrelated candidates", () => {
-  for (const sessionId of [null, undefined, "", "not-a-uuid"])
+  for (const sessionId of [null, undefined, "", "not-a-uuid"]) {
     for (const candidateId of [null, undefined, "", "not-a-uuid"]) {
       const result = runtime(
         [{ agent: "codex", sessionId: candidateId, lifecycle: "running" }],
@@ -46,6 +46,7 @@ test("null undefined empty and malformed conversation identities never correlate
       assert.equal(result.value, "unknown");
       assert.notEqual(result.label, "Running");
     }
+  }
 });
 test("exact record identity outranks stale UUID and legacy fallback in any inventory ordering", () => {
   const exact = {
@@ -58,14 +59,15 @@ test("exact record identity outranks stale UUID and legacy fallback in any inven
   for (const candidates of [
     [exact, fallback],
     [fallback, exact],
-  ])
+  ]) {
     assert.deepEqual(runtime(candidates, { sessionId: uuid }), {
       label: "Idle",
       value: "idle",
     });
+  }
 });
 test("unassociated external candidates can match a valid UUID and agent but conflicting record ownership cannot", () => {
-  for (const recordId of [null, undefined, ""])
+  for (const recordId of [null, undefined, ""]) {
     assert.deepEqual(
       runtime(
         [{ recordId, agent: "codex", sessionId: uuid, lifecycle: "closed" }],
@@ -73,14 +75,16 @@ test("unassociated external candidates can match a valid UUID and agent but conf
       ),
       { label: "Closed", value: "closed" },
     );
+  }
   for (const candidate of [
     { recordId: "b", agent: "codex", sessionId: uuid, lifecycle: "running" },
     { agent: "claude", sessionId: uuid, lifecycle: "running" },
-  ])
+  ]) {
     assert.deepEqual(runtime([candidate], { sessionId: uuid }), {
       label: "Saved session",
       value: "unknown",
     });
+  }
 });
 test("ambiguous exact or fallback candidates and malformed lifecycle report Unknown instead of the first status", () => {
   for (const candidates of [
@@ -94,11 +98,12 @@ test("ambiguous exact or fallback candidates and malformed lifecycle report Unkn
     ],
     [{ recordId: "a", lifecycle: "unexpected" }],
     [{ recordId: "a" }],
-  ])
+  ]) {
     assert.deepEqual(runtime(candidates, { sessionId: uuid }), {
       label: "Unknown",
       value: "unknown",
     });
+  }
 });
 test("absence preserves saved launch state without using unrelated runtime evidence", () => {
   assert.deepEqual(runtime([], { sessionId: null, launchNew: true }), {
@@ -127,9 +132,10 @@ test("exact record with contradictory agent is Unknown and cannot borrow an othe
     [contradictory],
     [contradictory, fallback],
     [fallback, contradictory],
-  ])
+  ]) {
     assert.deepEqual(runtime(candidates, { sessionId: uuid }), {
       label: "Unknown",
       value: "unknown",
     });
+  }
 });

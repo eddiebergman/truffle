@@ -39,7 +39,7 @@ function fixture(extra = {}) {
       calls.push({ route, payload });
       return {
         status: "checked",
-        itemIds: ["pr-" + payload.args.recordId],
+        itemIds: [`pr-${payload.args.recordId}`],
         checkedAt: clock / 1000,
       };
     },
@@ -87,7 +87,9 @@ test("a switch during an in-flight request refreshes the new chat without overla
     api: async (route, p) => {
       ids.push(p.args.recordId);
       maxActive = Math.max(maxActive, ++active);
-      if (p.args.recordId === "one") await gate;
+      if (p.args.recordId === "one") {
+        await gate;
+      }
       active--;
       return { status: "checked", itemIds: [], checkedAt: 100 };
     },
@@ -106,7 +108,9 @@ test("failed refresh keeps cached CI and exposes the error in its tooltip; a lat
   let fail = true;
   const { c, advance } = fixture({
     api: async () => {
-      if (fail) throw new Error("Unavailable");
+      if (fail) {
+        throw new Error("Unavailable");
+      }
       return { status: "checked", itemIds: ["pr-one"], checkedAt: 130 };
     },
   });
@@ -219,7 +223,9 @@ test("accepted checks with failed or declined presentation recover using reads o
     advance(30000);
     c.loadStateSnapshot = async () => {
       reads++;
-      if (mode === "throw") throw Error("private-read-error");
+      if (mode === "throw") {
+        throw Error("private-read-error");
+      }
       return { accepted: false };
     };
     await c.syncActiveChatCI();

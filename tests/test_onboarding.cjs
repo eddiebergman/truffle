@@ -115,8 +115,9 @@ test("onboarding serializes actions and releases controls after failures", async
     let spin = 0;
     (ob.actionPending || heading(ui) !== "Make yourself at home") && spin < 20;
     spin++
-  )
+  ) {
     await f.tick();
+  }
   await ob.runAction(async () => {
     throw new Error("Save failed");
   });
@@ -259,14 +260,18 @@ function profileFixture({
     api: async (path, payload) => {
       calls.push({ path, payload });
       if (path === "/api/settings/preview") {
-        if (previewError) throw new Error(previewError);
+        if (previewError) {
+          throw new Error(previewError);
+        }
         return {
           revision: current.revision,
           contentHash: current.contentHash,
           values: structuredClone(payload.patch),
         };
       }
-      if (!payload) return structuredClone(current);
+      if (!payload) {
+        return structuredClone(current);
+      }
       current.values = { ...current.values, ...structuredClone(payload.patch) };
       current.revision++;
       current.contentHash = "b".repeat(64);
@@ -412,7 +417,7 @@ test("invalid, oversized and backend-rejected company profiles show no partial p
     '{"private-fixture":',
     "null",
     "x".repeat(65537),
-    '"' + "é".repeat(33000) + '"',
+    `"${"é".repeat(33000)}"`,
   ]) {
     const f = profileFixture();
     f.input.value = value;
@@ -447,7 +452,7 @@ test("company profile disposal clears private fields and ignores delayed preview
       if (
         (stage === "settings" && path === "/api/settings" && !payload) ||
         (stage === "preview" && path === "/api/settings/preview")
-      )
+      ) {
         return new Promise(
           (resolve) =>
             (release = () =>
@@ -461,6 +466,7 @@ test("company profile disposal clears private fields and ignores delayed preview
                     },
               )),
         );
+      }
       return original(path, payload);
     };
     f.input.value = JSON.stringify({
@@ -469,7 +475,9 @@ test("company profile disposal clears private fields and ignores delayed preview
       values: { theme: "midnight" },
     });
     const pending = f.button("Preview pasted profile").onclick();
-    while (!release) await Promise.resolve();
+    while (!release) {
+      await Promise.resolve();
+    }
     f.file.value = "fixture.json";
     f.dialog.handlers.close();
     assert.equal(f.input.value, "");
@@ -696,7 +704,7 @@ test("a single installed assistant or editor needs no redundant picker and saves
       false,
     );
     assert.equal(decisions(f).length, 0);
-    assert.equal(ui.continue.textContent, "Use " + label);
+    assert.equal(ui.continue.textContent, `Use ${label}`);
     await ob.continueAction();
     assert.equal(decisions(f)[0].payload.patch[key], id);
   }
@@ -708,9 +716,13 @@ test("question confirmation preserves revision plus content hash and does not ad
   const requests = [],
     original = f.c.api;
   f.c.api = async (path, payload) => {
-    if (path !== "/api/settings") return original(path, payload);
+    if (path !== "/api/settings") {
+      return original(path, payload);
+    }
     requests.push({ path, payload });
-    if (!payload) return { revision: 4, contentHash: "a".repeat(64) };
+    if (!payload) {
+      return { revision: 4, contentHash: "a".repeat(64) };
+    }
     throw new Error("Settings changed.");
   };
   ob.confirmChoice(
@@ -782,12 +794,13 @@ test("actual assistant and editor steps render one decision instead of autosavin
       ui.continue.textContent,
       step === "assistant" ? "Use Codex" : "Use Zed",
     );
-    if (step === "assistant")
+    if (step === "assistant") {
       assert.ok(
         ui.content.children.some((node) =>
           /preferred installed assistant/.test(node.textContent),
         ),
       );
+    }
   }
 });
 test("entering a direct skill path initializes the chosen default assistant after resetting the form", async () => {
@@ -808,7 +821,9 @@ test("entering a direct skill path initializes the chosen default assistant afte
     form.id = "skill-editor-form";
     form.elements = fields;
     form.reset = () => {
-      for (const field of Object.values(fields)) field.value = "";
+      for (const field of Object.values(fields)) {
+        field.value = "";
+      }
       fields.agent.value = "claude";
     };
     error.id = "skill-editor-error";
@@ -848,8 +863,9 @@ function keymapFixture() {
       ? new Promise((resolve, reject) => f.previews.push({ resolve, reject }))
       : original(path, payload);
   f.waitForPreview = async (count) => {
-    for (let spin = 0; f.previews.length < count && spin < 20; spin++)
+    for (let spin = 0; f.previews.length < count && spin < 20; spin++) {
       await f.tick();
+    }
     assert.equal(f.previews.length, count);
   };
   return f;
@@ -870,8 +886,9 @@ test("a delayed shortcut preview cannot append old controls after Back renders t
   await f.waitForPreview(1);
   const ui = setupParts(f);
   ui.back.onclick();
-  for (let spin = 0; heading(ui) !== "Diff editor" && spin < 20; spin++)
+  for (let spin = 0; heading(ui) !== "Diff editor" && spin < 20; spin++) {
     await f.tick();
+  }
   f.previews[0].resolve(shortcutPreview("Primary+K"));
   await pending;
   assert.equal(ui.content.children[0].textContent, "Diff editor");
@@ -892,8 +909,11 @@ test("closing setup ignores delayed preview success and failure without adding c
     await f.waitForPreview(1);
     const ui = setupParts(f);
     f.c.window.closeOnboarding();
-    if (fails) f.previews[0].reject(new Error("Stale request failed"));
-    else f.previews[0].resolve(shortcutPreview("Primary+K"));
+    if (fails) {
+      f.previews[0].reject(new Error("Stale request failed"));
+    } else {
+      f.previews[0].resolve(shortcutPreview("Primary+K"));
+    }
     await pending;
     assert.equal(
       ui.content.children.some(
@@ -1021,8 +1041,9 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document.activeElement === this)
+      if (value && document.activeElement === this) {
         document.activeElement = document.body;
+      }
     }
     contains(node) {
       return (
@@ -1040,18 +1061,24 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     }
     append(...nodes) {
       for (const child of nodes) {
-        if (child.parentElement)
+        if (child.parentElement) {
           child.parentElement.children = child.parentElement.children.filter(
             (node) => node !== child,
           );
+        }
         child.parentElement = this;
         this.children.push(child);
       }
     }
     replaceChildren(...nodes) {
-      if (this.children.some((child) => child.contains(document.activeElement)))
+      if (
+        this.children.some((child) => child.contains(document.activeElement))
+      ) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentElement = null;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -1075,13 +1102,16 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
       );
     }
     dispatchEvent(event) {
-      for (const item of [...(this.listeners.get(event.type) || [])])
+      for (const item of [...(this.listeners.get(event.type) || [])]) {
         item.callback(event);
+      }
       return !event.defaultPrevented;
     }
     dispatch(type) {
       for (const item of [...(this.listeners.get(type) || [])]) {
-        if (item.once) this.removeEventListener(type, item.callback);
+        if (item.once) {
+          this.removeEventListener(type, item.callback);
+        }
         item.callback({ target: this });
       }
     }
@@ -1089,25 +1119,36 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
       this.open = true;
     }
     close() {
-      if (!this.open) return;
+      if (!this.open) {
+        return;
+      }
       this.open = false;
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
+      }
       this.dispatch("close");
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (selector.split(",").some((part) => node.matches(part))) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (selector.split(",").some((part) => node.matches(part))) {
+          return node;
+        }
+      }
       return null;
     }
     matches(selector) {
-      if (selector === "dialog[open]")
+      if (selector === "dialog[open]") {
         return this.tagName === "DIALOG" && this.open;
-      if (selector.startsWith("."))
+      }
+      if (selector.startsWith(".")) {
         return (this.className || "").split(" ").includes(selector.slice(1));
-      if (selector.startsWith("#")) return this.id === selector.slice(1);
-      if (selector === "[data-onboarding-close]")
+      }
+      if (selector.startsWith("#")) {
+        return this.id === selector.slice(1);
+      }
+      if (selector === "[data-onboarding-close]") {
         return Boolean(this.dataset.onboardingClose);
+      }
       return this.tagName === selector.toUpperCase();
     }
     querySelectorAll(selector) {
@@ -1115,7 +1156,9 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
         child,
         ...child.querySelectorAll("*"),
       ]);
-      if (selector === "*") return nodes;
+      if (selector === "*") {
+        return nodes;
+      }
       return nodes.filter((node) =>
         selector.split(",").some((part) => {
           const words = part.trim().split(" ");
@@ -1204,7 +1247,7 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
           editors: [],
         };
       }
-      if (path === "/api/settings")
+      if (path === "/api/settings") {
         return {
           revision: 2,
           contentHash: "a".repeat(64),
@@ -1216,6 +1259,7 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
             },
           },
         };
+      }
       return { presets: [], skills: [] };
     },
   });
@@ -1281,8 +1325,9 @@ test("one onboarding shell moves between connected inline section and standalone
     "onboarding-continue",
     "onboarding-step-count",
     "onboarding-back",
-  ])
-    assert.equal(f.document.querySelectorAll("#" + id).length, 1);
+  ]) {
+    assert.equal(f.document.querySelectorAll(`#${id}`).length, 1);
+  }
   f.c.window.closeOnboarding({ host: f.host });
   assert.equal(f.host.hidden, true);
   assert.equal(f.c.window.onboardingIsOpen(), false);
@@ -1301,7 +1346,9 @@ test("closing pending inline loads or shortcut previews prevents stale rendering
       ? new Promise((resolve) => (release = resolve))
       : original(path, payload);
   const opening = f.c.window.openOnboarding({ host: f.host });
-  for (let spin = 0; !release && spin < 20; spin++) await f.tick();
+  for (let spin = 0; !release && spin < 20; spin++) {
+    await f.tick();
+  }
   assert.ok(release);
   f.c.window.closeOnboarding({ host: f.host });
   release({
@@ -1346,7 +1393,9 @@ test("Settings child resumes the original inline host and a closed chat cannot b
       .querySelectorAll("button")
       .find((node) => node.textContent === "Open sharing setup");
     open.onclick();
-    for (let spin = 0; !f.settings.open && spin < 20; spin++) await f.tick();
+    for (let spin = 0; !f.settings.open && spin < 20; spin++) {
+      await f.tick();
+    }
     assert.equal(
       f.settings.open,
       true,
@@ -1355,7 +1404,9 @@ test("Settings child resumes the original inline host and a closed chat cannot b
     await f.tick();
     assert.equal(f.host.hidden, true);
     assert.equal(f.profile.disposed, 1);
-    if (cancel) f.c.window.closeOnboarding({ host: f.host });
+    if (cancel) {
+      f.c.window.closeOnboarding({ host: f.host });
+    }
     f.settings.close();
     await f.tick();
     await f.tick();
@@ -1404,7 +1455,9 @@ test("skill and schedule child dialogs return to the same inline host without em
         ]),
       );
       form.reset = () => {
-        for (const value of Object.values(form.elements)) value.value = "";
+        for (const value of Object.values(form.elements)) {
+          value.value = "";
+        }
         form.elements.agent.value = "claude";
       };
       const error = new f.Element("p");
@@ -1433,15 +1486,18 @@ test("skill and schedule child dialogs return to the same inline host without em
       );
     assert.ok(launch);
     launch.onclick();
-    for (let spin = 0; !child.open && spin < 20; spin++) await f.tick();
+    for (let spin = 0; !child.open && spin < 20; spin++) {
+      await f.tick();
+    }
     assert.equal(child.open, true);
     assert.equal(f.host.hidden, true);
     assert.equal(f.host.querySelectorAll("dialog").length, 0);
-    if (kind === "skill")
+    if (kind === "skill") {
       assert.equal(
         f.document.querySelector("#skill-editor-form").elements.agent.value,
         "codex",
       );
+    }
     await f.tick();
     child.close();
     await f.tick();
@@ -1462,7 +1518,9 @@ test("reopening a shell after interrupted confirmation resets busy controls and 
   await f.c.window.openOnboarding({ host: f.host });
   const footer = f.document.querySelector("#onboarding-continue");
   footer.onclick();
-  for (let spin = 0; !release && spin < 20; spin++) await f.tick();
+  for (let spin = 0; !release && spin < 20; spin++) {
+    await f.tick();
+  }
   assert.ok(release);
   assert.equal(footer.disabled, true);
   assert.equal(f.host.attrs["aria-busy"], "true");
@@ -1552,8 +1610,9 @@ test("company prose passes the complete message to helper byte validation withou
     messages = [];
   f.c.window.prepareAppChatMessage = (text) => {
     messages.push(text);
-    if (new TextEncoder().encode(text).length > 4000)
+    if (new TextEncoder().encode(text).length > 4000) {
       throw new Error("The prepared message exceeds 4000 bytes.");
+    }
   };
   await f.c.window.openOnboarding({ host: f.host });
   const input = f.host.querySelector("textarea"),
@@ -1593,9 +1652,11 @@ test("company instructions clear on Close, Back, Continue and host switch; struc
     assert.equal(alternative.open, false);
     assert.ok(alternative.querySelector(".settings-profile-import"));
     input.value = "Private team guide";
-    if (action === "close") f.c.window.closeOnboarding({ host: f.host });
-    else if (action === "switch") await f.c.window.openOnboarding();
-    else {
+    if (action === "close") {
+      f.c.window.closeOnboarding({ host: f.host });
+    } else if (action === "switch") {
+      await f.c.window.openOnboarding();
+    } else {
       f.document
         .querySelector(
           action === "back" ? "#onboarding-back" : "#onboarding-continue",
@@ -1643,7 +1704,9 @@ test("returning from an enabled schedule and choosing On demand keeps truthful s
     .querySelectorAll("button")
     .find((node) => node.textContent === "Enter a skill path")
     .onclick();
-  for (let spin = 0; !child.open && spin < 20; spin++) await f.tick();
+  for (let spin = 0; !child.open && spin < 20; spin++) {
+    await f.tick();
+  }
   assert.equal(child.open, true);
   f.c.lastSkillEditor.onSaved("new-skill");
   library = {
@@ -1668,7 +1731,9 @@ test("returning from an enabled schedule and choosing On demand keeps truthful s
     .querySelectorAll("button")
     .find((node) => node.textContent === "Configure schedule")
     .onclick();
-  for (let spin = 0; !scheduleChild.open && spin < 20; spin++) await f.tick();
+  for (let spin = 0; !scheduleChild.open && spin < 20; spin++) {
+    await f.tick();
+  }
   assert.equal(scheduleChild.open, true);
   f.c.state.skillSchedules["new-skill"].enabled = true;
   scheduleChild.close();
@@ -1737,7 +1802,7 @@ test("local assistant and editor choices preserve native keyboard focus and comm
     assert.equal(choice.disabled, false);
     assert.equal(choice.attrs["aria-pressed"], "true");
     assert.equal(group.children[0].attrs["aria-pressed"], "false");
-    assert.equal(ui.continue.textContent, "Use " + items[1].label);
+    assert.equal(ui.continue.textContent, `Use ${items[1].label}`);
     assert.ok(group.className.includes("ui-segmented"));
     assert.equal(ui.root.attrs["aria-busy"], busy);
     assert.equal(ob.actionPending, false);
@@ -1762,7 +1827,9 @@ test("local assistant and editor choices preserve native keyboard focus and comm
     await f.tick();
     assert.equal(patches.length, 1);
     finish();
-    for (let spin = 0; ob.actionPending && spin < 20; spin++) await f.tick();
+    for (let spin = 0; ob.actionPending && spin < 20; spin++) {
+      await f.tick();
+    }
     assert.equal(ob.actionPending, false);
     assert.equal(ui.continue.disabled, false);
     assert.deepEqual(
@@ -1792,7 +1859,7 @@ test("local choices ignore pending, read-only and obsolete setup handlers withou
     // A read-only setup paints no question, so ask it directly.
     await f.c.window.openOnboarding();
     const ui = setupParts(f);
-    if (mode === "read-only")
+    if (mode === "read-only") {
       ob.confirmChoice(
         [
           { id: "claude", label: "Claude" },
@@ -1802,11 +1869,16 @@ test("local choices ignore pending, read-only and obsolete setup handlers withou
         "defaultAgent",
         "Choose a tool",
       );
+    }
     const group = ui.content.children.find(
       (node) => node.attrs.role === "group",
     );
-    if (mode === "pending") void ob.runAction(() => new Promise(() => {}));
-    if (mode === "closed") ui.root.open = false;
+    if (mode === "pending") {
+      void ob.runAction(() => new Promise(() => {}));
+    }
+    if (mode === "closed") {
+      ui.root.open = false;
+    }
     if (mode === "reopened") {
       f.c.window.closeOnboarding();
       await f.c.window.openOnboarding();
@@ -1881,7 +1953,7 @@ test("actual async Continue holds focus before native disabling and moves to the
   }
 });
 test("actual same-step theme saves and rejections restore the exact enabled selector without resetting its draft", async () => {
-  for (const inline of [false, true])
+  for (const inline of [false, true]) {
     for (const rejected of [false, true]) {
       const f = onboardingHostFixture({ step: "theme" }),
         ui = await openFocusSetup(f, inline),
@@ -1893,24 +1965,28 @@ test("actual same-step theme saves and rejections restore the exact enabled sele
       assert.equal(f.document.activeElement, ui.holder);
       assert.equal(select.disabled, true);
       await f.tick();
-      if (rejected)
+      if (rejected) {
         write.reject(Error("Settings changed. Review your choice."));
-      else write.resolve();
+      } else {
+        write.resolve();
+      }
       await f.tick();
       assert.equal(f.document.activeElement, select);
       assert.equal(select.disabled, false);
       assert.equal(select.value, "midnight");
       assert.equal(select.focusOptions.preventScroll, true);
       assert.equal(write.writes(), 1);
-      if (rejected)
+      if (rejected) {
         assert.match(
           ui.root.querySelector(".onboarding-error").textContent,
           /Settings changed/,
         );
+      }
     }
+  }
 });
 test("async setup completion never steals outside, terminal or replacement-dialog focus", async () => {
-  for (const inline of [false, true])
+  for (const inline of [false, true]) {
     for (const where of ["input", "terminal", "dialog"]) {
       const f = onboardingHostFixture(),
         ui = await openFocusSetup(f, inline),
@@ -1927,12 +2003,15 @@ test("async setup completion never steals outside, terminal or replacement-dialo
         terminal.className = "xterm";
         terminal.append(outside);
         f.body.append(terminal);
-      } else f.body.append(outside);
+      } else {
+        f.body.append(outside);
+      }
       outside.focus();
       write.resolve();
       await f.tick();
-      assert.equal(f.document.activeElement, outside, inline + " " + where);
+      assert.equal(f.document.activeElement, outside, `${inline} ${where}`);
     }
+  }
 });
 test("an action started with outside focus never acquires setup focus even when the new step paints", async () => {
   for (const inline of [false, true]) {
@@ -1954,7 +2033,7 @@ test("an action started with outside focus never acquires setup focus even when 
   }
 });
 test("old async setup completion cannot restore focus after close, same-host reopen or a child Settings handoff", async () => {
-  for (const inline of [false, true])
+  for (const inline of [false, true]) {
     for (const mode of ["close", "reopen"]) {
       const f = onboardingHostFixture(),
         ui = await openFocusSetup(f, inline),
@@ -1977,8 +2056,9 @@ test("old async setup completion cannot restore focus after close, same-host reo
       const active = f.document.activeElement;
       write.resolve();
       await f.tick();
-      assert.equal(f.document.activeElement, active, inline + " " + mode);
+      assert.equal(f.document.activeElement, active, `${inline} ${mode}`);
     }
+  }
   const f = onboardingHostFixture({ step: "company" }),
     ui = await openFocusSetup(f, true),
     sharing = ui.content
@@ -2051,12 +2131,18 @@ test("setup awaited progress/settings reads never show over a newly opened guard
     const pause = new Promise((resolve) => (release = resolve));
     f.c.api = async (path, payload) => {
       const response = await original(path, payload);
-      if (path === "/api/onboarding" && phase === "progress") await pause;
+      if (path === "/api/onboarding" && phase === "progress") {
+        await pause;
+      }
       return response;
     };
     f.c.loadAppSettings = async ({ canApply }) => {
-      if (phase === "settings") await pause;
-      if (canApply()) settingsCommits++;
+      if (phase === "settings") {
+        await pause;
+      }
+      if (canApply()) {
+        settingsCommits++;
+      }
     };
     const pending = f.c.window.openOnboarding({ host: f.host });
     await f.tick();
@@ -2082,11 +2168,15 @@ test("setup opening rejects queued empty-modal ABA and disconnects its admission
   const pause = new Promise((resolve) => (release = resolve));
   f.c.api = async (path, payload) => {
     const response = await original(path, payload);
-    if (path === "/api/onboarding") await pause;
+    if (path === "/api/onboarding") {
+      await pause;
+    }
     return response;
   };
   f.c.loadAppSettings = async ({ canApply }) => {
-    if (canApply()) commits++;
+    if (canApply()) {
+      commits++;
+    }
   };
   const pending = f.c.window.openOnboarding({ host: f.host });
   await f.tick();
@@ -2112,7 +2202,9 @@ test("refused or stale Settings handoff restores setup only while its original p
       .querySelectorAll("button")
       .find((node) => node.textContent === "Open sharing setup");
     sharing.onclick();
-    for (let spin = 0; !resolve && spin < 20; spin++) await f.tick();
+    for (let spin = 0; !resolve && spin < 20; spin++) {
+      await f.tick();
+    }
     assert.ok(resolve);
     assert.equal(options.category, "sharing");
     assert.equal(f.host.hidden, true);
@@ -2132,18 +2224,23 @@ test("refused or stale Settings handoff restores setup only while its original p
       modal.append(outside);
       outside.focus();
     }
-    if (mode === "page") f.c.source = "notes";
+    if (mode === "page") {
+      f.c.source = "notes";
+    }
     resolve(false);
     await f.tick();
     await f.tick();
     assert.equal(f.host.hidden, mode !== "failed");
     assert.equal(f.c.settingsCategory, "appearance");
-    if (outside) assert.equal(f.document.activeElement, outside);
-    if (mode === "failed")
+    if (outside) {
+      assert.equal(f.document.activeElement, outside);
+    }
+    if (mode === "failed") {
       assert.match(
         f.host.querySelector(".onboarding-error").textContent,
         /Settings could not open.*progress is saved/,
       );
+    }
     if (mode === "existing-settings") {
       f.settings.close();
       await f.tick();

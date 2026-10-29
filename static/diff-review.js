@@ -11,23 +11,29 @@ function reviewDrafts() {
 }
 function acceptReviewDraft(id, draft) {
   const previous = sharedReviewDrafts.get(id);
-  if ((previous?.revision || 0) > (draft.revision || 0)) return;
-  if (JSON.stringify(sharedReviewDrafts.get(id)) === JSON.stringify(draft))
+  if ((previous?.revision || 0) > (draft.revision || 0)) {
     return;
+  }
+  if (JSON.stringify(sharedReviewDrafts.get(id)) === JSON.stringify(draft)) {
+    return;
+  }
   sharedReviewDrafts.set(id, draft);
-  while (sharedReviewDrafts.size > 20)
+  while (sharedReviewDrafts.size > 20) {
     sharedReviewDrafts.delete(sharedReviewDrafts.keys().next().value);
+  }
   window.dispatchEvent(new Event("truffle-review-draft"));
   if (reviewState?.record.id === id) {
     reviewState.draft = draft;
     paintReviewComments();
-    if (JSON.stringify(previous?.comments) !== JSON.stringify(draft.comments))
+    if (JSON.stringify(previous?.comments) !== JSON.stringify(draft.comments)) {
       updateReviewAnnotations();
+    }
     if (
       !reviewState.noteDirty &&
       document.activeElement !== $("#diff-review-note")
-    )
+    ) {
       $("#diff-review-note").value = draft.note || "";
+    }
   }
 }
 async function reviewAction(id, action, fields = {}) {
@@ -38,39 +44,50 @@ async function reviewAction(id, action, fields = {}) {
   });
   const previous = sharedReviewDrafts.get(id);
   if (action === "read" && previous?.revision === result.review.revision) {
-    for (const key of ["freshness", "freshnessCheckedAt"])
-      if (previous[key] !== undefined) result.review[key] = previous[key];
-    for (const key of ["comments", "assessments"])
+    for (const key of ["freshness", "freshnessCheckedAt"]) {
+      if (previous[key] !== undefined) {
+        result.review[key] = previous[key];
+      }
+    }
+    for (const key of ["comments", "assessments"]) {
       for (const entry of result.review[key] || []) {
         const old = (previous[key] || []).find((x) => x.id === entry.id);
-        if (old?.freshness) entry.freshness = old.freshness;
+        if (old?.freshness) {
+          entry.freshness = old.freshness;
+        }
       }
+    }
   }
   acceptReviewDraft(id, result.review);
   return result.review;
 }
 const activeDiffCache = { key: "", entries: new Map(), bytes: 0, epoch: 0 };
 function activateDiffCache(key) {
-  if (activeDiffCache.key === key) return;
+  if (activeDiffCache.key === key) {
+    return;
+  }
   activeDiffCache.key = key;
   activeDiffCache.entries.clear();
   activeDiffCache.bytes = 0;
   activeDiffCache.epoch++;
 }
 async function cachedReviewFile(record, path, directory) {
-  const key = record.id + "\0" + directory,
+  const key = `${record.id}\0${directory}`,
     cache = activeDiffCache,
     epoch = cache.epoch,
     entry = cache.entries.get(path);
-  if (cache.key === key && entry && Date.now() - entry.at < 10000)
+  if (cache.key === key && entry && Date.now() - entry.at < 10000) {
     return entry.promise;
+  }
   const promise = api("/api/session/git-file", {
     id: record.id,
     path,
     cwd: directory,
   });
   const next = { promise, at: Date.now(), bytes: 0 };
-  if (cache.key === key) cache.entries.set(path, next);
+  if (cache.key === key) {
+    cache.entries.set(path, next);
+  }
   try {
     const data = await promise;
     if (
@@ -88,7 +105,9 @@ async function cachedReviewFile(record, path, directory) {
     }
     return data;
   } catch (error) {
-    if (cache.entries.get(path) === next) cache.entries.delete(path);
+    if (cache.entries.get(path) === next) {
+      cache.entries.delete(path);
+    }
     throw error;
   }
 }
@@ -106,14 +125,17 @@ function syncActiveDiff() {
         : candidate && recordForCandidate(candidate)
       : null;
   const directory = record && selectedGitDirectory(record),
-    key = record ? record.id + "\0" + directory : "";
+    key = record ? `${record.id}\0${directory}` : "";
   if (activeDiffCache.key !== key) {
     activateDiffCache(key);
     reviewRefreshAt = 0;
     reviewFreshnessAt = 0;
-    if (reviewState && reviewState.record.id !== record?.id)
+    if (reviewState && reviewState.record.id !== record?.id) {
       $("#diff-review-dialog").close();
-    if (record) void warmActiveDiff(record, directory, key);
+    }
+    if (record) {
+      void warmActiveDiff(record, directory, key);
+    }
   }
   if (
     record &&
@@ -126,7 +148,9 @@ function syncActiveDiff() {
       check =
         Date.now() - reviewFreshnessAt > 30000 &&
         (draft?.run || draft?.comments?.length);
-    if (check) reviewFreshnessAt = Date.now();
+    if (check) {
+      reviewFreshnessAt = Date.now();
+    }
     void reviewAction(record.id, check ? "check" : "read")
       .catch(() => {})
       .finally(() => {
@@ -141,12 +165,16 @@ async function warmActiveDiff(record, directory, key) {
       id: record.id,
       cwd: directory,
     });
-    if (activeDiffCache.key !== key) return;
+    if (activeDiffCache.key !== key) {
+      return;
+    }
     void import("/vendor/diffs/diff-viewer.js");
     for (const file of overview.files
       .filter((f) => f.additions !== null)
       .slice(0, 4)) {
-      if (activeDiffCache.key !== key) return;
+      if (activeDiffCache.key !== key) {
+        return;
+      }
       await cachedReviewFile(record, file.path, directory).catch(() => {});
     }
   } catch {
@@ -156,20 +184,24 @@ async function warmActiveDiff(record, directory, key) {
 setInterval(syncActiveDiff, 1000);
 function reviewRunLabel(draft) {
   const run = draft?.run;
-  if (!run || run.state === "cancelled") return "";
+  if (!run || run.state === "cancelled") {
+    return "";
+  }
   if (
     ["requested", "reviewing"].includes(run.state) &&
     Date.now() / 1000 - run.updatedAt > 7200
-  )
+  ) {
     return "Review unverified";
+  }
   if (
     run.state === "complete" &&
     draft.freshness &&
     draft.freshness !== "current"
-  )
+  ) {
     return draft.freshness === "outdated"
       ? "Review outdated"
       : "Review unverified";
+  }
   return (
     {
       requested: "Review requested",
@@ -200,10 +232,14 @@ function paintReviewDispatch(current) {
         return loadStateSnapshot({ attempts: 2 });
       },
       onChange: () => {
-        if (reviewDispatchCurrent(current)) paintReviewComments();
+        if (reviewDispatchCurrent(current)) {
+          paintReviewComments();
+        }
       },
       onInspect: () => {
-        if (!reviewDispatchCurrent(current)) return;
+        if (!reviewDispatchCurrent(current)) {
+          return;
+        }
         const record = state.sessions.find(
           (row) => row.id === current.record.id,
         );
@@ -230,12 +266,16 @@ function paintReviewDispatch(current) {
 }
 async function startAgentReview() {
   const current = reviewState;
-  if (!current || current.reviewStarting || current.pending) return;
+  if (!current || current.reviewStarting || current.pending) {
+    return;
+  }
   current.reviewStarting = true;
   paintReviewComments();
   try {
     await saveReviewNote(current);
-    if (!reviewDispatchCurrent(current)) return;
+    if (!reviewDispatchCurrent(current)) {
+      return;
+    }
     const receipt = await submitChatDispatch(
       "review.request",
       "review-request",
@@ -249,22 +289,29 @@ async function startAgentReview() {
       }
     }
   } catch (error) {
-    if (reviewDispatchCurrent(current))
+    if (reviewDispatchCurrent(current)) {
       $("#diff-review-error").textContent = error.message;
+    }
   } finally {
     current.reviewStarting = false;
-    if (reviewDispatchCurrent(current)) paintReviewComments();
+    if (reviewDispatchCurrent(current)) {
+      paintReviewComments();
+    }
   }
 }
 async function sendReviewFeedback() {
   const current = reviewState;
-  if (!current || current.pending || current.reviewStarting) return;
+  if (!current || current.pending || current.reviewStarting) {
+    return;
+  }
   current.pending = true;
   $("#diff-review-note").disabled = true;
   paintReviewComments();
   try {
     await saveReviewNote(current);
-    if (!reviewDispatchCurrent(current)) return;
+    if (!reviewDispatchCurrent(current)) {
+      return;
+    }
     const receipt = await submitChatDispatch("review.send", "review-feedback", {
       recordId: current.record.id,
       revision: current.draft.revision,
@@ -283,19 +330,24 @@ async function sendReviewFeedback() {
       toast(receipt.message);
     }
   } catch (error) {
-    if (reviewDispatchCurrent(current))
+    if (reviewDispatchCurrent(current)) {
       $("#diff-review-error").textContent = error.message;
+    }
   } finally {
     current.pending = false;
     if (reviewState === current) {
       $("#diff-review-note").disabled = false;
-      if ($("#diff-review-dialog").open) paintReviewComments();
+      if ($("#diff-review-dialog").open) {
+        paintReviewComments();
+      }
     }
   }
 }
 let reviewBackgroundPoll = false;
 setInterval(() => {
-  if (document.hidden || reviewBackgroundPoll) return;
+  if (document.hidden || reviewBackgroundPoll) {
+    return;
+  }
   const ids = [...sharedReviewDrafts]
     .filter(
       ([id, draft]) =>
@@ -336,7 +388,9 @@ function pendingReviewNote(draft) {
   return draft.note && draft.note !== draft.reviewedNote ? draft.note : "";
 }
 function disposeReview() {
-  if (reviewScrollFrame !== null) cancelAnimationFrame(reviewScrollFrame);
+  if (reviewScrollFrame !== null) {
+    cancelAnimationFrame(reviewScrollFrame);
+  }
   reviewScrollFrame = null;
   reviewFileSizeObserver?.disconnect();
   reviewFileSizeObserver = null;
@@ -350,15 +404,16 @@ function disposeReview() {
 function reviewAuthorPill(author) {
   return el(
     "span",
-    "review-author-pill " + ((author || "You") === "You" ? "you" : "agent"),
+    `review-author-pill ${(author || "You") === "You" ? "you" : "agent"}`,
     author || "You",
   );
 }
 function highlightReviewMarkup(node, path) {
-  if (node.querySelector("code"))
+  if (node.querySelector("code")) {
     void import("/vendor/diffs/diff-viewer.js")
       .then((viewer) => viewer.highlightReviewCode(node, path))
       .catch(() => {});
+  }
 }
 function reviewCommentBody(text, path) {
   const node = el("div", "review-comment-markdown");
@@ -377,10 +432,11 @@ function reviewSourceExcerpt(text, path, label = "Earlier file version") {
   code.textContent = bounded;
   pre.append(code);
   node.append(caption, pre);
-  if (bounded.length < source.length)
+  if (bounded.length < source.length) {
     node.append(
       el("small", "form-hint", "Snippet truncated after 16,000 characters."),
     );
+  }
   highlightReviewMarkup(node, path);
   return node;
 }
@@ -404,23 +460,32 @@ function reviewAnnotations(file) {
       c.root === file.root &&
       c.fingerprint === file.fingerprint,
   )) {
-    const key = c.side + ":" + c.end;
-    if (!groups.has(key))
+    const key = `${c.side}:${c.end}`;
+    if (!groups.has(key)) {
       groups.set(key, { side: c.side, lineNumber: c.end, metadata: [] });
+    }
     groups.get(key).metadata.push({ author: c.author || "You", text: c.text });
   }
   return [...groups.values()];
 }
 function updateReviewAnnotations() {
-  if (!reviewState) return;
-  for (const entry of reviewState.files.values())
-    if (entry.data)
+  if (!reviewState) {
+    return;
+  }
+  for (const entry of reviewState.files.values()) {
+    if (entry.data) {
       reviewRenderer?.annotate(entry.data.path, reviewAnnotations(entry.data));
+    }
+  }
 }
 function positionQuickReview(current, anchor) {
-  if (reviewState !== current || !current.quick) return;
+  if (reviewState !== current || !current.quick) {
+    return;
+  }
   const conversation = $("#agent-workspace .agent-conversation");
-  if (!conversation) return;
+  if (!conversation) {
+    return;
+  }
   const bounds = conversation.getBoundingClientRect(),
     dialog = $("#diff-review-dialog");
   const scale =
@@ -446,25 +511,25 @@ function positionQuickReview(current, anchor) {
       100) *
     area.height;
   current.inspectorTop = desired;
-  dialog.style.setProperty("--inspector-height", height + "px");
-  dialog.style.setProperty("--inspector-left", Math.max(8, area.left) + "px");
+  dialog.style.setProperty("--inspector-height", `${height}px`);
+  dialog.style.setProperty("--inspector-left", `${Math.max(8, area.left)}px`);
   dialog.style.setProperty(
     "--inspector-right",
-    Math.max(8, viewport.width - area.right) + "px",
+    `${Math.max(8, viewport.width - area.right)}px`,
   );
   dialog.style.setProperty(
     "--inspector-top",
-    Math.max(
+    `${Math.max(
       Math.max(38, area.top),
       Math.min(desired, viewport.height - height - 8),
-    ) + "px",
+    )}px`,
   );
 }
 function savedReviewUI(record, directory) {
   try {
     return (
       JSON.parse(localStorage.getItem("truffle-review-ui") || "{}")[
-        record.id + "\0" + directory
+        `${record.id}\0${directory}`
       ] || {}
     );
   } catch {
@@ -473,7 +538,9 @@ function savedReviewUI(record, directory) {
 }
 function rememberReviewUI() {
   const current = reviewState;
-  if (!current) return;
+  if (!current) {
+    return;
+  }
   const body = $("#diff-review-body"),
     bounds = body.getBoundingClientRect(),
     top = bounds.top;
@@ -503,10 +570,10 @@ function rememberReviewUI() {
     file: file ? { path: file.path, fingerprint: file.fingerprint } : null,
     note: $("#diff-review-note").value,
     noteBase: current.noteBase ?? current.draft.note ?? "",
-    noteDirty: !!current.noteDirty,
+    noteDirty: Boolean(current.noteDirty),
   };
   try {
-    const key = current.record.id + "\0" + current.directory,
+    const key = `${current.record.id}\0${current.directory}`,
       all = JSON.parse(localStorage.getItem("truffle-review-ui") || "{}");
     delete all[key];
     all[key] = value;
@@ -542,34 +609,33 @@ function showReviewComposer(current) {
     };
   composer.hidden = false;
   const width = Math.min(380, window.innerWidth - 24);
-  composer.style.width = width + "px";
+  composer.style.width = `${width}px`;
   const height = composer.getBoundingClientRect().height;
-  composer.style.left =
-    Math.max(12, Math.min(point.x, bounds.right - width - 12)) + "px";
+  composer.style.left = `${Math.max(12, Math.min(point.x, bounds.right - width - 12))}px`;
   const below = point.y + 12;
-  composer.style.top =
-    Math.max(
-      12,
-      Math.min(
-        below + height < window.innerHeight - 12
-          ? below
-          : point.y - height - 12,
-        window.innerHeight - height - 12,
-      ),
-    ) + "px";
+  composer.style.top = `${Math.max(
+    12,
+    Math.min(
+      below + height < window.innerHeight - 12 ? below : point.y - height - 12,
+      window.innerHeight - height - 12,
+    ),
+  )}px`;
   $("#diff-review-comment").focus({ preventScroll: true });
 }
 function setReviewMode(mode) {
   hideReviewComposer();
-  if (!reviewState) return;
+  if (!reviewState) {
+    return;
+  }
   reviewState.mode = mode;
   try {
     localStorage.setItem("truffle-diff-layout", mode);
   } catch {
     // Storage can be unavailable or full; the layout stays in memory.
   }
-  for (const name of ["unified", "split"])
-    $("#diff-mode-" + name).setAttribute("aria-pressed", String(name === mode));
+  for (const name of ["unified", "split"]) {
+    $(`#diff-mode-${name}`).setAttribute("aria-pressed", String(name === mode));
+  }
   reviewRenderer?.setStyle(mode);
   scheduleReviewUISave();
 }
@@ -583,7 +649,9 @@ async function openDiffReview(
     returnTrigger =
       anchor && typeof anchor === "object" ? anchor : document.activeElement,
     preserveReturn = returnDialog.open;
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   captureDialogReturn(returnDialog, {
     trigger: returnTrigger,
     scope: gitReviewFocusKey(record, directory),
@@ -606,7 +674,7 @@ async function openDiffReview(
   rememberReviewUI();
   disposeReview();
   $("#diff-review-dispatch")?.remove();
-  const quick = !!path && anchor !== "full";
+  const quick = Boolean(path) && anchor !== "full";
   let mode =
     typeof setting === "function"
       ? setting(
@@ -617,13 +685,16 @@ async function openDiffReview(
         ? "split"
         : "unified";
   try {
-    if (!quick && localStorage.getItem("truffle-diff-layout") === "split")
+    if (!quick && localStorage.getItem("truffle-diff-layout") === "split") {
       mode = "split";
+    }
   } catch {
     // Storage can be unavailable; keep the default layout.
   }
   const ui = savedReviewUI(record, directory);
-  if (["split", "unified"].includes(ui.mode)) mode = ui.mode;
+  if (["split", "unified"].includes(ui.mode)) {
+    mode = ui.mode;
+  }
   const stored = sharedReviewDrafts.get(record.id);
   const current = (reviewState = {
     record,
@@ -637,7 +708,7 @@ async function openDiffReview(
     queue: [],
     loading: false,
     quick,
-    noteDirty: !!ui.noteDirty,
+    noteDirty: Boolean(ui.noteDirty),
     noteBase: ui.noteBase,
     restoredExpanded: new Set(ui.expanded || []),
   });
@@ -646,13 +717,15 @@ async function openDiffReview(
   $("#diff-review-title").textContent = quick ? path : "Review";
   const subtitle = $("#diff-review-subtitle");
   subtitle.replaceChildren();
-  if (!quick && gitDiffDirectories(record).length > 1)
+  if (!quick && gitDiffDirectories(record).length > 1) {
     subtitle.append(
       gitDirectorySelector(record, directory, (next) =>
         openDiffReview(record, undefined, next),
       ),
     );
-  else subtitle.textContent = record.title;
+  } else {
+    subtitle.textContent = record.title;
+  }
   subtitle.title = record.title;
   $("#diff-review-expand").hidden = !quick;
   $("#diff-review-expand").onclick = () =>
@@ -668,7 +741,9 @@ async function openDiffReview(
   $("#diff-review-note").disabled = false;
   $("#diff-review-note").value = current.draft.note || "";
   $("#diff-review-comment").value = ui.comment || "";
-  if (ui.noteDirty) $("#diff-review-note").value = ui.note || "";
+  if (ui.noteDirty) {
+    $("#diff-review-note").value = ui.note || "";
+  }
   $("#diff-review-add").disabled = true;
   $("#diff-review-range").textContent = "Select a line or range to comment";
   if (current.quick) {
@@ -676,7 +751,9 @@ async function openDiffReview(
     dialog.show();
     reviewSizeObserver = new ResizeObserver(() => positionQuickReview(current));
     reviewSizeObserver.observe($("#agent-workspace .agent-conversation"));
-  } else dialog.showModal();
+  } else {
+    dialog.showModal();
+  }
   paintReviewComments();
   setReviewMode(mode);
   try {
@@ -690,7 +767,9 @@ async function openDiffReview(
       import("/vendor/diffs/diff-viewer.js"),
       reviewAction(record.id, "check"),
     ]);
-    if (reviewState !== current || !dialog.open) return;
+    if (reviewState !== current || !dialog.open) {
+      return;
+    }
     current.root = overview.root;
     paintReviewComments();
     current.restoredExpanded = null;
@@ -758,56 +837,76 @@ async function openDiffReview(
     if (first) {
       if (filePromise) {
         const preload = await filePromise;
-        if (!preload.loadError && current.files.has(path))
+        if (!preload.loadError && current.files.has(path)) {
           current.files.get(path).preloaded = preload;
+        }
       }
       await loadReviewFile(first);
-    } else body.append(el("p", "form-hint", "No changes against main."));
-    if (reviewState !== current) return;
-    if (!path && first === ui.path && ui.offset) body.scrollTop += ui.offset;
-    for (const folder of $("#diff-review-files").querySelectorAll("details"))
+    } else {
+      body.append(el("p", "form-hint", "No changes against main."));
+    }
+    if (reviewState !== current) {
+      return;
+    }
+    if (!path && first === ui.path && ui.offset) {
+      body.scrollTop += ui.offset;
+    }
+    for (const folder of $("#diff-review-files").querySelectorAll("details")) {
       if (
         (ui.collapsed || []).includes(
           folder.querySelector("summary")?.textContent,
         )
-      )
+      ) {
         folder.open = false;
-    $("#diff-review-drawer").open = !!ui.drawer;
+      }
+    }
+    $("#diff-review-drawer").open = Boolean(ui.drawer);
     if (ui.range && ui.file) {
       const entry = current.files.get(ui.file.path);
       if (entry?.data?.fingerprint === ui.file.fingerprint) {
         current.file = entry.data;
         current.range = ui.range;
         $("#diff-review-range").textContent =
-          ui.file.path + " · " + ui.range.start + "–" + ui.range.end;
+          `${ui.file.path} · ${ui.range.start}–${ui.range.end}`;
         $("#diff-review-add").disabled = false;
         showReviewComposer(current);
       }
     }
 
-    if (reviewState !== current || !dialog.open) return;
+    if (reviewState !== current || !dialog.open) {
+      return;
+    }
     reviewObserver = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries)
-          if (entry.isIntersecting)
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
             queueReviewFile(entry.target.dataset.path, false);
+          }
+        }
       },
       { root: body, rootMargin: "400px 0px" },
     );
-    for (const entry of current.files.values())
-      if (entry.status === "idle") reviewObserver.observe(entry.section);
+    for (const entry of current.files.values()) {
+      if (entry.status === "idle") {
+        reviewObserver.observe(entry.section);
+      }
+    }
     reviewFileSizeObserver = new ResizeObserver(scheduleReviewFileHighlight);
-    for (const entry of current.files.values())
+    for (const entry of current.files.values()) {
       reviewFileSizeObserver.observe(entry.section);
+    }
     scheduleReviewFileHighlight();
   } catch (error) {
-    if (reviewState === current)
+    if (reviewState === current) {
       $("#diff-review-error").textContent = error.message;
+    }
   }
 }
 function highlightReviewFile(path) {
   const current = reviewState;
-  if (!current || current.activePath === path) return;
+  if (!current || current.activePath === path) {
+    return;
+  }
   current.activePath = path;
   const tree = $("#diff-review-files");
   for (const button of tree.querySelectorAll("button[data-path]")) {
@@ -822,18 +921,24 @@ function highlightReviewFile(path) {
       let parent = button.parentElement;
       parent && parent !== tree;
       parent = parent.parentElement
-    )
-      if (parent.tagName === "DETAILS") parent.open = true;
+    ) {
+      if (parent.tagName === "DETAILS") {
+        parent.open = true;
+      }
+    }
     const bounds = tree.getBoundingClientRect(),
       row = button.getBoundingClientRect();
-    if (row.top < bounds.top) tree.scrollTop += row.top - bounds.top;
-    else if (row.bottom > bounds.bottom)
+    if (row.top < bounds.top) {
+      tree.scrollTop += row.top - bounds.top;
+    } else if (row.bottom > bounds.bottom) {
       tree.scrollTop += row.bottom - bounds.bottom;
+    }
   }
 }
 function syncReviewFileHighlight() {
-  if (!reviewState || reviewState.quick || !$("#diff-review-dialog").open)
+  if (!reviewState || reviewState.quick || !$("#diff-review-dialog").open) {
     return;
+  }
   const bounds = $("#diff-review-body").getBoundingClientRect(),
     line = bounds.top + Math.min(64, bounds.height / 4);
   for (const [path, entry] of reviewState.files) {
@@ -845,7 +950,9 @@ function syncReviewFileHighlight() {
   }
 }
 function scheduleReviewFileHighlight() {
-  if (reviewScrollFrame !== null) return;
+  if (reviewScrollFrame !== null) {
+    return;
+  }
   reviewScrollFrame = requestAnimationFrame(() => {
     reviewScrollFrame = null;
     syncReviewFileHighlight();
@@ -854,7 +961,9 @@ function scheduleReviewFileHighlight() {
 function loadReviewFile(path) {
   $("#diff-review-drawer").open = false;
   const entry = reviewState.files.get(path);
-  if (!entry) return;
+  if (!entry) {
+    return;
+  }
   entry.section.scrollIntoView({ block: "start" });
   highlightReviewFile(path);
   return queueReviewFile(path, true);
@@ -867,16 +976,22 @@ function queueReviewFile(path, forced) {
     entry.status === "loaded" ||
     entry.status === "loading" ||
     (entry.status === "error" && !forced)
-  )
+  ) {
     return;
+  }
   current.queue = current.queue.filter((x) => x.path !== path);
-  if (forced) current.queue.unshift({ path, forced });
-  else current.queue.push({ path, forced });
+  if (forced) {
+    current.queue.unshift({ path, forced });
+  } else {
+    current.queue.push({ path, forced });
+  }
   entry.status = "queued";
   return drainReviewFiles(current);
 }
 async function drainReviewFiles(current) {
-  if (current.loading) return;
+  if (current.loading) {
+    return;
+  }
   current.loading = true;
   try {
     while (
@@ -892,7 +1007,9 @@ async function drainReviewFiles(current) {
           entry.preloaded ||
           (await cachedReviewFile(current.record, path, current.directory));
         delete entry.preloaded;
-        if (reviewState !== current || !$("#diff-review-dialog").open) return;
+        if (reviewState !== current || !$("#diff-review-dialog").open) {
+          return;
+        }
         entry.data = data;
         entry.status = "loaded";
         entry.content.replaceChildren();
@@ -924,9 +1041,13 @@ async function drainReviewFiles(current) {
             showReviewComposer(current);
           },
         );
-        if (forced) entry.section.scrollIntoView({ block: "start" });
+        if (forced) {
+          entry.section.scrollIntoView({ block: "start" });
+        }
       } catch (error) {
-        if (reviewState !== current || !$("#diff-review-dialog").open) return;
+        if (reviewState !== current || !$("#diff-review-dialog").open) {
+          return;
+        }
         entry.status = "error";
         entry.content.replaceChildren(el("p", "form-hint", error.message));
         reviewObserver?.unobserve(entry.section);
@@ -991,21 +1112,22 @@ function paintReviewComments() {
           .replace(/[-_.]/g, " ")
           .includes(a.pass.replace(/[-_.]/g, " "))
           ? ""
-          : " · " + a.pass) + (a.sentAt ? " · sent" : ""),
+          : ` · ${a.pass}`) + (a.sentAt ? " · sent" : ""),
       );
     section.dataset.assessmentId = a.id;
     section.dataset.reviewEntry = "assessment";
     section.dataset.reviewId = a.id;
     control(summary, "assessment", a.id, "summary");
     section.open = expanded.has(a.id) || current.restoredExpanded?.has(a.id);
-    if (a.freshness && a.freshness !== "current")
+    if (a.freshness && a.freshness !== "current") {
       summary.append(
         el(
           "small",
-          "review-freshness " + a.freshness,
+          `review-freshness ${a.freshness}`,
           a.freshness === "outdated" ? " · outdated" : " · unverified",
         ),
       );
+    }
     summary.prepend(reviewAuthorPill(a.author));
     section.append(
       summary,
@@ -1030,9 +1152,9 @@ function paintReviewComments() {
       el(
         "small",
         "form-hint",
-        (a.root || "Conversation") +
-          " · " +
-          new Date(a.createdAt * 1000).toLocaleString(),
+        `${a.root || "Conversation"} · ${new Date(
+          a.createdAt * 1000,
+        ).toLocaleString()}`,
       ),
       body(a.text, undefined, "assessment", a.id),
     );
@@ -1049,11 +1171,13 @@ function paintReviewComments() {
     const row = el("div", "review-comment"),
       head = el("div", "review-comment-head");
     const anchor = featureButton(
-      `${c.path}:${c.start}${c.end !== c.start ? "–" + c.end : ""}`,
+      `${c.path}:${c.start}${c.end !== c.start ? `–${c.end}` : ""}`,
       () => {
-        if (current.directory === c.root && current.files.has(c.path))
+        if (current.directory === c.root && current.files.has(c.path)) {
           loadReviewFile(c.path);
-        else openDiffReview(current.record, c.path, c.root);
+        } else {
+          openDiffReview(current.record, c.path, c.root);
+        }
       },
       "review-comment-anchor",
     );
@@ -1067,7 +1191,7 @@ function paintReviewComments() {
       control(
         featureIconButton(
           "×",
-          `Remove review comment ${index + 1} at ${c.path}:${c.start}${c.end !== c.start ? "–" + c.end : ""}`,
+          `Remove review comment ${index + 1} at ${c.path}:${c.start}${c.end !== c.start ? `–${c.end}` : ""}`,
           async () => {
             try {
               await reviewAction(current.record.id, "remove", {
@@ -1085,18 +1209,20 @@ function paintReviewComments() {
       ),
     );
     row.append(head, body(c.text, c.path, "comment", c.id));
-    if (c.freshness && c.freshness !== "current")
+    if (c.freshness && c.freshness !== "current") {
       row.append(
         el(
           "small",
-          "review-freshness " + c.freshness,
+          `review-freshness ${c.freshness}`,
           c.freshness === "outdated"
             ? "File changed since this comment"
             : "File version not verified",
         ),
       );
-    if (stale && stale.fingerprint !== c.fingerprint)
+    }
+    if (stale && stale.fingerprint !== c.fingerprint) {
       row.append(reviewSourceExcerpt(c.excerpt, c.path));
+    }
     list.append(row);
   }
   const active = ["requested", "reviewing"].includes(current.draft.run?.state);
@@ -1122,9 +1248,9 @@ function paintReviewComments() {
       ? "Review done"
       : "Review comments") +
     (current.draft.comments.length
-      ? " · " + current.draft.comments.length
+      ? ` · ${current.draft.comments.length}`
       : unsent
-        ? " · " + unsent + " assessments"
+        ? ` · ${unsent} assessments`
         : current.draft.assessments?.length
           ? " · assessments"
           : current.draft.note?.trim()
@@ -1149,20 +1275,23 @@ function paintReviewComments() {
     )
   ) {
     const visible = (node) => {
-      if (!node?.isConnected || node.disabled || node.closest("[hidden]"))
+      if (!node?.isConnected || node.disabled || node.closest("[hidden]")) {
         return false;
+      }
       for (
         let child = node, parent = node.parentElement;
         parent;
         child = parent, parent = parent.parentElement
-      )
+      ) {
         if (
           parent.tagName === "DETAILS" &&
           !parent.open &&
           child !==
             [...parent.children].find((entry) => entry.tagName === "SUMMARY")
-        )
+        ) {
           return false;
+        }
+      }
       return node.getClientRects().length > 0;
     };
     const rows = [...(focus.kind === "comment" ? list : assessments).children],
@@ -1178,7 +1307,9 @@ function paintReviewComments() {
       )?.node ||
       candidates.find((item) => visible(item.node))?.node ||
       $("#diff-review-drawer-toggle");
-    if (visible(target)) target.focus({ preventScroll: true });
+    if (visible(target)) {
+      target.focus({ preventScroll: true });
+    }
   }
 }
 async function saveReviewNote(current) {
@@ -1201,7 +1332,9 @@ $("#diff-review-add").onclick = async () => {
   const current = reviewState,
     { range, file } = current,
     text = $("#diff-review-comment").value.trim();
-  if (!range || !file || !text) return;
+  if (!range || !file || !text) {
+    return;
+  }
   const button = $("#diff-review-add");
   button.disabled = true;
   try {
@@ -1240,23 +1373,29 @@ function reviewCommentKeydown(event) {
     event.metaKey ||
     event.isComposing ||
     event.keyCode === 229
-  )
+  ) {
     return;
+  }
   event.preventDefault();
   event.stopPropagation();
-  if (!event.repeat) $("#diff-review-add").click();
+  if (!event.repeat) {
+    $("#diff-review-add").click();
+  }
 }
 $("#diff-review-comment").addEventListener("keydown", reviewCommentKeydown);
 $("#diff-review-body").addEventListener(
   "pointerup",
   (event) => {
-    if (reviewState)
+    if (reviewState) {
       reviewState.selectionPoint = { x: event.clientX, y: event.clientY };
+    }
   },
   true,
 );
 window.addEventListener("resize", () => {
-  if (reviewState?.quick) positionQuickReview(reviewState);
+  if (reviewState?.quick) {
+    positionQuickReview(reviewState);
+  }
 });
 $("#diff-review-cancel").onclick = () => {
   hideReviewComposer();
@@ -1276,9 +1415,7 @@ function showReviewHistoryEntry(entry) {
     el(
       "small",
       "review-history-label",
-      "Saved " +
-        new Date(entry.archivedAt * 1000).toLocaleString() +
-        " · Read only",
+      `Saved ${new Date(entry.archivedAt * 1000).toLocaleString()} · Read only`,
     ),
   );
   const draft = entry.review;
@@ -1305,7 +1442,7 @@ function showReviewHistoryEntry(entry) {
       el(
         "span",
         "review-comment-anchor",
-        `${comment.path} · ${comment.side === "deletions" ? "old" : "new"} ${comment.start}${comment.end !== comment.start ? "–" + comment.end : ""}`,
+        `${comment.path} · ${comment.side === "deletions" ? "old" : "new"} ${comment.start}${comment.end !== comment.start ? `–${comment.end}` : ""}`,
       ),
     );
     section.append(
@@ -1314,12 +1451,12 @@ function showReviewHistoryEntry(entry) {
       el(
         "small",
         "review-history-meta",
-        [comment.root, comment.baseCommit ? "Base " + comment.baseCommit : ""]
+        [comment.root, comment.baseCommit ? `Base ${comment.baseCommit}` : ""]
           .filter(Boolean)
           .join(" · "),
       ),
     );
-    if (comment.excerpt)
+    if (comment.excerpt) {
       section.append(
         reviewSourceExcerpt(
           comment.excerpt,
@@ -1327,14 +1464,16 @@ function showReviewHistoryEntry(entry) {
           "Commented file version",
         ),
       );
+    }
     content.append(section);
   }
   if (
     !draft.note?.trim() &&
     !draft.comments?.length &&
     !draft.assessments?.length
-  )
+  ) {
     content.append(el("p", "form-hint", "This review had no saved comments."));
+  }
 }
 function paintReviewHistoryList(reviews) {
   const content = $("#diff-review-history-content");
@@ -1369,7 +1508,9 @@ function paintReviewHistoryList(reviews) {
 }
 async function loadReviewHistory() {
   const current = reviewState;
-  if (!current || !$("#diff-review-history").open) return;
+  if (!current || !$("#diff-review-history").open) {
+    return;
+  }
   $("#diff-review-drawer").open = false;
   const content = $("#diff-review-history-content");
   content.replaceChildren(el("p", "form-hint", "Loading previous reviews…"));
@@ -1378,16 +1519,21 @@ async function loadReviewHistory() {
       id: current.record.id,
       action: "history",
     });
-    if (reviewState !== current || !$("#diff-review-history").open) return;
+    if (reviewState !== current || !$("#diff-review-history").open) {
+      return;
+    }
     current.history = result.reviews || [];
     paintReviewHistoryList(current.history);
   } catch (error) {
-    if (reviewState === current)
+    if (reviewState === current) {
       content.replaceChildren(el("p", "form-hint", error.message));
+    }
   }
 }
 $("#diff-review-history").addEventListener("toggle", () => {
-  if ($("#diff-review-history").open) void loadReviewHistory();
+  if ($("#diff-review-history").open) {
+    void loadReviewHistory();
+  }
 });
 $("#diff-review-history-current").onclick = () => {
   $("#diff-review-history").open = false;
@@ -1395,7 +1541,9 @@ $("#diff-review-history-current").onclick = () => {
   $("#diff-review-drawer-toggle").focus();
 };
 $("#diff-review-drawer").addEventListener("toggle", () => {
-  if ($("#diff-review-drawer").open) $("#diff-review-history").open = false;
+  if ($("#diff-review-drawer").open) {
+    $("#diff-review-history").open = false;
+  }
 });
 async function startNewReview() {
   const current = reviewState;
@@ -1404,8 +1552,9 @@ async function startNewReview() {
     current.pending ||
     current.reviewStarting ||
     ["requested", "reviewing"].includes(current.draft.run?.state)
-  )
+  ) {
     return;
+  }
   if ($("#diff-review-comment").value.trim()) {
     $("#diff-review-error").textContent =
       "Add or cancel your draft comment before starting a new review.";
@@ -1418,7 +1567,9 @@ async function startNewReview() {
     await reviewAction(current.record.id, "new", {
       revision: current.draft.revision,
     });
-    if (reviewState !== current) return;
+    if (reviewState !== current) {
+      return;
+    }
     current.noteDirty = false;
     current.history = null;
     $("#diff-review-history").open = false;
@@ -1431,11 +1582,14 @@ async function startNewReview() {
     rememberReviewUI();
     toast("New review started. The previous review was archived.");
   } catch (error) {
-    if (reviewState === current)
+    if (reviewState === current) {
       $("#diff-review-error").textContent = error.message;
+    }
   } finally {
     current.pending = false;
-    if (reviewState === current) paintReviewComments();
+    if (reviewState === current) {
+      paintReviewComments();
+    }
   }
 }
 $("#diff-review-new").onclick = startNewReview;
@@ -1455,7 +1609,9 @@ $("#diff-review-drawer-close").onclick = () => {
   $("#diff-review-drawer-toggle").focus();
 };
 $("#diff-review-note").oninput = () => {
-  if (!reviewState) return;
+  if (!reviewState) {
+    return;
+  }
   reviewState.noteDirty = true;
   scheduleReviewUISave();
   $("#diff-review-send").disabled =
@@ -1468,8 +1624,9 @@ $("#diff-review-note").oninput = () => {
       ));
 };
 $("#diff-review-note").onfocus = () => {
-  if (reviewState && !reviewState.noteDirty)
+  if (reviewState && !reviewState.noteDirty) {
     reviewState.noteBase = reviewState.draft.note || "";
+  }
 };
 $("#diff-review-note").onchange = () => {
   void saveReviewNote(reviewState).catch((error) => {

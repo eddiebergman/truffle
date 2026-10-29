@@ -24,9 +24,14 @@ function deferred() {
 function loadMore(f, files, { drop = [], elements = {}, keepHost = [] } = {}) {
   const raw = rawContext(f.c),
     api = f.c.api;
-  for (const name of drop) delete raw[name];
-  for (const name of Object.keys(raw))
-    if (/^[A-Za-z_$][\w$]*$/.test(name)) raw[name] = f.c[name];
+  for (const name of drop) {
+    delete raw[name];
+  }
+  for (const name of Object.keys(raw)) {
+    if (/^[A-Za-z_$][\w$]*$/.test(name)) {
+      raw[name] = f.c[name];
+    }
+  }
   raw.api = () => new Promise(() => {});
   try {
     return loadScripts(f.c, files, { elements, keepHost });
@@ -46,21 +51,35 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     pendingClose = [];
   const match = (node, selector) => {
     selector = selector.trim();
-    if (selector.startsWith("#")) return node.id === selector.slice(1);
-    if (selector === "dialog[open]")
+    if (selector.startsWith("#")) {
+      return node.id === selector.slice(1);
+    }
+    if (selector === "dialog[open]") {
       return node.tagName === "dialog" && node.open;
-    if (selector === "[data-feature-write]") return !!node.dataset.featureWrite;
-    if (selector.startsWith("."))
+    }
+    if (selector === "[data-feature-write]") {
+      return Boolean(node.dataset.featureWrite);
+    }
+    if (selector.startsWith(".")) {
       return node.className.split(" ").includes(selector.slice(1));
+    }
     const tag = selector.match(/^\w+/)?.[0];
-    if (tag && node.tagName !== tag) return false;
-    if (selector.includes(":not(:disabled)") && node.disabled) return false;
-    if (selector.includes(':not([type="hidden"])') && node.type === "hidden")
+    if (tag && node.tagName !== tag) {
       return false;
-    if (selector.includes('[type="submit"]') && node.type !== "submit")
+    }
+    if (selector.includes(":not(:disabled)") && node.disabled) {
       return false;
-    if (selector.includes("[href]") && !node.href) return false;
-    return !!tag;
+    }
+    if (selector.includes(':not([type="hidden"])') && node.type === "hidden") {
+      return false;
+    }
+    if (selector.includes('[type="submit"]') && node.type !== "submit") {
+      return false;
+    }
+    if (selector.includes("[href]") && !node.href) {
+      return false;
+    }
+    return Boolean(tag);
   };
   class Node {
     constructor(tag = "div", cls = "", text = "") {
@@ -78,7 +97,7 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       this.classList = {
         contains: (name) => this.className.split(" ").includes(name),
         add: (name) => {
-          this.className += " " + name;
+          this.className += ` ${name}`;
         },
       };
     }
@@ -96,15 +115,20 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     }
     set textContent(value) {
       this._text = value;
-      if (this.children) for (const child of [...this.children]) child.remove();
+      if (this.children) {
+        for (const child of [...this.children]) {
+          child.remove();
+        }
+      }
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document?.activeElement === this)
+      if (value && document?.activeElement === this) {
         document.activeElement = document.body;
+      }
     }
     get disabled() {
       return this._disabled;
@@ -116,10 +140,14 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       }
     }
     replaceChildren(...children) {
-      for (const child of this.children) child.remove();
+      for (const child of this.children) {
+        child.remove();
+      }
       this.children = [];
       this.append(...children);
-      if (this.tagName === "select") this.value = children[0]?.value || "";
+      if (this.tagName === "select") {
+        this.value = children[0]?.value || "";
+      }
     }
     add(child) {
       this.append(child);
@@ -128,12 +156,14 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       return this.children.length;
     }
     remove() {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      if (this.parentElement)
+      }
+      if (this.parentElement) {
         this.parentElement.children = this.parentElement.children.filter(
           (child) => child !== this,
         );
+      }
       this.parentElement = null;
     }
     contains(node) {
@@ -147,7 +177,9 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     closest(selector) {
       let node = this;
       while (node) {
-        if (node.matches(selector)) return node;
+        if (node.matches(selector)) {
+          return node;
+        }
         node = node.parentElement;
       }
       return null;
@@ -173,7 +205,9 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       );
     }
     dispatchEvent(event) {
-      for (const fn of this.events[event.type] || []) fn(event);
+      for (const fn of this.events[event.type] || []) {
+        fn(event);
+      }
       return !event.defaultPrevented;
     }
     focus(options) {
@@ -186,11 +220,16 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       this.open = true;
     }
     close() {
-      if (!this.open) return;
+      if (!this.open) {
+        return;
+      }
       this.open = false;
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      for (const fn of this.events.close || []) fn();
+      }
+      for (const fn of this.events.close || []) {
+        fn();
+      }
     }
   }
   const document = {
@@ -218,9 +257,9 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     return nodes.get(id);
   };
   const makeForm = (name, names) => {
-    const dialog = $("#" + name + "-dialog");
+    const dialog = $(`#${name}-dialog`);
     dialog.tagName = "dialog";
-    const form = $("#" + name + "-form");
+    const form = $(`#${name}-form`);
     form.tagName = "form";
     form.remove();
     dialog.append(form);
@@ -244,13 +283,14 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     }
     form.append(save);
     form.reset = () => {
-      for (const [key, node] of Object.entries(form.elements))
+      for (const [key, node] of Object.entries(form.elements)) {
         node.value =
           key === "duration"
             ? "day"
             : ["days", "minUsers", "minEvents"].includes(key)
               ? "0"
               : "";
+      }
     };
     form.reset();
     return { dialog, form, close, save };
@@ -302,31 +342,36 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const apply = (payload) => {
     canonical = { ...canonical, revision: canonical.revision + 1 };
-    if (payload.name === "changes.mark-read")
+    if (payload.name === "changes.mark-read") {
       canonical.changes = canonical.changes.map((change) =>
         payload.args.ids.includes(change.id)
           ? { ...change, read: true }
           : change,
       );
-    if (payload.action === "save-sentry-view")
+    }
+    if (payload.action === "save-sentry-view") {
       canonical.sentryViews = [
         ...canonical.sentryViews.filter((row) => row.id !== payload.id),
         { id: payload.id, name: payload.name, filters: clone(payload.filters) },
       ];
-    if (payload.action === "delete-sentry-view")
+    }
+    if (payload.action === "delete-sentry-view") {
       canonical.sentryViews = canonical.sentryViews.filter(
         (row) => row.id !== payload.id,
       );
-    if (payload.action === "save-briefing")
+    }
+    if (payload.action === "save-briefing") {
       canonical.briefings.push({
         id: "report",
         sessionId: payload.id,
         body: payload.body,
       });
-    if (payload.action === "checkpoint")
+    }
+    if (payload.action === "checkpoint") {
       canonical.sessions = canonical.sessions.map((row) =>
         row.id === payload.id ? { ...row, checkpoint: payload } : row,
       );
+    }
     return clone(canonical);
   };
   const c = browserContext({
@@ -361,7 +406,9 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     persist() {},
     render: () => {
       renders++;
-      if (renderFailure) throw Error("Render unavailable");
+      if (renderFailure) {
+        throw Error("Render unavailable");
+      }
     },
     loadInventory() {},
     allItems: () => c.state.items,
@@ -379,11 +426,12 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     quickStart() {},
     api: async (path, payload) => {
       calls.push({ path, payload: payload && clone(payload) });
-      if (handler)
+      if (handler) {
         return handler(path, payload, {
           apply,
           snapshot: () => clone(canonical),
         });
+      }
       return path === "/api/edit" || path === "/api/commands/invoke"
         ? apply(payload)
         : clone(canonical);

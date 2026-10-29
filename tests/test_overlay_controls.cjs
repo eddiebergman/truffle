@@ -13,7 +13,9 @@ class Dialog extends EventTarget {
     this.isConnected = true;
   }
   close() {
-    if (!this.open) return;
+    if (!this.open) {
+      return;
+    }
     this.closed++;
     this.open = false;
   }
@@ -174,7 +176,7 @@ function themeFixture() {
       this.hidden = false;
       this.classList = {
         contains: (name) => this.className.split(" ").includes(name),
-        add: (name) => (this.className += " " + name),
+        add: (name) => (this.className += ` ${name}`),
       };
       nodes.push(this);
     }
@@ -185,13 +187,17 @@ function themeFixture() {
       }
     }
     replaceChildren(...children) {
-      if (this.contains(document.activeElement)) document.activeElement = body;
-      for (const child of this.children) child.parentElement = null;
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.append(...children);
     }
     get isConnected() {
-      return this === body || !!this.parentElement?.isConnected;
+      return this === body || Boolean(this.parentElement?.isConnected);
     }
     contains(node) {
       return (
@@ -199,7 +205,7 @@ function themeFixture() {
       );
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
+      for (let node = this; node; node = node.parentElement) {
         if (
           selector
             .split(",")
@@ -209,8 +215,10 @@ function themeFixture() {
                 (part[0] === "#" && node.id === part.slice(1)) ||
                 (part[0] === "." && node.classList.contains(part.slice(1))),
             )
-        )
+        ) {
           return node;
+        }
+      }
       return null;
     }
     querySelectorAll(selector) {
@@ -227,25 +235,31 @@ function themeFixture() {
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document?.activeElement === this)
+      if (value && document?.activeElement === this) {
         document.activeElement = body;
+      }
     }
     get disabled() {
       return Boolean(this._disabled);
     }
     focus() {
-      if (this.isConnected && !this.hidden && !this.disabled)
+      if (this.isConnected && !this.hidden && !this.disabled) {
         document.activeElement = this;
+      }
     }
     click() {
-      if (!this.disabled) return this.onclick?.();
+      if (!this.disabled) {
+        return this.onclick?.();
+      }
     }
     showModal() {
       this.open = true;
     }
     close() {
       this.open = false;
-      if (this.contains(document.activeElement)) document.activeElement = body;
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
       this.dispatchEvent(new Event("close"));
     }
   }
@@ -447,8 +461,9 @@ test("theme accepted read failure locks choices and retries GET only before clos
   const original = f.c.api;
   let fail = true;
   f.c.api = async (path, payload) => {
-    if (!payload && path === "/api/settings" && fail)
+    if (!payload && path === "/api/settings" && fail) {
       throw Error("Read unavailable");
+    }
     return original(path, payload);
   };
   const choice = f.choices()[1];
@@ -471,7 +486,9 @@ test("theme unknown postcommit outcome stays locked after read-only refresh with
   const original = f.c.api;
   f.c.api = async (path, payload) => {
     const result = await original(path, payload);
-    if (payload) throw Object.assign(Error("Lost reply"), { status: 503 });
+    if (payload) {
+      throw Object.assign(Error("Lost reply"), { status: 503 });
+    }
     return result;
   };
   const choice = f.choices()[1];
@@ -498,9 +515,13 @@ test("theme failed read-only recovery keeps accepted and uncertain save truth vi
     await f.c.openThemeChooser();
     const original = f.c.api;
     f.c.api = async (path, payload) => {
-      if (!payload) throw Error("Read unavailable");
+      if (!payload) {
+        throw Error("Read unavailable");
+      }
       const result = await original(path, payload);
-      if (unknown) throw Error("Lost reply");
+      if (unknown) {
+        throw Error("Lost reply");
+      }
       return result;
     };
     await f.choices()[1].onclick();
@@ -612,23 +633,30 @@ test("theme settlement never closes replacement picker or steals outside/child f
       f.dialog.open = true;
     } else if (change === "closed") {
       f.dialog.close();
-    } else if (change === "source") f.c.source = "github";
-    else {
+    } else if (change === "source") {
+      f.c.source = "github";
+    } else {
       outside = new f.Node(change === "child" ? "dialog" : "input");
       f.body.append(outside);
-      if (change === "child") outside.showModal();
+      if (change === "child") {
+        outside.showModal();
+      }
       outside.focus();
     }
     post.reject(Object.assign(Error("Lost response"), { status: 503 }));
     await pending;
-    if (outside) assert.equal(f.document.activeElement, outside, change);
-    if (change === "replacement") assert.equal(f.dialog.open, true);
+    if (outside) {
+      assert.equal(f.document.activeElement, outside, change);
+    }
+    if (change === "replacement") {
+      assert.equal(f.dialog.open, true);
+    }
     assert.equal(f.posts().length, 1);
     f.c.requestDialogClose(f.dialog);
     assert.equal(
       f.dialog.open,
       false,
-      change + " listener released after pending",
+      `${change} listener released after pending`,
     );
   }
 });
@@ -646,9 +674,15 @@ test("theme accepted GET cannot close or paint a replaced owner and child modal 
     await Promise.resolve();
     await Promise.resolve();
     let child;
-    if (change === "replacement") f.form.replaceChildren(new f.Node("input"));
-    if (change === "closed") f.dialog.close();
-    if (change === "source") f.c.source = "github";
+    if (change === "replacement") {
+      f.form.replaceChildren(new f.Node("input"));
+    }
+    if (change === "closed") {
+      f.dialog.close();
+    }
+    if (change === "source") {
+      f.c.source = "github";
+    }
     if (change === "child") {
       child = new f.Node("dialog");
       f.body.append(child);
@@ -657,12 +691,16 @@ test("theme accepted GET cannot close or paint a replaced owner and child modal 
     }
     read.resolve({ revision: 2, values: { theme: "light", other: "read" } });
     await pending;
-    if (change !== "closed") assert.equal(f.dialog.open, true, change);
+    if (change !== "closed") {
+      assert.equal(f.dialog.open, true, change);
+    }
     if (child) {
       assert.equal(f.document.activeElement, child);
       assert.equal(f.button("Refresh view").hidden, false);
       assert.equal(f.button("Close").disabled, false);
-    } else assert.notEqual(f.c.appSettings.values.other, "read", change);
+    } else {
+      assert.notEqual(f.c.appSettings.values.other, "read", change);
+    }
     assert.equal(f.posts().length, 1);
   }
 });
@@ -727,7 +765,9 @@ test("theme accepted and unknown writes fence old settings reads while keeping l
         return old.promise;
       }
       const result = await original(path, payload);
-      if (payload && unknown) throw Error("Lost reply");
+      if (payload && unknown) {
+        throw Error("Lost reply");
+      }
       return result;
     };
     const read = f.c.loadAppSettings();
@@ -750,7 +790,9 @@ test("theme accepted paint failures remain read-only until a GET actually paints
     let paints = 0;
     f.c.applyAppSettings = () => {
       paints++;
-      if (paints <= failCount) throw Error("Theme paint failed");
+      if (paints <= failCount) {
+        throw Error("Theme paint failed");
+      }
     };
     f.choices()[1].focus();
     await f.choices()[1].onclick();
@@ -830,7 +872,7 @@ test("normal App chat width remains inside scaled viewport gutters according to 
     width = block.split(";").find((value) => value.startsWith("width:"));
   const [, cap, calc] = width.match(/width:min\(([\d.]+)px,calc\((.*)\)\)/),
     right = Number(block.match(/right:([\d.]+)px/)[1]);
-  for (const viewport of [280, 500, 800])
+  for (const viewport of [280, 500, 800]) {
     for (const scale of [1, 1.25, 1.5, 2]) {
       const expression = calc
         .replace("100vw", String(viewport))
@@ -845,4 +887,5 @@ test("normal App chat width remains inside scaled viewport gutters according to 
         JSON.stringify({ viewport, scale, physicalWidth }),
       );
     }
+  }
 });

@@ -6,7 +6,7 @@ function restartImpact(review, mode) {
       count > 0 && (mode === "terminals" || !review?.preserveTerminals);
   return {
     interrupts,
-    blocked: interrupts && !!review?.problems?.length,
+    blocked: interrupts && Boolean(review?.problems?.length),
     message: interrupts
       ? `${count} terminal${count === 1 ? "" : "s"} will close, then saved chats will reopen in the same folders. Running commands and subagents may be interrupted.`
       : mode === "terminals"
@@ -16,8 +16,10 @@ function restartImpact(review, mode) {
           : "Restart the dashboard service. No live terminals.",
   };
 }
-if (typeof module !== "undefined") module.exports = { restartImpact };
-if (typeof document !== "undefined")
+if (typeof module !== "undefined") {
+  module.exports = { restartImpact };
+}
+if (typeof document !== "undefined") {
   (() => {
     const toggle = $("#restart-toggle"),
       panel = $("#restart-panel"),
@@ -31,7 +33,7 @@ if (typeof document !== "undefined")
       pending = false,
       timer = null,
       finished = "";
-    const demo = () => !!state?.demo;
+    const demo = () => Boolean(state?.demo);
     function paint() {
       toggle.disabled = pending;
       toggle.setAttribute("aria-expanded", String(!panel.hidden));
@@ -71,7 +73,9 @@ if (typeof document !== "undefined")
       }
     }
     async function finish() {
-      if (job?.status !== "succeeded" || finished === job.id) return;
+      if (job?.status !== "succeeded" || finished === job.id) {
+        return;
+      }
       finished = job.id;
       await refresh();
       await loadInventory();
@@ -81,12 +85,17 @@ if (typeof document !== "undefined")
     }
     async function poll() {
       clearTimeout(timer);
-      if (!serviceClient.isDesktop) return;
+      if (!serviceClient.isDesktop) {
+        return;
+      }
       try {
         job = await serviceClient.restartStatus();
         paint();
-        if (job.status === "working") timer = setTimeout(poll, 750);
-        else await finish();
+        if (job.status === "working") {
+          timer = setTimeout(poll, 750);
+        } else {
+          await finish();
+        }
       } catch (error) {
         result.hidden = false;
         result.textContent = error.message;
@@ -123,22 +132,27 @@ if (typeof document !== "undefined")
     toggle.onclick = () => {
       panel.hidden = !panel.hidden;
       paint();
-      if (!panel.hidden) void inspect();
+      if (!panel.hidden) {
+        void inspect();
+      }
     };
     $("#restart-close").onclick = () => {
       panel.hidden = true;
       toggle.setAttribute("aria-expanded", "false");
       toggle.focus();
     };
-    for (const button of panel.querySelectorAll("[data-restart-mode]"))
+    for (const button of panel.querySelectorAll("[data-restart-mode]")) {
       button.onclick = () => {
         mode = button.dataset.restartMode;
         check.checked = false;
         paint();
       };
+    }
     check.onchange = paint;
     start.onclick = async () => {
-      if (start.disabled) return;
+      if (start.disabled) {
+        return;
+      }
       pending = true;
       paint();
       try {
@@ -153,7 +167,9 @@ if (typeof document !== "undefined")
               confirmed: check.checked,
               snapshot: review.snapshot,
             });
-        if (!demo()) void poll();
+        if (!demo()) {
+          void poll();
+        }
       } catch (error) {
         job = { status: "failed", message: String(error.message || error) };
         review = null;
@@ -167,9 +183,10 @@ if (typeof document !== "undefined")
       () => {
         if (!serviceClient.isDesktop) {
           toggle.disabled = !demo();
-          if (demo())
+          if (demo()) {
             toggle.title =
               "Preview restart controls; no processes will be restarted.";
+          }
         }
       },
       { order: 20 },
@@ -177,5 +194,8 @@ if (typeof document !== "undefined")
     if (!serviceClient.isDesktop && !demo()) {
       toggle.disabled = true;
       toggle.title = "Restart controls are available in the desktop app.";
-    } else if (serviceClient.isDesktop) void poll();
+    } else if (serviceClient.isDesktop) {
+      void poll();
+    }
   })();
+}

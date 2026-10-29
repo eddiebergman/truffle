@@ -8,17 +8,23 @@ let libraryFlight = null,
   libraryGeneration = 0,
   libraryRetryAfter = 0;
 function loadArtifactLibrary(force = false) {
-  if (force) libraryGeneration++;
-  if (libraryFlight) return libraryFlight;
+  if (force) {
+    libraryGeneration++;
+  }
+  if (libraryFlight) {
+    return libraryFlight;
+  }
   if (
     !force &&
     artifactLibrary &&
     !libraryError &&
     Date.now() - libraryFetched < 15000
-  )
+  ) {
     return Promise.resolve({ accepted: true });
-  if (!force && Date.now() < libraryRetryAfter)
+  }
+  if (!force && Date.now() < libraryRetryAfter) {
     return Promise.resolve({ accepted: false, error: libraryError });
+  }
   libraryLoading = true;
   libraryFlight = (async () => {
     let failure =
@@ -29,14 +35,18 @@ function loadArtifactLibrary(force = false) {
         const generation = libraryGeneration;
         try {
           const next = await api("/api/library");
-          if (generation !== libraryGeneration) continue;
+          if (generation !== libraryGeneration) {
+            continue;
+          }
           artifactLibrary = next;
           libraryFetched = Date.now();
           libraryError = "";
           libraryRetryAfter = 0;
           return { accepted: true };
         } catch (error) {
-          if (generation !== libraryGeneration) continue;
+          if (generation !== libraryGeneration) {
+            continue;
+          }
           failure = error.message;
           break;
         }
@@ -47,10 +57,12 @@ function loadArtifactLibrary(force = false) {
     } finally {
       libraryLoading = false;
       libraryFlight = null;
-      if (["agents", "skills", "newsletters", "artifacts"].includes(source))
+      if (["agents", "skills", "newsletters", "artifacts"].includes(source)) {
         render();
-      if (selectedSession && $("#session-dialog").open)
+      }
+      if (selectedSession && $("#session-dialog").open) {
         renderSessionArtifacts(selectedSession);
+      }
     }
   })();
   return libraryFlight;
@@ -80,11 +92,13 @@ function artifactLink(artifact, label) {
   return link;
 }
 async function startNewsletter(preset, button) {
-  if (newsletterOpening) return;
+  if (newsletterOpening) {
+    return;
+  }
   newsletterOpening = true;
   try {
     await prepareSavedChat(
-      "skill:" + preset.id,
+      `skill:${preset.id}`,
       "skill",
       { presetId: preset.id },
       { button },
@@ -114,7 +128,7 @@ function libraryRow(artifact) {
   const associations = el("div", "artifact-sessions");
   for (const id of artifact.sessionIds || []) {
     const session = state.sessions.find((x) => x.id === id);
-    if (session)
+    if (session) {
       associations.append(
         featureButton(
           session.title,
@@ -122,8 +136,9 @@ function libraryRow(artifact) {
           "artifact-session-link",
         ),
       );
+    }
   }
-  if (!associations.children.length)
+  if (!associations.children.length) {
     associations.append(
       el(
         "span",
@@ -131,13 +146,14 @@ function libraryRow(artifact) {
         artifact.available ? "No session linked" : "File unavailable",
       ),
     );
+  }
   const attach = featureButton(
     "⇄",
     () => editArtifact(artifact),
     "icon-button",
   );
   attach.title = "Link artifact to sessions";
-  attach.setAttribute("aria-label", "Link sessions: " + artifact.title);
+  attach.setAttribute("aria-label", `Link sessions: ${artifact.title}`);
   row.append(date, type, title, associations, attach);
   return row;
 }
@@ -157,9 +173,12 @@ function renderNewsletterView(list, controls, query) {
     void loadArtifactLibrary();
     return;
   }
-  if (libraryError) list.append(el("p", "form-hint", libraryError));
-  for (const warning of artifactLibrary.warnings || [])
+  if (libraryError) {
+    list.append(el("p", "form-hint", libraryError));
+  }
+  for (const warning of artifactLibrary.warnings || []) {
     list.append(el("p", "form-hint", warning));
+  }
   if (source === "newsletters") {
     controls.append(
       el(
@@ -178,7 +197,7 @@ function renderNewsletterView(list, controls, query) {
         head = el("div", "newsletter-heading");
       head.append(el("h2", "", preset.title));
       const run = featureButton(
-        newsletterOpening ? "Opening…" : "▶ Run " + preset.command,
+        newsletterOpening ? "Opening…" : `▶ Run ${preset.command}`,
         () => startNewsletter(preset, run),
         "button primary",
       );
@@ -192,7 +211,7 @@ function renderNewsletterView(list, controls, query) {
           `${agentName(preset.agent)} · ${preset.cwd.replace(/^\/Users\/[^/]+/, "~")}`,
         ),
       );
-      if (!preset.available)
+      if (!preset.available) {
         card.append(
           el(
             "p",
@@ -200,6 +219,7 @@ function renderNewsletterView(list, controls, query) {
             "Skill or folder unavailable. Update data/newsletters.json.",
           ),
         );
+      }
       const sessions = state.sessions
         .filter((x) => x.newsletterId === preset.id)
         .sort((a, b) => b.createdAt - a.createdAt)
@@ -231,7 +251,7 @@ function renderNewsletterView(list, controls, query) {
       if (outputs.length) {
         card.append(el("h3", "group-header", "Recent results"));
         outputs.forEach((x) => card.append(libraryRow(x)));
-      } else
+      } else {
         card.append(
           el(
             "p",
@@ -239,6 +259,7 @@ function renderNewsletterView(list, controls, query) {
             "No reports yet. The agent will register its completed outputs.",
           ),
         );
+      }
       list.append(card);
     }
     list.append(
@@ -282,8 +303,9 @@ function renderNewsletterView(list, controls, query) {
           : !artifactSessionFilter ||
             (x.sessionIds || []).includes(artifactSessionFilter),
       );
-    if (rows.length) rows.forEach((x) => list.append(libraryRow(x)));
-    else
+    if (rows.length) {
+      rows.forEach((x) => list.append(libraryRow(x)));
+    } else {
       list.append(
         el(
           "p",
@@ -291,6 +313,7 @@ function renderNewsletterView(list, controls, query) {
           "No matching artifacts. Add a local file or an existing artifact URL.",
         ),
       );
+    }
     list.append(
       el(
         "p",
@@ -336,7 +359,9 @@ function paintArtifactEditor(current, metadata = null) {
   }
 }
 async function readArtifactEditor(current) {
-  if (!current.isCurrent() || current.loading || current.pending) return;
+  if (!current.isCurrent() || current.loading || current.pending) {
+    return;
+  }
   current.loading = true;
   current.loadFailed = false;
   holdFormFocus(current.host, current);
@@ -348,14 +373,17 @@ async function readArtifactEditor(current) {
       name: "artifacts.metadata.read",
       args: { id: current.target },
     });
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     if (
       metadata.artifact?.id !== current.target ||
       !Array.isArray(metadata.artifact.sessionIds) ||
       !metadata.expected ||
       !["registered", "discovered"].includes(metadata.origin?.type)
-    )
+    ) {
       throw new Error("Artifact metadata is unavailable.");
+    }
     current.baseline = metadata;
     current.conflict = false;
     current.result = null;
@@ -388,10 +416,12 @@ async function readArtifactEditor(current) {
 function editArtifact(artifact = null, session = null) {
   const dialog = $("#artifact-editor"),
     form = $("#artifact-form");
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   disposeFeatureForm(dialog);
   form.reset();
-  form.elements.target.disabled = !!artifact;
+  form.elements.target.disabled = Boolean(artifact);
   $("#artifact-editor-title").textContent = artifact
     ? "Artifact & sessions"
     : "Add artifact";
@@ -406,7 +436,9 @@ function editArtifact(artifact = null, session = null) {
   current.ui.refresh.onclick = () => refreshArtifactEditor(current);
   paintArtifactEditor(current);
   dialog.showModal();
-  if (current.target) return readArtifactEditor(current);
+  if (current.target) {
+    return readArtifactEditor(current);
+  }
 }
 async function refreshArtifactEditor(current) {
   if (
@@ -414,8 +446,9 @@ async function refreshArtifactEditor(current) {
     current.pending ||
     current.refreshing ||
     !["accepted", "unknown"].includes(current.result?.kind)
-  )
+  ) {
     return;
+  }
   current.refreshing = true;
   holdFormFocus(current.host, current);
   freezeFeatureForm(current, true);
@@ -425,22 +458,27 @@ async function refreshArtifactEditor(current) {
       loadStateSnapshot({ attempts: 2 }),
       loadArtifactLibrary(true),
     ]);
-    if (!snapshot.accepted || !library.accepted)
+    if (!snapshot.accepted || !library.accepted) {
       throw new Error("The artifact view could not refresh.");
-    if (!current.isCurrent()) return;
+    }
+    if (!current.isCurrent()) {
+      return;
+    }
     render();
     if (current.result.kind === "accepted") {
       current.dialog.close();
       toast("Artifact saved.");
-    } else
+    } else {
       current.ui.message.textContent =
         "The save outcome is unknown. The view and library were refreshed. Inspect them before saving again; this draft was not resubmitted.";
+    }
   } catch {
-    if (current.isCurrent())
+    if (current.isCurrent()) {
       current.ui.message.textContent = localWriteMessage(
         current.result,
         "Artifact saved.",
       );
+    }
   } finally {
     current.refreshing = false;
     if (current.isCurrent()) {
@@ -458,7 +496,9 @@ async function refreshArtifactEditor(current) {
 $("#artifact-form").onsubmit = async (event) => {
   event.preventDefault();
   const current = featureForms.get($("#artifact-editor"));
-  if (!artifactEditorMutable(current)) return;
+  if (!artifactEditorMutable(current)) {
+    return;
+  }
   const form = current.host,
     title = form.elements.title.value,
     checked = [...$("#artifact-session-picker").querySelectorAll("input")]
@@ -475,15 +515,20 @@ $("#artifact-form").onsubmit = async (event) => {
   let name, args;
   if (current.target) {
     const baseline = current.baseline;
-    if (!baseline) return;
+    if (!baseline) {
+      return;
+    }
     const patch = {},
       expected = {};
-    if (title.trim() && title !== baseline.artifact.title) patch.title = title;
+    if (title.trim() && title !== baseline.artifact.title) {
+      patch.title = title;
+    }
     if (
       JSON.stringify(ids) !==
       JSON.stringify([...baseline.artifact.sessionIds].sort())
-    )
+    ) {
       patch.sessionIds = ids;
+    }
     const discovered = baseline.origin.type === "discovered";
     if (!Object.keys(patch).length) {
       if (!discovered) {
@@ -492,8 +537,9 @@ $("#artifact-form").onsubmit = async (event) => {
       }
       patch.sessionIds = ids;
     }
-    for (const field of Object.keys(patch))
+    for (const field of Object.keys(patch)) {
       expected[field] = baseline.expected[field];
+    }
     name = discovered
       ? "artifacts.register-discovered"
       : "artifacts.metadata.update";
@@ -534,8 +580,9 @@ $("#artifact-form").onsubmit = async (event) => {
   if (result.kind === "accepted") {
     try {
       const library = await loadArtifactLibrary(true);
-      if (!library.accepted)
+      if (!library.accepted) {
         throw new Error("The artifact library could not refresh.");
+      }
     } catch (error) {
       current.result = {
         kind: "accepted",
@@ -546,8 +593,9 @@ $("#artifact-form").onsubmit = async (event) => {
   }
   current.pending = false;
   if (!current.isCurrent()) {
-    if (featureForms.get(current.dialog) === current && current.dialog.open)
+    if (featureForms.get(current.dialog) === current && current.dialog.open) {
       freezeFeatureForm(current, true);
+    }
     toast(localWriteMessage(current.result, "Artifact saved."));
     return;
   }
@@ -570,15 +618,17 @@ $("#artifact-form").onsubmit = async (event) => {
     // deliberate reload replaces that draft rather than silently rebasing it.
     current.conflict = true;
     freezeFeatureForm(current, false);
-    current.ui.message.textContent =
-      current.result.error +
-      " Your draft remains. Reload artifact replaces this draft with current metadata before saving.";
+    current.ui.message.textContent = `${
+      current.result.error
+    } Your draft remains. Reload artifact replaces this draft with current metadata before saving.`;
     current.ui.refresh.textContent = "Reload artifact";
     current.ui.refresh.hidden = false;
     current.ui.refresh.onclick = () => readArtifactEditor(current);
     form.querySelector('button[type="submit"]').disabled = true;
     restoreFormFocus(current, current.ui.refresh);
-  } else presentFeatureFormResult(current);
+  } else {
+    presentFeatureFormResult(current);
+  }
 };
 function artifactCopyButton(label, action) {
   const button = featureButton(
@@ -600,7 +650,9 @@ function artifactCopyButton(label, action) {
 }
 let artifactPreviewGeneration = 0;
 async function viewArtifact(artifact) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   const generation = ++artifactPreviewGeneration;
   $("#artifact-viewer-title").textContent = artifact.title;
   const content = $("#artifact-preview");
@@ -631,24 +683,27 @@ async function viewArtifact(artifact) {
     input.title = value;
     input.onclick = () => input.select();
     const copy = artifactCopyButton(
-      "Copy " + (label === "URL" ? "URL" : "path"),
+      `Copy ${label === "URL" ? "URL" : "path"}`,
       () => serviceClient.copyText(value),
     );
     copy.setAttribute(
       "aria-label",
       label === "URL"
         ? "Copy artifact URL"
-        : "Copy " + label.toLowerCase() + " path",
+        : `Copy ${label.toLowerCase()} path`,
     );
     row.append(el("small", "", label), input, copy);
     locations.append(row);
   };
-  if (artifact.url) path("URL", artifact.url);
-  else {
-    if (artifact.sourcePath && artifact.sourcePath !== artifact.path)
+  if (artifact.url) {
+    path("URL", artifact.url);
+  } else {
+    if (artifact.sourcePath && artifact.sourcePath !== artifact.path) {
       path("Source", artifact.sourcePath);
-    if (artifact.path)
+    }
+    if (artifact.path) {
       path(artifact.snapshot ? "Saved copy" : "Path", artifact.path);
+    }
   }
   $("#artifact-viewer").showModal();
   if (artifact.url) {
@@ -673,14 +728,17 @@ async function viewArtifact(artifact) {
     if (table) {
       const rows = async () => {
         const text = await raw();
-        if (artifact.format === "csv") return parseCSV(text);
+        if (artifact.format === "csv") {
+          return parseCSV(text);
+        }
         const data = JSON.parse(text);
         if (
           !["truffle.table/v1", "mydash.table/v1"].includes(data.schema) ||
           !Array.isArray(data.columns) ||
           !Array.isArray(data.rows)
-        )
+        ) {
           throw new Error("Unsupported table schema.");
+        }
         return [data.columns, ...data.rows];
       };
       copies.append(
@@ -693,7 +751,7 @@ async function viewArtifact(artifact) {
           serviceClient.copyText(rows().then(artifactMarkdown)),
         ),
       );
-    } else
+    } else {
       copies.append(
         artifactCopyButton(
           artifact.format === "md"
@@ -704,13 +762,15 @@ async function viewArtifact(artifact) {
           () => serviceClient.copyText(raw()),
         ),
       );
+    }
   }
-  if (isImage)
+  if (isImage) {
     copies.append(
       artifactCopyButton("Copy image", () =>
         serviceClient.copyArtifactImage(artifact.id),
       ),
     );
+  }
   if (["md", "txt", "csv", "json", "py"].includes(artifact.format)) {
     try {
       const body = await raw();
@@ -720,25 +780,30 @@ async function viewArtifact(artifact) {
         $("#artifact-preview") !== content ||
         !content.isConnected ||
         $("#artifact-viewer-title").textContent !== artifact.title
-      )
+      ) {
         return;
+      }
       const node = el(
         artifact.format === "md" ? "div" : "pre",
         artifact.format === "py"
           ? "briefing-body artifact-code"
           : "briefing-body",
       );
-      if (artifact.format === "md") appendReportText(node, body);
-      else if (["csv", "json"].includes(artifact.format))
+      if (artifact.format === "md") {
+        appendReportText(node, body);
+      } else if (["csv", "json"].includes(artifact.format)) {
         appendResultTable(node, body, artifact.format);
-      else node.textContent = body;
+      } else {
+        node.textContent = body;
+      }
       content.append(node);
     } catch (error) {
       if (
         generation === artifactPreviewGeneration &&
         $("#artifact-viewer").open
-      )
+      ) {
         content.append(el("p", "form-hint", error.message));
+      }
     }
   } else if (isImage) {
     const image = el("img", "artifact-image");
@@ -782,7 +847,7 @@ function renderSessionArtifacts(session) {
     (x.sessionIds || []).includes(session.id),
   );
   rows.forEach((x) => section.append(libraryRow(x)));
-  if (!rows.length)
+  if (!rows.length) {
     section.append(
       el(
         "p",
@@ -792,4 +857,5 @@ function renderSessionArtifacts(session) {
           : "No artifacts linked. Attach an existing file or artifact URL.",
       ),
     );
+  }
 }

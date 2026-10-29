@@ -8,11 +8,15 @@ let sessionFilter = "active",
 const launchForm = $("#launch-form");
 let launchLifetime = 0;
 function restoreSessionFocus(key) {
-  if (key)
+  if (key) {
     for (const node of document.querySelectorAll(
       "#work-list [data-focus-key], #hidden-list [data-focus-key]",
-    ))
-      if (node.dataset.focusKey === key) node.focus({ preventScroll: true });
+    )) {
+      if (node.dataset.focusKey === key) {
+        node.focus({ preventScroll: true });
+      }
+    }
+  }
 }
 const needsChatLink = (session) =>
   session.agent === "codex" &&
@@ -21,8 +25,9 @@ const needsChatLink = (session) =>
   !session.launchNew;
 const agentName = (value) => (value === "claude" ? "Claude" : "Codex");
 function sessionWorkState(session) {
-  if (!session.items.length || session.items.some((x) => x.sourceUnavailable))
+  if (!session.items.length || session.items.some((x) => x.sourceUnavailable)) {
     return "unknown";
+  }
   return session.items.every((x) => x.status === "done" || x.archivedAt)
     ? "done"
     : "active";
@@ -63,22 +68,24 @@ function sessionRuntime(session) {
         : "unknown";
     return { label: labels[lifecycle], value: lifecycle };
   }
-  if (!session.sessionId && !session.launchNew)
+  if (!session.sessionId && !session.launchNew) {
     return {
       label:
         session.destination === "cmux" ? "Linking chat" : "Awaiting chat link",
       value: "unknown",
     };
+  }
   return {
     label: session.launchNew ? "Not started" : "Saved session",
     value: "unknown",
   };
 }
 function loadInventory(fresh = false) {
-  if (inventoryLoading)
+  if (inventoryLoading) {
     return fresh
       ? inventoryLoading.then(() => loadInventory())
       : inventoryLoading;
+  }
   inventoryLoading = (async () => {
     try {
       const next = await api("/api/agents");
@@ -87,7 +94,9 @@ function loadInventory(fresh = false) {
         $("#directory-options").replaceChildren(
           ...inventory.directories.map((path) => new Option(path, path)),
         );
-        if (state && !document.querySelector("dialog[open]")) render();
+        if (state && !document.querySelector("dialog[open]")) {
+          render();
+        }
       }
       return next;
     } catch {
@@ -115,17 +124,21 @@ function updateQuickAgent() {
 $("#quick-agent").onchange = () => {
   updateQuickAgent();
   persist();
-  if (state) render();
+  if (state) {
+    render();
+  }
 };
 updateQuickAgent();
 let reviewStarting = false;
 $("#summarize-work").onclick = async () => {
-  if (reviewStarting) return;
+  if (reviewStarting) {
+    return;
+  }
   reviewStarting = true;
   try {
     const agent = $("#quick-agent").value;
     await prepareSavedChat(
-      "review:" + agent,
+      `review:${agent}`,
       "review",
       { agent },
       { button: $("#summarize-work") },
@@ -137,7 +150,7 @@ $("#summarize-work").onclick = async () => {
   }
 };
 function folderViewKey() {
-  return source + ":" + (scopePrefs[source] || "");
+  return `${source}:${scopePrefs[source] || ""}`;
 }
 function itemFolderContexts(item) {
   const result = [];
@@ -145,9 +158,13 @@ function itemFolderContexts(item) {
     const repo =
       item.url?.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\//)?.[1] ||
       item.project;
-    if (repo) result.push("github:" + repo.toLowerCase());
+    if (repo) {
+      result.push(`github:${repo.toLowerCase()}`);
+    }
   }
-  if (item.source === "sentry") result.push("sentry-project:" + item.project);
+  if (item.source === "sentry") {
+    result.push(`sentry-project:${item.project}`);
+  }
   if (item.source === "linear") {
     let parent = item.parent,
       top = null;
@@ -157,18 +174,24 @@ function itemFolderContexts(item) {
       top = parent;
       parent = parent.parent;
     }
-    if (!top && item.children?.length) top = item;
-    if (top) result.push("linear-family:" + top.id);
+    if (!top && item.children?.length) {
+      top = item;
+    }
+    if (top) {
+      result.push(`linear-family:${top.id}`);
+    }
     if (item.projectId) {
       const workspace = item.url?.split("/")[3] || "";
-      result.push("linear-project:" + workspace + ":" + item.projectId);
+      result.push(`linear-project:${workspace}:${item.projectId}`);
     }
   }
-  result.push("item:" + item.id);
+  result.push(`item:${item.id}`);
   return result;
 }
 function viewFolderContext() {
-  if (!scopePrefs[source]) return null;
+  if (!scopePrefs[source]) {
+    return null;
+  }
   const matching = state.items.filter(
     (x) => isSource(x, source) && scopeKey(x) === scopePrefs[source],
   );
@@ -191,27 +214,36 @@ function viewFolderContext() {
 }
 function folderHint(item) {
   // This is configured metadata for compact rows, not filesystem validation.
-  if (item.source === "notes" && item.cwd) return item.cwd;
+  if (item.source === "notes" && item.cwd) {
+    return item.cwd;
+  }
   const setting = state.itemSettings?.[item.id];
-  if (setting?.explicit && setting.cwd !== inventory.workRoot)
+  if (setting?.explicit && setting.cwd !== inventory.workRoot) {
     return setting.cwd;
+  }
   for (const key of itemFolderContexts(item)) {
     const value = state.folderMappings?.[key];
-    if (value) return value.path;
+    if (value) {
+      return value.path;
+    }
   }
   if (item.source === "github") {
     const repo = scopeKey(item).split("/").pop().toLowerCase();
     const folder = (inventory.folders || []).find(
       (x) => x.name.toLowerCase() === repo,
     );
-    if (folder) return folder.path;
+    if (folder) {
+      return folder.path;
+    }
   }
   return setting?.cwd && setting.cwd !== inventory.workRoot
     ? setting.cwd
     : null;
 }
 function renderFolderSelector() {
-  if ($("#launch-options").open) return;
+  if ($("#launch-options").open) {
+    return;
+  }
   const select = $("#launch-folder"),
     key = folderViewKey(),
     context = viewFolderContext();
@@ -231,7 +263,7 @@ function renderFolderSelector() {
     }));
   select.replaceChildren(
     new Option(
-      automatic ? "Auto · " + automatic.split("/").pop() : "Automatic",
+      automatic ? `Auto · ${automatic.split("/").pop()}` : "Automatic",
       "",
     ),
     ...choices.map((x) => new Option(x.name, x.path)),
@@ -240,7 +272,7 @@ function renderFolderSelector() {
     ? folderPrefs[key]
     : "";
   select.title = automatic
-    ? "Remembered folder: " + automatic
+    ? `Remembered folder: ${automatic}`
     : "Choose a folder for a new session. Issue buttons resolve their saved folder or ask once.";
 }
 $("#launch-folder").onchange = () => {
@@ -249,10 +281,12 @@ $("#launch-folder").onchange = () => {
 };
 let pendingFolderLaunch = null;
 function showFolderDialog(location, item, payload) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   pendingFolderLaunch = { item, payload };
   $("#folder-reason").textContent =
-    location.title + " · " + location.reason + " (" + location.root + ")";
+    `${location.title} · ${location.reason} (${location.root})`;
   $("#folder-choice").replaceChildren(
     new Option("Choose an existing folder…", ""),
     ...location.folders.map((x) => new Option(x.name, x.path)),
@@ -274,7 +308,9 @@ $("#folder-choice").onchange = () => {
   const create = $("#folder-choice").value === "__new__";
   $("#new-folder-label").hidden = !create;
   $("#new-folder-name").required = create;
-  if (create) $("#new-folder-name").focus();
+  if (create) {
+    $("#new-folder-name").focus();
+  }
 };
 $("#folder-form").onsubmit = async (event) => {
   event.preventDefault();
@@ -296,7 +332,9 @@ $("#folder-form").onsubmit = async (event) => {
   }
 };
 async function quickStart(item = null, button = null, extra = {}) {
-  if (quickStarting) return;
+  if (quickStarting) {
+    return;
+  }
   $("#launch-options").open = false;
   quickStarting = true;
   const page = source,
@@ -315,7 +353,9 @@ async function quickStart(item = null, button = null, extra = {}) {
   ) {
     payload.folderPath = manual;
     const context = viewFolderContext();
-    if (context) payload.rememberKey = context;
+    if (context) {
+      payload.rememberKey = context;
+    }
   }
   Object.assign(payload, extra);
   const kind = payload.workflow === "pr-review" ? "pr-review" : "quick";
@@ -327,7 +367,7 @@ async function quickStart(item = null, button = null, extra = {}) {
   }
   try {
     const result = await prepareSavedChat(
-      kind === "quick" ? "quick" : "pr-review:" + item.id,
+      kind === "quick" ? "quick" : `pr-review:${item.id}`,
       kind,
       payload,
       {
@@ -341,11 +381,12 @@ async function quickStart(item = null, button = null, extra = {}) {
             inventory.folders ||= [];
             if (
               !inventory.folders.some((folder) => folder.path === session.cwd)
-            )
+            ) {
               inventory.folders.push({
                 name: session.cwd.split("/").pop(),
                 path: session.cwd,
               });
+            }
           }
         },
       },
@@ -354,8 +395,9 @@ async function quickStart(item = null, button = null, extra = {}) {
       result.status === "rejected" &&
       result.error?.data?.location &&
       result.isCurrent()
-    )
+    ) {
       showFolderDialog(result.error.data.location, item, payload);
+    }
   } catch (error) {
     toast(error.message);
   } finally {
@@ -376,7 +418,7 @@ function itemSessionChip(item) {
     "agent-link item-agent-action",
     session ? "↗" : "＋",
   );
-  button.dataset.focusKey = item.id + ":agent";
+  button.dataset.focusKey = `${item.id}:agent`;
   button.disabled = quickStarting;
   const description = session
     ? `Continue ${agentName(session.agent)} for ${item.title}`
@@ -385,11 +427,11 @@ function itemSessionChip(item) {
     folderLabel =
       item.source === "notes" && !session?.cwd
         ? folder
-          ? "Configured folder: " + folder
+          ? `Configured folder: ${folder}`
           : "Folder resolved when launching"
-        : "Folder: " + (folder || "choose on first launch");
+        : `Folder: ${folder || "choose on first launch"}`;
   button.setAttribute("aria-label", description);
-  button.title = description + " · " + folderLabel;
+  button.title = `${description} · ${folderLabel}`;
   button.onclick = () =>
     session
       ? needsChatLink(session)
@@ -417,14 +459,14 @@ function itemSessionChip(item) {
         ? " · Reopen the existing review session"
         : " · Start a dedicated review now");
     review.setAttribute("aria-label", label);
-    review.dataset.focusKey = item.id + ":pr-review";
+    review.dataset.focusKey = `${item.id}:pr-review`;
     review.disabled = quickStarting;
     review.onclick = () => quickStart(item, review, { workflow: "pr-review" });
     wrap.append(review);
   }
   if (links.length > 1) {
     const more = el("button", "agent-link", `+${links.length - 1}`);
-    more.dataset.focusKey = item.id + ":more-sessions";
+    more.dataset.focusKey = `${item.id}:more-sessions`;
     more.title = "Manage attached sessions";
     more.setAttribute(
       "aria-label",
@@ -440,13 +482,13 @@ function sessionCard(session) {
   card.append(
     el(
       "span",
-      "agent-icon " + session.agent,
+      `agent-icon ${session.agent}`,
       session.agent === "claude" ? "✳" : "⌘",
     ),
   );
   const title = el("button", "session-card-title", session.title);
   title.title = `${session.title} · ${session.cwd}`;
-  title.dataset.focusKey = session.id + ":title";
+  title.dataset.focusKey = `${session.id}:title`;
   title.onclick = () => showSession(session);
   card.append(title);
   const linked = el(
@@ -463,7 +505,7 @@ function sessionCard(session) {
   card.append(
     el(
       "span",
-      "runtime-pill " + runtime.value,
+      `runtime-pill ${runtime.value}`,
       session.archivedAt ? "Archived" : done ? "Work complete" : runtime.label,
     ),
   );
@@ -472,7 +514,7 @@ function sessionCard(session) {
     "icon-button session-continue",
     session.launchNew ? "＋" : "↗",
   );
-  open.dataset.focusKey = session.id + ":open";
+  open.dataset.focusKey = `${session.id}:open`;
   open.dataset.savedOpenRecord = session.id;
   const openLabel = savedSessionOpenState(session.id)
     ? savedSessionOpenAction(savedSessionOpenState(session.id))
@@ -490,10 +532,12 @@ function sessionCard(session) {
   const manage = el("button", "icon-button", "⋯");
   manage.title = "Manage session";
   manage.setAttribute("aria-label", `Manage session: ${session.title}`);
-  manage.dataset.focusKey = session.id + ":manage";
+  manage.dataset.focusKey = `${session.id}:manage`;
   manage.onclick = () => showSession(session);
   card.append(open);
-  if (!session.archivedAt) card.append(visibilityButton(session, true));
+  if (!session.archivedAt) {
+    card.append(visibilityButton(session, true));
+  }
   card.append(manage);
   return card;
 }
@@ -506,14 +550,16 @@ function renderBoardSessions() {
       !x.hidden &&
       !x.launchNew &&
       sessionWorkState(x) !== "done" &&
-      [x.title, ...x.items.map((i) => i.title + " " + workReference(i))]
+      [x.title, ...x.items.map((i) => `${i.title} ${workReference(i)}`)]
         .join(" ")
         .toLowerCase()
         .includes(query),
   );
   section.hidden = source !== "all" || !sessions.length;
   section.replaceChildren();
-  if (section.hidden) return;
+  if (section.hidden) {
+    return;
+  }
   sessions.sort(
     (a, b) => (b.lastOpenedAt || b.updatedAt) - (a.lastOpenedAt || a.updatedAt),
   );
@@ -536,7 +582,7 @@ function renderSessionView(
         (sessionFilter === "done"
           ? sessionWorkState(x) === "done"
           : sessionWorkState(x) !== "done")) &&
-      [x.title, x.cwd, ...x.items.map((i) => i.title + " " + workReference(i))]
+      [x.title, x.cwd, ...x.items.map((i) => `${i.title} ${workReference(i)}`)]
         .join(" ")
         .toLowerCase()
         .includes(query),
@@ -544,11 +590,12 @@ function renderSessionView(
   sessions.sort(
     (a, b) => (b.lastOpenedAt || b.updatedAt) - (a.lastOpenedAt || a.updatedAt),
   );
-  for (const button of document.querySelectorAll("[data-session-filter]"))
+  for (const button of document.querySelectorAll("[data-session-filter]")) {
     button.classList.toggle(
       "selected",
       button.dataset.sessionFilter === sessionFilter,
     );
+  }
   const list = $("#work-list");
   list.replaceChildren(...sessions.map(sessionCard));
   restoreSessionFocus(focusKey);
@@ -626,7 +673,7 @@ function renderItemSessions(item) {
     : "Archive project";
   const links = linkedSessions(item);
   $("#item-session-list").replaceChildren(...links.map(sessionCard));
-  if (!links.length)
+  if (!links.length) {
     $("#item-session-list").append(
       el(
         "p",
@@ -634,6 +681,7 @@ function renderItemSessions(item) {
         "No session attached. Start one or connect a conversation you already use.",
       ),
     );
+  }
   $("#item-add-session").onclick = () =>
     quickStart(item, $("#item-add-session"));
   $("#edit-project").onclick = () => {
@@ -647,12 +695,14 @@ function renderItemSessions(item) {
   const archive = $("#archive-project"),
     dialog = $("#item-dialog"),
     id = item.id,
-    restore = !!item.archivedAt,
+    restore = Boolean(item.archivedAt),
     page = source;
   let archiving = false;
   archive.disabled = false;
   const archiveAction = async () => {
-    if (archiving) return;
+    if (archiving) {
+      return;
+    }
     archiving = true;
     archive.disabled = true;
     const result = await mutate({ action: "archive-project", id, restore });
@@ -665,8 +715,9 @@ function renderItemSessions(item) {
       result.kind === "accepted" &&
       result.presentation === "ready" &&
       current()
-    )
+    ) {
       dialog.close();
+    }
     if (result.kind === "rejected" && current()) {
       archiving = false;
       archive.disabled = false;
@@ -689,8 +740,7 @@ function renderItemFolderHint(item) {
   label.setAttribute("role", "status");
   label.setAttribute("aria-busy", String(item.source === "notes"));
   if (item.source !== "notes") {
-    label.textContent =
-      "Folder: " + (folderHint(item) || "choose on first launch");
+    label.textContent = `Folder: ${folderHint(item) || "choose on first launch"}`;
     label.title = "";
     return;
   }
@@ -708,7 +758,9 @@ function renderItemFolderHint(item) {
     args: { id: item.id },
   })
     .then((result) => {
-      if (!current()) return;
+      if (!current()) {
+        return;
+      }
       if (
         result.id !== item.id ||
         !(
@@ -717,22 +769,26 @@ function renderItemFolderHint(item) {
             typeof result.cwd === "string" &&
             result.cwd.length > 0)
         )
-      )
+      ) {
         throw new Error("Invalid project folder preview.");
+      }
       label.textContent = result.requiresSelection
         ? "Folder: choose when launching"
-        : "Folder: " + result.cwd;
+        : `Folder: ${result.cwd}`;
     })
     .catch(() => {
-      if (current())
-        label.textContent =
-          "Folder: could not verify." +
-          (configured
-            ? " Configured folder: " + configured
-            : " Launch will check again.");
+      if (current()) {
+        label.textContent = `Folder: could not verify.${
+          configured
+            ? ` Configured folder: ${configured}`
+            : " Launch will check again."
+        }`;
+      }
     })
     .finally(() => {
-      if (current()) label.setAttribute("aria-busy", "false");
+      if (current()) {
+        label.setAttribute("aria-busy", "false");
+      }
     });
 }
 function setRadio(name, value) {
@@ -748,15 +804,20 @@ function scopeMode() {
 function updateLaunchForm() {
   const agent = launchForm.elements.agent.value;
   const attach = connectionMode() === "attach",
-    editing = !!launchForm.elements.id.value;
+    editing = Boolean(launchForm.elements.id.value);
   launchForm.elements.agent.disabled = editing;
-  $("#candidate-picker").disabled = editing && !!selectedSession?.sessionId;
+  $("#candidate-picker").disabled =
+    editing && Boolean(selectedSession?.sessionId);
   const desktop = launchForm.elements.destination.querySelector(
     'option[value="desktop"]',
   );
   desktop.disabled = agent === "claude";
-  if (agent === "claude" && launchForm.elements.destination.value === "desktop")
+  if (
+    agent === "claude" &&
+    launchForm.elements.destination.value === "desktop"
+  ) {
     launchForm.elements.destination.value = "embedded";
+  }
   $("#attach-fields").hidden = !attach;
   launchForm.elements.sessionId.required = attach && !editing;
   $("#existing-work-fields").hidden = scopeMode() !== "existing";
@@ -775,7 +836,7 @@ function updateLaunchForm() {
   $("#connection-mode").hidden = editing;
   $("#scope-mode").hidden = editing;
   launchForm.elements.sessionId.readOnly =
-    editing && !!selectedSession?.sessionId;
+    editing && Boolean(selectedSession?.sessionId);
   $("#launch-note").textContent = attach
     ? "Attaching keeps the existing conversation history. Opening it does not send a new message."
     : launchForm.elements.destination.value === "desktop"
@@ -825,16 +886,20 @@ function renderWorkPicker() {
         .join(" ")
         .toLowerCase()
         .includes(query)
-    )
+    ) {
       continue;
+    }
     const label = el("label", "work-option");
     const check = el("input");
     check.type = "checkbox";
     check.value = item.id;
     check.checked = selectedWork.has(item.id);
     check.onchange = () => {
-      if (check.checked) selectedWork.add(item.id);
-      else selectedWork.delete(item.id);
+      if (check.checked) {
+        selectedWork.add(item.id);
+      } else {
+        selectedWork.delete(item.id);
+      }
     };
     const words = el("div");
     words.append(
@@ -849,7 +914,7 @@ function renderWorkPicker() {
     container.append(label);
     count++;
   }
-  if (!count)
+  if (!count) {
     container.append(
       el(
         "p",
@@ -857,9 +922,12 @@ function renderWorkPicker() {
         "No matching work. You can import an issue or PR link below.",
       ),
     );
+  }
 }
 function openLaunch(agent = "claude", item = null, session = null) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   launchLifetime++;
   launchEdit = null;
   delete $("#launch-dialog").dataset.formLayout;
@@ -895,14 +963,17 @@ function openLaunch(agent = "claude", item = null, session = null) {
   $("#launch-dialog").showModal();
   launchForm.elements.title.focus();
   const lifetime = launchLifetime;
-  if (session) beginManagedLaunch(session.id, lifetime);
+  if (session) {
+    beginManagedLaunch(session.id, lifetime);
+  }
   loadInventory().then(() => {
     if (
       $("#launch-dialog").open &&
       launchLifetime === lifetime &&
       !featureForms.get($("#launch-dialog"))?.pending
-    )
+    ) {
       populateCandidates();
+    }
   });
 }
 const pendingSessionResumes = new Set(),
@@ -919,8 +990,9 @@ function savedSessionOpenReceipt(receipt, id) {
     !["accepted", "unknown", "preview"].includes(receipt.status) ||
     !["embedded", "desktop"].includes(receipt.target) ||
     typeof receipt.localSaved !== "boolean"
-  )
+  ) {
     return null;
+  }
   const observed = receipt.terminal?.state === "observed";
   if (
     observed &&
@@ -931,8 +1003,9 @@ function savedSessionOpenReceipt(receipt, id) {
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
         receipt.terminal.generation,
       ))
-  )
+  ) {
     return null;
+  }
   const expected = observed
     ? "observed"
     : receipt.status === "unknown"
@@ -948,8 +1021,9 @@ function savedSessionOpenReceipt(receipt, id) {
       (typeof receipt.terminal.generation !== "string" ||
         !receipt.terminal.generation.length ||
         receipt.terminal.generation.length > 200))
-  )
+  ) {
     return null;
+  }
   return {
     recordId: id,
     status: receipt.status,
@@ -965,15 +1039,21 @@ function savedSessionOpenReceipt(receipt, id) {
 }
 function adoptSavedSessionOpen(receipt, id) {
   const narrowed = savedSessionOpenReceipt(receipt, id);
-  if (!narrowed) return null;
+  if (!narrowed) {
+    return null;
+  }
   let entry = savedSessionOpens.get(id);
-  if (entry?.receipt) return entry;
+  if (entry?.receipt) {
+    return entry;
+  }
   if (!entry) {
     if (savedSessionOpens.size >= 64) {
       const completed = [...savedSessionOpens].find(
         ([, value]) => value.resolved,
       );
-      if (!completed) return null;
+      if (!completed) {
+        return null;
+      }
       savedSessionOpens.delete(completed[0]);
     }
     entry = { pending: false, checking: false, resolved: false };
@@ -989,18 +1069,22 @@ function savedSessionOpenAction(entry) {
     : "Check terminal";
 }
 function savedSessionOpenMessage(entry) {
-  if (entry.pending) return "Opening saved chat…";
-  if (entry.receipt?.status === "unknown")
+  if (entry.pending) {
+    return "Opening saved chat…";
+  }
+  if (entry.receipt?.status === "unknown") {
     return entry.receipt.target === "desktop"
       ? "The desktop open request could not be confirmed. Check open status reads local state; it cannot confirm application consumption. No second open request will be sent."
       : "The open request could not be confirmed. Check terminal to read its current status; no second open request will be sent.";
-  if (entry.receipt?.status === "preview")
+  }
+  if (entry.receipt?.status === "preview") {
     return "Preview only. No terminal was started.";
-  if (entry.receipt?.terminal?.state === "observed")
-    return (
-      "Existing terminal found. No new open request was sent." +
-      (entry.resolved ? "" : " Check terminal to reload its observed state.")
-    );
+  }
+  if (entry.receipt?.terminal?.state === "observed") {
+    return `Existing terminal found. No new open request was sent.${
+      entry.resolved ? "" : " Check terminal to reload its observed state."
+    }`;
+  }
   return (
     (entry.receipt?.target === "desktop"
       ? "Desktop open request acknowledged."
@@ -1010,9 +1094,9 @@ function savedSessionOpenMessage(entry) {
       : "") +
     (entry.resolved
       ? ""
-      : " " +
-        savedSessionOpenAction(entry) +
-        " to refresh the view; do not repeat the open request.")
+      : ` ${savedSessionOpenAction(
+          entry,
+        )} to refresh the view; do not repeat the open request.`)
   );
 }
 async function openSavedSession(
@@ -1028,15 +1112,17 @@ async function openSavedSession(
   const id = session.id;
   let outcome,
     entry = savedSessionOpens.get(id);
-  if (entry?.pending || entry?.checking)
+  if (entry?.pending || entry?.checking) {
     return { status: "pending", presentation: "pending" };
+  }
   if (!entry) {
     if (savedSessionOpens.size >= 64) {
       const completed = [...savedSessionOpens].find(
         ([, value]) => value.resolved,
       );
-      if (completed) savedSessionOpens.delete(completed[0]);
-      else {
+      if (completed) {
+        savedSessionOpens.delete(completed[0]);
+      } else {
         toast("Check existing chat open requests before opening another chat.");
         return { status: "blocked", presentation: "pending" };
       }
@@ -1087,8 +1173,9 @@ async function openSavedSession(
     if (
       document.activeElement === button ||
       button.closest("dialog")?.contains(document.activeElement)
-    )
+    ) {
       holdFormFocus(operation.host, operation);
+    }
     button.dataset.savedOpenRecord = id;
   }
   pendingSessionResumes.add(id);
@@ -1103,16 +1190,18 @@ async function openSavedSession(
           name: "chats.open",
           args: { recordId: id, ...(target === "embedded" ? { target } : {}) },
         });
-        if (!adoptSavedSessionOpen(receipt, id))
+        if (!adoptSavedSessionOpen(receipt, id)) {
           throw new Error("The open response could not be confirmed.");
+        }
       } catch (error) {
         if ([400, 401, 403, 404, 409].includes(error.status)) {
           savedSessionOpens.delete(id);
-          if (current())
+          if (current()) {
             showSessionRecovery(
               state.sessions.find((row) => row.id === id) || session,
               error.message,
             );
+          }
           return {
             status: "rejected",
             presentation: "pending",
@@ -1156,11 +1245,11 @@ async function openSavedSession(
         (generation === undefined || candidate.generation === generation),
     );
     const ready =
-      !!snapshot?.accepted &&
-      !!latest &&
+      Boolean(snapshot?.accepted) &&
+      Boolean(latest) &&
       (entry.receipt.target === "desktop" ||
         entry.receipt.status === "preview" ||
-        !!candidate);
+        Boolean(candidate));
     entry.resolved =
       ready &&
       entry.receipt.status !== "unknown" &&
@@ -1178,7 +1267,7 @@ async function openSavedSession(
       candidate &&
       mayNavigate() &&
       typeof selectAgent === "function"
-    )
+    ) {
       try {
         selectAgent(latest, candidate);
         result.navigated = true;
@@ -1186,14 +1275,17 @@ async function openSavedSession(
         entry.resolved = false;
         result.presentation = "pending";
       }
-    if (notify) toast(savedSessionOpenMessage(entry));
+    }
+    if (notify) {
+      toast(savedSessionOpenMessage(entry));
+    }
     return result;
   } finally {
     entry.pending = false;
     entry.checking = false;
     pendingSessionResumes.delete(id);
     const held =
-      !!status &&
+      Boolean(status) &&
       (document.activeElement === status ||
         (document.activeElement === document.body && !status.isConnected));
     if (button?.isConnected) {
@@ -1202,14 +1294,19 @@ async function openSavedSession(
         ? "Open session ↗"
         : savedSessionOpenAction(entry);
     }
-    if (current())
+    if (current()) {
       try {
         render();
       } catch {
         entry.resolved = false;
-        if (outcome) outcome.presentation = "pending";
-        if (notify) toast(savedSessionOpenMessage(entry));
+        if (outcome) {
+          outcome.presentation = "pending";
+        }
+        if (notify) {
+          toast(savedSessionOpenMessage(entry));
+        }
       }
+    }
     const stillHeld =
       held &&
       (document.activeElement === status ||
@@ -1242,15 +1339,18 @@ function recoveryIsCurrent(lifetime) {
   );
 }
 function presentRecoveryOpen(result, lifetime, focus) {
-  if (!recoveryIsCurrent(lifetime)) return;
+  if (!recoveryIsCurrent(lifetime)) {
+    return;
+  }
   const dialog = $("#recovery-dialog");
   if (result.presentation === "ready") {
     if (
       [...document.querySelectorAll("dialog[open]")].some(
         (open) => open !== dialog,
       )
-    )
+    ) {
       return;
+    }
     dialog.close();
     if (
       result.candidate &&
@@ -1258,8 +1358,9 @@ function presentRecoveryOpen(result, lifetime, focus) {
       (!document.activeElement ||
         document.activeElement === document.body ||
         document.activeElement === focus)
-    )
+    ) {
       selectAgent(result.record, result.candidate);
+    }
     return;
   }
   const id = (recoveryPrepared || recoveryOriginal).id;
@@ -1273,12 +1374,15 @@ function presentRecoveryOpen(result, lifetime, focus) {
   if (recoveryPrepared) {
     $("#recovery-retry").hidden = true;
     $("#recovery-edit").hidden = true;
-    for (const hint of dialog.querySelectorAll(".form-hint"))
+    for (const hint of dialog.querySelectorAll(".form-hint")) {
       hint.hidden = true;
+    }
   }
 }
 function showSessionRecovery(session, message) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   disposeFeatureForm($("#recovery-dialog"));
   recoveryLifetime++;
   recoveryOriginal = session;
@@ -1290,19 +1394,23 @@ function showSessionRecovery(session, message) {
   };
   $("#recovery-retry").hidden = false;
   $("#recovery-edit").hidden = false;
-  for (const hint of $("#recovery-dialog").querySelectorAll(".form-hint"))
+  for (const hint of $("#recovery-dialog").querySelectorAll(".form-hint")) {
     hint.hidden = false;
+  }
   $("#recovery-error").textContent = message;
   $("#recovery-title").textContent = session.title;
   $("#recovery-folder").value = session.cwd;
   $("#recovery-folder").disabled = false;
   $("#recovery-start").textContent = "Start new with context ↗";
-  for (const button of $("#recovery-dialog").querySelectorAll("button"))
+  for (const button of $("#recovery-dialog").querySelectorAll("button")) {
     button.disabled = false;
+  }
   $("#recovery-dialog").showModal();
 }
 $("#recovery-retry").onclick = async () => {
-  if (recoveryPending) return;
+  if (recoveryPending) {
+    return;
+  }
   const lifetime = recoveryLifetime,
     record = recoveryPrepared || recoveryOriginal,
     button = $("#recovery-retry"),
@@ -1333,18 +1441,22 @@ $("#recovery-retry").onclick = async () => {
 $("#recovery-edit").onclick = () =>
   openLaunch(recoveryOriginal.agent, null, recoveryOriginal);
 $("#recovery-dialog").addEventListener("cancel", (event) => {
-  if (recoveryPending) event.preventDefault();
+  if (recoveryPending) {
+    event.preventDefault();
+  }
 });
 $("#recovery-form").onsubmit = async (event) => {
   event.preventDefault();
-  if (recoveryPending || !$("#recovery-dialog").open) return;
+  if (recoveryPending || !$("#recovery-dialog").open) {
+    return;
+  }
   const lifetime = recoveryLifetime,
     original = recoveryOriginal,
     cwd = $("#recovery-folder").value;
   recoveryPending = true;
   try {
     await prepareSavedChat(
-      "recover:" + original.id,
+      `recover:${original.id}`,
       "recover",
       { id: original.id, cwd },
       {
@@ -1356,14 +1468,19 @@ $("#recovery-form").onsubmit = async (event) => {
       },
     );
   } catch (error) {
-    if (recoveryLifetime === lifetime)
+    if (recoveryLifetime === lifetime) {
       $("#recovery-error").textContent = error.message;
+    }
   } finally {
-    if (recoveryLifetime === lifetime) recoveryPending = false;
+    if (recoveryLifetime === lifetime) {
+      recoveryPending = false;
+    }
   }
 };
 async function showSession(session) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   sessionDetailsLifetime++;
   selectedSession = session;
   $("#session-agent").textContent =
@@ -1377,7 +1494,7 @@ async function showSession(session) {
     const title = el(
       item.url ? "a" : "button",
       "linked-work-title",
-      `${item.reference ? workReference(item) + " · " : ""}${item.title}`,
+      `${item.reference ? `${workReference(item)} · ` : ""}${item.title}`,
     );
     if (item.url) {
       title.href = item.url;
@@ -1389,12 +1506,14 @@ async function showSession(session) {
         if (current) {
           $("#session-dialog").close();
           openItem(current);
-        } else toast("This project is no longer in the active workspace.");
+        } else {
+          toast("This project is no longer in the active workspace.");
+        }
       };
     }
     row.append(
       title,
-      el("span", "status-pill " + item.status, workStatusLabel(item)),
+      el("span", `status-pill ${item.status}`, workStatusLabel(item)),
     );
     list.append(row);
   }
@@ -1420,20 +1539,23 @@ async function showSession(session) {
   $("#session-dialog").showModal();
   try {
     const data = await api("/api/session/context", { id: session.id });
-    if (selectedSession?.id === session.id)
+    if (selectedSession?.id === session.id) {
       $("#session-context").textContent = data.context;
+    }
   } catch (error) {
     $("#session-context").textContent = error.message;
   }
 }
 $("#project-only").onclick = () => openNote();
-for (const radio of launchForm.querySelectorAll('input[type="radio"]'))
+for (const radio of launchForm.querySelectorAll('input[type="radio"]')) {
   radio.onchange = updateLaunchForm;
+}
 for (const select of [
   launchForm.elements.agent,
   launchForm.elements.destination,
-])
+]) {
   select.onchange = updateLaunchForm;
+}
 $("#work-picker-search").oninput = renderWorkPicker;
 $("#candidate-picker").onchange = () => {
   if (
@@ -1443,19 +1565,23 @@ $("#candidate-picker").onchange = () => {
       launchEdit.loading ||
       !launchEdit.baseline ||
       launchEdit.baseline.chat.sessionId)
-  )
+  ) {
     return;
+  }
   const candidate = inventory.candidates.find(
     (x) =>
       x.agent === launchForm.elements.agent.value &&
       attachableSessionCandidate(x) &&
       x.sessionId === $("#candidate-picker").value,
   );
-  if (!candidate) return;
+  if (!candidate) {
+    return;
+  }
   launchForm.elements.sessionId.value = candidate.sessionId;
   launchForm.elements.cwd.value = candidate.cwd;
-  if (!launchForm.elements.title.value)
+  if (!launchForm.elements.title.value) {
     launchForm.elements.title.value = candidate.title;
+  }
 };
 const launchEditableFields = [
   "title",
@@ -1480,7 +1606,7 @@ function enforceManagedIdentity(current) {
       current.refreshing ||
       !current.baseline ||
       ["accepted", "unknown"].includes(current.result?.kind),
-    attached = !!current.baseline?.chat.sessionId;
+    attached = Boolean(current.baseline?.chat.sessionId);
   launchForm.elements.agent.disabled = true;
   launchForm.elements.sessionId.readOnly = attached;
   $("#candidate-picker").disabled = locked || attached;
@@ -1498,22 +1624,29 @@ function revealManagedRecovery(current) {
     active?.isConnected &&
     !active.hidden &&
     !active.disabled
-  )
+  ) {
     active.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 }
 function paintManagedLaunch(current) {
-  if (!current.isCurrent()) return;
-  if (current.result) presentFeatureFormResult(current);
-  else freezeFeatureForm(current, current.loading || !current.baseline);
+  if (!current.isCurrent()) {
+    return;
+  }
+  if (current.result) {
+    presentFeatureFormResult(current);
+  } else {
+    freezeFeatureForm(current, current.loading || !current.baseline);
+  }
   current.reload.hidden =
-    (!!current.result &&
+    (Boolean(current.result) &&
       ["accepted", "unknown"].includes(current.result.kind)) ||
-    (!current.conflicted && !!current.baseline);
+    (!current.conflicted && Boolean(current.baseline));
   current.reload.disabled =
     current.pending || current.refreshing || current.loading;
   if (current.conflicted) {
-    for (const button of launchForm.querySelectorAll('button[type="submit"]'))
+    for (const button of launchForm.querySelectorAll('button[type="submit"]')) {
       button.disabled = true;
+    }
     restoreFormFocus(current, current.reload);
   }
   enforceManagedIdentity(current);
@@ -1526,8 +1659,9 @@ async function readManagedLaunch(current) {
     current.refreshing ||
     current.loading ||
     ["accepted", "unknown"].includes(current.result?.kind)
-  )
+  ) {
     return;
+  }
   current.loading = true;
   current.baseline = null;
   current.result = null;
@@ -1540,7 +1674,9 @@ async function readManagedLaunch(current) {
       name: "chats.metadata.read",
       args: { recordId: current.target },
     });
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     if (
       value?.recordId !== current.target ||
       typeof value.redacted !== "boolean" ||
@@ -1557,10 +1693,11 @@ async function readManagedLaunch(current) {
       ) ||
       (value.chat.sessionId !== null &&
         typeof value.chat.sessionId !== "string")
-    )
+    ) {
       throw new Error(
         "Current session settings could not be read. Reload before saving.",
       );
+    }
     const chat = value.chat;
     current.baseline = {
       chat: { ...chat, itemIds: [...chat.itemIds] },
@@ -1574,8 +1711,9 @@ async function readManagedLaunch(current) {
       sessionId: chat.sessionId,
     };
     launchForm.elements.id.value = current.target;
-    for (const field of ["agent", "title", "cwd", "instruction", "sessionId"])
+    for (const field of ["agent", "title", "cwd", "instruction", "sessionId"]) {
       launchForm.elements[field].value = chat[field] || "";
+    }
     launchForm.elements.destination.value =
       chat.destination === "desktop" ? "desktop" : "embedded";
     launchForm.elements.urls.value = "";
@@ -1592,15 +1730,17 @@ async function readManagedLaunch(current) {
       (selectedSession.items || []).map((item) => [item.id, item]),
     );
     allItems().forEach((item) => items.set(item.id, item));
-    for (const id of chat.itemIds)
-      if (!items.has(id))
+    for (const id of chat.itemIds) {
+      if (!items.has(id)) {
         items.set(id, {
           id,
-          title: "Saved work: " + id,
+          title: `Saved work: ${id}`,
           source: "notes",
           reference: id,
           status: "todo",
         });
+      }
+    }
     pickerItems = [...items.values()];
     updateLaunchForm();
     freezeFeatureForm(current, false);
@@ -1618,7 +1758,9 @@ async function readManagedLaunch(current) {
     }
   } finally {
     current.loading = false;
-    if (current.isCurrent()) paintManagedLaunch(current);
+    if (current.isCurrent()) {
+      paintManagedLaunch(current);
+    }
   }
 }
 function beginManagedLaunch(id, lifetime) {
@@ -1659,8 +1801,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
     current.loading ||
     current.conflicted ||
     !current.baseline
-  )
+  ) {
     return;
+  }
   const patch = {},
     expected = {},
     urls = (values.urls || "")
@@ -1675,7 +1818,7 @@ async function saveExistingLaunch(values, { lifetime, open }) {
       sessionId: values.sessionId.trim(),
       itemIds: [...selectedWork].sort(),
     };
-  for (const field of launchEditableFields)
+  for (const field of launchEditableFields) {
     if (
       JSON.stringify(next[field]) !== JSON.stringify(current.display[field]) ||
       (field === "itemIds" && urls.length)
@@ -1683,12 +1826,14 @@ async function saveExistingLaunch(values, { lifetime, open }) {
       patch[field] = next[field];
       expected[field] = current.baseline.expected[field];
     }
+  }
   const record = () => {
     const saved = state.sessions.find((saved) => saved.id === id);
-    if (!saved)
+    if (!saved) {
       throw new Error(
         "The saved session is not in the loaded view. Refresh or inspect History; do not repeat the save.",
       );
+    }
     return saved;
   };
   const finish = () => {
@@ -1702,8 +1847,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
       current.refreshing ||
       current.result?.kind !== "accepted" ||
       current.result.presentation !== "ready"
-    )
+    ) {
       return;
+    }
     let saved;
     try {
       saved = record();
@@ -1737,8 +1883,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
         outcome.presentation === "ready" &&
         outcome.record &&
         outcome.candidate
-      )
+      ) {
         focusPreparedTerminal(outcome.record, outcome.candidate, returnFocus);
+      }
     } catch {
       toast(
         "Session changes saved. The open outcome could not be confirmed. Inspect this saved chat before another open request.",
@@ -1757,14 +1904,18 @@ async function saveExistingLaunch(values, { lifetime, open }) {
   current.openResult = openButton;
   current.ui.refresh.parentElement.append(openButton);
   current.afterReady = () => {
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     record();
     current.result = { kind: "accepted", presentation: "ready" };
     if (open) {
       openButton.hidden = false;
       current.ui.message.textContent =
         "Session changes saved. Choose Open saved chat to open it.";
-    } else finish();
+    } else {
+      finish();
+    }
   };
   current.acceptedText = Object.keys(patch).length
     ? "Session changes saved."
@@ -1776,7 +1927,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
   current.ui.message.textContent = "Saving session changes…";
   let failureStatus = null;
   const result = await presentLocalWrite(async () => {
-    if (!Object.keys(patch).length) return;
+    if (!Object.keys(patch).length) {
+      return;
+    }
     try {
       const receipt = await api("/api/commands/invoke", {
         name: "chats.metadata.update",
@@ -1787,8 +1940,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
           ...(urls.length ? { urls } : {}),
         },
       });
-      if (receipt?.saved !== true || receipt.recordId !== id)
+      if (receipt?.saved !== true || receipt.recordId !== id) {
         throw new Error("The session save response could not be confirmed.");
+      }
     } catch (error) {
       failureStatus = error.status;
       throw error;
@@ -1797,16 +1951,18 @@ async function saveExistingLaunch(values, { lifetime, open }) {
   current.pending = false;
   current.result = result;
   if (!current.isCurrent()) {
-    if (featureForms.get(dialog) === current && dialog.open)
+    if (featureForms.get(dialog) === current && dialog.open) {
       freezeFeatureForm(current, true);
+    }
     toast(localWriteMessage(result, current.acceptedText));
     return;
   }
   if (result.kind === "accepted" && result.presentation === "ready") {
     try {
       record();
-      if (open) await openSaved();
-      else {
+      if (open) {
+        await openSaved();
+      } else {
         finish();
         toast(current.acceptedText);
       }
@@ -1823,8 +1979,9 @@ async function saveExistingLaunch(values, { lifetime, open }) {
     current.conflicted = true;
     current.ui.message.textContent = result.error;
     freezeFeatureForm(current, false);
-    for (const button of launchForm.querySelectorAll('button[type="submit"]'))
+    for (const button of launchForm.querySelectorAll('button[type="submit"]')) {
       button.disabled = true;
+    }
     current.reload.hidden = false;
     current.reload.disabled = false;
     enforceManagedIdentity(current);
@@ -1832,27 +1989,33 @@ async function saveExistingLaunch(values, { lifetime, open }) {
     revealManagedRecovery(current);
     return;
   }
-  if (current.isCurrent()) paintManagedLaunch(current);
+  if (current.isCurrent()) {
+    paintManagedLaunch(current);
+  }
 }
 launchForm.onsubmit = async (event) => {
   event.preventDefault();
-  if (!$("#launch-dialog").open) return;
+  if (!$("#launch-dialog").open) {
+    return;
+  }
   const lifetime = launchLifetime,
     values = Object.fromEntries(new FormData(launchForm));
   values.agent = launchForm.elements.agent.value;
   const context = capturePreparationContext(() => launchLifetime === lifetime);
   try {
-    if (values.connection === "attach" && !values.sessionId && !values.id)
+    if (values.connection === "attach" && !values.sessionId && !values.id) {
       throw new Error("Choose a saved session or enter its exact UUID.");
+    }
     if (
       values.scope === "existing" &&
       !values.id &&
       !selectedWork.size &&
       !values.urls.trim()
-    )
+    ) {
       throw new Error(
         "Select at least one item, or paste an issue or PR link.",
       );
+    }
     const payload = {
       agent: values.agent,
       destination: values.destination,
@@ -1889,7 +2052,7 @@ launchForm.onsubmit = async (event) => {
             itemIds: payload.itemIds,
           }
         : payload;
-    await prepareSavedChat("launch:" + kind, kind, args, {
+    await prepareSavedChat(`launch:${kind}`, kind, args, {
       host: launchForm,
       open: event.submitter?.value === "open",
       isCurrent: () => launchLifetime === lifetime,
@@ -1915,7 +2078,9 @@ $("#session-archive").onclick = async () => {
     archived = !target.archivedAt,
     dialog = $("#session-dialog");
   if (await mutateChatMetadata("chats.archive", { id: target.id, archived })) {
-    if (selectedSession === target && dialog.open) dialog.close();
+    if (selectedSession === target && dialog.open) {
+      dialog.close();
+    }
     toast(
       archived
         ? "Archived in truffle. The agent conversation stays available."
@@ -1923,25 +2088,34 @@ $("#session-archive").onclick = async () => {
     );
   }
 };
-for (const button of document.querySelectorAll("[data-session-filter]"))
+for (const button of document.querySelectorAll("[data-session-filter]")) {
   button.onclick = () => {
     sessionFilter = button.dataset.sessionFilter;
     render();
   };
+}
 setInterval(() => {
-  if (!document.hidden && !document.querySelector("dialog[open]"))
+  if (!document.hidden && !document.querySelector("dialog[open]")) {
     loadInventory();
+  }
 }, 5000);
 
 let sessionHashHandled = false;
 function handleSessionHash() {
-  if (sessionHashHandled || !state) return;
+  if (sessionHashHandled || !state) {
+    return;
+  }
   const hash = location.hash.match(/^#session=([0-9a-f-]{36})$/i);
-  if (!hash) return;
+  if (!hash) {
+    return;
+  }
   sessionHashHandled = true;
   const record = state.sessions.find((x) => x.id === hash[1]);
-  if (record) showSession(record);
-  else toast("That session association is no longer available.");
+  if (record) {
+    showSession(record);
+  } else {
+    toast("That session association is no longer available.");
+  }
 }
 window.addEventListener("hashchange", () => {
   sessionHashHandled = false;
@@ -1953,8 +2127,9 @@ $("#session-correct").onclick = async () => {
   if (
     !old.archivedAt &&
     !(await mutateChatMetadata("chats.archive", { id: old.id, archived: true }))
-  )
+  ) {
     return;
+  }
   openLaunch(old.agent, null, null);
   launchForm.elements.title.value = old.title;
   launchForm.elements.cwd.value = old.cwd;
@@ -1999,22 +2174,23 @@ function renderLocationChoices() {
   locationChoices.forEach((folder, index) => {
     const button = el(
       "button",
-      "location-choice" + (index === locationIndex ? " selected" : ""),
+      `location-choice${index === locationIndex ? " selected" : ""}`,
       folder.name,
     );
     button.type = "button";
-    button.id = "location-choice-" + index;
+    button.id = `location-choice-${index}`;
     button.title = folder.path || "Use saved project mapping";
     button.setAttribute("role", "option");
     button.setAttribute("aria-selected", String(index === locationIndex));
     button.onclick = () => launchAtLocation(folder);
     list.append(button);
   });
-  if (!locationChoices.length)
+  if (!locationChoices.length) {
     list.append(el("p", "form-hint", "No matching folder"));
+  }
   $("#location-query").setAttribute(
     "aria-activedescendant",
-    locationChoices.length ? "location-choice-" + locationIndex : "",
+    locationChoices.length ? `location-choice-${locationIndex}` : "",
   );
   list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
 }
@@ -2023,11 +2199,13 @@ function openLocationPrompt() {
     typeof selectedAgentKey === "string"
       ? (state.sessions || []).find(
           (session) =>
-            "record:" + session.id === selectedAgentKey ||
-            "embedded:" + session.id === selectedAgentKey,
+            `record:${session.id}` === selectedAgentKey ||
+            `embedded:${session.id}` === selectedAgentKey,
         )
       : null;
-  if (record) $("#quick-agent").value = record.agent;
+  if (record) {
+    $("#quick-agent").value = record.agent;
+  }
   renderFolderSelector();
   $("#location-prompt").hidden = false;
   $("#launch-options").open = true;
@@ -2066,9 +2244,12 @@ $("#location-query").onkeydown = (event) => {
 };
 $("#location-prompt").onsubmit = (event) => {
   event.preventDefault();
-  if (locationChoices[locationIndex])
+  if (locationChoices[locationIndex]) {
     void launchAtLocation(locationChoices[locationIndex]);
+  }
 };
 $("#launch-options").addEventListener("toggle", () => {
-  if (!$("#launch-options").open) $("#location-prompt").hidden = true;
+  if (!$("#launch-options").open) {
+    $("#location-prompt").hidden = true;
+  }
 });

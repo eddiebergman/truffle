@@ -179,6 +179,13 @@ const rules = {
   eqeqeq: "error",
   "no-var": "error",
   "prefer-const": "error",
+  curly: "error",
+  "default-case-last": "error",
+  "no-else-return": ["error", { allowElseIf: false }],
+  "no-implicit-coercion": "error",
+  "object-shorthand": "error",
+  "prefer-template": "error",
+  radix: "error",
 };
 
 export default [

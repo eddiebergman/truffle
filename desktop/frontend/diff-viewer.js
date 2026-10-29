@@ -13,7 +13,9 @@ const registeredThemes = new Set();
 function themeName() {
   const data =
     window.truffleThemeCatalog?.[document.documentElement.dataset.theme];
-  if (!data) return "truffle-rose-pine";
+  if (!data) {
+    return "truffle-rose-pine";
+  }
   if (!registeredThemes.has(data.syntaxName)) {
     registerCustomTheme(data.syntaxName, () =>
       Promise.resolve({ ...data.theme, name: data.syntaxName }),
@@ -27,18 +29,24 @@ export async function highlightReviewCode(root, path) {
   await Promise.all(
     blocks.map(async (code) => {
       const text = code.textContent;
-      if (!text || text.length > 8000) return;
+      if (!text || text.length > 8000) {
+        return;
+      }
       const language =
         [...code.classList]
           .find((name) => name.startsWith("language-"))
           ?.slice(9) || getFiletypeFromFileName(path || "");
-      if (!language) return;
+      if (!language) {
+        return;
+      }
       try {
         const highlighter = await getSharedHighlighter({
           themes: [themeName()],
           langs: [language],
         });
-        if (!code.isConnected) return;
+        if (!code.isConnected) {
+          return;
+        }
         const result = highlighter.codeToTokens(text, {
             lang: language,
             theme: themeName(),
@@ -49,14 +57,19 @@ export async function highlightReviewCode(root, path) {
           result.tokens
             .map((line) => line.map((token) => token.content).join(""))
             .join("\n") !== text
-        )
+        ) {
           return;
+        }
         for (const [index, line] of result.tokens.entries()) {
-          if (index) fragment.append(document.createTextNode("\n"));
+          if (index) {
+            fragment.append(document.createTextNode("\n"));
+          }
           for (const token of line) {
             const span = document.createElement("span");
             span.textContent = token.content;
-            if (token.color) span.style.color = token.color;
+            if (token.color) {
+              span.style.color = token.color;
+            }
             fragment.append(span);
           }
         }
@@ -94,6 +107,7 @@ export function createDiffReview(root, style, renderComments) {
             getComputedStyle(document.documentElement).getPropertyValue(
               "--diff-line-height",
             ),
+            10,
           ) || 16,
       });
       view.render({
@@ -120,7 +134,9 @@ export function createDiffReview(root, style, renderComments) {
       }
     },
     dispose() {
-      for (const { view } of views.values()) view.cleanUp();
+      for (const { view } of views.values()) {
+        view.cleanUp();
+      }
       views.clear();
       virtualizer.cleanUp();
     },

@@ -27,7 +27,7 @@ function settingFields() {
               (a, b) =>
                 a.type.localeCompare(b.type) || a.label.localeCompare(b.label),
             )
-            .map((t) => [t.id, t.label + " · " + t.type]),
+            .map((t) => [t.id, `${t.label} · ${t.type}`]),
         ]
       : f.type === "select"
         ? f.choices
@@ -113,9 +113,11 @@ function applyTheme() {
   };
   for (const [key, value] of Object.entries(
     data?.theme?.truffle || data?.theme?.mydash || {},
-  ))
-    if (Object.hasOwn(palette, "--" + key) && /^#[0-9a-f]{6,8}$/i.test(value))
-      palette["--" + key] = value;
+  )) {
+    if (Object.hasOwn(palette, `--${key}`) && /^#[0-9a-f]{6,8}$/i.test(value)) {
+      palette[`--${key}`] = value;
+    }
+  }
   Object.assign(palette, {
     "--sidebar": palette["--panel"],
     "--accent": palette["--iris"],
@@ -125,8 +127,9 @@ function applyTheme() {
     "--progress": palette["--gold"],
     "--blocked": palette["--love"],
   });
-  for (const [key, value] of Object.entries(palette))
+  for (const [key, value] of Object.entries(palette)) {
     document.documentElement.style.setProperty(key, value);
+  }
   document.documentElement.dataset.colorScheme = data?.type || "dark";
   document.documentElement.style.colorScheme = data?.type || "dark";
 }
@@ -155,7 +158,9 @@ function applyThemeSettings() {
   }
 }
 function previewTheme(id) {
-  if (themePreview === id) return;
+  if (themePreview === id) {
+    return;
+  }
   themePreview = id;
   applyThemeSettings();
 }
@@ -204,7 +209,7 @@ function applyShortcutHint(button, id) {
     hint.textContent = shortcutLabel(chord);
     hint.hidden = !chord;
   }
-  if (chord)
+  if (chord) {
     button.setAttribute(
       "aria-keyshortcuts",
       chord.replace(
@@ -212,7 +217,9 @@ function applyShortcutHint(button, id) {
         /Mac/.test(navigator.platform) ? "Meta" : "Control",
       ),
     );
-  else button.removeAttribute("aria-keyshortcuts");
+  } else {
+    button.removeAttribute("aria-keyshortcuts");
+  }
 }
 function applyAppSettings() {
   applyThemeSettings();
@@ -223,39 +230,41 @@ function applyAppSettings() {
   );
   document.documentElement.style.setProperty(
     "--diff-font-size",
-    setting("diffFontSize", 10) + "px",
+    `${setting("diffFontSize", 10)}px`,
   );
   document.documentElement.style.setProperty(
     "--diff-line-height",
-    Math.ceil(setting("diffFontSize", 10) * 1.6) + "px",
+    `${Math.ceil(setting("diffFontSize", 10) * 1.6)}px`,
   );
   $("#quick-agent").value = setting("defaultAgent", "claude");
   updateQuickAgent();
   const native = window.__TAURI__?.core;
-  if (native && appSettings)
+  if (native && appSettings) {
     void native
       .invoke("apply_native_settings", {
         values: appSettings.values,
         light: themeDefinition()?.type === "light",
       })
       .catch((error) =>
-        toast("Native shortcuts could not update: " + String(error)),
+        toast(`Native shortcuts could not update: ${String(error)}`),
       );
-  for (const node of document.querySelectorAll("[data-command-id]"))
+  }
+  for (const node of document.querySelectorAll("[data-command-id]")) {
     node.textContent = shortcutLabel(
       setting("keybindings", {})[node.dataset.commandId],
     );
-  for (const node of document.querySelectorAll("#sources [data-source]"))
-    applyShortcutHint(node, "view-" + node.dataset.source);
+  }
+  for (const node of document.querySelectorAll("#sources [data-source]")) {
+    applyShortcutHint(node, `view-${node.dataset.source}`);
+  }
   applyShortcutHint($("#activity-open"), "view-sessions");
   applyShortcutHint($("#command-open"), "commands");
   applyShortcutHint($("#new-note"), "agent-new");
   $("#new-note").title =
-    "New chat · " + shortcutLabel(setting("keybindings", {})["agent-new"]);
+    `New chat · ${shortcutLabel(setting("keybindings", {})["agent-new"])}`;
   const hint = $(".search kbd");
   if (hint) {
-    hint.textContent =
-      "/ · " + shortcutLabel(setting("keybindings", {})["page-search"]);
+    hint.textContent = `/ · ${shortcutLabel(setting("keybindings", {})["page-search"])}`;
     hint.title = "Search this page";
   }
   renderQuickActions();
@@ -273,30 +282,38 @@ async function loadAppSettings({ canApply = () => true } = {}) {
     } catch (error) {
       next.configError = error.message;
     }
-    if (!current()) return null;
+    if (!current()) {
+      return null;
+    }
     const changed =
       JSON.stringify(next) !== JSON.stringify(appSettings) ||
       (themes &&
         JSON.stringify(themes) !== JSON.stringify(window.truffleThemeCatalog));
     appSettings = next;
-    if (themes) window.truffleThemeCatalog = themes;
-    if (changed)
+    if (themes) {
+      window.truffleThemeCatalog = themes;
+    }
+    if (changed) {
       try {
         applyAppSettings();
       } catch (error) {
         if (appSettings === next) {
           appSettings = identity;
-          if (themes && window.truffleThemeCatalog === themes)
+          if (themes && window.truffleThemeCatalog === themes) {
             window.truffleThemeCatalog = catalog;
+          }
         }
         throw error;
       }
-    if (next.configError && canApply() && $("#settings-dialog").open)
+    }
+    if (next.configError && canApply() && $("#settings-dialog").open) {
       $("#settings-error").textContent = next.configError;
+    }
     return next;
   } catch (error) {
-    if (appSettings === identity && canApply() && $("#settings-dialog").open)
+    if (appSettings === identity && canApply() && $("#settings-dialog").open) {
       $("#settings-error").textContent = error.message;
+    }
   }
 }
 function focusPageSearch() {
@@ -306,7 +323,9 @@ function focusPageSearch() {
     : source === "chat-results"
       ? document.querySelector(".chat-search-form input")
       : $("#search");
-  if (!input || !input.getClientRects().length) return false;
+  if (!input || !input.getClientRects().length) {
+    return false;
+  }
   input.focus();
   input.select();
   return true;
@@ -336,48 +355,52 @@ function chordFromEvent(event) {
     !(event.metaKey || event.ctrlKey) ||
     (event.metaKey && event.ctrlKey) ||
     event.isComposing
-  )
+  ) {
     return "";
-  let key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
-  if (event.altKey && /^Key[A-Z]$/.test(event.code || ""))
-    key = event.code.slice(3);
-  if (event.shiftKey) {
-    if (/^Digit[0-9]$/.test(event.code || "")) key = event.code.slice(5);
-    else if (["Comma", "Period", "Slash"].includes(event.code))
-      key = { Comma: ",", Period: ".", Slash: "/" }[event.code];
   }
-  return (
-    "Primary+" +
-    (event.shiftKey ? "Shift+" : "") +
-    (event.altKey ? "Alt+" : "") +
-    key
-  );
+  let key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  if (event.altKey && /^Key[A-Z]$/.test(event.code || "")) {
+    key = event.code.slice(3);
+  }
+  if (event.shiftKey) {
+    if (/^Digit[0-9]$/.test(event.code || "")) {
+      key = event.code.slice(5);
+    } else if (["Comma", "Period", "Slash"].includes(event.code)) {
+      key = { Comma: ",", Period: ".", Slash: "/" }[event.code];
+    }
+  }
+  return `Primary+${event.shiftKey ? "Shift+" : ""}${
+    event.altKey ? "Alt+" : ""
+  }${key}`;
 }
 function canonicalShortcut(value) {
   const parts = value.trim().split("+");
-  if (!value.trim()) return "";
+  if (!value.trim()) {
+    return "";
+  }
   const key = parts.pop(),
     modifiers = parts.map((part) => part.toLowerCase());
   if (
     modifiers[0] !== "primary" ||
     new Set(modifiers).size !== modifiers.length ||
     modifiers.some((part) => !["primary", "shift", "alt"].includes(part))
-  )
+  ) {
     return null;
+  }
   const normalizedKey =
     key.toLowerCase() === "enter" ? "Enter" : key.toUpperCase();
-  if (!/^(?:[A-Z0-9,./]|Enter)$/.test(normalizedKey)) return null;
-  return (
-    "Primary+" +
-    (modifiers.includes("shift") ? "Shift+" : "") +
-    (modifiers.includes("alt") ? "Alt+" : "") +
-    normalizedKey
-  );
+  if (!/^(?:[A-Z0-9,./]|Enter)$/.test(normalizedKey)) {
+    return null;
+  }
+  return `Primary+${modifiers.includes("shift") ? "Shift+" : ""}${
+    modifiers.includes("alt") ? "Alt+" : ""
+  }${normalizedKey}`;
 }
 function shortcutValidationMessage(value, id) {
   const chord = canonicalShortcut(value);
-  if (chord === null)
+  if (chord === null) {
     return "Use Primary, optional Shift/Alt, and a letter, number, Enter, comma, period or slash.";
+  }
   if (
     [
       "Primary+C",
@@ -388,8 +411,9 @@ function shortcutValidationMessage(value, id) {
       "Primary+Shift+Z",
       "Primary+Q",
     ].includes(chord)
-  )
+  ) {
     return "This shortcut is reserved for editing or quitting.";
+  }
   const conflict =
     chord &&
     Object.entries(settingsDraft.keybindings).find(
@@ -397,23 +421,25 @@ function shortcutValidationMessage(value, id) {
         otherId !== id && canonicalShortcut(binding) === chord,
     );
   return conflict
-    ? "Already assigned to " +
-        (appSettings.commands.find((command) => command.id === conflict[0])
-          ?.label || conflict[0]) +
-        ". Choose another shortcut."
+    ? `Already assigned to ${
+        appSettings.commands.find((command) => command.id === conflict[0])
+          ?.label || conflict[0]
+      }. Choose another shortcut.`
     : "";
 }
 function recordedShortcut(event) {
   if (
     event.isComposing ||
     ["Meta", "Control", "Shift", "Alt"].includes(event.key)
-  )
+  ) {
     return "";
+  }
   const chord = chordFromEvent(event);
-  if (!chord || canonicalShortcut(chord) === null)
+  if (!chord || canonicalShortcut(chord) === null) {
     throw new Error(
       "Use Command/Control with a letter, number, Enter, comma, period or slash.",
     );
+  }
   if (
     [
       "Primary+C",
@@ -424,12 +450,15 @@ function recordedShortcut(event) {
       "Primary+Shift+Z",
       "Primary+Q",
     ].includes(chord)
-  )
+  ) {
     throw new Error("This shortcut is reserved for editing or quitting.");
+  }
   return chord;
 }
 function syncNativeShortcutRecording(recording) {
-  if (!serviceClient.isDesktop) return Promise.resolve();
+  if (!serviceClient.isDesktop) {
+    return Promise.resolve();
+  }
   shortcutRecordingSync = shortcutRecordingSync
     .catch(() => {})
     .then(() =>
@@ -439,7 +468,9 @@ function syncNativeShortcutRecording(recording) {
 }
 async function finishShortcutRecording() {
   const current = shortcutRecording;
-  if (!current) return;
+  if (!current) {
+    return;
+  }
   shortcutRecording = null;
   current.button.textContent = "Record";
   current.button.setAttribute("aria-pressed", "false");
@@ -451,12 +482,14 @@ async function finishShortcutRecording() {
     await syncNativeShortcutRecording(false);
   } catch (error) {
     $("#settings-error").textContent =
-      "Could not restore app shortcuts: " + String(error);
+      `Could not restore app shortcuts: ${String(error)}`;
   }
   filterSettings();
 }
 async function startShortcutRecording(button, input, id) {
-  if (settingsSaving) return;
+  if (settingsSaving) {
+    return;
+  }
   if (shortcutRecording?.button === button) {
     await finishShortcutRecording();
     return;
@@ -474,15 +507,19 @@ async function startShortcutRecording(button, input, id) {
   try {
     await syncNativeShortcutRecording(true);
   } catch (error) {
-    if (shortcutRecording === current) await finishShortcutRecording();
+    if (shortcutRecording === current) {
+      await finishShortcutRecording();
+    }
     $("#settings-error").textContent =
-      "Could not record shortcut: " + String(error);
+      `Could not record shortcut: ${String(error)}`;
   }
 }
 window.addEventListener(
   "keydown",
   (event) => {
-    if (settingsSaving || !shortcutRecording || event.isComposing) return;
+    if (settingsSaving || !shortcutRecording || event.isComposing) {
+      return;
+    }
     if (event.key === "Tab") {
       void finishShortcutRecording();
       return;
@@ -496,10 +533,14 @@ window.addEventListener(
     }
     try {
       const chord = recordedShortcut(event);
-      if (!chord) return;
+      if (!chord) {
+        return;
+      }
       const current = shortcutRecording,
         error = shortcutValidationMessage(chord, current.id);
-      if (error) throw new Error(error);
+      if (error) {
+        throw new Error(error);
+      }
       current.input.value = chord;
       settingsDraft.keybindings[current.id] = chord;
       updateSettingsDirty();
@@ -536,11 +577,16 @@ function runConfiguredCommand(id) {
     return;
   }
   if (id === "find-work") {
-    if ($("#command-dialog").open) requestDialogClose($("#command-dialog"));
-    else openPalette();
+    if ($("#command-dialog").open) {
+      requestDialogClose($("#command-dialog"));
+    } else {
+      openPalette();
+    }
     return;
   }
-  if (document.querySelector("dialog[open]")) return;
+  if (document.querySelector("dialog[open]")) {
+    return;
+  }
   if (id === "toggle-left" || id === "toggle-right") {
     toggleSidebar(id === "toggle-left" ? "left" : "right");
     return;
@@ -556,7 +602,9 @@ function runConfiguredCommand(id) {
     return;
   }
   if (id === "chat-terminal") {
-    if (source === "agents") void toggleChatTerminal();
+    if (source === "agents") {
+      void toggleChatTerminal();
+    }
     return;
   }
   if (id === "terminal-focus") {
@@ -568,10 +616,15 @@ function runConfiguredCommand(id) {
   }
   if (id.startsWith("view-")) {
     source = id.slice(5);
-    if (typeof savedViewUsePage === "function") savedViewUsePage(source);
-    else {
-      if (source === "github") githubView = "all";
-      if (source === "linear") scopePrefs.linear = "";
+    if (typeof savedViewUsePage === "function") {
+      savedViewUsePage(source);
+    } else {
+      if (source === "github") {
+        githubView = "all";
+      }
+      if (source === "linear") {
+        scopePrefs.linear = "";
+      }
     }
     persist();
     render();
@@ -580,7 +633,9 @@ function runConfiguredCommand(id) {
 document.addEventListener(
   "keydown",
   (event) => {
-    if (!appSettings || event.target.closest(".shortcut-input")) return;
+    if (!appSettings || event.target.closest(".shortcut-input")) {
+      return;
+    }
     const chord = chordFromEvent(event),
       id = Object.keys(appSettings.values.keybindings).find(
         (id) =>
@@ -589,10 +644,14 @@ document.addEventListener(
             chord.toUpperCase(),
       );
     if (id) {
-      if (id === "page-search" && !focusPageSearch()) return;
+      if (id === "page-search" && !focusPageSearch()) {
+        return;
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (id !== "page-search") runConfiguredCommand(id);
+      if (id !== "page-search") {
+        runConfiguredCommand(id);
+      }
     } else if (
       /^Primary\+[1-9]$/.test(chord) &&
       !document.querySelector("dialog[open]")
@@ -617,7 +676,9 @@ function settingsButton(label, action, className = "button") {
       : className.includes("danger")
         ? "destructive"
         : "secondary";
-    if (className.includes("icon-button")) button.dataset.size = "icon";
+    if (className.includes("icon-button")) {
+      button.dataset.size = "icon";
+    }
   }
   return button;
 }
@@ -636,40 +697,52 @@ function settingsReset(key, label, { commandId } = {}) {
   const reset = settingsButton(
     "↶",
     () => {
-      if (settingsSaving) return;
+      if (settingsSaving) {
+        return;
+      }
       const owned = reset.parentElement.contains(document.activeElement),
         input = document.getElementById(
-          commandId ? "shortcut-" + commandId : "preference-" + key,
+          commandId ? `shortcut-${commandId}` : `preference-${key}`,
         );
-      if (commandId) settingsDraft.keybindings[commandId] = value;
-      else settingsDraft[key] = structuredClone(value);
-      if (input) {
-        if (input.type === "checkbox") input.checked = value;
-        else input.value = value;
+      if (commandId) {
+        settingsDraft.keybindings[commandId] = value;
+      } else {
+        settingsDraft[key] = structuredClone(value);
       }
-      if (commandId && shortcutRecording?.id === commandId)
+      if (input) {
+        if (input.type === "checkbox") {
+          input.checked = value;
+        } else {
+          input.value = value;
+        }
+      }
+      if (commandId && shortcutRecording?.id === commandId) {
         void finishShortcutRecording();
-      if (owned) document.activeElement.blur();
+      }
+      if (owned) {
+        document.activeElement.blur();
+      }
       updateSettingsDirty();
       if (
         owned &&
         (document.activeElement === document.body ||
           !document.activeElement?.isConnected)
       ) {
-        if (input && !input.closest("[hidden]"))
+        if (input && !input.closest("[hidden]")) {
           input.focus({ preventScroll: true });
-        else $("#settings-modified").focus({ preventScroll: true });
+        } else {
+          $("#settings-modified").focus({ preventScroll: true });
+        }
       }
     },
     "icon-button preference-reset",
   );
   reset.dataset.settingsReset = commandId || key;
-  if (commandId) reset.dataset.shortcutReset = "true";
-  reset.setAttribute(
-    "aria-label",
-    "Reset " + label + " to default: " + description,
-  );
-  reset.title = "Reset to default: " + description;
+  if (commandId) {
+    reset.dataset.shortcutReset = "true";
+  }
+  reset.setAttribute("aria-label", `Reset ${label} to default: ${description}`);
+  reset.title = `Reset to default: ${description}`;
   return reset;
 }
 function settingsValueModified(key, commandId) {
@@ -694,7 +767,9 @@ function settingsDraftButton(label, action, className = "button") {
   const button = settingsButton(
     label,
     () => {
-      if (!settingsSaving) return action();
+      if (!settingsSaving) {
+        return action();
+      }
     },
     className,
   );
@@ -708,8 +783,9 @@ function updateSettingsDirty() {
     JSON.stringify(settingsBaseline?.values ?? appSettings.values);
   for (const control of document.querySelectorAll(
     "#settings-dialog [data-settings-draft-control]",
-  ))
+  )) {
     control.disabled = settingsSaving;
+  }
   let invalid = false;
   for (const input of document.querySelectorAll(".shortcut-input")) {
     const error = shortcutValidationMessage(
@@ -720,7 +796,7 @@ function updateSettingsDirty() {
     input.setAttribute("aria-invalid", String(Boolean(error)));
     input.title = error || "Type a shortcut or choose Record";
     invalid ||= Boolean(error);
-    const message = document.getElementById(input.id + "-error");
+    const message = document.getElementById(`${input.id}-error`);
     if (message) {
       message.textContent = error;
       message.hidden = !error;
@@ -729,11 +805,16 @@ function updateSettingsDirty() {
           .split(/\s+/)
           .filter(Boolean),
       );
-      if (error) descriptions.add(message.id);
-      else descriptions.delete(message.id);
-      if (descriptions.size)
+      if (error) {
+        descriptions.add(message.id);
+      } else {
+        descriptions.delete(message.id);
+      }
+      if (descriptions.size) {
         input.setAttribute("aria-describedby", [...descriptions].join(" "));
-      else input.removeAttribute("aria-describedby");
+      } else {
+        input.removeAttribute("aria-describedby");
+      }
     }
   }
   for (const reset of document.querySelectorAll("[data-settings-reset]")) {
@@ -760,21 +841,20 @@ function settingInput(field) {
     description = appSettings.fields.find((f) => f.key === key)?.description;
   row.dataset.settingsKey = key;
   row.addEventListener("focusout", () => queueMicrotask(filterSettings));
-  row.dataset.search = (
-    label +
-    " " +
-    category +
-    " " +
-    (description || "")
-  ).toLowerCase();
-  heading.htmlFor = "preference-" + key;
+  row.dataset.search = `${label} ${category} ${
+    description || ""
+  }`.toLowerCase();
+  heading.htmlFor = `preference-${key}`;
   heading.append(name);
-  if (description)
+  if (description) {
     heading.append(el("small", "preference-description", description));
+  }
   let input;
   if (type === "select") {
     input = el("select");
-    for (const [value, text] of options) input.add(new Option(text, value));
+    for (const [value, text] of options) {
+      input.add(new Option(text, value));
+    }
     input.value = settingsDraft[key];
   } else {
     input = el("input");
@@ -783,20 +863,25 @@ function settingInput(field) {
       input.min = options;
       input.max = max;
       input.value = settingsDraft[key];
-    } else if (type === "checkbox") input.checked = settingsDraft[key];
-    else {
+    } else if (type === "checkbox") {
+      input.checked = settingsDraft[key];
+    } else {
       input.value = settingsDraft[key];
       input.placeholder = options;
       input.maxLength = 100;
     }
   }
-  if (type !== "checkbox") input.classList.add("ui-field");
-  input.id = "preference-" + key;
+  if (type !== "checkbox") {
+    input.classList.add("ui-field");
+  }
+  input.id = `preference-${key}`;
   input.name = key;
   input.dataset.settingsDraftControl = "true";
   input.setAttribute("aria-label", label);
   input.oninput = () => {
-    if (settingsSaving) return;
+    if (settingsSaving) {
+      return;
+    }
     settingsDraft[key] =
       type === "checkbox"
         ? input.checked
@@ -807,11 +892,14 @@ function settingInput(field) {
   };
   const controls = el("span", "preference-control");
   controls.append(input);
-  if (key === "claudeReviewCommand" || key === "codexReviewCommand")
+  if (key === "claudeReviewCommand" || key === "codexReviewCommand") {
     controls.append(
       settingsDraftButton("Browse", () => browseReviewSkill(key), "button"),
     );
-  if (unit) controls.append(el("small", "", unit));
+  }
+  if (unit) {
+    controls.append(el("small", "", unit));
+  }
   controls.append(settingsReset(key, label));
   row.append(heading, controls);
   return row;
@@ -825,45 +913,53 @@ function shortcutInput(command) {
   row.dataset.settingsCommand = command.id;
   row.addEventListener("focusout", () => queueMicrotask(filterSettings));
   row.dataset.search = command.label.toLowerCase();
-  input.id = "shortcut-" + command.id;
+  input.id = `shortcut-${command.id}`;
   label.htmlFor = input.id;
   input.dataset.commandId = command.id;
   input.value = settingsDraft.keybindings[command.id];
   input.placeholder = "Unassigned";
   input.spellcheck = false;
   input.setAttribute("autocapitalize", "off");
-  input.setAttribute("aria-label", command.label + " shortcut");
+  input.setAttribute("aria-label", `${command.label} shortcut`);
   input.dataset.settingsDraftControl = "true";
   input.oninput = () => {
-    if (settingsSaving) return;
+    if (settingsSaving) {
+      return;
+    }
     settingsDraft.keybindings[command.id] =
       canonicalShortcut(input.value) ?? input.value.trim();
     updateSettingsDirty();
   };
   input.addEventListener("blur", () => {
-    if (shortcutRecording?.input === input) void finishShortcutRecording();
+    if (shortcutRecording?.input === input) {
+      void finishShortcutRecording();
+    }
     const chord = canonicalShortcut(input.value);
-    if (chord !== null) input.value = chord;
+    if (chord !== null) {
+      input.value = chord;
+    }
   });
   const record = settingsDraftButton(
     "Record",
     () => void startShortcutRecording(record, input, command.id),
     "button shortcut-record",
   );
-  record.setAttribute("aria-label", "Record " + command.label + " shortcut");
+  record.setAttribute("aria-label", `Record ${command.label} shortcut`);
   record.setAttribute("aria-pressed", "false");
   record.addEventListener("pointerdown", (event) => {
-    if (shortcutRecording?.button === record) event.preventDefault();
+    if (shortcutRecording?.button === record) {
+      event.preventDefault();
+    }
   });
   const error = el("small", "form-hint shortcut-error");
-  error.id = input.id + "-error";
+  error.id = `${input.id}-error`;
   error.hidden = true;
   error.setAttribute("aria-live", "polite");
   label.append(error);
   controls.append(
     input,
     record,
-    settingsReset("keybindings", command.label + " shortcut", {
+    settingsReset("keybindings", `${command.label} shortcut`, {
       commandId: command.id,
     }),
   );
@@ -879,13 +975,16 @@ function settingsPanel(id, title) {
 function paintSettingsBody() {
   for (const setup of document.querySelectorAll(
     "#settings-body .connection-setup",
-  ))
+  )) {
     setup.disposeConnectionSetup?.();
+  }
   void finishShortcutRecording();
   const nav = $(".preferences-nav"),
     navHead = $(".preferences-nav-head");
   nav.replaceChildren();
-  if (navHead) nav.append(navHead);
+  if (navHead) {
+    nav.append(navHead);
+  }
   for (const [id, label] of settingsCategories()) {
     const button = settingsButton(
       label,
@@ -903,13 +1002,16 @@ function paintSettingsBody() {
   }
   const body = $("#settings-body"),
     legacy = $("#legacy-connections");
-  if (legacy) legacy.remove();
+  if (legacy) {
+    legacy.remove();
+  }
   body.replaceChildren();
   for (const [id, label] of settingsCategories()) {
     const panel = settingsPanel(id, label);
-    for (const field of settingFields().filter((f) => f[0] === id))
+    for (const field of settingFields().filter((f) => f[0] === id)) {
       panel.append(settingInput(field));
-    if (id === "review")
+    }
+    if (id === "review") {
       panel.append(
         el(
           "p",
@@ -917,7 +1019,8 @@ function paintSettingsBody() {
           "Font size applies to full review and file previews. Shift+Enter inserts a newline when Enter submits comments.",
         ),
       );
-    if (id === "agents")
+    }
+    if (id === "agents") {
       panel.append(
         el(
           "p",
@@ -925,6 +1028,7 @@ function paintSettingsBody() {
           "Leave a review skill empty to disable agent review. Review follows the selected chat across its repositories. Skills define the reviewer roles and count. Zed opens diffs; VS Code and Cursor open the selected worktree. Changes apply on the next editor action.",
         ),
       );
+    }
     if (id === "keyboard") {
       panel.append(
         el(
@@ -933,8 +1037,9 @@ function paintSettingsBody() {
           "Type a shortcut (for example Primary+K), or choose Record and press the keys. Primary is Command on macOS and Control elsewhere. Leave a shortcut empty to disable it. Tab / Shift+Tab cycle chat tabs; 1–9 with Primary select a tab. Editing shortcuts are reserved.",
         ),
       );
-      for (const command of appSettings.commands)
+      for (const command of appSettings.commands) {
         panel.append(shortcutInput(command));
+      }
     }
     if (id === "actions") {
       panel.append(
@@ -979,7 +1084,9 @@ function paintSettingsBody() {
         command.setAttribute("writingsuggestions", "false");
         command.setAttribute("aria-label", "Quick action command");
         title.oninput = () => {
-          if (settingsSaving) return;
+          if (settingsSaving) {
+            return;
+          }
           action.title = title.value;
           updateSettingsDirty();
         };
@@ -992,7 +1099,9 @@ function paintSettingsBody() {
         };
         checkCommand();
         command.oninput = () => {
-          if (settingsSaving) return;
+          if (settingsSaving) {
+            return;
+          }
           action.command = command.value;
           checkCommand();
           updateSettingsDirty();
@@ -1138,9 +1247,13 @@ function paintSettingsBody() {
 function settingsFilterContext() {
   const search = $("#settings-search"),
     modified = $("#settings-modified");
-  if (!search || !modified || typeof search.value !== "string") return null;
+  if (!search || !modified || typeof search.value !== "string") {
+    return null;
+  }
   const pressed = modified.getAttribute("aria-pressed");
-  if (pressed !== "true" && pressed !== "false") return null;
+  if (pressed !== "true" && pressed !== "false") {
+    return null;
+  }
   let query = "",
     queryTruncated = false,
     count = 0;
@@ -1211,21 +1324,28 @@ function filterSettings() {
             !(row.dataset.search || row.textContent.toLowerCase()).includes(
               query,
             ));
-        if (!row.hidden) visible++;
+        if (!row.hidden) {
+          visible++;
+        }
       }
       panel.hidden = !rows.some((row) => !row.hidden);
     } else {
       panel.hidden = !query && panel.dataset.category !== settingsCategory;
       if (query) {
         panel.hidden = !panel.textContent.toLowerCase().includes(query);
-        for (const row of rows)
+        for (const row of rows) {
           row.hidden = !(
             row.dataset.search || row.textContent.toLowerCase()
           ).includes(query);
-      } else for (const row of rows) row.hidden = false;
+        }
+      } else {
+        for (const row of rows) {
+          row.hidden = false;
+        }
+      }
     }
   }
-  for (const button of document.querySelectorAll("[data-settings-category]"))
+  for (const button of document.querySelectorAll("[data-settings-category]")) {
     button.setAttribute(
       "aria-current",
       String(
@@ -1234,6 +1354,7 @@ function filterSettings() {
           !modified,
       ),
     );
+  }
   $("#settings-filter-scope").hidden = !modified;
   const status = $("#settings-filter-status");
   status.hidden = !modified || visible > 0;
@@ -1252,25 +1373,34 @@ function resetSettingsDraft(document) {
   settingsDirty = false;
 }
 async function openPreferences({ category } = {}) {
-  if (settingsSaving) return false;
+  if (settingsSaving) {
+    return false;
+  }
   const dialog = $("#settings-dialog");
-  if (!dialog?.isConnected) return false;
+  if (!dialog?.isConnected) {
+    return false;
+  }
   if (dialog.open) {
     if (
       [...document.querySelectorAll("dialog[open]")].some(
         (open) => open !== dialog && !open.contains(dialog),
       )
-    )
+    ) {
       return false;
+    }
     if (category !== undefined) {
       settingsCategory = category;
       resetSettingsFilter();
       filterSettings();
       $("#settings-body").scrollTop = 0;
-    } else $("#settings-search").focus();
+    } else {
+      $("#settings-search").focus();
+    }
     return true;
   }
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   const generation = ++settingsOpenGeneration,
     baseline = settingsBaseline,
     draft = settingsDraft,
@@ -1293,9 +1423,13 @@ async function openPreferences({ category } = {}) {
   } finally {
     navigation.dispose();
   }
-  if (!next || !current()) return false;
+  if (!next || !current()) {
+    return false;
+  }
   resetSettingsDraft(next);
-  if (category !== undefined) settingsCategory = category;
+  if (category !== undefined) {
+    settingsCategory = category;
+  }
   $("#settings-error").textContent = next.configError || "";
   resetSettingsFilter();
   paintSettingsBody();
@@ -1304,7 +1438,9 @@ async function openPreferences({ category } = {}) {
   return true;
 }
 async function savePreferences() {
-  if (settingsSaving) return;
+  if (settingsSaving) {
+    return;
+  }
   for (const [id, value] of Object.entries(settingsDraft.keybindings)) {
     const error = shortcutValidationMessage(value, id);
     if (error) {
@@ -1323,10 +1459,11 @@ async function savePreferences() {
   $("#settings-error").textContent = "";
   try {
     await finishShortcutRecording();
-    if (settingsBaseline !== baseline)
+    if (settingsBaseline !== baseline) {
       throw new Error(
         "Settings were reloaded while saving. Review them and try again.",
       );
+    }
     appSettings = await api("/api/settings", {
       revision: baseline.revision,
       contentHash: baseline.contentHash,
@@ -1356,13 +1493,16 @@ async function savePreferences() {
       document.activeElement === document.body
     ) {
       const target = focus?.id ? document.getElementById(focus.id) : focus;
-      if (target?.isConnected && !target.disabled)
+      if (target?.isConnected && !target.disabled) {
         target.focus({ preventScroll: true });
+      }
     }
   }
 }
 async function discardSettingsDraft() {
-  if (settingsSaving) return;
+  if (settingsSaving) {
+    return;
+  }
   const baseline = settingsBaseline,
     current = settingsDraft,
     stamp = JSON.stringify(current),
@@ -1372,7 +1512,9 @@ async function discardSettingsDraft() {
       settingsDraft === current &&
       JSON.stringify(current) === stamp;
   const next = await loadAppSettings({ canApply: unchanged });
-  if (!next || next.configError || !unchanged()) return;
+  if (!next || next.configError || !unchanged()) {
+    return;
+  }
   resetSettingsDraft(next);
   paintSettingsBody();
   updateSettingsDirty();
@@ -1389,13 +1531,15 @@ function mergeSettingsProfile(current, profile) {
     Object.keys(profile).some(
       (key) => !["format", "version", "values"].includes(key),
     )
-  )
+  ) {
     throw new Error("Unsupported settings profile. Nothing was loaded.");
+  }
   for (const [key, value] of Object.entries(profile.values)) {
-    if (!Object.hasOwn(current, key))
+    if (!Object.hasOwn(current, key)) {
       throw new Error(
         "Profile contains an unsupported setting. Nothing was loaded.",
       );
+    }
     if (key === "keybindings") {
       if (
         !object(value) ||
@@ -1404,10 +1548,11 @@ function mergeSettingsProfile(current, profile) {
             !Object.hasOwn(current.keybindings, id) ||
             typeof chord !== "string",
         )
-      )
+      ) {
         throw new Error(
           "Profile contains unsupported keyboard settings. Nothing was loaded.",
         );
+      }
     } else if (key === "quickActions") {
       if (
         !Array.isArray(value) ||
@@ -1421,10 +1566,11 @@ function mergeSettingsProfile(current, profile) {
               (field) => typeof action[field] !== "string",
             ),
         )
-      )
+      ) {
         throw new Error(
           "Profile contains unsupported quick actions. Nothing was loaded.",
         );
+      }
     } else if (
       Array.isArray(current[key])
         ? !Array.isArray(value)
@@ -1439,11 +1585,12 @@ function mergeSettingsProfile(current, profile) {
     ...structuredClone(current),
     ...structuredClone(profile.values),
   };
-  if (Object.hasOwn(profile.values, "keybindings"))
+  if (Object.hasOwn(profile.values, "keybindings")) {
     next.keybindings = {
       ...current.keybindings,
       ...profile.values.keybindings,
     };
+  }
   return next;
 }
 function exportSettingsProfile() {
@@ -1491,31 +1638,38 @@ function renderQuickActions() {
   }
 }
 async function browseReviewSkill(key) {
-  if (settingsSaving) return;
+  if (settingsSaving) {
+    return;
+  }
   const dialog = $("#quick-action-picker"),
     form = $("#quick-action-picker-form"),
     settings = $("#settings-dialog"),
-    input = document.getElementById("preference-" + key),
+    input = document.getElementById(`preference-${key}`),
     draft = settingsDraft,
     baseline = settingsBaseline,
     previous = draft[key],
     trigger = document.activeElement,
     agent = key === "codexReviewCommand" ? "codex" : "claude";
-  if (!input?.isConnected || !settings.open) return;
+  if (!input?.isConnected || !settings.open) {
+    return;
+  }
   let live = true;
-  for (const owner of [dialog, settings])
+  for (const owner of [dialog, settings]) {
     owner.addEventListener(
       "close",
       () => {
-        if (!owner.open) live = false;
+        if (!owner.open) {
+          live = false;
+        }
       },
       { once: true },
     );
+  }
   form.replaceChildren(
     el(
       "h2",
       "",
-      "Choose " + (agent === "claude" ? "Claude" : "Codex") + " review skill",
+      `Choose ${agent === "claude" ? "Claude" : "Codex"} review skill`,
     ),
   );
   const query = el("input"),
@@ -1532,7 +1686,7 @@ async function browseReviewSkill(key) {
     settings.open &&
     settings.isConnected &&
     form.contains(query) &&
-    document.getElementById("preference-" + key) === input &&
+    document.getElementById(`preference-${key}`) === input &&
     settingsDraft === draft &&
     settingsBaseline === baseline &&
     draft[key] === previous &&
@@ -1548,9 +1702,13 @@ async function browseReviewSkill(key) {
     const catalog = await api("/api/skills/catalog", {
       cwd: currentAgentRecord()?.cwd || "",
     });
-    if (!current()) return;
+    if (!current()) {
+      return;
+    }
     const draw = () => {
-      if (!current()) return;
+      if (!current()) {
+        return;
+      }
       results.replaceChildren();
       const skills = skillPickerMatches(
         catalog.skills,
@@ -1567,8 +1725,9 @@ async function browseReviewSkill(key) {
             if (
               !current() ||
               [...document.querySelectorAll("dialog[open]")].at(-1) !== dialog
-            )
+            ) {
               return;
+            }
             const owned = dialog.contains(document.activeElement),
               focused = document.activeElement;
             draft[key] =
@@ -1581,7 +1740,7 @@ async function browseReviewSkill(key) {
               owned &&
               settings.open &&
               settings.isConnected &&
-              document.getElementById("preference-" + key) === input &&
+              document.getElementById(`preference-${key}`) === input &&
               ![...document.querySelectorAll("dialog[open]")].some(
                 (open) => open !== settings,
               ) &&
@@ -1610,7 +1769,9 @@ async function browseReviewSkill(key) {
     query.oninput = draw;
     draw();
   } catch (error) {
-    if (current()) status.textContent = error.message;
+    if (current()) {
+      status.textContent = error.message;
+    }
   }
 }
 async function chooseQuickAction(action, identity) {
@@ -1626,8 +1787,8 @@ async function chooseQuickAction(action, identity) {
   for (const [field, source, prefix] of [
     ["prId", "github", "PR"],
     ["ticketId", "linear", "TICKET"],
-  ])
-    if (new RegExp("\\$\\{?" + prefix + "_").test(action.command)) {
+  ]) {
+    if (new RegExp(`\\$\\{?${prefix}_`).test(action.command)) {
       const items = (record?.items || []).filter(
         (i) =>
           i.source === source &&
@@ -1635,15 +1796,19 @@ async function chooseQuickAction(action, identity) {
       );
       if (!items.length) {
         toast(
-          "Select a chat with a linked " +
-            (source === "github" ? "PR" : "ticket") +
-            ".",
+          `Select a chat with a linked ${
+            source === "github" ? "PR" : "ticket"
+          }.`,
         );
         return;
       }
-      if (items.length === 1) p[field] = items[0].id;
-      else choices.push({ field, items });
+      if (items.length === 1) {
+        p[field] = items[0].id;
+      } else {
+        choices.push({ field, items });
+      }
     }
+  }
   const start = async () => {
     try {
       const job = await api("/api/commands/invoke", {
@@ -1665,10 +1830,11 @@ async function chooseQuickAction(action, identity) {
   for (const { field, items } of choices) {
     const label = el("label", "", field === "prId" ? "Pull request" : "Ticket"),
       select = el("select");
-    for (const item of items)
+    for (const item of items) {
       select.add(
-        new Option((item.reference || "") + " · " + item.title, item.id),
+        new Option(`${item.reference || ""} · ${item.title}`, item.id),
       );
+    }
     p[field] = select.value;
     select.onchange = () => (p[field] = select.value);
     label.append(select);
@@ -1691,7 +1857,9 @@ async function chooseQuickAction(action, identity) {
 async function loadQuickActionRuns() {
   clearTimeout(quickActionTimer);
   const root = $("#quick-action-runs");
-  if (!root) return;
+  if (!root) {
+    return;
+  }
   try {
     const { jobs } = await api("/api/quick-actions"),
       expanded = new Set(
@@ -1700,14 +1868,15 @@ async function loadQuickActionRuns() {
     root.replaceChildren();
     for (const job of jobs.sort((a, b) => b.startedAt - a.startedAt)) {
       const details = el("details", "quick-action-output"),
-        summary = el("summary", "", job.title + " · " + job.state);
+        summary = el("summary", "", `${job.title} · ${job.state}`);
       details.dataset.jobId = job.id;
       details.open = expanded.has(job.id) || job.state === "running";
       details.append(summary, el("pre", "", job.output || "No output yet."));
       root.append(details);
     }
-    if (jobs.some((j) => j.state === "running") && $("#settings-dialog").open)
+    if (jobs.some((j) => j.state === "running") && $("#settings-dialog").open) {
       quickActionTimer = setTimeout(loadQuickActionRuns, 1500);
+    }
   } catch (error) {
     root.textContent = error.message;
   }
@@ -1720,7 +1889,9 @@ $("#settings").onclick = openSettings;
 const oldDialog = $("#settings-dialog"),
   legacy = el("div");
 legacy.id = "legacy-connections";
-while (oldDialog.children.length > 2) legacy.append(oldDialog.children[2]);
+while (oldDialog.children.length > 2) {
+  legacy.append(oldDialog.children[2]);
+}
 oldDialog.replaceChildren();
 oldDialog.classList.add("preferences-page");
 const heading = el("header", "preferences-heading"),
@@ -1750,9 +1921,9 @@ const scope = el("span", "settings-scope", "User"),
     "Edit settings.json",
     async () => {
       try {
-        if (serviceClient.isDesktop)
+        if (serviceClient.isDesktop) {
           await window.__TAURI__.core.invoke("open_settings_file");
-        else {
+        } else {
           await serviceClient.copyText(appSettings.files.preferences);
           $("#settings-status").textContent =
             "Settings path copied. Open it in your editor.";
@@ -1824,7 +1995,9 @@ file.hidden = true;
 file.dataset.settingsDraftControl = "true";
 file.onchange = async () => {
   const selected = file.files[0];
-  if (!selected) return;
+  if (!selected) {
+    return;
+  }
   if (settingsSaving) {
     file.value = "";
     return;
@@ -1838,20 +2011,24 @@ file.onchange = async () => {
       JSON.stringify(current) === stamp &&
       settingsBaseline === baseline;
   try {
-    if (selected.size > 65536) throw new Error("Profile exceeds 64 KiB.");
+    if (selected.size > 65536) {
+      throw new Error("Profile exceeds 64 KiB.");
+    }
     const profile = JSON.parse(await selected.text());
-    if (!unchanged())
+    if (!unchanged()) {
       throw new Error(
         "Settings changed while reading the profile. Import it again.",
       );
+    }
     const revision = baseline.revision,
       contentHash = baseline.contentHash,
       next = mergeSettingsProfile(current, profile);
     await api("/api/settings/preview", { revision, contentHash, patch: next });
-    if (!unchanged())
+    if (!unchanged()) {
       throw new Error(
         "Settings changed while validating the profile. Import it again.",
       );
+    }
     settingsDraft = next;
     paintSettingsBody();
     updateSettingsDirty();
@@ -1872,7 +2049,9 @@ picker.append(pickerForm);
 document.body.append(picker);
 $("#gcp-login").hidden = true;
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (setting("theme", "") === "system") applyAppSettings();
+  if (setting("theme", "") === "system") {
+    applyAppSettings();
+  }
 });
 void loadAppSettings();
 window.addEventListener(
@@ -1880,5 +2059,7 @@ window.addEventListener(
   () => void loadAppSettings(),
 );
 setInterval(() => {
-  if (!settingsDirty && !document.hidden) void loadAppSettings();
+  if (!settingsDirty && !document.hidden) {
+    void loadAppSettings();
+  }
 }, 10000);

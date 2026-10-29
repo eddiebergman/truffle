@@ -36,11 +36,12 @@ test("snooze lesson requires three hours of known readiness with no background w
     { subagents: 1 },
     { scheduledWakeups: 1 },
     { at: 21000 },
-  ])
+  ]) {
     assert.equal(
       guidanceReadyToSnooze({ ...ready, ...patch }, 8000, now),
       false,
     );
+  }
   assert.equal(guidanceReadyToSnooze(ready, 10000, now), false);
 });
 
@@ -176,7 +177,7 @@ test("active guidance marks the exact target and follows it at the current scale
   assert.equal(highlight.style.left, "396.8px");
   assert.equal(highlight.style.top, "76.8px");
   assert.equal(highlight.style.width, "22.4px");
-  assert.equal(anchor.attrs["aria-describedby"], "existing-help " + node.id);
+  assert.equal(anchor.attrs["aria-describedby"], `existing-help ${node.id}`);
   move({ left: 600, top: 200, width: 24, height: 24, right: 624, bottom: 224 });
   tip.position();
   assert.equal(highlight.style.left, "476.8px");
@@ -260,13 +261,17 @@ test("Escape dismisses guidance before Review and honors Review cancellation bef
   });
   let saving = true;
   dialog.addEventListener("cancel", (event) => {
-    if (saving) event.preventDefault();
+    if (saving) {
+      event.preventDefault();
+    }
   });
   const c = browserContext({
     Event,
     truffleGuidance: {
       dismiss: () => {
-        if (!active) return false;
+        if (!active) {
+          return false;
+        }
         active = false;
         dismissed++;
         return true;

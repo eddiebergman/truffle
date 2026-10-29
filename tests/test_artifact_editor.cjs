@@ -35,14 +35,18 @@ function fixture({
       if (
         path === "/api/commands/invoke" &&
         payload.name === "artifacts.metadata.read"
-      )
+      ) {
         return read ? read(payload.args) : metadata(payload.args.id);
-      if (path === "/api/commands/invoke" || path === "/api/edit")
+      }
+      if (path === "/api/commands/invoke" || path === "/api/edit") {
         return write ? write(payload) : { saved: true };
-      if (path === "/api/library")
+      }
+      if (path === "/api/library") {
         return libraryRead ? libraryRead() : { artifacts: [], presets: [] };
-      if (path === "/api/state")
+      }
+      if (path === "/api/state") {
         return stateRead ? stateRead() : owner.snapshot();
+      }
       return owner.snapshot();
     },
   });
@@ -68,7 +72,9 @@ function fixture({
   form.append(picker);
   form.append(save);
   form.reset = () => {
-    for (const input of Object.values(form.elements)) input.value = "";
+    for (const input of Object.values(form.elements)) {
+      input.value = "";
+    }
   };
   f.c.document.createTextNode = (text) => new f.Node("span", "", text);
   loadMore(f, ["static/newsletters.js"], {
@@ -247,7 +253,9 @@ test("accepted save with failed library or state presentation recovers via reads
       libs = 0;
     const f = fixture({
       stateRead: async () => {
-        if (stateFailure && ++states === 1) throw Error("State unavailable");
+        if (stateFailure && ++states === 1) {
+          throw Error("State unavailable");
+        }
         return { revision: 2, sessions: [], items: [], notes: [] };
       },
       library: async () =>
@@ -368,7 +376,9 @@ test("registered unchanged metadata closes without writing while metadata read f
   let reads = 0;
   const failed = fixture({
     read: async () => {
-      if (++reads === 1) throw Error("Read unavailable");
+      if (++reads === 1) {
+        throw Error("Read unavailable");
+      }
       return metadata();
     },
   });
@@ -407,7 +417,9 @@ test("a late read-only recovery cannot close a reopened same-ID editor or move i
   let reads = 0;
   const f = fixture({
     stateRead: async () => {
-      if (++reads === 1) throw Error("Initial view unavailable");
+      if (++reads === 1) {
+        throw Error("Initial view unavailable");
+      }
       return refresh.promise;
     },
   });

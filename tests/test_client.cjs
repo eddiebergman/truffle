@@ -50,8 +50,8 @@ test("artifact views work through either transport and reject paths", async () =
       return "# Report";
     },
   });
-  assert.equal(browser.artifactUrl(id), "/artifacts/" + id);
-  assert.equal(native.artifactUrl(id), "truffle-artifact://localhost/" + id);
+  assert.equal(browser.artifactUrl(id), `/artifacts/${id}`);
+  assert.equal(native.artifactUrl(id), `truffle-artifact://localhost/${id}`);
   assert.equal(await browser.readArtifact(id), "# Report");
   assert.equal(await native.readArtifact(id), "# Report");
   assert.throws(() => native.artifactUrl("../../.env"));

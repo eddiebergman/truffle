@@ -63,7 +63,7 @@ function fixture({ available = true, preview, initialView } = {}) {
       case "connection_setup_commit":
         return { ...config, revision: 1 };
       default:
-        throw new Error("Unexpected native command " + name);
+        throw new Error(`Unexpected native command ${name}`);
     }
   };
   const c = vm.createContext({

@@ -45,14 +45,17 @@ function fixture({
     }
     append(...children) {
       this.children.push(...children);
-      for (const node of children) node.parentElement = this;
+      for (const node of children) {
+        node.parentElement = this;
+      }
     }
     replaceChildren(...children) {
       if (
         this.contains(document.activeElement) &&
         document.activeElement !== this
-      )
+      ) {
         document.activeElement = null;
+      }
       this.children = [];
       this.append(...children);
     }
@@ -79,16 +82,19 @@ function fixture({
       ]);
     }
     querySelector(selector) {
-      if (selector === "[data-dispatch-record]")
+      if (selector === "[data-dispatch-record]") {
         return (
           this.children.find((node) => node.dataset.dispatchRecord) || null
         );
+      }
       return this.querySelectorAll(selector)[0] || null;
     }
     closest(selector) {
       let node = this;
       while (node) {
-        if (node.className.split(" ").includes(selector.slice(1))) return node;
+        if (node.className.split(" ").includes(selector.slice(1))) {
+          return node;
+        }
         node = node.parentElement;
       }
       return null;
@@ -141,8 +147,12 @@ function fixture({
     api: async (path, args) => {
       calls.push({ path, ...args });
       assert.equal(path, "/api/commands/invoke");
-      if (handler) return handler(args.name, args.args);
-      if (args.name === "chats.dispatch.read") return { operations };
+      if (handler) {
+        return handler(args.name, args.args);
+      }
+      if (args.name === "chats.dispatch.read") {
+        return { operations };
+      }
       if (args.name.endsWith(".prepare")) {
         const kind =
             args.name === "review.request.prepare"
@@ -151,7 +161,7 @@ function fixture({
                 ? "ci-investigation"
                 : "review-feedback",
           prepared = receipt({
-            operationId: "server-" + ++serial,
+            operationId: `server-${++serial}`,
             recordId: args.args.recordId,
             kind,
             itemId: args.args.itemId,
@@ -203,7 +213,7 @@ function button(host, label) {
   const node = host
     .querySelectorAll("button")
     .find((node) => node.textContent === label);
-  assert.ok(node, "Missing " + label);
+  assert.ok(node, `Missing ${label}`);
   return node;
 }
 async function click(host, label) {
@@ -214,7 +224,9 @@ async function click(host, label) {
 test("preparation sends no input and the server identity is persisted before lookup-only submit", async () => {
   const f = fixture({
     handler: async (name, args) => {
-      if (name === "chats.dispatch.read") return { operations: [] };
+      if (name === "chats.dispatch.read") {
+        return { operations: [] };
+      }
       if (name === "review.send.prepare") {
         assert.deepEqual(JSON.parse(JSON.stringify(args)), {
           recordId: "chat",
@@ -267,7 +279,9 @@ test("uncertain recovery only reads until a human explicitly confirms a resoluti
   let prior = receipt();
   const f = fixture({
       handler: async (name, args) => {
-        if (name === "chats.dispatch.read") return { operations: [prior] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [prior] };
+        }
         assert.equal(name, "chats.dispatch.resolve");
         assert.equal(args.decision, "submitted");
         prior = receipt({
@@ -307,7 +321,9 @@ test("abandon requires confirmation and permits only a separately clicked new op
   let prior = receipt({ status: "prepared" });
   const f = fixture({
       handler: async (name, args) => {
-        if (name === "chats.dispatch.read") return { operations: [prior] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [prior] };
+        }
         assert.equal(name, "chats.dispatch.resolve");
         assert.equal(args.decision, "abandon");
         prior = receipt({
@@ -339,7 +355,9 @@ test("written unfinalized recovery only finalizes and prepared recovery reuses t
     let prior = receipt({ status });
     const f = fixture({
         handler: async (name, args) => {
-          if (name === "chats.dispatch.read") return { operations: [prior] };
+          if (name === "chats.dispatch.read") {
+            return { operations: [prior] };
+          }
           assert.equal(
             name,
             status === "written"
@@ -398,12 +416,15 @@ test("lost submit response plus reload and empty journal keeps the issued identi
     first = fixture({
       storage,
       handler: async (name) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
-        if (name === "review.send.prepare")
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
+        if (name === "review.send.prepare") {
           return receipt({
             operationId: "issued-before-loss",
             status: "prepared",
           });
+        }
         assert.equal(name, "chats.dispatch.submit");
         throw Error("HTTP response lost");
       },
@@ -419,7 +440,9 @@ test("lost submit response plus reload and empty journal keeps the issued identi
   const reloaded = fixture({
       storage,
       handler: async (name, args) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
         assert.equal(name, "chats.dispatch.submit");
         retried = args;
         return receipt({ ...args, status: "written", finalized: true });
@@ -486,7 +509,7 @@ test("actual review request and feedback handlers use dispatch receipts with no 
     const f = reviewFixture();
     await f.c[fn]();
     assert.equal(
-      f.calls.filter((call) => call.name === name + ".prepare").length,
+      f.calls.filter((call) => call.name === `${name}.prepare`).length,
       1,
     );
     assert.equal(
@@ -534,7 +557,9 @@ test("user-confirmed submission with failed acknowledgement remains blocked and 
   });
   const f = fixture({
       handler: async (name, args) => {
-        if (name === "chats.dispatch.read") return { operations: [prior] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [prior] };
+        }
         assert.equal(name, "chats.dispatch.finalize");
         assert.equal(args.operationId, "existing");
         prior = { ...prior, finalized: true };
@@ -601,14 +626,16 @@ test("uncertain CI dispatch survives a new rendered group and cannot create anot
   let prior;
   const f = ciFixture({
     handler: async (name, args) => {
-      if (name === "chats.dispatch.read")
+      if (name === "chats.dispatch.read") {
         return { operations: prior ? [prior] : [] };
-      if (name === "chats.ci.investigate.prepare")
+      }
+      if (name === "chats.ci.investigate.prepare") {
         return receipt({
           ...args,
           kind: "ci-investigation",
           status: "prepared",
         });
+      }
       assert.equal(name, "chats.dispatch.submit");
       prior = receipt({ ...args, kind: "ci-investigation" });
       return prior;
@@ -720,13 +747,16 @@ test("HTTP 503 after submit preserves the server identity across reload and empt
     first = fixture({
       storage,
       handler: async (name) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
-        if (name === "review.request.prepare")
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
+        if (name === "review.request.prepare") {
           return receipt({
             operationId: "issued-503",
             kind: "review-request",
             status: "prepared",
           });
+        }
         assert.equal(name, "chats.dispatch.submit");
         const error = Error("Service response unavailable");
         error.status = 503;
@@ -743,7 +773,9 @@ test("HTTP 503 after submit preserves the server identity across reload and empt
   const next = fixture({
       storage,
       handler: async (name, args) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
         assert.equal(name, "chats.dispatch.submit");
         assert.deepEqual(JSON.parse(JSON.stringify(args)), {
           recordId: "chat",
@@ -773,7 +805,9 @@ test("HTTP 503 after submit preserves the server identity across reload and empt
 test("definite validation rejection clears an attempt only after a successful empty durable read", async () => {
   const f = fixture({
     handler: async (name) => {
-      if (name === "chats.dispatch.read") return { operations: [] };
+      if (name === "chats.dispatch.read") {
+        return { operations: [] };
+      }
       const error = Error("Invalid review revision");
       error.status = 400;
       throw error;
@@ -799,8 +833,8 @@ test("bounded sticky recovery refuses a new target rather than evicting unresolv
         "truffle-dispatch-intents-v1",
         JSON.stringify(
           Array.from({ length: 24 }, (_, i) => ({
-            recordId: "old-" + i,
-            operationId: "operation-" + i,
+            recordId: `old-${i}`,
+            operationId: `operation-${i}`,
             kind: "review-feedback",
             revision: 1,
           })),
@@ -848,14 +882,14 @@ test("shared recovery names the actual operation in a CI host and its explicit c
     assert.ok(panel);
     assert.equal(
       panel.children[0].textContent,
-      label + ": Terminal delivery is uncertain.",
+      `${label}: Terminal delivery is uncertain.`,
     );
     assert.equal(panel.children[0].attrs.role, "status");
     await click(panel, "I confirmed submission");
     assert.ok(
       panel.children.some((node) =>
         node.textContent.startsWith(
-          label + ": Only confirm after inspecting the chat.",
+          `${label}: Only confirm after inspecting the chat.`,
         ),
       ),
     );
@@ -883,10 +917,11 @@ test("lost prepare response can recover a reservation but never submits it autom
   let prepared = false;
   const f = fixture({
     handler: async (name) => {
-      if (name === "chats.dispatch.read")
+      if (name === "chats.dispatch.read") {
         return {
           operations: prepared ? [receipt({ status: "prepared" })] : [],
         };
+      }
       assert.equal(name, "review.send.prepare");
       prepared = true;
       throw Error("Prepare response lost");
@@ -906,7 +941,9 @@ test("lost prepare with no visible row is safe to prepare again and never alloca
   let attempts = 0;
   const f = fixture({
     handler: async (name) => {
-      if (name === "chats.dispatch.read") return { operations: [] };
+      if (name === "chats.dispatch.read") {
+        return { operations: [] };
+      }
       assert.equal(name, "review.request.prepare");
       attempts++;
       throw Error("Prepare response lost");
@@ -915,7 +952,7 @@ test("lost prepare with no visible row is safe to prepare again and never alloca
   f.c.crypto.randomUUID = () => {
     throw Error("Browser IDs are forbidden");
   };
-  for (let i = 0; i < 2; i++)
+  for (let i = 0; i < 2; i++) {
     await assert.rejects(
       f.c.submitChatDispatch("review.request", "review-request", {
         recordId: "chat",
@@ -923,6 +960,7 @@ test("lost prepare with no visible row is safe to prepare again and never alloca
       }),
       /Prepare response lost/,
     );
+  }
   assert.equal(attempts, 2);
   assert.equal(f.storage.get("truffle-dispatch-intents-v1"), undefined);
 });
@@ -941,7 +979,9 @@ test("legacy identities use lookup only and unavailable receipts survive reload 
     ],
   ]);
   const handler = async (name, args) => {
-    if (name === "chats.dispatch.read") return { operations: [] };
+    if (name === "chats.dispatch.read") {
+      return { operations: [] };
+    }
     assert.equal(name, "chats.dispatch.submit");
     assert.deepEqual(JSON.parse(JSON.stringify(args)), {
       recordId: "chat",
@@ -1029,15 +1069,18 @@ test("invalid server identity or unavailable local persistence prevents lookup s
   for (const invalid of [true, false]) {
     const f = fixture({
       handler: async (name) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
         assert.equal(name, "review.send.prepare");
         return receipt({ status: "prepared", ticket: invalid ? 42 : "42" });
       },
     });
-    if (!invalid)
+    if (!invalid) {
       f.c.localStorage.setItem = () => {
         throw Error("Disk unavailable");
       };
+    }
     await assert.rejects(
       f.c.submitChatDispatch("review.send", "review-feedback", {
         recordId: "chat",
@@ -1052,7 +1095,7 @@ test("accepted submit with a lost response returns the finalized read receipt an
   let accepted = false;
   const f = reviewFixture({
     handler: async (name) => {
-      if (name === "chats.dispatch.read")
+      if (name === "chats.dispatch.read") {
         return {
           operations: accepted
             ? [
@@ -1064,8 +1107,10 @@ test("accepted submit with a lost response returns the finalized read receipt an
               ]
             : [],
         };
-      if (name === "review.send.prepare")
+      }
+      if (name === "review.send.prepare") {
         return receipt({ operationId: "issued", status: "prepared" });
+      }
       assert.equal(name, "chats.dispatch.submit");
       accepted = true;
       throw Error("Accepted response lost");
@@ -1088,7 +1133,9 @@ test("prepare cannot automatically submit another target or a previously uncerta
   for (const mismatch of [true, false]) {
     const f = fixture({
       handler: async (name) => {
-        if (name === "chats.dispatch.read") return { operations: [] };
+        if (name === "chats.dispatch.read") {
+          return { operations: [] };
+        }
         assert.equal(name, "chats.ci.investigate.prepare");
         return receipt({
           kind: "ci-investigation",
@@ -1097,7 +1144,7 @@ test("prepare cannot automatically submit another target or a previously uncerta
         });
       },
     });
-    if (mismatch)
+    if (mismatch) {
       await assert.rejects(
         f.c.submitChatDispatch("chats.ci.investigate", "ci-investigation", {
           recordId: "chat",
@@ -1105,7 +1152,7 @@ test("prepare cannot automatically submit another target or a previously uncerta
         }),
         /invalid delivery identity/,
       );
-    else
+    } else {
       assert.equal(
         (
           await f.c.submitChatDispatch(
@@ -1116,6 +1163,7 @@ test("prepare cannot automatically submit another target or a previously uncerta
         ).status,
         "uncertain",
       );
+    }
     assert.ok(!f.calls.some((call) => call.name === "chats.dispatch.submit"));
   }
 });
@@ -1129,10 +1177,12 @@ test("concurrent finalized status read wins over a delayed lost submit response 
   });
   const f = reviewFixture({
     handler: async (name) => {
-      if (name === "chats.dispatch.read")
+      if (name === "chats.dispatch.read") {
         return { operations: submitted ? [final] : [] };
-      if (name === "review.send.prepare")
+      }
+      if (name === "review.send.prepare") {
         return receipt({ operationId: "issued", status: "prepared" });
+      }
       assert.equal(name, "chats.dispatch.submit");
       submitted = true;
       return new Promise((_resolve, no) => {
@@ -1196,12 +1246,15 @@ test("observed uncertain or written receipts survive a later submit rejection an
     const observed = receipt({ status });
     const f = fixture({
         handler: async (name) => {
-          if (name === "chats.dispatch.submit")
+          if (name === "chats.dispatch.submit") {
             return new Promise((_yes, no) => {
               reject = no;
             });
+          }
           assert.equal(name, "chats.dispatch.read");
-          if (readFails) throw Error("Status unavailable");
+          if (readFails) {
+            throw Error("Status unavailable");
+          }
           return { operations: [observed] };
         },
       }),

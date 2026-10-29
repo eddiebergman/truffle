@@ -39,7 +39,9 @@ test("accepted POST body never commits and post-write read is the authoritative 
 test("overlapping accepted writes discard an older read across a service restart and retry only the snapshot", async () => {
   const old = deferred(),
     f = fixture((path) => {
-      if (path === "/api/edit") return { revision: "ignored" };
+      if (path === "/api/edit") {
+        return { revision: "ignored" };
+      }
       return f.calls.filter((x) => x.path === "/api/state").length === 1
         ? old.promise
         : { revision: "B:1", items: ["newer"] };
@@ -102,13 +104,16 @@ test("conflicted read followed by failed read and render failure cannot turn acc
           ? read.promise
           : Promise.reject(Error("Offline")),
     );
-    if (renderError)
+    if (renderError) {
       f.c.render = () => {
         throw Error("Paint failed");
       };
+    }
     const pending = f.c.mutate({});
     await tick();
-    if (!renderError) f.c.state = { ...f.c.state, local: true };
+    if (!renderError) {
+      f.c.state = { ...f.c.state, local: true };
+    }
     read.resolve({ revision: "B:1" });
     const result = await pending;
     assert.equal(result.kind, "accepted");
@@ -133,11 +138,12 @@ test("write status alone classifies known rejection versus unknown and never ret
       [400, 401, 403, 404, 409].includes(status) ? "rejected" : "unknown",
     );
     assert.equal(f.calls.length, 1);
-    if (result.kind === "unknown")
+    if (result.kind === "unknown") {
       assert.match(
         f.c.localWriteMessage(result, "Saved"),
         /outcome is unknown/,
       );
+    }
   }
 });
 function visibilityFixture() {
@@ -161,7 +167,9 @@ function visibilityFixture() {
   }
   const nodes = new Map(),
     $ = (id) => {
-      if (!nodes.has(id)) nodes.set(id, new Node());
+      if (!nodes.has(id)) {
+        nodes.set(id, new Node());
+      }
       return nodes.get(id);
     };
   const document = {
@@ -242,8 +250,9 @@ test("actual pin handler preserves captured intent, reports pending truthfully a
         isConnected: true,
         set disabled(value) {
           this._disabled = value;
-          if (value && f.document.activeElement === this)
+          if (value && f.document.activeElement === this) {
             f.document.activeElement = f.document.body;
+          }
         },
         get disabled() {
           return this._disabled;
@@ -276,7 +285,9 @@ test("actual pin handler preserves captured intent, reports pending truthfully a
     assert.equal(pin.disabled, true);
     await pin.onclick();
     assert.equal(calls, 1);
-    if (external) f.document.activeElement = other;
+    if (external) {
+      f.document.activeElement = other;
+    }
     write.resolve({ kind: "accepted", presentation: "pending" });
     await pending;
     assert.match(
@@ -285,7 +296,9 @@ test("actual pin handler preserves captured intent, reports pending truthfully a
     );
     assert.equal(pin.disabled, false);
     assert.equal(f.document.activeElement, external ? other : replacement);
-    if (!external) assert.equal(replacement.options.preventScroll, true);
+    if (!external) {
+      assert.equal(replacement.options.preventScroll, true);
+    }
   }
 });
 test("unknown response after a possible commit invalidates earlier GET without changing its outcome or retrying", async () => {
@@ -362,14 +375,18 @@ test("Changes named-command transport reuses exact local-write outcome boundary 
           return { markedIds: ["captured"], absentIds: ["pruned"] };
         }
         if (path === "/api/state") {
-          if (mode === "pending") throw Error("Offline");
+          if (mode === "pending") {
+            throw Error("Offline");
+          }
           return { revision: "fresh" };
         }
-        throw Error("Unexpected transport " + path);
+        throw Error(`Unexpected transport ${path}`);
       });
     const result = await f.c.markChangesRead(ids);
     assert.equal(result.kind, mode === "unknown" ? "unknown" : "accepted");
-    if (mode !== "unknown") assert.equal(result.presentation, mode);
+    if (mode !== "unknown") {
+      assert.equal(result.presentation, mode);
+    }
     assert.equal(
       f.calls.filter((x) => x.path === "/api/commands/invoke").length,
       1,

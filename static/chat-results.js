@@ -4,11 +4,12 @@ let chatResultIntent = 0;
 let chatSearchSurface = null;
 try {
   const saved = sessionStorage.getItem("truffle-chat-results");
-  if (saved && saved.length < 65536)
+  if (saved && saved.length < 65536) {
     chatSearchPage = {
       ...JSON.parse(saved),
       command: appChatCommand(JSON.parse(saved).command),
     };
+  }
 } catch {
   // Saved results are optional; start without them.
 }
@@ -34,7 +35,9 @@ function rememberChatResults(command) {
 }
 function showChatResults(command) {
   chatResultIntent++;
-  if (command) rememberChatResults(command);
+  if (command) {
+    rememberChatResults(command);
+  }
   source = "chat-results";
   $("#search").value = chatSearchPage?.command.query || "";
   persist();
@@ -51,14 +54,16 @@ async function openChatSearchTarget(id) {
     page !== chatSearchPage ||
     origin !== source ||
     selected !== selectedAgentKey
-  )
+  ) {
     return;
+  }
   const record = (state?.sessions || []).find((r) => r.id === id),
     candidate = record
       ? candidateForRecord(record)
       : liveCandidates().find((c) => candidateKey(c) === id);
-  if (!record && !candidate)
+  if (!record && !candidate) {
     throw new Error("That chat is no longer available. Search again.");
+  }
   if (chatSearchPage) {
     chatSearchPage.scroll =
       $("#chat-search-matches")?.scrollTop ?? chatSearchPage.scroll;
@@ -80,8 +85,9 @@ function resultChatLinks(result) {
   return resultChatRecord(result)?.items || result.item.items || [];
 }
 function resultSearchMatches(result, query) {
-  if (result.type === "work")
+  if (result.type === "work") {
     return Number.isFinite(workSearchScore(query, resultWorkItem(result)));
+  }
   const item = result.item,
     links = resultChatLinks(result).flatMap((link) => [
       link.title,
@@ -136,7 +142,9 @@ const resultItemRenderers = {
       .slice(0, 3)
       .map(workReference)
       .filter(Boolean);
-    if (refs.length) context.append(el("small", "", refs.join(" · ")));
+    if (refs.length) {
+      context.append(el("small", "", refs.join(" · ")));
+    }
     row.append(title, badges, context);
     row.onclick = () =>
       openChatSearchTarget(result.id).catch((error) => toast(error.message));
@@ -145,7 +153,9 @@ const resultItemRenderers = {
 };
 function renderResultItem(result) {
   const renderer = resultItemRenderers[result.type];
-  if (!renderer) throw new Error("Unsupported result type.");
+  if (!renderer) {
+    throw new Error("Unsupported result type.");
+  }
   return renderer(result);
 }
 function ownsChatSearchSurface(surface) {
@@ -173,51 +183,53 @@ function drawChatResultRows(surface) {
   list.replaceChildren();
   if (value.type === "display-items") {
     for (const result of value.items) {
-      if (!resultSearchMatches(result, input.value)) continue;
+      if (!resultSearchMatches(result, input.value)) {
+        continue;
+      }
       const recommended =
         value.recommended?.type === result.type &&
         value.recommended?.id === result.id;
       const row = renderResultItem(result);
       row.classList.toggle("agent-result-recommended", recommended);
       row.classList.toggle("recommended", recommended);
-      if (recommended)
+      if (recommended) {
         ($(".row-main", row) || row).append(
           el("span", "chat-search-recommended", "Suggested"),
         );
-      if (recommended && value.reason) row.title = value.reason;
+      }
+      if (recommended && value.reason) {
+        row.title = value.reason;
+      }
       list.append(row);
     }
-    status.textContent =
-      list.children.length +
-      " of " +
-      value.items.length +
-      " selected results" +
-      (value.reason ? " · " + value.reason : "");
+    status.textContent = `${list.children.length} of ${
+      value.items.length
+    } selected results${value.reason ? ` · ${value.reason}` : ""}`;
   } else {
     status.textContent = surface.pending
       ? "Searching chats…"
       : surface.error ||
         (value.total
-          ? "Showing " +
-            value.chats.length +
-            " of " +
-            value.total +
-            " matching chats. Titles, folders and linked work are searched."
+          ? `Showing ${value.chats.length} of ${
+              value.total
+            } matching chats. Titles, folders and linked work are searched.`
           : "No chats match. Try a shorter keyword or part of the working folder.");
     for (const row of value.chats) {
       const recommended = row.id === value.recommendedId,
         card = el(
           "button",
-          "chat-search-match" + (recommended ? " recommended" : ""),
+          `chat-search-match${recommended ? " recommended" : ""}`,
         );
       card.type = "button";
       card.dataset.chatResult = row.id;
       const heading = el("span", "chat-search-match-heading");
       heading.append(el("strong", "", row.title || "Untitled chat"));
-      if (recommended)
+      if (recommended) {
         heading.append(el("span", "chat-search-recommended", "Suggested"));
-      if (page.selectedId === row.id)
+      }
+      if (page.selectedId === row.id) {
         heading.append(el("small", "", "Last viewed"));
+      }
       card.append(
         heading,
         el("code", "", row.cwd),
@@ -234,8 +246,9 @@ function drawChatResultRows(surface) {
           ].join(" · "),
         ),
       );
-      if (recommended && value.reason)
+      if (recommended && value.reason) {
         card.append(el("span", "chat-search-reason", value.reason));
+      }
       card.onclick = async () => {
         card.disabled = true;
         try {
@@ -291,11 +304,15 @@ function renderChatSearchResults() {
   submit.type = "submit";
   form.append(input, submit);
   status.setAttribute("role", "status");
-  if (list) list.id = "chat-search-matches";
+  if (list) {
+    list.id = "chat-search-matches";
+  }
   container.replaceChildren(form, status, ...(list ? [list] : []));
   form.onsubmit = async (event) => {
     event.preventDefault();
-    if (surface.pending || !ownsChatSearchSurface(surface)) return;
+    if (surface.pending || !ownsChatSearchSurface(surface)) {
+      return;
+    }
     const intent = ++chatResultIntent,
       query = input.value;
     const current = () =>
@@ -313,7 +330,7 @@ function renderChatSearchResults() {
         name: "chats.search",
         args: { query },
       });
-      if (current())
+      if (current()) {
         showChatResults({
           type: "chat-results",
           query,
@@ -322,6 +339,7 @@ function renderChatSearchResults() {
           recommendedId: "",
           reason: "",
         });
+      }
     } catch (error) {
       if (current()) {
         surface.error = error.message;
@@ -331,8 +349,9 @@ function renderChatSearchResults() {
       surface.pending = false;
       submit.disabled = false;
       form.setAttribute("aria-busy", "false");
-      if (source === "chat-results" && ownsChatSearchSurface(surface))
+      if (source === "chat-results" && ownsChatSearchSurface(surface)) {
         drawChatResultRows(surface);
+      }
     }
   };
   if (page?.command.type === "display-items") {
@@ -340,7 +359,9 @@ function renderChatSearchResults() {
     input.setAttribute("aria-label", "Filter displayed results");
     submit.hidden = true;
     input.oninput = () => {
-      if (!ownsChatSearchSurface(surface)) return;
+      if (!ownsChatSearchSurface(surface)) {
+        return;
+      }
       page.filter = input.value;
       page.scroll = 0;
       drawChatResultRows(surface);
@@ -350,14 +371,18 @@ function renderChatSearchResults() {
     form.onsubmit = (event) => event.preventDefault();
   }
   drawChatResultRows(surface);
-  if (list)
+  if (list) {
     requestAnimationFrame(() => {
-      if (source === "chat-results" && ownsChatSearchSurface(surface))
+      if (source === "chat-results" && ownsChatSearchSurface(surface)) {
         list.scrollTop = page.scroll || 0;
+      }
     });
+  }
 }
 function invalidateChatSearchSurface() {
-  if (source !== "chat-results") chatSearchSurface = null;
+  if (source !== "chat-results") {
+    chatSearchSurface = null;
+  }
 }
 function updateChatResultsBack() {
   let back = $("#chat-results-back");

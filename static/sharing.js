@@ -29,8 +29,9 @@ function matchingSharePeople(people, query) {
     .slice(0, 8);
 }
 function sharingTransport(config) {
-  if (["gcs", "folder"].includes(config?.transport?.kind))
+  if (["gcs", "folder"].includes(config?.transport?.kind)) {
     return { kind: config.transport.kind, root: config.transport.root || "" };
+  }
   return config?.root
     ? { kind: "gcs", root: config.root }
     : { kind: "folder", root: "" };
@@ -38,29 +39,33 @@ function sharingTransport(config) {
 function sharingProfile(kind, root, handle) {
   const name = normalizeShareHandle(handle);
   root = String(root).trim().replace(/\/+$/, "");
-  if (!name)
+  if (!name) {
     throw new Error(
       "Choose a receiving handle using letters, numbers, underscore or hyphen.",
     );
+  }
   if (
     !["gcs", "folder"].includes(kind) ||
     !root ||
     root.includes("\0") ||
     root.length > 2000
-  )
+  ) {
     throw new Error("Choose a supported storage type and root.");
+  }
   if (
     kind === "gcs" &&
     !/^gs:\/\/[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/.test(root)
-  )
+  ) {
     throw new Error("Use a plain gs://bucket/prefix.");
+  }
   if (
     kind === "folder" &&
     (!root.startsWith("/") ||
       root === "/" ||
       root.split("/").some((part) => part === "." || part === ".."))
-  )
+  ) {
     throw new Error("Choose an absolute mounted folder path.");
+  }
   return {
     format: "truffle-sharing",
     version: 1,
@@ -75,8 +80,9 @@ function parseSharingProfile(profile) {
     profile.version !== 1 ||
     typeof profile.transport?.root !== "string" ||
     typeof profile.identity?.handle !== "string"
-  )
+  ) {
     throw new Error("Unsupported sharing profile.");
+  }
   return sharingProfile(
     profile.transport.kind,
     profile.transport.root,
@@ -89,8 +95,9 @@ function sharingConfigurationPayload(config, kind, root, handle) {
     !Number.isSafeInteger(config?.revision) ||
     typeof config.contentHash !== "string" ||
     !/^[a-f0-9]{64}$/.test(config.contentHash)
-  )
+  ) {
     throw new Error("Reload sharing settings before saving.");
+  }
   return {
     revision: config.revision,
     contentHash: config.contentHash,
@@ -103,7 +110,7 @@ function sharingTransportHint(kind) {
     ? "Local folder extension: file:// delivery links require recipients to mount this folder at the same absolute path. Use a filesystem that supports atomic hard links. Existing filesystem or company-share permissions control access; this app does not grant access."
     : "Google Cloud Storage uses your existing Google identity and bucket permissions. Inbox handles route messages and do not verify sender identity.";
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = {
     normalizeShareHandle,
     matchingSharePeople,
@@ -113,7 +120,8 @@ if (typeof module !== "undefined")
     sharingConfigurationPayload,
     sharingTransportHint,
   };
-if (typeof document !== "undefined")
+}
+if (typeof document !== "undefined") {
   (() => {
     const menu = $("#sharing-menu"),
       panel = $("#sharing-popover"),
@@ -136,13 +144,14 @@ if (typeof document !== "undefined")
     const jobDetails = new Map(),
       detailsLoading = new Set();
     function receiving(id = previewId) {
-      if (!imports.has(id))
+      if (!imports.has(id)) {
         imports.set(id, {
           jobId: "",
           starting: false,
           opening: false,
           error: "",
         });
+      }
       while (imports.size > 20) {
         const old = [...imports].find(
           ([key, value]) =>
@@ -151,7 +160,9 @@ if (typeof document !== "undefined")
             !value.opening &&
             currentJob(value.jobId)?.status !== "working",
         );
-        if (!old) break;
+        if (!old) {
+          break;
+        }
         imports.delete(old[0]);
       }
       return imports.get(id);
@@ -173,7 +184,9 @@ if (typeof document !== "undefined")
       );
     }
     function openImported(deliveryId, id) {
-      if (receiving(deliveryId).opening) return;
+      if (receiving(deliveryId).opening) {
+        return;
+      }
       previewId = deliveryId;
       lastRendered = "";
       const intent = {
@@ -191,10 +204,12 @@ if (typeof document !== "undefined")
       );
       return live
         ? recordForCandidate(live)
-        : state?.sessions?.find((s) => "record:" + s.id === selectedAgentKey);
+        : state?.sessions?.find((s) => `record:${s.id}` === selectedAgentKey);
     }
     function chatDraft(record = selected()) {
-      if (!record) return null;
+      if (!record) {
+        return null;
+      }
       if (!shareDrafts.has(record.id)) {
         const prior = data?.jobs?.find(
           (job) =>
@@ -211,7 +226,7 @@ if (typeof document !== "undefined")
           : null;
         shareDrafts.set(record.id, {
           recipient: send?.recipients?.[0]
-            ? ("/" + send.recipients[0]).slice(0, 200)
+            ? `/${send.recipients[0]}`.slice(0, 200)
             : "",
           message: String(send?.message || "").slice(0, 4000),
           recent: prepare?.recentConversation ?? true,
@@ -221,8 +236,9 @@ if (typeof document !== "undefined")
           preparing: false,
           sending: false,
         });
-        while (shareDrafts.size > 20)
+        while (shareDrafts.size > 20) {
           shareDrafts.delete(shareDrafts.keys().next().value);
+        }
       }
       const draft = shareDrafts.get(record.id);
       shareDrafts.delete(record.id);
@@ -235,13 +251,15 @@ if (typeof document !== "undefined")
       );
     }
     function editDraft(draft, field, value) {
-      if (draftSending(draft)) return;
+      if (draftSending(draft)) {
+        return;
+      }
       draft[field] = value;
       draft.revision++;
       draft.sendId = "";
     }
     function button(label, action, classes = "button") {
-      const b = el("button", classes + " ui-control", label);
+      const b = el("button", `${classes} ui-control`, label);
       b.dataset.variant = classes.includes("primary") ? "primary" : "secondary";
       b.type = "button";
       b.onclick = action;
@@ -261,10 +279,13 @@ if (typeof document !== "undefined")
       return group;
     }
     function message(node, text, error = false) {
-      if (!node) return;
+      if (!node) {
+        return;
+      }
       node.replaceChildren();
-      if (text)
+      if (text) {
         node.append(el("p", error ? "sharing-error" : "sharing-note", text));
+      }
     }
     async function call(name, args) {
       data = await sharingCommand(name, args);
@@ -273,17 +294,24 @@ if (typeof document !== "undefined")
       return data;
     }
     async function load() {
-      if (loading || !state) return;
+      if (loading || !state) {
+        return;
+      }
       loading = true;
       const initial = !data;
       try {
         data = await sharingCommand("sharing.state", {});
         lastFetch = Date.now();
-        if ($("#sharing-error")) message($("#sharing-error"), "");
-        if (initial && menu.open) build();
-        else paint();
+        if ($("#sharing-error")) {
+          message($("#sharing-error"), "");
+        }
+        if (initial && menu.open) {
+          build();
+        } else {
+          paint();
+        }
       } catch (e) {
-        if (menu.open)
+        if (menu.open) {
           message(
             $("#sharing-error"),
             e.message +
@@ -292,6 +320,7 @@ if (typeof document !== "undefined")
                 : ""),
             true,
           );
+        }
       } finally {
         loading = false;
       }
@@ -311,21 +340,24 @@ if (typeof document !== "undefined")
         return;
       }
       try {
-        if ((await openPreferences({ category: "sharing" })) !== true)
+        if ((await openPreferences({ category: "sharing" })) !== true) {
           throw new Error(
             "Sharing settings could not open. Close the current dialog or finish saving, then try again.",
           );
+        }
         menu.open = false;
       } catch (error) {
         message($("#sharing-error"), error.message, true);
       }
     }
     function switchView(next) {
-      if (tab === next) return;
+      if (tab === next) {
+        return;
+      }
       openIntent = null;
       tab = next;
       build();
-      $("#sharing-view-" + next)?.focus();
+      $(`#sharing-view-${next}`)?.focus();
     }
     function build() {
       panel.replaceChildren();
@@ -341,9 +373,9 @@ if (typeof document !== "undefined")
         const b = button(
           label,
           () => switchView(id),
-          "sharing-view" + (id === tab ? " selected" : ""),
+          `sharing-view${id === tab ? " selected" : ""}`,
         );
-        b.id = "sharing-view-" + id;
+        b.id = `sharing-view-${id}`;
         b.setAttribute("aria-pressed", String(id === tab));
         tabs.append(b);
       }
@@ -361,7 +393,7 @@ if (typeof document !== "undefined")
       errors.id = "sharing-error";
       errors.setAttribute("role", "status");
       panel.append(errors);
-      if (!data?.config?.root || !data?.config?.handle)
+      if (!data?.config?.root || !data?.config?.handle) {
         panel.append(
           el(
             "p",
@@ -369,6 +401,7 @@ if (typeof document !== "undefined")
             "Configure a storage destination and receiving inbox in Sharing settings.",
           ),
         );
+      }
       if (tab === "share") {
         const record = selected(),
           draftState = chatDraft(record);
@@ -383,8 +416,9 @@ if (typeof document !== "undefined")
         const prepare = button(
           "Prepare handover",
           async () => {
-            if (!record || draftState.preparing || draftSending(draftState))
+            if (!record || draftState.preparing || draftSending(draftState)) {
               return;
+            }
             const recentConversation = draftState.recent;
             draftState.preparing = true;
             draftState.error = "";
@@ -416,7 +450,9 @@ if (typeof document !== "undefined")
         check.checked = draftState?.recent ?? true;
         check.id = "sharing-recent";
         check.onchange = () => {
-          if (!draftState) return;
+          if (!draftState) {
+            return;
+          }
           if (
             draftState.preparing ||
             currentJob(draftState.draftId)?.status === "working" ||
@@ -453,7 +489,9 @@ if (typeof document !== "undefined")
         people.setAttribute("role", "listbox");
         people.setAttribute("aria-label", "Recipient suggestions");
         const dismissPeople = (e) => {
-          if (e.key !== "Escape" || !people.childElementCount) return false;
+          if (e.key !== "Escape" || !people.childElementCount) {
+            return false;
+          }
           e.preventDefault();
           e.stopPropagation();
           recipient.focus();
@@ -471,14 +509,18 @@ if (typeof document !== "undefined")
           paintSend();
         };
         recipient.onkeydown = (e) => {
-          if (dismissPeople(e)) return;
+          if (dismissPeople(e)) {
+            return;
+          }
           if (e.key === "ArrowDown") {
             e.preventDefault();
             people.querySelector("button")?.focus();
           }
         };
         people.onkeydown = (e) => {
-          if (dismissPeople(e)) return;
+          if (dismissPeople(e)) {
+            return;
+          }
           const buttons = [...people.querySelectorAll("button")],
             at = buttons.indexOf(document.activeElement);
           if (["ArrowDown", "ArrowUp"].includes(e.key)) {
@@ -555,8 +597,9 @@ if (typeof document !== "undefined")
         for (const [value, label] of [
           ["claude", "Claude"],
           ["codex", "Codex"],
-        ])
+        ]) {
           agent.add(new Option(label, value));
+        }
         agent.value =
           receivingAgents.get(previewId) ||
           receivingAgents.get("") ||
@@ -564,18 +607,21 @@ if (typeof document !== "undefined")
         agent.onchange = () => {
           receivingAgents.delete(previewId);
           receivingAgents.set(previewId, agent.value);
-          while (receivingAgents.size > 20)
+          while (receivingAgents.size > 20) {
             receivingAgents.delete(receivingAgents.keys().next().value);
+          }
         };
         const folder = el("select", "ui-field");
         folder.id = "sharing-folder";
         folder.setAttribute("aria-label", "Receiving folder");
         folder.add(new Option("Choose folder…", ""));
         const dirs = inventory.directories || [];
-        for (const path of dirs)
+        for (const path of dirs) {
           folder.add(new Option(path.replace(/^\/Users\/[^/]+/, "~"), path));
-        if (!dirs.length)
+        }
+        if (!dirs.length) {
           folder.add(new Option("Select a folder in the + menu", ""));
+        }
         folder.onchange = () => {
           locations.set(previewId, folder.value);
           lastRendered = "";
@@ -597,13 +643,19 @@ if (typeof document !== "undefined")
       paint();
     }
     async function previewEntry(id) {
-      if (previewStarting) return;
-      if (previewId !== id) openIntent = null;
+      if (previewStarting) {
+        return;
+      }
+      if (previewId !== id) {
+        openIntent = null;
+      }
       previewId = id;
       previewJob = "";
       lastRendered = "";
       paint();
-      if (data.entries.find((entry) => entry.id === id)?.error) return;
+      if (data.entries.find((entry) => entry.id === id)?.error) {
+        return;
+      }
       previewStarting = true;
       try {
         const result = await call("sharing.preview", { deliveryId: id });
@@ -621,8 +673,9 @@ if (typeof document !== "undefined")
     async function refreshInbox() {
       try {
         await call("sharing.refresh", {});
-        if (previewId && currentJob(previewJob)?.status === "failed")
+        if (previewId && currentJob(previewJob)?.status === "failed") {
           await previewEntry(previewId);
+        }
       } catch (error) {
         message($("#sharing-error"), error.message, true);
       }
@@ -630,19 +683,23 @@ if (typeof document !== "undefined")
     function paintPeople() {
       const list = $("#sharing-people"),
         input = $("#sharing-recipient");
-      if (!list || !input) return;
+      if (!list || !input) {
+        return;
+      }
       list.replaceChildren();
       const q = input.value;
       for (const person of matchingSharePeople(data?.people || [], q)) {
         const b = button(
-          person.name + " · /" + person.id,
+          `${person.name} · /${person.id}`,
           () => {
-            input.value = "/" + person.id;
+            input.value = `/${person.id}`;
             input.focus();
             list.replaceChildren();
             input.setAttribute("aria-expanded", "false");
             const draft = chatDraft();
-            if (draft) editDraft(draft, "recipient", input.value);
+            if (draft) {
+              editDraft(draft, "recipient", input.value);
+            }
             paintSend();
           },
           "sharing-person",
@@ -656,14 +713,16 @@ if (typeof document !== "undefined")
         !matchingSharePeople(data?.people || [], q).some((p) => p.id === direct)
       ) {
         const b = button(
-          "Send to /" + direct,
+          `Send to /${direct}`,
           () => {
-            input.value = "/" + direct;
+            input.value = `/${direct}`;
             input.focus();
             list.replaceChildren();
             input.setAttribute("aria-expanded", "false");
             const draft = chatDraft();
-            if (draft) editDraft(draft, "recipient", input.value);
+            if (draft) {
+              editDraft(draft, "recipient", input.value);
+            }
             paintSend();
           },
           "sharing-person",
@@ -675,7 +734,9 @@ if (typeof document !== "undefined")
     }
     function currentJob(id) {
       const basic = data?.jobs?.find((j) => j.id === id);
-      if (!basic) return null;
+      if (!basic) {
+        return null;
+      }
       if (
         basic.status === "ready" &&
         ["prepare", "preview"].includes(basic.kind) &&
@@ -700,18 +761,23 @@ if (typeof document !== "undefined")
     function paintSend() {
       const b = $("#sharing-send"),
         local = chatDraft();
-      if (!b || !local) return;
+      if (!b || !local) {
+        return;
+      }
       const draft = currentJob(local.draftId),
         send = currentJob(local.sendId);
       const sending = draftSending(local);
       for (const id of ["sharing-recipient", "sharing-message"]) {
-        const input = $("#" + id);
-        if (input) input.disabled = sending;
+        const input = $(`#${id}`);
+        if (input) {
+          input.disabled = sending;
+        }
       }
       const recent = $("#sharing-recent");
-      if (recent)
+      if (recent) {
         recent.disabled =
           sending || local.preparing || draft?.status === "working";
+      }
       b.disabled =
         sending ||
         local.preparing ||
@@ -729,7 +795,9 @@ if (typeof document !== "undefined")
             : send?.status === "ready"
               ? "Sent"
               : "Send";
-      if (send?.status === "ready") b.disabled = true;
+      if (send?.status === "ready") {
+        b.disabled = true;
+      }
     }
     function summary(node, preview) {
       node.replaceChildren();
@@ -744,54 +812,56 @@ if (typeof document !== "undefined")
           preview.title || "Shared context",
         ),
       );
-      if (preview.summary)
+      if (preview.summary) {
         node.append(el("p", "sharing-summary", preview.summary));
+      }
       const count = preview.resourceCount ?? preview.resources?.length ?? 0;
-      if (count)
+      if (count) {
         node.append(
           el(
             "small",
             "sharing-note",
-            count +
-              " files · " +
-              Math.round(
-                (preview.totalBytes ??
-                  preview.resources.reduce((n, r) => n + (r.size || 0), 0)) /
-                  1024,
-              ) +
-              " KB",
+            `${count} files · ${Math.round(
+              (preview.totalBytes ??
+                preview.resources.reduce((n, r) => n + (r.size || 0), 0)) /
+                1024,
+            )} KB`,
           ),
         );
+      }
       const details = document.createElement("details"),
         heading = document.createElement("summary");
       heading.textContent = "Context & files";
       details.append(heading);
       const list = el("ul", "sharing-artifacts");
-      for (const item of preview.items || [])
+      for (const item of preview.items || []) {
         list.append(el("li", "", item.title || item.kind || "Context"));
-      for (const resource of preview.resources || [])
+      }
+      for (const resource of preview.resources || []) {
         list.append(
           el(
             "li",
             "",
-            (resource.name || resource.media_type || "File") +
-              " · " +
-              Math.round((resource.size || 0) / 1024) +
-              " KB",
+            `${resource.name || resource.media_type || "File"} · ${Math.round(
+              (resource.size || 0) / 1024,
+            )} KB`,
           ),
         );
-      for (const [category, refs] of Object.entries(preview.uris || {}))
-        for (const ref of refs)
+      }
+      for (const [category, refs] of Object.entries(preview.uris || {})) {
+        for (const ref of refs) {
           list.append(
             el(
               "li",
               "",
-              category + " · " + (ref.title || ref.uri || "Reference"),
+              `${category} · ${ref.title || ref.uri || "Reference"}`,
             ),
           );
+        }
+      }
       details.append(list);
       node.append(details);
-      if (preview.itemsTruncated || preview.resourcesTruncated)
+      if (preview.itemsTruncated || preview.resourcesTruncated) {
         node.append(
           el(
             "small",
@@ -799,18 +869,24 @@ if (typeof document !== "undefined")
             "Preview shortened; all content is retained in the handover.",
           ),
         );
+      }
     }
     function paint() {
       if (
         openIntent &&
         (selectedAgentKey !== openIntent.agentKey ||
           source !== openIntent.source)
-      )
+      ) {
         openIntent = null;
-      if (!data) return;
+      }
+      if (!data) {
+        return;
+      }
       badge.textContent = data.unread || 0;
       badge.hidden = !data.unread;
-      if (!menu.open) return;
+      if (!menu.open) {
+        return;
+      }
       if (
         !panel.childElementCount ||
         (tab === "share" && renderedRecordId !== (selected()?.id || ""))
@@ -819,23 +895,29 @@ if (typeof document !== "undefined")
         return;
       }
       const status = $("#sharing-status");
-      if (status)
+      if (status) {
         status.textContent = data.refreshing
           ? "Checking inbox…"
           : data.lastSuccess
-            ? "Checked " +
-              new Date(data.lastSuccess * 1000).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+            ? `Checked ${new Date(data.lastSuccess * 1000).toLocaleTimeString(
+                [],
+                {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                },
+              )}`
             : "Cached inbox · refresh every 5 minutes";
-      if (tab === "share" && status) {
-        if (data.peopleError)
-          status.textContent += " · Recipient suggestions: " + data.peopleError;
-        else if (data.peopleHasMore)
-          status.textContent += " · More recipient names loading…";
       }
-      if (data.error) message($("#sharing-error"), data.error, true);
+      if (tab === "share" && status) {
+        if (data.peopleError) {
+          status.textContent += ` · Recipient suggestions: ${data.peopleError}`;
+        } else if (data.peopleHasMore) {
+          status.textContent += " · More recipient names loading…";
+        }
+      }
+      if (data.error) {
+        message($("#sharing-error"), data.error, true);
+      }
       if (tab === "share") {
         const local = chatDraft(),
           draft = currentJob(local?.draftId),
@@ -853,21 +935,21 @@ if (typeof document !== "undefined")
           const target = $("#sharing-draft");
           if (draft?.status === "ready") {
             summary(target, draft.preview);
-            if (draft.diagnostics?.length)
+            if (draft.diagnostics?.length) {
               target.append(
                 el(
                   "small",
                   "sharing-note",
-                  draft.diagnostics.length + " compatibility notices retained.",
+                  `${draft.diagnostics.length} compatibility notices retained.`,
                 ),
               );
+            }
             if (draft.notices?.length) {
               const notes = document.createElement("details"),
                 heading = document.createElement("summary");
-              heading.textContent =
-                "Preparation notes (" + draft.notices.length + ")";
+              heading.textContent = `Preparation notes (${draft.notices.length})`;
               notes.append(heading);
-              for (const note of draft.notices)
+              for (const note of draft.notices) {
                 notes.append(
                   el(
                     "p",
@@ -875,9 +957,10 @@ if (typeof document !== "undefined")
                     typeof note === "string" ? note : JSON.stringify(note),
                   ),
                 );
+              }
               target.append(notes);
             }
-          } else
+          } else {
             message(
               target,
               draft?.status === "working"
@@ -886,8 +969,11 @@ if (typeof document !== "undefined")
                     "Prepare a handover to review its content before sending.",
               draft?.status === "failed",
             );
-          if (send?.error) target.append(el("p", "sharing-error", send.error));
-          if (send?.uri && send.status === "ready")
+          }
+          if (send?.error) {
+            target.append(el("p", "sharing-error", send.error));
+          }
+          if (send?.uri && send.status === "ready") {
             target.append(
               button(
                 "Copy context URI",
@@ -902,20 +988,26 @@ if (typeof document !== "undefined")
                 "text-button",
               ),
             );
+          }
         }
-        if (document.activeElement === $("#sharing-recipient")) paintPeople();
+        if (document.activeElement === $("#sharing-recipient")) {
+          paintPeople();
+        }
         const prepare = $("#sharing-prepare");
-        if (prepare)
+        if (prepare) {
           prepare.disabled =
             !selected() ||
             local?.preparing ||
             draftSending(local) ||
             draft?.status === "working";
-        if (local?.error) message($("#sharing-error"), local.error, true);
+        }
+        if (local?.error) {
+          message($("#sharing-error"), local.error, true);
+        }
         paintSend();
       } else {
         const entries = (data.entries || []).filter(
-            (e) => !!e.dismissed === archive,
+            (e) => Boolean(e.dismissed) === archive,
           ),
           selectedEntry = (data.entries || []).find((e) => e.id === previewId),
           job = currentJob(previewJob),
@@ -937,7 +1029,7 @@ if (typeof document !== "undefined")
           lastRendered = signature;
           const list = $("#sharing-entries");
           list.replaceChildren();
-          if (!entries.length)
+          if (!entries.length) {
             list.append(
               el(
                 "p",
@@ -945,10 +1037,11 @@ if (typeof document !== "undefined")
                 archive ? "No archived shares." : "Your inbox is empty.",
               ),
             );
+          }
           for (const entry of entries) {
             const row = el(
               "div",
-              "sharing-entry" + (!entry.read ? " unread" : ""),
+              `sharing-entry${!entry.read ? " unread" : ""}`,
             );
             const open = button(
               "",
@@ -960,12 +1053,13 @@ if (typeof document !== "undefined")
               el(
                 "small",
                 "",
-                (entry.sender?.name || entry.sender?.id || "Unknown sender") +
-                  " · " +
-                  (entry.created_at
+                `${
+                  entry.sender?.name || entry.sender?.id || "Unknown sender"
+                } · ${
+                  entry.created_at
                     ? new Date(entry.created_at).toLocaleDateString()
-                    : "Unknown date") +
-                  (entry.imported ? " · Imported" : ""),
+                    : "Unknown date"
+                }${entry.imported ? " · Imported" : ""}`,
               ),
             );
             row.append(
@@ -974,7 +1068,9 @@ if (typeof document !== "undefined")
                 (archive ? "Restore " : "Archive ") + entry.title,
                 archive ? "↶" : "×",
                 async () => {
-                  if (entry.id === previewId) openIntent = null;
+                  if (entry.id === previewId) {
+                    openIntent = null;
+                  }
                   try {
                     await call("sharing.dismiss", {
                       id: entry.id,
@@ -995,14 +1091,14 @@ if (typeof document !== "undefined")
               );
               go.setAttribute(
                 "aria-label",
-                "Open imported chat: " + entry.title,
+                `Open imported chat: ${entry.title}`,
               );
-              go.disabled = !!imports.get(entry.id)?.opening;
+              go.disabled = Boolean(imports.get(entry.id)?.opening);
               row.append(go);
             }
             list.append(row);
           }
-          if (data.hasMore)
+          if (data.hasMore) {
             list.append(
               el(
                 "small",
@@ -1010,9 +1106,11 @@ if (typeof document !== "undefined")
                 "More entries are loading; this scan is incomplete.",
               ),
             );
+          }
           const target = $("#sharing-preview");
-          if (job?.status === "ready") summary(target, job.preview);
-          else
+          if (job?.status === "ready") {
+            summary(target, job.preview);
+          } else {
             message(
               target,
               selectedEntry?.error ||
@@ -1020,9 +1118,14 @@ if (typeof document !== "undefined")
                 (job?.status === "working"
                   ? "Loading handover…"
                   : selectedEntry?.message || ""),
-              !!selectedEntry?.error || job?.status === "failed",
+              Boolean(selectedEntry?.error) || job?.status === "failed",
             );
-          if (job?.status === "failed" && selectedEntry && !selectedEntry.error)
+          }
+          if (
+            job?.status === "failed" &&
+            selectedEntry &&
+            !selectedEntry.error
+          ) {
             target.append(
               button(
                 "Retry preview",
@@ -1030,6 +1133,7 @@ if (typeof document !== "undefined")
                 "button small",
               ),
             );
+          }
           $("#sharing-import-options").hidden = !(job?.status === "ready");
           $("#sharing-agent").value =
             receivingAgents.get(previewId) ||
@@ -1043,10 +1147,11 @@ if (typeof document !== "undefined")
           if (
             suggested &&
             ![...folder.options].some((o) => o.value === suggested)
-          )
+          ) {
             folder.add(
               new Option(suggested.replace(/^\/Users\/[^/]+/, "~"), suggested),
             );
+          }
           folder.value = suggested || "";
           go.disabled =
             local.starting ||
@@ -1060,10 +1165,11 @@ if (typeof document !== "undefined")
               : importedSession(selectedEntry)
                 ? "Open imported chat"
                 : "Import into new chat";
-          if (local.error || importing?.error)
+          if (local.error || importing?.error) {
             target.append(
               el("p", "sharing-error", local.error || importing.error),
             );
+          }
         }
         if (
           importing?.status === "ready" &&
@@ -1084,15 +1190,17 @@ if (typeof document !== "undefined")
         local.sending ||
         currentJob(local.sendId)?.status === "working" ||
         local.preparing
-      )
+      ) {
         return;
+      }
       const payload = {
         draftId: local.draftId,
         recipients: [normalizeShareHandle(local.recipient)],
         message: local.message,
       };
-      if (currentJob(local.sendId)?.status === "failed")
+      if (currentJob(local.sendId)?.status === "failed") {
         payload.retryId = local.sendId;
+      }
       local.sending = true;
       local.error = "";
       paintSend();
@@ -1114,8 +1222,9 @@ if (typeof document !== "undefined")
         local.starting ||
         local.opening ||
         currentJob(local.jobId)?.status === "working"
-      )
+      ) {
         return;
+      }
       const existing = importedSession(
         data.entries.find((entry) => entry.id === deliveryId),
       );
@@ -1151,7 +1260,9 @@ if (typeof document !== "undefined")
     }
     async function showImported(id, intent) {
       const local = receiving(intent.deliveryId);
-      if (local.opening || !currentImportIntent(intent)) return;
+      if (local.opening || !currentImportIntent(intent)) {
+        return;
+      }
       local.opening = true;
       local.error = "";
       lastRendered = "";
@@ -1166,25 +1277,30 @@ if (typeof document !== "undefined")
             (job?.status === "ready" && job.sessionId === id
               ? job.openReceipt
               : null);
-        if (receipt && !adoptSavedSessionOpen(receipt, id))
+        if (receipt && !adoptSavedSessionOpen(receipt, id)) {
           throw new Error(
             "The imported chat open receipt is unavailable. Inspect the chat; no additional open request was sent.",
           );
+        }
         const [snapshot, agents] = await Promise.all([
           loadStateSnapshot({ attempts: 2 }),
           api("/api/agents"),
         ]);
-        if (!currentImportIntent(intent)) return;
-        if (!snapshot.accepted)
+        if (!currentImportIntent(intent)) {
+          return;
+        }
+        if (!snapshot.accepted) {
           throw new Error(
             "Dashboard changed while opening this chat. Your newer changes were kept. Use Open imported chat to try again; do not import again.",
           );
+        }
         inventory = agents;
         let record = state.sessions.find((record) => record.id === id);
-        if (!record)
+        if (!record) {
           throw new Error(
             "The imported chat is unavailable in the refreshed dashboard. Use Open imported chat to try again; do not import again.",
           );
+        }
         let candidate = candidateForRecord(record);
         if (!candidate && !data.demo) {
           const result = await openSavedSession(record, null, {
@@ -1192,7 +1308,9 @@ if (typeof document !== "undefined")
             navigate: false,
             notify: false,
           });
-          if (!currentImportIntent(intent)) return;
+          if (!currentImportIntent(intent)) {
+            return;
+          }
           if (result.presentation !== "ready" || !result.candidate) {
             local.error = savedSessionOpenMessage(
               savedSessionOpenState(id) || {},
@@ -1202,7 +1320,9 @@ if (typeof document !== "undefined")
           record = result.record;
           candidate = result.candidate;
         }
-        if (!currentImportIntent(intent)) return;
+        if (!currentImportIntent(intent)) {
+          return;
+        }
         selectAgent(record, candidate);
         menu.open = false;
         const opening = savedSessionOpenState(id);
@@ -1211,7 +1331,7 @@ if (typeof document !== "undefined")
             ? "Preview imported · no agent launched"
             : opening?.receipt?.status === "unknown" ||
                 opening?.receipt?.localSaved === false
-              ? "Shared context imported. " + savedSessionOpenMessage(opening)
+              ? `Shared context imported. ${savedSessionOpenMessage(opening)}`
               : "Shared context imported into a new chat",
         );
       } catch (error) {
@@ -1223,7 +1343,9 @@ if (typeof document !== "undefined")
       }
     }
     menu.addEventListener("toggle", () => {
-      if (!menu.open) openIntent = null;
+      if (!menu.open) {
+        openIntent = null;
+      }
       if (menu.open) {
         if (!data) {
           tab = "share";
@@ -1232,12 +1354,16 @@ if (typeof document !== "undefined")
             el("div"),
           );
           panel.lastChild.id = "sharing-error";
-        } else build();
+        } else {
+          build();
+        }
         void load();
       }
     });
     document.addEventListener("pointerdown", (e) => {
-      if (menu.open && !menu.contains(e.target)) menu.open = false;
+      if (menu.open && !menu.contains(e.target)) {
+        menu.open = false;
+      }
     });
     menu.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -1250,17 +1376,22 @@ if (typeof document !== "undefined")
     setInterval(() => {
       const working = data?.jobs?.some((j) => j.status === "working");
       const interval = menu.open || working ? 1500 : 60000;
-      if (!document.hidden && Date.now() - lastFetch > interval) void load();
+      if (!document.hidden && Date.now() - lastFetch > interval) {
+        void load();
+      }
     }, 1000);
     registerRenderHook(
       "sharing:initial-load",
       () => {
-        if (!data) void load();
-        else if (menu.open) paint();
+        if (!data) {
+          void load();
+        } else if (menu.open) {
+          paint();
+        }
       },
       { order: 50 },
     );
-    if (typeof module !== "undefined")
+    if (typeof module !== "undefined") {
       module.exports.sharingPanel = {
         call,
         load,
@@ -1286,4 +1417,6 @@ if (typeof document !== "undefined")
           return detailsLoading;
         },
       };
+    }
   })();
+}

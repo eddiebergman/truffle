@@ -6,21 +6,25 @@ function snoozeDue(entry) {
 function nextSnoozeTime(choice) {
   const date = new Date();
   date.setHours(9, 0, 0, 0);
-  if (choice === "tomorrow") date.setDate(date.getDate() + 1);
-  else if (choice === "monday")
+  if (choice === "tomorrow") {
+    date.setDate(date.getDate() + 1);
+  } else if (choice === "monday") {
     date.setDate(date.getDate() + ((8 - date.getDay()) % 7 || 7));
-  else if (choice === "three") date.setDate(date.getDate() + 3);
-  else return null;
+  } else if (choice === "three") {
+    date.setDate(date.getDate() + 3);
+  } else {
+    return null;
+  }
   return date.getTime();
 }
 function snoozeScheduleControl(key, entry) {
   const row = el("div", "snooze-schedule"),
     select = el("select");
-  select.setAttribute("aria-label", "Return date for " + entry.title);
+  select.setAttribute("aria-label", `Return date for ${entry.title}`);
   select.add(
     new Option(
       entry.until
-        ? "Return " + new Date(entry.until).toLocaleString()
+        ? `Return ${new Date(entry.until).toLocaleString()}`
         : "Until restored",
       "current",
     ),
@@ -31,8 +35,9 @@ function snoozeScheduleControl(key, entry) {
     ["three", "In 3 days"],
     ["monday", "Monday"],
     ["custom", "Choose date…"],
-  ])
+  ]) {
     select.add(new Option(label, value));
+  }
   const input = el("input");
   input.type = "datetime-local";
   input.hidden = true;
@@ -86,16 +91,20 @@ function detachLinkButton(record, field, key) {
               ? loadArtifactLibrary(true)
               : Promise.resolve({ accepted: true }),
           ]);
-          if (results[0].status === "fulfilled" && results[0].value.accepted)
+          if (results[0].status === "fulfilled" && results[0].value.accepted) {
             render();
-          if (results.some((result) => result.status === "rejected"))
+          }
+          if (results.some((result) => result.status === "rejected")) {
             throw new Error("Dashboard refresh failed.");
+          }
           return results.every((result) => result.value.accepted);
         };
         let undoing = false,
           undone = false;
         const undo = async () => {
-          if (undoing || undone) return;
+          if (undoing || undone) {
+            return;
+          }
           undoing = true;
           try {
             await api("/api/session/links", {
@@ -129,8 +138,9 @@ function detachLinkButton(record, field, key) {
         };
         let message = "Dashboard link removed";
         try {
-          if (!(await refreshLinks()))
+          if (!(await refreshLinks())) {
             message += "; refresh to update this view";
+          }
         } catch {
           message += "; dashboard refresh failed";
         }
@@ -145,15 +155,15 @@ function detachLinkButton(record, field, key) {
   button.title = "Remove dashboard link";
   button.setAttribute(
     "aria-label",
-    "Remove " +
-      (field === "worktrees"
+    `Remove ${
+      field === "worktrees"
         ? key.split("/").pop()
         : field === "resources"
           ? "resource"
           : field === "itemIds"
             ? "work item"
-            : "artifact") +
-      " link",
+            : "artifact"
+    } link`,
   );
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -162,19 +172,23 @@ function detachLinkButton(record, field, key) {
   return button;
 }
 function toggleSidebar(side) {
-  if (side === "left") leftSidebarCollapsed = !leftSidebarCollapsed;
-  else agentSidebarCollapsed = !agentSidebarCollapsed;
+  if (side === "left") {
+    leftSidebarCollapsed = !leftSidebarCollapsed;
+  } else {
+    agentSidebarCollapsed = !agentSidebarCollapsed;
+  }
   persist();
   render();
   requestAnimationFrame(() => {
-    for (const view of terminalViews.values()) view.resize();
+    for (const view of terminalViews.values()) {
+      view.resize();
+    }
   });
 }
 function positionAgentMenu(menu) {
   const rect = menu.getBoundingClientRect(),
     options = menu.querySelector(".agent-menu-options");
-  options.style.left =
-    Math.max(8, Math.min(window.innerWidth - 175, rect.right - 165)) + "px";
+  options.style.left = `${Math.max(8, Math.min(window.innerWidth - 175, rect.right - 165))}px`;
 }
 let activityView = ["sessions", "changes", "logs"].includes(source)
   ? source
@@ -191,8 +205,9 @@ function renderSharedUX() {
     "left-sidebar-collapsed",
     leftSidebarCollapsed,
   );
-  for (const menu of document.querySelectorAll(".agent-tab .agent-menu"))
+  for (const menu of document.querySelectorAll(".agent-tab .agent-menu")) {
     menu.ontoggle = () => positionAgentMenu(menu);
+  }
   $(".launcher").hidden = false;
   const active = ["sessions", "changes", "logs"].includes(source),
     tabs = $("#activity-tabs");
@@ -236,13 +251,18 @@ setInterval(() => {
   }
 }, 30000);
 document.addEventListener("click", (event) => {
-  for (const menu of document.querySelectorAll(".agent-menu[open]"))
-    if (!menu.contains(event.target)) menu.open = false;
+  for (const menu of document.querySelectorAll(".agent-menu[open]")) {
+    if (!menu.contains(event.target)) {
+      menu.open = false;
+    }
+  }
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape")
-    for (const menu of document.querySelectorAll(".agent-menu[open]"))
+  if (event.key === "Escape") {
+    for (const menu of document.querySelectorAll(".agent-menu[open]")) {
       menu.open = false;
+    }
+  }
 });
 
 function paintReviewDraftBadges() {
@@ -261,13 +281,16 @@ function paintReviewDraftBadges() {
         tab.querySelector(".live-agent-state").append(badge);
       }
       badge.textContent = reviewRunLabel(draft);
-    } else badge?.remove();
+    } else {
+      badge?.remove();
+    }
   }
 }
 window.addEventListener("truffle-review-draft", () => {
   paintReviewDraftBadges();
-  for (const row of document.querySelectorAll("[data-review-file]"))
+  for (const row of document.querySelectorAll("[data-review-file]")) {
     paintReviewFileMarkers(row, reviewDrafts()[row.dataset.reviewRecord]);
+  }
 });
 
 function sidebarGlyph(name) {
@@ -298,8 +321,9 @@ function sidebarGlyph(name) {
     "stroke-linecap": "round",
     "stroke-linejoin": "round",
     "aria-hidden": "true",
-  }))
+  })) {
     svg.setAttribute(key, value);
+  }
   const path = document.createElementNS(svg.namespaceURI, "path");
   path.setAttribute("d", paths[name]);
   svg.append(path);
@@ -319,8 +343,9 @@ for (const button of document.querySelectorAll(
       "sentry",
       "notes",
     ].includes(name)
-  )
+  ) {
     continue;
+  }
   const icon = button.querySelector("span");
   icon.className = "sidebar-icon";
   icon.replaceChildren(sidebarGlyph(name));
@@ -333,11 +358,14 @@ for (const [id, name, hasIcon] of [
   ["restart-toggle", "restart", true],
   ["settings", "settings", false],
 ]) {
-  const button = $("#" + id);
+  const button = $(`#${id}`);
   let icon;
-  if (hasIcon) icon = button.querySelector("span");
-  else {
-    if (button.firstChild?.nodeType === 3) button.firstChild.remove();
+  if (hasIcon) {
+    icon = button.querySelector("span");
+  } else {
+    if (button.firstChild?.nodeType === 3) {
+      button.firstChild.remove();
+    }
     icon = el("span");
     button.prepend(icon);
   }

@@ -27,33 +27,34 @@ function githubUnreadReviews(data, items) {
     .map(([id, event]) => ({ id, version: event.version }));
 }
 function githubReviewerLabel(item) {
-  if (!Array.isArray(item.requestedReviewers)) return "Reviewers…";
+  if (!Array.isArray(item.requestedReviewers)) {
+    return "Reviewers…";
+  }
   if (!item.requestedReviewers.length) {
     const review = (item.latestReviews || []).find((r) => r.author?.login);
     return review
-      ? (review.state === "APPROVED"
-          ? "✓ "
-          : review.state === "CHANGES_REQUESTED"
-            ? "! "
-            : "↳ ") +
-          "@" +
-          review.author.login
+      ? `${
+          review.state === "APPROVED"
+            ? "✓ "
+            : review.state === "CHANGES_REQUESTED"
+              ? "! "
+              : "↳ "
+        }@${review.author.login}`
       : "None";
   }
   const first = item.requestedReviewers[0].login;
-  return (
-    "@" +
-    first +
-    (item.reviewerCount > 1 ? " +" + (item.reviewerCount - 1) : "")
-  );
+  return `@${
+    first
+  }${item.reviewerCount > 1 ? ` +${item.reviewerCount - 1}` : ""}`;
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = {
     githubUnreadReviews,
     githubReviewerLabel,
     githubStackGroups,
     orderedGithubItems,
   };
+}
 let githubReviewPanel = null;
 function githubReviewerChip(item) {
   const button = el(
@@ -62,16 +63,15 @@ function githubReviewerChip(item) {
     githubReviewerLabel(item),
   );
   button.type = "button";
-  button.title =
-    "Pending reviewers: " +
-    (item.requestedReviewers?.map((r) => "@" + r.login).join(", ") ||
-      (Array.isArray(item.requestedReviewers) ? "None" : "not yet loaded")) +
-    " · PR actions";
+  button.title = `Pending reviewers: ${
+    item.requestedReviewers?.map((r) => `@${r.login}`).join(", ") ||
+    (Array.isArray(item.requestedReviewers) ? "None" : "not yet loaded")
+  } · PR actions`;
   button.setAttribute(
     "aria-label",
-    "Reviewers and PR actions for " + workReference(item),
+    `Reviewers and PR actions for ${workReference(item)}`,
   );
-  button.dataset.focusKey = item.id + ":reviewers";
+  button.dataset.focusKey = `${item.id}:reviewers`;
   button.onclick = () => openGithubReviewPanel(item, button);
   return button;
 }
@@ -83,11 +83,11 @@ function openGithubReviewPanel(initial, anchor) {
   githubReviewPanel = panel;
   document.body.append(panel);
   const position = anchor.getBoundingClientRect();
-  panel.style.top =
-    Math.min(position.bottom + 5, Math.max(40, window.innerHeight - 350)) +
-    "px";
-  panel.style.left =
-    Math.max(8, Math.min(position.right - 310, window.innerWidth - 328)) + "px";
+  panel.style.top = `${Math.min(
+    position.bottom + 5,
+    Math.max(40, window.innerHeight - 350),
+  )}px`;
+  panel.style.left = `${Math.max(8, Math.min(position.right - 310, window.innerWidth - 328))}px`;
   let item = initial,
     pending = true,
     login = "",
@@ -106,19 +106,22 @@ function openGithubReviewPanel(initial, anchor) {
   const close = () => {
     const hadFocus = panel.contains(document.activeElement);
     panel.remove();
-    if (githubReviewPanel === panel) githubReviewPanel = null;
+    if (githubReviewPanel === panel) {
+      githubReviewPanel = null;
+    }
     if (hadFocus) {
       const trigger = anchor.isConnected
         ? anchor
         : [...document.querySelectorAll(".github-reviewer-chip")].find(
-            (node) => node.dataset.focusKey === initial.id + ":reviewers",
+            (node) => node.dataset.focusKey === `${initial.id}:reviewers`,
           );
       (trigger || $("#activity-open"))?.focus({ preventScroll: true });
     }
   };
   async function run(action) {
-    if (!active() || pending || (requiresRefresh && action !== "refresh"))
+    if (!active() || pending || (requiresRefresh && action !== "refresh")) {
       return;
+    }
     const normalizedLogin = login.trim().replace(/^@/, "");
     if (
       action === "request-review" &&
@@ -130,8 +133,9 @@ function openGithubReviewPanel(initial, anchor) {
         ? "Enter a GitHub username with 1–39 letters, numbers or hyphens, starting and ending with a letter or number."
         : "Enter a GitHub username.";
       usernameError.hidden = false;
-      if (panel.contains(document.activeElement))
+      if (panel.contains(document.activeElement)) {
         usernameInput.focus({ preventScroll: true });
+      }
       return;
     }
     pending = true;
@@ -146,39 +150,48 @@ function openGithubReviewPanel(initial, anchor) {
           : "Review requested on GitHub.";
     try {
       receipt = await api("/api/commands/invoke", {
-        name: "github.pr." + action,
+        name: `github.pr.${action}`,
         args: {
           id: initial.id,
           ...(action === "request-review" ? { login: normalizedLogin } : {}),
         },
       });
-      if (!active()) return;
-      if (action !== "refresh") login = "";
+      if (!active()) {
+        return;
+      }
+      if (action !== "refresh") {
+        login = "";
+      }
       const result = await loadStateSnapshot({ attempts: 2 });
-      if (!active()) return;
-      if (!result.accepted)
+      if (!active()) {
+        return;
+      }
+      if (!result.accepted) {
         throw new Error(
           "Dashboard changed while refreshing. Your newer changes were kept.",
         );
+      }
       const current = state.items.find((i) => i.id === initial.id);
-      if (!current)
+      if (!current) {
         throw new Error("This PR is unavailable in the refreshed dashboard.");
+      }
       item = current;
       requiresRefresh = false;
       render();
-      if (action !== "refresh") toast(completedMessage());
+      if (action !== "refresh") {
+        toast(completedMessage());
+      }
     } catch (error) {
-      if (!active()) return;
+      if (!active()) {
+        return;
+      }
       if (receipt) {
         requiresRefresh = true;
-        failure =
-          (action === "refresh"
-            ? "PR refresh was accepted."
-            : completedMessage()) +
-          " " +
-          error.message +
-          " Use Refresh PR to update this view" +
-          (action === "refresh" ? "." : "; do not repeat the action.");
+        failure = `${
+          action === "refresh" ? "PR refresh was accepted." : completedMessage()
+        } ${error.message} Use Refresh PR to update this view${
+          action === "refresh" ? "." : "; do not repeat the action."
+        }`;
       } else if (
         ["remote-confirmed-local-failed", "confirmation-unknown"].includes(
           error.data?.githubReceipt?.status,
@@ -186,14 +199,17 @@ function openGithubReviewPanel(initial, anchor) {
       ) {
         requiresRefresh = true;
         failure = error.message;
-      } else
+      } else {
         failure =
           error.message === "Not found."
             ? "Restart the updated service to enable PR actions."
             : error.message;
+      }
     } finally {
       pending = false;
-      if (active()) paint();
+      if (active()) {
+        paint();
+      }
     }
   }
   function paint() {
@@ -214,30 +230,30 @@ function openGithubReviewPanel(initial, anchor) {
         item.status === "done";
     const requested = el("div", "github-review-people");
     requested.append(el("small", "", "Requested"));
-    if (!Array.isArray(item.requestedReviewers))
+    if (!Array.isArray(item.requestedReviewers)) {
       requested.append(el("span", "", "Loading…"));
-    else if (!item.requestedReviewers.length)
+    } else if (!item.requestedReviewers.length) {
       requested.append(el("span", "muted", "None"));
-    else
-      for (const person of item.requestedReviewers)
+    } else {
+      for (const person of item.requestedReviewers) {
         requested.append(
-          el("span", "github-review-person", "@" + person.login),
+          el("span", "github-review-person", `@${person.login}`),
         );
+      }
+    }
     panel.append(requested);
     for (const review of item.latestReviews || []) {
-      if (review.author?.login)
+      if (review.author?.login) {
         panel.append(
           el(
             "div",
             "github-review-done",
-            "@" +
-              review.author.login +
-              " · " +
-              String(review.state || "reviewed")
-                .toLowerCase()
-                .replaceAll("_", " "),
+            `@${review.author.login} · ${String(review.state || "reviewed")
+              .toLowerCase()
+              .replaceAll("_", " ")}`,
           ),
         );
+      }
     }
     let ready;
     if (draft && !closed) {
@@ -272,15 +288,26 @@ function openGithubReviewPanel(initial, anchor) {
     list.id = "github-review-suggestions";
     const people = new Set();
     for (const row of state?.items || []) {
-      if (row.source !== "github") continue;
-      if (row.author) people.add(row.author);
-      for (const person of row.requestedReviewers || [])
-        if (person.kind === "user") people.add(person.login);
-      for (const review of row.latestReviews || [])
-        if (review.author?.login) people.add(review.author.login);
+      if (row.source !== "github") {
+        continue;
+      }
+      if (row.author) {
+        people.add(row.author);
+      }
+      for (const person of row.requestedReviewers || []) {
+        if (person.kind === "user") {
+          people.add(person.login);
+        }
+      }
+      for (const review of row.latestReviews || []) {
+        if (review.author?.login) {
+          people.add(review.author.login);
+        }
+      }
     }
-    for (const person of [...people].filter((p) => p !== item.author).sort())
+    for (const person of [...people].filter((p) => p !== item.author).sort()) {
       list.append(new Option(person, person));
+    }
     const submit = el("button", "button", "Request review");
     submit.dataset.githubFocus = "request";
     submit.type = "submit";
@@ -300,15 +327,18 @@ function openGithubReviewPanel(initial, anchor) {
     usernameError.setAttribute("role", "alert");
     usernameError.hidden = true;
     panel.append(usernameError);
-    if (draft)
+    if (draft) {
       panel.append(
         el("small", "form-hint", "Mark ready before requesting a reviewer."),
       );
-    if (closed) panel.append(el("small", "form-hint", "This PR is closed."));
-    else if (item.canUpdate === false)
+    }
+    if (closed) {
+      panel.append(el("small", "form-hint", "This PR is closed."));
+    } else if (item.canUpdate === false) {
       panel.append(
         el("small", "form-hint", "Your account cannot edit this PR."),
       );
+    }
     if (failure) {
       const error = el("p", "inline-error", failure);
       error.setAttribute("role", "alert");
@@ -323,7 +353,9 @@ function openGithubReviewPanel(initial, anchor) {
     refreshButton.disabled = pending;
     panel.append(refreshButton);
     focusControls = [ready, input, submit, refreshButton, closeButton];
-    if (hadFocus) focusControl(focusKey);
+    if (hadFocus) {
+      focusControl(focusKey);
+    }
   }
   panel.onkeydown = (event) => {
     if (event.key === "Escape") {
@@ -340,41 +372,49 @@ function openGithubReviewPanel(initial, anchor) {
     item.canUpdate !== null &&
     item.canUpdate !== undefined &&
     Date.now() / 1000 - observed < 300
-  )
+  ) {
     paint();
-  else void run("refresh");
+  } else {
+    void run("refresh");
+  }
   focusControl();
 }
-if (typeof document !== "undefined")
+if (typeof document !== "undefined") {
   (() => {
     let acknowledging = false;
     registerRenderHook("github:review-attention", updateReviewAttention, {
       order: 30,
     });
     function updateReviewAttention() {
-      if (!state) return;
+      if (!state) {
+        return;
+      }
       const unread = githubUnreadReviews(state, allItems()),
         dot = $("#github-review-dot");
       dot.hidden = !unread.length;
-      dot.title =
-        unread.length +
-        " new PR" +
-        (unread.length === 1 ? "" : "s") +
-        " ready for your review";
+      dot.title = `${unread.length} new PR${
+        unread.length === 1 ? "" : "s"
+      } ready for your review`;
       dot.setAttribute("aria-label", dot.title);
-      if (source !== "github" || acknowledging || !unread.length) return;
+      if (source !== "github" || acknowledging || !unread.length) {
+        return;
+      }
       const visible = new Set(
         [...document.querySelectorAll("#work-list .row[data-work-id]")].map(
           (row) => row.dataset.workId,
         ),
       );
       const reviews = unread.filter((r) => visible.has(r.id));
-      if (!reviews.length) return;
+      if (!reviews.length) {
+        return;
+      }
       acknowledging = true;
       void api("/api/github/reviews/seen", { reviews })
         .then(async () => {
           const result = await loadStateSnapshot({ attempts: 2 });
-          if (result.accepted) render();
+          if (result.accepted) {
+            render();
+          }
         })
         .catch(() => {})
         .finally(() => {
@@ -396,6 +436,7 @@ if (typeof document !== "undefined")
       true,
     );
   })();
+}
 
 // Dependencies are branch targets within the base repository, not title/body guesses.
 // Use the complete cached set to retain stack identity when filters hide a parent.
@@ -415,13 +456,19 @@ function githubStackGroups(visible, all) {
   const key = (repo, branch) =>
     JSON.stringify([String(repo || "").toLowerCase(), branch]);
   for (const item of prs) {
-    if (!item.headRepository || !item.headRefName) continue;
+    if (!item.headRepository || !item.headRefName) {
+      continue;
+    }
     const k = key(item.headRepository, item.headRefName);
-    if (!byHead.has(k)) byHead.set(k, []);
+    if (!byHead.has(k)) {
+      byHead.set(k, []);
+    }
     byHead.get(k).push(item);
   }
   for (const item of prs) {
-    if (!item.baseRefName || !item.project) continue;
+    if (!item.baseRefName || !item.project) {
+      continue;
+    }
     const matches = (
       byHead.get(key(item.project, item.baseRefName)) || []
     ).filter(
@@ -429,7 +476,9 @@ function githubStackGroups(visible, all) {
         p.id !== item.id &&
         String(p.project).toLowerCase() === String(item.project).toLowerCase(),
     );
-    if (matches.length === 1) parents.set(item.id, matches[0].id);
+    if (matches.length === 1) {
+      parents.set(item.id, matches[0].id);
+    }
   }
   // Fail open for corrupt or ambiguous metadata: never invent a cyclic stack.
   for (const id of [...parents.keys()]) {
@@ -437,14 +486,18 @@ function githubStackGroups(visible, all) {
     let next = parents.get(id);
     while (next) {
       if (seen.has(next)) {
-        for (const member of seen) parents.delete(member);
+        for (const member of seen) {
+          parents.delete(member);
+        }
         break;
       }
       seen.add(next);
       next = parents.get(next);
     }
   }
-  for (const parent of parents.values()) children.add(parent);
+  for (const parent of parents.values()) {
+    children.add(parent);
+  }
   const groups = new Map();
   for (const item of visible) {
     let root = item.id,
@@ -454,19 +507,20 @@ function githubStackGroups(visible, all) {
       depth++;
     }
     const stacked = parents.has(item.id) || children.has(item.id),
-      groupKey = stacked ? "stack:" + root : "other:" + item.project;
-    if (!groups.has(groupKey))
+      groupKey = stacked ? `stack:${root}` : `other:${item.project}`;
+    if (!groups.has(groupKey)) {
       groups.set(groupKey, {
         root: stacked ? byId.get(root) : null,
         repo: item.project,
         rows: [],
       });
+    }
     groups
       .get(groupKey)
       .rows.push({ item, depth, parent: byId.get(parents.get(item.id)) });
   }
-  for (const group of groups.values())
-    if (group.root)
+  for (const group of groups.values()) {
+    if (group.root) {
       group.rows.sort(
         (a, b) =>
           a.depth - b.depth ||
@@ -474,8 +528,10 @@ function githubStackGroups(visible, all) {
             numeric: true,
           }),
       );
+    }
+  }
   return [...groups.values()].sort(
-    (a, b) => Number(!!b.root) - Number(!!a.root),
+    (a, b) => Number(Boolean(b.root)) - Number(Boolean(a.root)),
   );
 }
 function orderedGithubItems(visible, all) {
@@ -487,10 +543,12 @@ function appendGithubStacks(list, visible, all, limit, compact) {
   const visibleIds = new Set(visible.map((i) => i.id));
   let remaining = limit;
   for (const stack of githubStackGroups(visible, all)) {
-    if (!remaining) break;
+    if (!remaining) {
+      break;
+    }
     const group = el(
         "section",
-        (compact ? "github-inline-stack" : "group") + " github-stack",
+        `${compact ? "github-inline-stack" : "group"} github-stack`,
       ),
       heading = el("h2", "group-header");
     const title = stack.root
@@ -503,15 +561,15 @@ function appendGithubStacks(list, visible, all, limit, compact) {
       el("span", "group-count", stack.rows.length),
       el("span", "group-line"),
     );
-    if (stack.root)
+    if (stack.root) {
       heading.title =
         "Base first · each indented PR targets the branch above it";
-    if (!compact || stack.root) group.append(heading);
+    }
+    if (!compact || stack.root) {
+      group.append(heading);
+    }
     for (const { item, depth, parent } of stack.rows.slice(0, remaining)) {
-      const wrap = el(
-        "div",
-        "github-stack-row" + (depth ? " stack-child" : ""),
-      );
+      const wrap = el("div", `github-stack-row${depth ? " stack-child" : ""}`);
       wrap.style.setProperty("--stack-depth", Math.min(depth, 4));
       if (parent && !visibleIds.has(parent.id)) {
         const note = el("div", "stack-parent-note");
@@ -525,10 +583,10 @@ function appendGithubStacks(list, visible, all, limit, compact) {
       }
       const row = renderRow(item);
       if (stack.root) {
-        const badge = el("span", "github-stack-badge", "⎇ " + (depth + 1));
-        badge.title =
-          `Stack ${workReference(stack.root)} · layer ${depth + 1}` +
-          (parent ? ` · based on ${workReference(parent)}` : " · base PR");
+        const badge = el("span", "github-stack-badge", `⎇ ${depth + 1}`);
+        badge.title = `Stack ${workReference(stack.root)} · layer ${depth + 1}${
+          parent ? ` · based on ${workReference(parent)}` : " · base PR"
+        }`;
         badge.setAttribute("aria-label", badge.title);
         $(".row-title", row).prepend(badge);
       }
@@ -552,23 +610,24 @@ const activeChatCI = {
 };
 const chatCIChecks = new Map();
 function chatCIContext() {
-  if (document.hidden || source !== "agents") return null;
+  if (document.hidden || source !== "agents") {
+    return null;
+  }
   const candidate = liveCandidates().find(
     (c) => candidateKey(c) === selectedAgentKey,
   );
   const record = selectedAgentKey.startsWith("record:")
     ? state?.sessions.find((r) => r.id === selectedAgentKey.slice(7))
     : candidate && recordForCandidate(candidate);
-  if (!record) return null;
+  if (!record) {
+    return null;
+  }
   return {
     record,
-    key:
-      record.id +
-      "\0" +
-      (record.items || [])
-        .map((i) => i.id)
-        .sort()
-        .join(","),
+    key: `${record.id}\0${(record.items || [])
+      .map((i) => i.id)
+      .sort()
+      .join(",")}`,
     prs: agentWork(record).filter(
       (i) => i.source === "github" && i.kind === "Pull request",
     ),
@@ -581,7 +640,7 @@ function syncChatCISourceAdmission() {
     info.disabled === true
       ? "disabled"
       : info.failures > 0 && info.nextAttempt > Date.now() / 1000
-        ? "backoff:" + info.nextAttempt
+        ? `backoff:${info.nextAttempt}`
         : "ready";
   if (
     activeChatCI.sourceAdmission !== null &&
@@ -593,13 +652,14 @@ function syncChatCISourceAdmission() {
       activeChatCI.retryAt = 0;
       activeChatCI.retryReason = "";
     }
-    for (const [id, checked] of chatCIChecks)
+    for (const [id, checked] of chatCIChecks) {
       if (["disabled", "backoff"].includes(checked.reason)) {
         const retained = { ...checked };
         delete retained.reason;
         delete retained.retryAt;
         chatCIChecks.set(id, retained);
       }
+    }
   }
   activeChatCI.sourceAdmission = admission;
   return activeChatCI.sourceAdmissionGeneration;
@@ -633,35 +693,28 @@ function chatCIStatus(item) {
       : checked?.retryAt;
   const retry =
     notice && Number.isFinite(retryAt) && retryAt > Date.now() / 1000
-      ? " Next attempt " + new Date(retryAt * 1000).toLocaleTimeString() + "."
+      ? ` Next attempt ${new Date(retryAt * 1000).toLocaleTimeString()}.`
       : "";
   const age = checked?.at
-    ? "Last checked " + relative(checked.at)
+    ? `Last checked ${relative(checked.at)}`
     : info.lastSuccess
-      ? "Last synced " + relative(info.lastSuccess)
+      ? `Last synced ${relative(info.lastSuccess)}`
       : "Checks have not been refreshed in this view.";
-  return age + (notice ? " · " + notice + retry : "");
+  return age + (notice ? ` · ${notice}${retry}` : "");
 }
 function chatCIHint(item) {
   const info = ciInfo(item.ci),
     failed = (item.ci?.checks || []).filter((c) => c.state === "failed");
-  return (
+  return `${
     info.label +
-    (item.ci?.total ? " · " + item.ci.total + " checks" : "") +
-    (failed.length ? "\n" + failed.map((c) => c.name).join("\n") : "") +
-    "\n" +
-    chatCIStatus(item)
-  );
+    (item.ci?.total ? ` · ${item.ci.total} checks` : "") +
+    (failed.length ? `\n${failed.map((c) => c.name).join("\n")}` : "")
+  }\n${chatCIStatus(item)}`;
 }
 function chatCIBadgeLabel(item) {
-  return (
-    "CI for " +
-    workReference(item) +
-    ": " +
-    ciInfo(item.ci).label +
-    ". " +
-    chatCIStatus(item)
-  );
+  return `CI for ${workReference(item)}: ${
+    ciInfo(item.ci).label
+  }. ${chatCIStatus(item)}`;
 }
 function paintChatCIHints() {
   const linked = chatCIContext()?.prs || [];
@@ -690,7 +743,9 @@ async function syncActiveChatCI() {
     activeChatCI.retryAt = 0;
     activeChatCI.retryReason = "";
   }
-  if (activeChatCI.pending || !prs.length) return;
+  if (activeChatCI.pending || !prs.length) {
+    return;
+  }
   const info = state.sources.github || {},
     time = Date.now() / 1000;
   if (
@@ -700,8 +755,9 @@ async function syncActiveChatCI() {
     paintChatCIHints();
     return;
   }
-  if (Date.now() - activeChatCI.at < 30000 || activeChatCI.retryAt > time)
+  if (Date.now() - activeChatCI.at < 30000 || activeChatCI.retryAt > time) {
     return;
+  }
   activeChatCI.at = Date.now();
   activeChatCI.pending = true;
   try {
@@ -717,14 +773,16 @@ async function syncActiveChatCI() {
         if (
           ["disabled", "backoff"].includes(result.reason) &&
           currentAdmission !== admission
-        )
+        ) {
           return;
-        for (const id of result.itemIds)
+        }
+        for (const id of result.itemIds) {
           chatCIChecks.set(id, {
             ...chatCIChecks.get(id),
             reason: result.reason,
             retryAt: result.retryAt,
           });
+        }
         if (activeChatCI.key === key) {
           activeChatCI.retryAt = Number.isFinite(result.retryAt)
             ? result.retryAt
@@ -733,11 +791,12 @@ async function syncActiveChatCI() {
         }
         return;
       }
-      for (const id of result.skippedItemIds || [])
+      for (const id of result.skippedItemIds || []) {
         chatCIChecks.set(id, {
           ...chatCIChecks.get(id),
           reason: "state-changed",
         });
+      }
       activeChatCI.presentation = {
         key,
         itemIds: result.itemIds,
@@ -747,26 +806,34 @@ async function syncActiveChatCI() {
     const presentation = activeChatCI.presentation;
     try {
       const snapshot = await loadStateSnapshot({ attempts: 2 });
-      if (!snapshot.accepted)
+      if (!snapshot.accepted) {
         throw new Error("Dashboard changed during refresh.");
-      for (const id of presentation.itemIds)
+      }
+      for (const id of presentation.itemIds) {
         chatCIChecks.set(id, { at: presentation.checkedAt });
+      }
       activeChatCI.presentation = null;
-      if (chatCIContext()?.key === presentation.key) render();
+      if (chatCIContext()?.key === presentation.key) {
+        render();
+      }
     } catch {
-      for (const id of presentation.itemIds)
+      for (const id of presentation.itemIds) {
         chatCIChecks.set(id, {
           ...chatCIChecks.get(id),
           reason: "presentation",
         });
+      }
     }
   } catch {
-    for (const pr of prs)
+    for (const pr of prs) {
       chatCIChecks.set(pr.id, { ...chatCIChecks.get(pr.id), error: true });
+    }
   } finally {
     activeChatCI.pending = false;
     paintChatCIHints();
-    if (activeChatCI.key !== key) void syncActiveChatCI();
+    if (activeChatCI.key !== key) {
+      void syncActiveChatCI();
+    }
   }
 }
 if (typeof window !== "undefined") {

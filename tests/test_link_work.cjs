@@ -27,12 +27,15 @@ function fixture({ command, library } = {}) {
     }
     append(...children) {
       this.children.push(...children);
-      for (const child of children) child.parentElement = this;
+      for (const child of children) {
+        child.parentElement = this;
+      }
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document.activeElement === this)
+      if (value && document.activeElement === this) {
         document.activeElement = null;
+      }
     }
     get disabled() {
       return this._disabled;
@@ -76,7 +79,7 @@ function fixture({ command, library } = {}) {
     toast: (message) => messages.push(message),
     api: async (path, args) => {
       calls.push({ path, args });
-      if (path === "/api/commands/invoke")
+      if (path === "/api/commands/invoke") {
         return command
           ? command()
           : {
@@ -87,6 +90,7 @@ function fixture({ command, library } = {}) {
               scope: "local",
               revision: "exact",
             };
+      }
       const read = deferred();
       reads.push(read);
       return read.promise;

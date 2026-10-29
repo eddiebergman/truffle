@@ -14,13 +14,16 @@ function fixture() {
     state: { old: true },
     api: async (path, payload) => {
       calls.push({ path, payload });
-      if (path === "/api/commands/invoke")
+      if (path === "/api/commands/invoke") {
         return new Promise((resolve) => (finish = resolve));
+      }
       return { sources: {}, syncing: [] };
     },
     render: () => {
       calls.push({ render: true });
-      for (const button of Object.values(buttons)) button.disabled = false;
+      for (const button of Object.values(buttons)) {
+        button.disabled = false;
+      }
     },
     toast: (message) => messages.push(message),
   });
@@ -94,11 +97,12 @@ test("source refresh retries obsolete reads and preserves newer metadata, receip
         reads.push(read);
         return read.promise;
       }
-      if (payload.name === "sources.refresh")
+      if (payload.name === "sources.refresh") {
         return {
           message: "Owner accepted source refresh.",
           forceRefreshAfter: cooldown,
         };
+      }
       return {
         chat: {
           id: "chat",
@@ -129,11 +133,12 @@ test("source refresh retries obsolete reads and preserves newer metadata, receip
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(reads.length, 2);
     assert.equal(f.c.state.sessions[0].hidden, true);
-    if (exhausted)
+    if (exhausted) {
       await f.c.mutateChatMetadata("chats.rename", {
         id: "chat",
         title: "Newer",
       });
+    }
     reads[1].resolve({
       revision: "fixture:2",
       sessions: [{ id: "chat", title: "Before", hidden: true }],
@@ -148,19 +153,21 @@ test("source refresh retries obsolete reads and preserves newer metadata, receip
     assert.equal(f.c.state.forceRefreshAfter, cooldown);
     assert.equal(f.buttons["#force-refresh"].disabled, true);
     assert.match(f.messages.at(-1), /^Owner accepted source refresh\./);
-    if (exhausted)
+    if (exhausted) {
       assert.match(
         f.messages.at(-1),
         /Dashboard changed.*newer changes were kept/,
       );
+    }
   }
 });
 test("source refresh keeps the successful owner receipt and cooldown when its state read fails", async () => {
   const f = fixture(),
     cooldown = Date.now() / 1000 + 60;
   f.c.api = async (path) => {
-    if (path === "/api/commands/invoke")
+    if (path === "/api/commands/invoke") {
       return { message: "Owner accepted.", forceRefreshAfter: cooldown };
+    }
     throw new Error("Read unavailable");
   };
   await f.c.refreshSources(true, f.buttons["#force-refresh"]);

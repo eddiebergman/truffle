@@ -6,7 +6,9 @@ let chatDispatchStorageError = false;
 function storedChatDispatchIntents() {
   try {
     const raw = localStorage.getItem(chatDispatchStorageKey) || "[]";
-    if (raw.length > 32768) throw new Error("Recovery metadata is too large");
+    if (raw.length > 32768) {
+      throw new Error("Recovery metadata is too large");
+    }
     const rows = JSON.parse(raw);
     if (
       !Array.isArray(rows) ||
@@ -42,8 +44,9 @@ function storedChatDispatchIntents() {
           (row.itemId !== undefined &&
             (typeof row.itemId !== "string" || row.itemId.length > 300)),
       )
-    )
+    ) {
       throw new Error("Invalid recovery metadata");
+    }
     chatDispatchStorageError = false;
     return rows;
   } catch {
@@ -53,13 +56,15 @@ function storedChatDispatchIntents() {
 }
 function storeChatDispatchIntent(intent) {
   const rows = storedChatDispatchIntents();
-  if (chatDispatchStorageError)
+  if (chatDispatchStorageError) {
     throw new Error(
       "Delivery recovery storage is unavailable. Do not submit again.",
     );
+  }
   const others = rows.filter((row) => row.recordId !== intent.recordId);
-  if (others.length >= 24)
+  if (others.length >= 24) {
     throw new Error("Resolve an earlier submission before starting another.");
+  }
   try {
     localStorage.setItem(
       chatDispatchStorageKey,
@@ -74,7 +79,7 @@ function storeChatDispatchIntent(intent) {
 }
 function clearChatDispatchIntent(recordId, operationId) {
   const rows = storedChatDispatchIntents();
-  if (!chatDispatchStorageError)
+  if (!chatDispatchStorageError) {
     try {
       localStorage.setItem(
         chatDispatchStorageKey,
@@ -88,6 +93,7 @@ function clearChatDispatchIntent(recordId, operationId) {
     } catch {
       chatDispatchStorageError = true;
     }
+  }
 }
 function unavailableChatDispatch(intent) {
   return {
@@ -126,8 +132,9 @@ function chatDispatchEntry(recordId) {
         : null,
       presentation: null,
     });
-    while (chatDispatchCache.size > 24)
+    while (chatDispatchCache.size > 24) {
       chatDispatchCache.delete(chatDispatchCache.keys().next().value);
+    }
   }
   return chatDispatchCache.get(recordId);
 }
@@ -150,16 +157,17 @@ function chatDispatchBlocked(recordId) {
     chatDispatchStorageError ||
     !entry.loaded ||
     entry.busy ||
-    !!entry.presentation ||
-    !!unresolvedChatDispatch(recordId)
+    Boolean(entry.presentation) ||
+    Boolean(unresolvedChatDispatch(recordId))
   );
 }
 function notifyChatDispatch(recordId) {
-  for (const node of document.querySelectorAll("[data-dispatch-record]"))
+  for (const node of document.querySelectorAll("[data-dispatch-record]")) {
     if (node.dataset.dispatchRecord === recordId) {
       node.refreshDispatch();
       node.dispatchChanged?.();
     }
+  }
 }
 function rememberChatDispatch(receipt) {
   const entry = chatDispatchEntry(receipt.recordId);
@@ -183,9 +191,12 @@ function rememberChatDispatch(receipt) {
   ].slice(0, 32);
   if (receipt.finalized || receipt.resolution === "user-abandoned") {
     clearChatDispatchIntent(receipt.recordId, receipt.operationId);
-    if (entry.intent?.operationId === receipt.operationId) entry.intent = null;
-  } else if (entry.intent?.operationId === receipt.operationId)
+    if (entry.intent?.operationId === receipt.operationId) {
+      entry.intent = null;
+    }
+  } else if (entry.intent?.operationId === receipt.operationId) {
     entry.intent.unknown = null;
+  }
   return receipt;
 }
 function persistChatDispatchIdentity(receipt) {
@@ -203,8 +214,9 @@ function persistChatDispatchIdentity(receipt) {
 async function lookupChatDispatch(receipt) {
   const { recordId, operationId } = receipt,
     entry = chatDispatchEntry(recordId);
-  if (entry.intent?.operationId !== operationId)
+  if (entry.intent?.operationId !== operationId) {
     persistChatDispatchIdentity(receipt);
+  }
   const capturedIntent = entry.intent;
   try {
     return rememberChatDispatch(
@@ -219,12 +231,15 @@ async function lookupChatDispatch(receipt) {
       known?.finalized ||
       known?.resolved ||
       ["uncertain", "written"].includes(known?.status)
-    )
+    ) {
       return known;
-    if (entry.unavailable?.operationId === operationId)
+    }
+    if (entry.unavailable?.operationId === operationId) {
       return entry.unavailable;
-    if (entry.intent?.operationId !== operationId)
+    }
+    if (entry.intent?.operationId !== operationId) {
       return known || unknownChatDispatch(capturedIntent);
+    }
     entry.intent.unknown = unknownChatDispatch(entry.intent);
     entry.operations = entry.operations.filter(
       (op) => op.operationId !== operationId,
@@ -243,8 +258,12 @@ async function lookupChatDispatch(receipt) {
 }
 async function readChatDispatch(recordId, force = false) {
   const entry = chatDispatchEntry(recordId);
-  if (entry.pending) return entry.pending;
-  if (!force && Date.now() - entry.readAt < 5000) return entry;
+  if (entry.pending) {
+    return entry.pending;
+  }
+  if (!force && Date.now() - entry.readAt < 5000) {
+    return entry;
+  }
   entry.pending = (async () => {
     try {
       const result = await api("/api/commands/invoke", {
@@ -261,7 +280,9 @@ async function readChatDispatch(recordId, force = false) {
         if (found.finalized || found.resolution === "user-abandoned") {
           clearChatDispatchIntent(recordId, found.operationId);
           entry.intent = null;
-        } else entry.intent.unknown = null;
+        } else {
+          entry.intent.unknown = null;
+        }
       }
       return entry;
     } catch (error) {
@@ -278,26 +299,35 @@ async function readChatDispatch(recordId, force = false) {
 async function submitChatDispatch(name, kind, args) {
   const { recordId } = args,
     entry = chatDispatchEntry(recordId);
-  if (chatDispatchStorageError)
+  if (chatDispatchStorageError) {
     throw new Error(
       "Delivery recovery storage is unavailable. Do not submit again.",
     );
-  if (entry.busy) throw new Error("A submission is already being checked.");
+  }
+  if (entry.busy) {
+    throw new Error("A submission is already being checked.");
+  }
   entry.busy = true;
   try {
     await readChatDispatch(recordId, true);
     const blocked = unresolvedChatDispatch(recordId);
-    if (blocked) return blocked;
-    if (entry.presentation) return entry.presentation;
+    if (blocked) {
+      return blocked;
+    }
+    if (entry.presentation) {
+      return entry.presentation;
+    }
     const stored = storedChatDispatchIntents();
-    if (chatDispatchStorageError)
+    if (chatDispatchStorageError) {
       throw new Error("Delivery recovery storage is unavailable.");
-    if (stored.filter((row) => row.recordId !== recordId).length >= 24)
+    }
+    if (stored.filter((row) => row.recordId !== recordId).length >= 24) {
       throw new Error("Resolve an earlier submission before starting another.");
+    }
     let prepared;
     try {
       prepared = await api("/api/commands/invoke", {
-        name: name + ".prepare",
+        name: `${name}.prepare`,
         args,
       });
     } catch (error) {
@@ -307,7 +337,9 @@ async function submitChatDispatch(name, kind, args) {
         // The read is a refresh; keep the state already known.
       }
       const recovered = unresolvedChatDispatch(recordId);
-      if (recovered) return recovered;
+      if (recovered) {
+        return recovered;
+      }
       throw error;
     }
     if (
@@ -320,17 +352,19 @@ async function submitChatDispatch(name, kind, args) {
       prepared.operationId.length > 80 ||
       typeof prepared.ticket !== "string" ||
       !/^(0|[1-9][0-9]{0,19})$/.test(prepared.ticket)
-    )
+    ) {
       throw new Error(
         "Preparation returned an invalid delivery identity. Nothing was submitted. Check delivery before trying again.",
       );
+    }
     rememberChatDispatch(prepared);
     if (
       prepared.finalized ||
       prepared.resolved ||
       prepared.status !== "prepared"
-    )
+    ) {
       return prepared;
+    }
     persistChatDispatchIdentity(prepared);
     return await lookupChatDispatch(prepared);
   } finally {
@@ -347,9 +381,13 @@ async function refreshChatDispatch(
     const result = await (refresh
       ? refresh()
       : loadStateSnapshot({ attempts: 2 }));
-    if (!result.accepted) throw new Error("Dashboard changed.");
+    if (!result.accepted) {
+      throw new Error("Dashboard changed.");
+    }
     entry.presentation = null;
-    if (canPresent()) render();
+    if (canPresent()) {
+      render();
+    }
     notifyChatDispatch(receipt.recordId);
     return true;
   } catch {
@@ -394,16 +432,23 @@ function chatDispatchRecovery(
       return;
     }
     const record = state.sessions.find((row) => row.id === recordId);
-    if (record) selectAgent(record, candidateForRecord(record));
-    else toast("This chat is unavailable.");
+    if (record) {
+      selectAgent(record, candidateForRecord(record));
+    } else {
+      toast("This chat is unavailable.");
+    }
   };
   const act = async (action) => {
-    if (working || !current()) return;
+    if (working || !current()) {
+      return;
+    }
     working = true;
     failure = "";
     const focused = host.contains(document.activeElement);
     host.tabIndex = -1;
-    if (focused) host.focus({ preventScroll: true });
+    if (focused) {
+      host.focus({ preventScroll: true });
+    }
     host.refreshDispatch();
     try {
       await action();
@@ -415,10 +460,11 @@ function chatDispatchRecovery(
       notifyChatDispatch(recordId);
       if (current()) {
         host.refreshDispatch();
-        if (focused && host.contains(document.activeElement))
+        if (focused && host.contains(document.activeElement)) {
           host
             .querySelector("button:not(:disabled)")
             ?.focus({ preventScroll: true });
+        }
       }
     }
   };
@@ -437,7 +483,9 @@ function chatDispatchRecovery(
       !working &&
       !failure &&
       !chatDispatchStorageError;
-    if (host.hidden) return;
+    if (host.hidden) {
+      return;
+    }
     const context = presentation || receipt,
       label = context
         ? chatDispatchLabel(
@@ -451,10 +499,11 @@ function chatDispatchRecovery(
           : !entry.loaded
             ? "Check delivery status before submitting."
             : presentation
-              ? presentation.message +
-                " The dashboard could not refresh. Refresh view; do not submit again."
+              ? `${
+                  presentation.message
+                } The dashboard could not refresh. Refresh view; do not submit again.`
               : receipt?.message || "Checking delivery…");
-    const message = el("p", "form-hint", (label ? label + ": " : "") + text);
+    const message = el("p", "form-hint", (label ? `${label}: ` : "") + text);
     message.setAttribute("role", "status");
     host.append(message);
     const actions = el("div", "ui-actiongroup");
@@ -493,8 +542,9 @@ function chatDispatchRecovery(
         completed = read.operations.find(
           (op) => op.operationId === operationId && op.finalized,
         );
-      if (completed)
+      if (completed) {
         await refreshChatDispatch(completed, { canPresent, refresh });
+      }
     });
     if (!receipt) {
       restore();
@@ -511,8 +561,9 @@ function chatDispatchRecovery(
         const warning = el(
           "p",
           "form-hint",
-          chatDispatchLabel(entry.intent) +
-            ": Prior delivery may have occurred. Acknowledging only clears this local recovery reminder. It does not undo delivery or send a new request.",
+          `${chatDispatchLabel(
+            entry.intent,
+          )}: Prior delivery may have occurred. Acknowledging only clears this local recovery reminder. It does not undo delivery or send a new request.`,
         );
         warning.setAttribute("role", "status");
         host.append(warning);
@@ -525,10 +576,11 @@ function chatDispatchRecovery(
         button("Cancel", async () => {
           confirming = null;
         });
-      } else
+      } else {
         button("Acknowledge unavailable receipt", async () => {
           confirming = "unavailable";
         });
+      }
       restore();
       return;
     }
@@ -544,8 +596,9 @@ function chatDispatchRecovery(
             args: { recordId, operationId: receipt.operationId },
           }),
         );
-        if (result.finalized)
+        if (result.finalized) {
           await refreshChatDispatch(result, { canPresent, refresh });
+        }
       });
     }
     if (
@@ -558,8 +611,9 @@ function chatDispatchRecovery(
           : "Check and submit same operation",
         async () => {
           const result = await lookupChatDispatch(receipt);
-          if (result.finalized)
+          if (result.finalized) {
             await refreshChatDispatch(result, { canPresent, refresh });
+          }
         },
       );
     }
@@ -577,18 +631,19 @@ function chatDispatchRecovery(
           }),
         );
         confirming = null;
-        if (result.finalized || result.resolved)
+        if (result.finalized || result.resolved) {
           await refreshChatDispatch(result, { canPresent, refresh });
+        }
       };
       if (confirming) {
         const warning = el(
           "p",
           "form-hint",
-          chatDispatchLabel(receipt) +
-            ": " +
-            (confirming === "submitted"
+          `${chatDispatchLabel(receipt)}: ${
+            confirming === "submitted"
               ? "Only confirm after inspecting the chat. This records your judgment; the transport cannot verify delivery."
-              : "This keeps the old operation as an audit record. It does not undo delivery or send again."),
+              : "This keeps the old operation as an audit record. It does not undo delivery or send again."
+          }`,
         );
         warning.setAttribute("role", "status");
         host.append(warning);
@@ -601,10 +656,11 @@ function chatDispatchRecovery(
           confirming = null;
         });
       } else {
-        if (receipt.status === "uncertain")
+        if (receipt.status === "uncertain") {
           button("I confirmed submission", async () => {
             confirming = "submitted";
           });
+        }
         button("Abandon submission", async () => {
           confirming = "abandon";
         });

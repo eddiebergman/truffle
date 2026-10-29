@@ -44,7 +44,9 @@ try {
 } catch {
   /* Browser storage is optional. */
 }
-if (!prefs || typeof prefs !== "object") prefs = {};
+if (!prefs || typeof prefs !== "object") {
+  prefs = {};
+}
 let source = [
   "chat-results",
   "agents",
@@ -66,7 +68,9 @@ let source = [
 ].includes(prefs.source)
   ? prefs.source
   : "agents";
-if (prefs.agentWorkspaceVersion !== 1) source = "agents";
+if (prefs.agentWorkspaceVersion !== 1) {
+  source = "agents";
+}
 let state = null,
   currentItem = null,
   toastTimer,
@@ -75,8 +79,9 @@ const workPageSize = 100;
 let workPageLimit = workPageSize,
   workPageKey = "";
 const statusFilter = $("#status-filter");
-for (const [value, text] of Object.entries(labels))
+for (const [value, text] of Object.entries(labels)) {
   statusFilter.add(new Option(text, value));
+}
 statusFilter.value = ["all", "active", ...order].includes(prefs.status)
   ? prefs.status
   : "active";
@@ -133,8 +138,9 @@ const folderPrefs =
     : {};
 
 for (const select of [$("#note-status"), $("#item-status")]) {
-  for (const [value, text] of Object.entries(labels))
+  for (const [value, text] of Object.entries(labels)) {
     select.add(new Option(text, value));
+  }
 }
 function persist() {
   try {
@@ -183,8 +189,12 @@ function persist() {
 }
 function el(tag, cls, text) {
   const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
+  if (cls) {
+    node.className = cls;
+  }
+  if (text !== undefined) {
+    node.textContent = text;
+  }
   return node;
 }
 function toast(message, undo) {
@@ -195,7 +205,9 @@ function toast(message, undo) {
       button.disabled = true;
       try {
         const result = await undo();
-        if (result !== false) $("#toast").hidden = true;
+        if (result !== false) {
+          $("#toast").hidden = true;
+        }
       } catch (error) {
         toast(error.message);
       }
@@ -223,9 +235,12 @@ async function api(path, payload) {
 }
 
 function sameSnapshot(previous, next) {
-  if (!previous) return false;
-  if (previous.revision !== undefined && next.revision !== undefined)
+  if (!previous) {
+    return false;
+  }
+  if (previous.revision !== undefined && next.revision !== undefined) {
     return previous.revision === next.revision;
+  }
   // The original Python service has no revision. Keep it usable during migration.
   return JSON.stringify(previous) === JSON.stringify(next);
 }
@@ -239,7 +254,9 @@ async function loadStateSnapshot({ attempts = 1 } = {}) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const baseline = state,
       next = await api("/api/state");
-    if (state !== baseline) continue;
+    if (state !== baseline) {
+      continue;
+    }
     const changed = !sameSnapshot(state, next);
     state = next;
     return { accepted: true, changed };
@@ -247,25 +264,32 @@ async function loadStateSnapshot({ attempts = 1 } = {}) {
   return { accepted: false, changed: false };
 }
 async function refresh() {
-  if (refreshing) return;
+  if (refreshing) {
+    return;
+  }
   refreshing = true;
   try {
     const result = await loadStateSnapshot();
     if (result.accepted) {
-      if (result.changed) render();
-      else renderSync();
+      if (result.changed) {
+        render();
+      } else {
+        renderSync();
+      }
       handleSessionHash();
     }
     if (
       typeof window !== "undefined" &&
       typeof window.refreshConfiguration === "function"
-    )
+    ) {
       void window.refreshConfiguration();
+    }
     if (
       typeof window !== "undefined" &&
       typeof window.refreshPresentations === "function"
-    )
+    ) {
       void window.refreshPresentations();
+    }
   } catch {
     $("#sync-label").textContent =
       "Server unavailable · showing last loaded view";
@@ -281,7 +305,9 @@ async function presentLocalWrite(write) {
     const kind = [400, 401, 403, 404, 409].includes(error.status)
       ? "rejected"
       : "unknown";
-    if (kind === "unknown") invalidateSnapshot();
+    if (kind === "unknown") {
+      invalidateSnapshot();
+    }
     return {
       kind,
       error: error.message || "The local write could not be confirmed.",
@@ -292,8 +318,9 @@ async function presentLocalWrite(write) {
   invalidateSnapshot();
   try {
     const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted)
+    if (!snapshot.accepted) {
       throw new Error("The dashboard changed while refreshing.");
+    }
     render();
     return { kind: "accepted", presentation: "ready" };
   } catch (error) {
@@ -313,18 +340,19 @@ async function markChangesRead(ids) {
   );
 }
 function localWriteMessage(result, acceptedText) {
-  if (result.kind === "accepted")
+  if (result.kind === "accepted") {
     return (
       acceptedText +
       (result.presentation === "pending"
         ? " The dashboard could not refresh. Refresh the view; do not repeat this action."
         : "")
     );
-  if (result.kind === "unknown")
-    return (
-      result.error +
-      " The save outcome is unknown. Inspect the current view before trying again."
-    );
+  }
+  if (result.kind === "unknown") {
+    return `${
+      result.error
+    } The save outcome is unknown. Inspect the current view before trying again.`;
+  }
   return result.error;
 }
 async function mutateChatMetadata(name, args, { renderAfter = true } = {}) {
@@ -334,7 +362,9 @@ async function mutateChatMetadata(name, args, { renderAfter = true } = {}) {
       "chats.visibility": ["hidden"],
       "chats.archive": ["archivedAt"],
     }[name];
-    if (!fields) throw new Error("Unsupported chat metadata action.");
+    if (!fields) {
+      throw new Error("Unsupported chat metadata action.");
+    }
     const result = await api("/api/commands/invoke", { name, args }),
       patch = Object.fromEntries(fields.map((key) => [key, result.chat[key]]));
     state = {
@@ -343,7 +373,9 @@ async function mutateChatMetadata(name, args, { renderAfter = true } = {}) {
         record.id === result.chat.id ? { ...record, ...patch } : record,
       ),
     };
-    if (renderAfter) render();
+    if (renderAfter) {
+      render();
+    }
     return true;
   } catch (error) {
     toast(error.message);
@@ -363,7 +395,9 @@ let itemCacheState = null,
   itemCache = [];
 let visibleWorkItems = [];
 function allItems() {
-  if (itemCacheState === state) return itemCache;
+  if (itemCacheState === state) {
+    return itemCache;
+  }
   itemCacheState = state;
   itemCache = [...state.items, ...state.notes].map((item) => {
     const override = state.overrides[item.id] || {};
@@ -372,26 +406,36 @@ function allItems() {
       kind: item.source === "notes" ? "Project" : item.kind,
       status: override.status || item.status,
       sourceStatusCode: item.status,
-      pinned: !!override.pinned,
-      hidden: !!override.hidden,
-      overridden: !!override.status,
+      pinned: Boolean(override.pinned),
+      hidden: Boolean(override.hidden),
+      overridden: Boolean(override.status),
     };
   });
   return itemCache;
 }
 function relative(timestamp) {
-  if (!timestamp) return "not synced yet";
+  if (!timestamp) {
+    return "not synced yet";
+  }
   const seconds = Math.max(0, Date.now() / 1000 - timestamp);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 60) {
+    return "just now";
+  }
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m ago`;
+  }
+  if (seconds < 86400) {
+    return `${Math.floor(seconds / 3600)}h ago`;
+  }
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 function sourceMark(item) {
   return el("span", `source-icon ${item.source}`, icons[item.source]);
 }
 function workReference(item) {
-  if (item.source !== "github" || !item.reference) return item.reference || "";
+  if (item.source !== "github" || !item.reference) {
+    return item.reference || "";
+  }
   const number = item.reference.match(/#(\d+)$/)?.[1];
   const repository =
     item.url?.match(/^https:\/\/github\.com\/[^/]+\/([^/]+)\//)?.[1] ||
@@ -399,25 +443,30 @@ function workReference(item) {
   return number && repository ? `${repository}#${number}` : item.reference;
 }
 function githubRole(item) {
-  if (item.source !== "github") return null;
-  if (item.relations?.includes("authored"))
+  if (item.source !== "github") {
+    return null;
+  }
+  if (item.relations?.includes("authored")) {
     return {
       label: item.kind === "Issue" ? "My issue" : "My PR",
       kind: "mine",
       detail: "You authored this work.",
     };
-  if (item.relations?.includes("reviews"))
+  }
+  if (item.relations?.includes("reviews")) {
     return {
       label: "Review requested",
       kind: "review",
       detail: "Your review is requested on this pull request.",
     };
-  if (item.relations?.some((x) => ["assigned", "issues"].includes(x)))
+  }
+  if (item.relations?.some((x) => ["assigned", "issues"].includes(x))) {
     return {
       label: "Assigned",
       kind: "assigned",
       detail: "This work is assigned to you.",
     };
+  }
   return {
     label: "Linked",
     kind: "linked",
@@ -425,7 +474,9 @@ function githubRole(item) {
   };
 }
 function styleWorkTitle(title, item) {
-  if (item.source !== "github") return;
+  if (item.source !== "github") {
+    return;
+  }
   title.classList.toggle(
     "draft-title",
     item.kind === "Pull request" &&
@@ -434,22 +485,28 @@ function styleWorkTitle(title, item) {
   const prefix = item.title.match(
     /^(feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert)(?:\([^)]*\))?!?:\s*/i,
   );
-  if (prefix) title.classList.add("commit-" + prefix[1].toLowerCase());
+  if (prefix) {
+    title.classList.add(`commit-${prefix[1].toLowerCase()}`);
+  }
   if (
     (prefix &&
       ["chore", "build", "ci", "style"].includes(prefix[1].toLowerCase())) ||
     /^(?:update|bump)\s+\S/i.test(item.title)
-  )
+  ) {
     title.classList.add("maintenance-title");
+  }
   title.replaceChildren();
   let cursor = 0,
     primary = false;
   function appendPR(text, offset) {
-    if (!text) return;
+    if (!text) {
+      return;
+    }
     const link = el(
       item.url ? "a" : "span",
-      "pr-title-part " +
-        (/^[\s(),.;]*$/.test(text) ? "title-punctuation" : "title-prose"),
+      `pr-title-part ${
+        /^[\s(),.;]*$/.test(text) ? "title-punctuation" : "title-prose"
+      }`,
     );
     if (item.url) {
       link.href = item.url;
@@ -457,15 +514,17 @@ function styleWorkTitle(title, item) {
       link.rel = "noopener noreferrer";
     }
     if (!primary) {
-      link.dataset.focusKey = item.id + ":title";
+      link.dataset.focusKey = `${item.id}:title`;
       primary = true;
     }
-    if (offset === 0 && prefix)
+    if (offset === 0 && prefix) {
       link.append(
-        el("span", "commit-prefix " + prefix[1].toLowerCase(), prefix[0]),
+        el("span", `commit-prefix ${prefix[1].toLowerCase()}`, prefix[0]),
         document.createTextNode(text.slice(prefix[0].length)),
       );
-    else link.textContent = text;
+    } else {
+      link.textContent = text;
+    }
     title.append(link);
   }
   for (const match of item.title.matchAll(/\b[A-Z][A-Z0-9]*-[0-9]+\b/g)) {
@@ -475,11 +534,11 @@ function styleWorkTitle(title, item) {
     );
     const link = el("a", "linear-ticket-link", match[0]);
     link.href =
-      known?.url || state.linearLinks?.[match[0]] || "/linear/" + match[0];
+      known?.url || state.linearLinks?.[match[0]] || `/linear/${match[0]}`;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.title = "Open " + match[0] + " in Linear";
-    link.dataset.focusKey = item.id + ":linear:" + match.index;
+    link.title = `Open ${match[0]} in Linear`;
+    link.dataset.focusKey = `${item.id}:linear:${match.index}`;
     title.append(link);
     cursor = match.index + match[0].length;
   }
@@ -507,14 +566,17 @@ function appendLinearTree(container, items) {
       seen.add(parent.id);
       const ancestor = ensure(parent);
       child.parent = parent.id;
-      if (!ancestor.children.includes(child.ref.id))
+      if (!ancestor.children.includes(child.ref.id)) {
         ancestor.children.push(child.ref.id);
+      }
       child = ancestor;
       parent = parent.parent;
     }
   }
   function renderNode(node, seen) {
-    if (seen.has(node.ref.id)) return el("div");
+    if (seen.has(node.ref.id)) {
+      return el("div");
+    }
     const next = new Set(seen).add(node.ref.id);
     const wrap = el("div", "issue-tree-node"),
       header = el("div", "issue-tree-header");
@@ -526,26 +588,31 @@ function appendLinearTree(container, items) {
       );
       toggle.setAttribute(
         "aria-label",
-        "Toggle sub-issues of " + (node.ref.reference || node.ref.title),
+        `Toggle sub-issues of ${node.ref.reference || node.ref.title}`,
       );
       toggle.setAttribute(
         "aria-expanded",
         String(!collapsedIssueTrees.has(node.ref.id)),
       );
       toggle.onclick = () => {
-        if (collapsedIssueTrees.has(node.ref.id))
+        if (collapsedIssueTrees.has(node.ref.id)) {
           collapsedIssueTrees.delete(node.ref.id);
-        else collapsedIssueTrees.add(node.ref.id);
+        } else {
+          collapsedIssueTrees.add(node.ref.id);
+        }
         render();
       };
       header.append(toggle);
-    } else header.append(el("span", "tree-spacer"));
-    if (node.item) header.append(renderRow(node.item));
-    else {
+    } else {
+      header.append(el("span", "tree-spacer"));
+    }
+    if (node.item) {
+      header.append(renderRow(node.item));
+    } else {
       const link = el(
         "a",
         "parent-issue-context",
-        (node.ref.reference ? node.ref.reference + " · " : "") + node.ref.title,
+        (node.ref.reference ? `${node.ref.reference} · ` : "") + node.ref.title,
       );
       link.href = node.ref.url;
       link.target = "_blank";
@@ -556,15 +623,20 @@ function appendLinearTree(container, items) {
     wrap.append(header);
     if (!collapsedIssueTrees.has(node.ref.id)) {
       const children = el("div", "issue-tree-children");
-      for (const id of node.children)
+      for (const id of node.children) {
         children.append(renderNode(nodes.get(id), next));
-      if (node.children.length) wrap.append(children);
+      }
+      if (node.children.length) {
+        wrap.append(children);
+      }
     }
     return wrap;
   }
   for (const id of order) {
     const node = nodes.get(id);
-    if (!node.parent) container.append(renderNode(node, new Set()));
+    if (!node.parent) {
+      container.append(renderNode(node, new Set()));
+    }
   }
 }
 const hiddenSectionsOpen = new Set();
@@ -576,7 +648,9 @@ function scopeKey(item) {
     : item.project || "No project";
 }
 function scopeLabel(key) {
-  if (source !== "github") return key;
+  if (source !== "github") {
+    return key;
+  }
   const short = key.split("/").pop();
   const owners = new Set(
     allItems()
@@ -612,11 +686,17 @@ function updateGroupingControl() {
       select.add(option);
     }
     option.textContent = source === "github" ? "Group: Repo" : "Group: Project";
-  } else option?.remove();
+  } else {
+    option?.remove();
+  }
   const stack = select.querySelector('[value="stack"]');
   if (source === "github") {
-    if (!stack) select.add(new Option("Group: Stack", "stack"));
-  } else stack?.remove();
+    if (!stack) {
+      select.add(new Option("Group: Stack", "stack"));
+    }
+  } else {
+    stack?.remove();
+  }
   select.value = groupingPrefs[source];
 }
 function renderScopeFilters(items) {
@@ -641,8 +721,9 @@ function renderScopeFilters(items) {
         .map(scopeKey),
     ),
   ].sort((a, b) => a.localeCompare(b));
-  if (scopePrefs[source] && !keys.includes(scopePrefs[source]))
+  if (scopePrefs[source] && !keys.includes(scopePrefs[source])) {
     keys.push(scopePrefs[source]);
+  }
   const name = source === "github" ? "repository" : "project";
   strip.setAttribute(
     "aria-label",
@@ -669,8 +750,9 @@ function renderScopeFilters(items) {
       );
       button.onclick = () => {
         scopePrefs[source] = scopePrefs[source] === key ? "" : key;
-        if (typeof setSavedViewScope === "function")
+        if (typeof setSavedViewScope === "function") {
           setSavedViewScope(scopePrefs[source]);
+        }
         persist();
         render();
       };
@@ -678,17 +760,20 @@ function renderScopeFilters(items) {
     }),
   );
   strip.scrollLeft = scroll;
-  if (focused !== undefined)
-    for (const button of strip.children)
-      if (button.dataset.scopeKey === focused)
+  if (focused !== undefined) {
+    for (const button of strip.children) {
+      if (button.dataset.scopeKey === focused) {
         button.focus({ preventScroll: true });
+      }
+    }
+  }
 }
 function visibilityButton(record, session = false) {
   const button = el("button", "icon-button visibility-button");
   const label = `${record.hidden ? "Show" : "Hide"} ${session ? "session" : "item"}: ${record.title}`;
   button.setAttribute("aria-label", label);
   button.title = record.hidden ? "Show again" : "Hide from dashboard";
-  button.dataset.focusKey = record.id + ":visibility";
+  button.dataset.focusKey = `${record.id}:visibility`;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   for (const [key, value] of Object.entries({
     viewBox: "0 0 24 24",
@@ -698,26 +783,30 @@ function visibilityButton(record, session = false) {
     stroke: "currentColor",
     "stroke-width": "1.6",
     "aria-hidden": "true",
-  }))
+  })) {
     svg.setAttribute(key, value);
+  }
   for (const shape of [
     ["path", { d: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" }],
     ["circle", { cx: "12", cy: "12", r: "3" }],
     ...(!record.hidden ? [["path", { d: "M3 3l18 18" }]] : []),
   ]) {
     const node = document.createElementNS(svg.namespaceURI, shape[0]);
-    for (const [key, value] of Object.entries(shape[1]))
+    for (const [key, value] of Object.entries(shape[1])) {
       node.setAttribute(key, value);
+    }
     svg.append(node);
   }
   button.append(svg);
   button.onclick = async () => {
-    if (button.disabled) return;
+    if (button.disabled) {
+      return;
+    }
     const focused = document.activeElement === button;
     button.disabled = true;
     const page = source,
       dialogItem = currentItem,
-      hidden = !!record.hidden,
+      hidden = Boolean(record.hidden),
       text = hidden ? "Shown again." : "Hidden.";
     let result;
     try {
@@ -743,7 +832,9 @@ function visibilityButton(record, session = false) {
         ) {
           try {
             const item = allItems().find((x) => x.id === dialogItem.id);
-            if (item) renderItemSessions(item);
+            if (item) {
+              renderItemSessions(item);
+            }
           } catch (error) {
             result = {
               kind: "accepted",
@@ -755,11 +846,12 @@ function visibilityButton(record, session = false) {
         const undo =
           result.presentation === "ready"
             ? async () => {
-                if (session)
+                if (session) {
                   return mutateChatMetadata("chats.visibility", {
                     id: record.id,
                     hidden,
                   });
+                }
                 const restored = await mutate({
                   action: "override",
                   id: record.id,
@@ -793,7 +885,9 @@ function visibilityButton(record, session = false) {
             : $("#hidden-summary");
           target?.focus({ preventScroll: true });
         }
-      } else if (result) toast(localWriteMessage(result, text));
+      } else if (result) {
+        toast(localWriteMessage(result, text));
+      }
     } finally {
       button.disabled = false;
     }
@@ -804,8 +898,9 @@ function visibilityButton(record, session = false) {
       button.isConnected &&
       (document.activeElement === document.body ||
         !document.activeElement?.isConnected)
-    )
+    ) {
       button.focus({ preventScroll: true });
+    }
   };
   return button;
 }
@@ -832,7 +927,7 @@ function renderHiddenItems(items) {
           [
             x.title,
             x.cwd,
-            ...x.items.map((i) => i.title + " " + workReference(i)),
+            ...x.items.map((i) => `${i.title} ${workReference(i)}`),
           ]
             .join(" ")
             .toLowerCase()
@@ -845,7 +940,9 @@ function renderHiddenItems(items) {
   $("#hidden-summary").textContent =
     `Hidden · ${work.length + sessions.length}`;
   list.replaceChildren();
-  if (section.hidden || !section.open) return;
+  if (section.hidden || !section.open) {
+    return;
+  }
   if (sessions.length) {
     list.append(el("h3", "group-header", "Agent sessions"));
     sessions.forEach((x) => list.append(sessionCard(x)));
@@ -859,7 +956,9 @@ $("#hidden-items").ontoggle = () => {
   const section = $("#hidden-items");
   if (section.open) {
     hiddenSectionsOpen.add(section.dataset.source);
-    if (state) renderHiddenItems(allItems());
+    if (state) {
+      renderHiddenItems(allItems());
+    }
   } else {
     hiddenSectionsOpen.delete(section.dataset.source);
     $("#hidden-list").replaceChildren();
@@ -891,7 +990,9 @@ function fuzzyScore(query, text) {
       part = 0;
     for (const char of word) {
       const at = value.indexOf(char, cursor);
-      if (at < 0) return -Infinity;
+      if (at < 0) {
+        return -Infinity;
+      }
       part +=
         5 +
         (at === last + 1 ? 8 : 0) +
@@ -910,7 +1011,9 @@ function workSearchScore(query, item) {
       .replace(/[^\p{L}\p{N}]/gu, "")
       .toLowerCase();
   const words = query.trim().split(/\s+/).map(normalize).filter(Boolean);
-  if (!words.length) return 0;
+  if (!words.length) {
+    return 0;
+  }
   const fields = [
     ["title", 40],
     ["reference", 35],
@@ -936,30 +1039,44 @@ function workSearchScore(query, item) {
     let best = -Infinity;
     for (const field of fields) {
       const at = field.value.indexOf(word);
-      if (at >= 0)
+      if (at >= 0) {
         best = Math.max(best, 100 + field.weight + (at === 0 ? 10 : 0));
-      else if (field.fuzzy && Number.isFinite(fuzzyScore(word, field.value)))
+      } else if (
+        field.fuzzy &&
+        Number.isFinite(fuzzyScore(word, field.value))
+      ) {
         best = Math.max(best, field.weight);
+      }
     }
-    if (!Number.isFinite(best)) return -Infinity;
+    if (!Number.isFinite(best)) {
+      return -Infinity;
+    }
     score += best;
   }
   return score;
 }
 function workViewAllows(item, page = source) {
-  if (item.archivedAt || item.hidden || item.snoozed) return false;
+  if (item.archivedAt || item.hidden || item.snoozed) {
+    return false;
+  }
   if (
     page !== "all" &&
     (page === "pinned" ? !item.pinned : item.source !== page)
-  )
+  ) {
     return false;
+  }
   if (
     typeof pageSettingsAllows === "function" &&
     !pageSettingsAllows(item, page)
-  )
+  ) {
     return false;
-  if (scopePrefs[page] && scopeKey(item) !== scopePrefs[page]) return false;
-  if (!matchesSentry(item, page)) return false;
+  }
+  if (scopePrefs[page] && scopeKey(item) !== scopePrefs[page]) {
+    return false;
+  }
+  if (!matchesSentry(item, page)) {
+    return false;
+  }
   return typeof savedViewAllows === "function"
     ? savedViewAllows(item, page)
     : item.status !== "done";
@@ -985,14 +1102,15 @@ function workGroupingKey(item, groupBy) {
       : item[groupBy];
 }
 function workGroupingKeys(items, groupBy) {
-  if (groupBy === "status")
+  if (groupBy === "status") {
     return [
       ...order,
       ...(items.some((item) => !Object.hasOwn(labels, item.status))
         ? ["unknown"]
         : []),
     ];
-  if (groupBy === "source")
+  }
+  if (groupBy === "source") {
     return [
       ...new Set([
         "linear",
@@ -1002,6 +1120,7 @@ function workGroupingKeys(items, groupBy) {
         ...items.map((item) => item.source),
       ]),
     ];
+  }
   return groupBy === "project"
     ? [...new Set(items.map(scopeKey))].sort((a, b) => a.localeCompare(b))
     : ["all"];
@@ -1015,10 +1134,12 @@ function registerRenderHook(name, run, { phase = "after", order = 0 } = {}) {
     !name ||
     typeof run !== "function" ||
     !Number.isFinite(order)
-  )
+  ) {
     throw new Error("Invalid render hook.");
-  if (hooks.has(name))
-    throw new Error("Render hook already registered: " + name);
+  }
+  if (hooks.has(name)) {
+    throw new Error(`Render hook already registered: ${name}`);
+  }
   hooks.set(name, { name, run, order });
 }
 function runRenderHooks(phase, context) {
@@ -1029,28 +1150,38 @@ function runRenderHooks(phase, context) {
     try {
       hook.run(context);
     } catch (error) {
-      if (context.error === null) context.error = error;
+      if (context.error === null) {
+        context.error = error;
+      }
     }
   }
 }
 function render() {
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   const context = { source, error: null };
   let result;
   runRenderHooks("before", context);
   try {
-    if (context.error === null) result = renderWorkspacePage();
+    if (context.error === null) {
+      result = renderWorkspacePage();
+    }
   } catch (error) {
     context.error = error;
   } finally {
     runRenderHooks("after", context);
     runRenderHooks("finally", context);
   }
-  if (context.error !== null) throw context.error;
+  if (context.error !== null) {
+    throw context.error;
+  }
   return result;
 }
 function renderWorkPage() {
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   visibleWorkItems = [];
   const focusKey = document.activeElement?.dataset.focusKey;
   const items = allItems();
@@ -1079,18 +1210,19 @@ function renderWorkPage() {
           ?.name
       : "";
   const viewLabel = savedName
-    ? sourceNames[source] + " · " + savedName
+    ? `${sourceNames[source]} · ${savedName}`
     : source === "linear" && scopePrefs.linear
-      ? "Linear · " + scopePrefs.linear
+      ? `Linear · ${scopePrefs.linear}`
       : sourceNames[source];
   $("#page-title").replaceChildren(
     document.createTextNode(viewLabel),
     el("span", "title-dot", "."),
   );
-  for (const button of document.querySelectorAll("[data-source]"))
+  for (const button of document.querySelectorAll("[data-source]")) {
     button.classList.toggle("active", button.dataset.source === source);
+  }
   for (const name of ["all", "pinned", "linear", "sentry", "github", "notes"]) {
-    $("#count-" + name).textContent = workViewCount(items, name);
+    $(`#count-${name}`).textContent = workViewCount(items, name);
   }
   $("#count-sessions").textContent = (state.sessions || []).filter(
     (x) => !x.archivedAt && !x.hidden && sessionWorkState(x) !== "done",
@@ -1111,7 +1243,7 @@ function renderWorkPage() {
     "artifacts",
   ].includes(source);
   $(".metrics").hidden = special;
-  $("#status-filter").hidden = special || !!savedView;
+  $("#status-filter").hidden = special || Boolean(savedView);
   $("#group-by").hidden = special;
   $("#session-filter-bar").hidden = source !== "sessions";
   if (renderFeatureView(items)) {
@@ -1136,11 +1268,11 @@ function renderWorkPage() {
     ["progress", "in-progress"],
     ["blocked", "blocked"],
   ]) {
-    $("#metric-" + id).textContent = scope.filter((x) =>
+    $(`#metric-${id}`).textContent = scope.filter((x) =>
       status ? x.status === status : x.status !== "done",
     ).length;
   }
-  for (const metric of document.querySelectorAll("[data-metric]"))
+  for (const metric of document.querySelectorAll("[data-metric]")) {
     metric.classList.toggle(
       "selected",
       savedView
@@ -1148,10 +1280,13 @@ function renderWorkPage() {
             savedView.draft.lifecycle === "active"
         : metric.dataset.metric === statusFilter.value,
     );
+  }
   const query = $("#search").value.trim().toLowerCase();
   const scores = new Map();
   const visible = scope.filter((x) => {
-    if (!query) return true;
+    if (!query) {
+      return true;
+    }
     const score = workSearchScore(query, x);
     scores.set(x.id, score);
     return Number.isFinite(score);
@@ -1171,10 +1306,10 @@ function renderWorkPage() {
   if (!visible.length) {
     const empty = el("div", "empty");
     const filtered =
-      !!query ||
-      !!scopePrefs[source] ||
-      (!!savedView &&
-        (!!savedView.id ||
+      Boolean(query) ||
+      Boolean(scopePrefs[source]) ||
+      (Boolean(savedView) &&
+        (Boolean(savedView.id) ||
           savedView.draft.lifecycle !== "active" ||
           savedView.draft.filter.op !== "all" ||
           savedView.draft.filter.conditions.length > 0));
@@ -1182,15 +1317,18 @@ function renderWorkPage() {
       ? "No items match these filters."
       : "No items in this view.";
     empty.append(el("h2", "", title));
-    if (!items.length)
+    if (!items.length) {
       empty.append(el("p", "", "Connect GitHub or Linear to load your work."));
+    }
     let add;
     if (filtered) {
       add = el("button", "button", "Clear filters");
       add.onclick = () => {
         $("#search").value = "";
         scopePrefs[source] = "";
-        if (typeof resetSavedViewState === "function") resetSavedViewState();
+        if (typeof resetSavedViewState === "function") {
+          resetSavedViewState();
+        }
         persist();
         render();
       };
@@ -1201,7 +1339,9 @@ function renderWorkPage() {
       add = el("button", "button", "Connect your accounts");
       add.onclick = openSettings;
     }
-    if (add) empty.append(add);
+    if (add) {
+      empty.append(add);
+    }
     list.append(empty);
   }
   const groupBy = $("#group-by").value;
@@ -1238,8 +1378,12 @@ function renderWorkPage() {
     let groupItems = visible.filter(
       (x) => groupBy === "none" || workGroupingKey(x, groupBy) === key,
     );
-    if (!groupItems.length || !remaining) continue;
-    if (source === "github") groupItems = orderedGithubItems(groupItems, items);
+    if (!groupItems.length || !remaining) {
+      continue;
+    }
+    if (source === "github") {
+      groupItems = orderedGithubItems(groupItems, items);
+    }
     const pageItems = groupItems.slice(0, remaining);
     remaining -= pageItems.length;
     const group = el("div", "group");
@@ -1252,7 +1396,7 @@ function renderWorkPage() {
         blocked: "blocked",
       }[key] || "";
     heading.append(
-      el("i", "dot " + dotClass),
+      el("i", `dot ${dotClass}`),
       document.createTextNode(
         groupBy === "status"
           ? labels[key] || "Unknown"
@@ -1266,10 +1410,15 @@ function renderWorkPage() {
       el("span", "group-line"),
     );
     group.append(heading);
-    if (source === "github")
+    if (source === "github") {
       appendGithubStacks(group, pageItems, items, pageItems.length, true);
-    else if (source === "linear") appendLinearTree(group, pageItems);
-    else for (const item of pageItems) group.append(renderRow(item));
+    } else if (source === "linear") {
+      appendLinearTree(group, pageItems);
+    } else {
+      for (const item of pageItems) {
+        group.append(renderRow(item));
+      }
+    }
     list.append(group);
   }
   if (visible.length > workPageLimit) {
@@ -1298,9 +1447,11 @@ function renderWorkPage() {
     // Preserve keyboard focus during the small background state refresh.
     for (const node of document.querySelectorAll(
       "#work-list [data-focus-key], #active-sessions [data-focus-key], #hidden-list [data-focus-key]",
-    ))
-      if (node.dataset.focusKey === focusKey)
+    )) {
+      if (node.dataset.focusKey === focusKey) {
         node.focus({ preventScroll: true });
+      }
+    }
   }
   renderSync();
 }
@@ -1310,21 +1461,22 @@ function renderRow(item) {
   );
   const row = el(
     "article",
-    "row" +
-      (mixed
+    `row${
+      mixed
         ? " mixed-source"
         : ["linear", "sentry", "notes"].includes(source)
           ? " no-role-column"
-          : ""),
+          : ""
+    }`,
   );
   row.dataset.workId = item.id;
-  row.dataset.focusKey = item.id + ":row";
+  row.dataset.focusKey = `${item.id}:row`;
   row.tabIndex = -1;
   const codes = el("div", "row-codes");
   const role = githubRole(item);
   const status = el(
     "button",
-    "status-pill " + item.status,
+    `status-pill ${item.status}`,
     workStatusLabel(item),
   );
   status.title = `Status: ${workStatusLabel(item)} · Click to change`;
@@ -1332,10 +1484,12 @@ function renderRow(item) {
     "aria-label",
     `${workStatusLabel(item)}: edit status for ${item.title}`,
   );
-  status.dataset.focusKey = item.id + ":status";
+  status.dataset.focusKey = `${item.id}:status`;
   status.onclick = () =>
     item.source === "notes" ? openNote(item) : openItem(item);
-  if (mixed) codes.append(sourceMark(item));
+  if (mixed) {
+    codes.append(sourceMark(item));
+  }
 
   const bar = el("div", "row-bar");
   const main = el("div", "row-main");
@@ -1344,52 +1498,62 @@ function renderRow(item) {
     "row-title",
     item.title,
   );
-  if (item.source !== "github") title.dataset.focusKey = item.id + ":title";
+  if (item.source !== "github") {
+    title.dataset.focusKey = `${item.id}:title`;
+  }
   if (item.url && item.source !== "github") {
     title.href = item.url;
     title.target = "_blank";
     title.rel = "noopener noreferrer";
-  } else if (item.source !== "github") title.onclick = () => openItem(item);
+  } else if (item.source !== "github") {
+    title.onclick = () => openItem(item);
+  }
   const meta = el("div", "row-meta");
   if (role) {
     const badge = el(
       "span",
-      "item-role " + role.kind,
+      `item-role ${role.kind}`,
       role.kind === "mine" ? "Yours" : role.label,
     );
     badge.title = role.detail;
     meta.append(badge);
   }
-  if (item.reference)
+  if (item.reference) {
     meta.append(
       el("span", "ref", workReference(item)),
       el("span", "meta-sep", "·"),
     );
+  }
   meta.append(el("span", "", item.project || sourceNames[item.source]));
-  if (item.relations?.includes("reviews"))
+  if (item.relations?.includes("reviews")) {
     meta.append(
       el("span", "meta-sep", "·"),
       el("span", "", "Your review requested"),
     );
-  else if (item.sourceStatus && item.sourceStatus !== labels[item.status])
+  } else if (item.sourceStatus && item.sourceStatus !== labels[item.status]) {
     meta.append(el("span", "meta-sep", "·"), el("span", "", item.sourceStatus));
-  if (item.overridden)
+  }
+  if (item.overridden) {
     meta.append(el("span", "meta-sep", "·"), el("span", "", "Local status"));
+  }
   title.title = item.title;
   styleWorkTitle(title, item);
-  if (mixed) main.append(codes);
+  if (mixed) {
+    main.append(codes);
+  }
   main.append(title);
   bar.append(main, meta);
   const actions = el(
     "div",
-    "row-actions" +
-      (item.source === "github" && item.kind === "Pull request"
+    `row-actions${
+      item.source === "github" && item.kind === "Pull request"
         ? " has-pr-review"
-        : ""),
+        : ""
+    }`,
   );
   const pin = el(
     "button",
-    "pin-button" + (item.pinned ? " pinned" : ""),
+    `pin-button${item.pinned ? " pinned" : ""}`,
     item.pinned ? "★" : "☆",
   );
   pin.setAttribute(
@@ -1397,9 +1561,11 @@ function renderRow(item) {
     `${item.pinned ? "Unpin" : "Pin"} ${item.title}`,
   );
   pin.setAttribute("aria-pressed", String(item.pinned));
-  pin.dataset.focusKey = item.id + ":pin";
+  pin.dataset.focusKey = `${item.id}:pin`;
   pin.onclick = async () => {
-    if (pin.disabled) return;
+    if (pin.disabled) {
+      return;
+    }
     const focused = document.activeElement === pin,
       page = source;
     pin.disabled = true;
@@ -1424,14 +1590,14 @@ function renderRow(item) {
   };
   const details = el("button", "row-open icon-button", "⋯");
   details.setAttribute("aria-label", `Details for ${item.title}`);
-  details.dataset.focusKey = item.id + ":details";
+  details.dataset.focusKey = `${item.id}:details`;
   details.onclick = () => openItem(item);
   const ciSlot = el("span", "ci-slot");
   if (item.kind === "Pull request") {
     const info = ciInfo(item.ci);
     const ciButton = el(
       "button",
-      "ci-pill " + (item.ci?.state || "unknown"),
+      `ci-pill ${item.ci?.state || "unknown"}`,
       info.short,
     );
     ciButton.title =
@@ -1440,7 +1606,7 @@ function renderRow(item) {
       "aria-label",
       `CI checks for ${item.title}: ${info.label}`,
     );
-    ciButton.dataset.focusKey = item.id + ":ci";
+    ciButton.dataset.focusKey = `${item.id}:ci`;
     ciButton.onclick = () => openItem(item);
     ciSlot.append(ciButton);
   }
@@ -1453,7 +1619,7 @@ function renderRow(item) {
       item.sentryLinks.length > 1
         ? "First Sentry error. Open details for all errors."
         : "Open Sentry error";
-    errorLink.setAttribute("aria-label", "Open Sentry error for " + item.title);
+    errorLink.setAttribute("aria-label", `Open Sentry error for ${item.title}`);
     ciSlot.append(errorLink);
     actions.classList.add("has-impact");
   }
@@ -1476,8 +1642,11 @@ function renderRow(item) {
     actions.classList.add("has-github-actions");
   }
   actions.append(itemSessionChip(item), ciSlot, status, pin);
-  if (!item.archivedAt) actions.append(visibilityButton(item));
-  else actions.append(el("span", "visibility-slot"));
+  if (!item.archivedAt) {
+    actions.append(visibilityButton(item));
+  } else {
+    actions.append(el("span", "visibility-slot"));
+  }
   actions.append(details);
   bar.append(actions);
   row.append(bar);
@@ -1527,11 +1696,14 @@ function renderSync() {
           : "Sync now";
   const notice = $("#connection-notice");
   const focused = document.activeElement,
-    noticeFocused = !!focused && notice.contains(focused),
+    noticeFocused = Boolean(focused) && notice.contains(focused),
     focusKey = noticeFocused ? focused.dataset.noticeFocus : null;
-  if (notice.parentElement !== $("#sidebar-notices"))
+  if (notice.parentElement !== $("#sidebar-notices")) {
     $("#sidebar-notices").append(notice);
-  if (!errors.length) localStorage.removeItem("dismissed-connection-warning");
+  }
+  if (!errors.length) {
+    localStorage.removeItem("dismissed-connection-warning");
+  }
   const warningKey = JSON.stringify(
     entries
       .filter(([, info]) => info.error)
@@ -1541,13 +1713,17 @@ function renderSync() {
     !errors.length ||
     state.demo ||
     localStorage.getItem("dismissed-connection-warning") === warningKey;
-  if (notice.hidden && noticeFocused) $("#activity-open").focus();
+  if (notice.hidden && noticeFocused) {
+    $("#activity-open").focus();
+  }
   if (!errors.length || state.demo) {
     notice.replaceChildren();
     delete notice.dataset?.warningKey;
     return;
   }
-  if (notice.dataset.warningKey === warningKey) return;
+  if (notice.dataset.warningKey === warningKey) {
+    return;
+  }
   notice.dataset.warningKey = warningKey;
   notice.classList.add("ui-notice");
   notice.dataset.variant = "warning";
@@ -1566,7 +1742,9 @@ function renderSync() {
   dismiss.onclick = () => {
     localStorage.setItem("dismissed-connection-warning", warningKey);
     notice.hidden = true;
-    if (notice.contains(document.activeElement)) $("#activity-open").focus();
+    if (notice.contains(document.activeElement)) {
+      $("#activity-open").focus();
+    }
   };
   dismiss.dataset.noticeFocus = "dismiss";
   header.append(title, dismiss);
@@ -1575,8 +1753,9 @@ function renderSync() {
   body.tabIndex = 0;
   body.setAttribute("role", "region");
   body.setAttribute("aria-label", "Connection errors");
-  for (const [name, info] of entries.filter(([, info]) => info.error))
+  for (const [name, info] of entries.filter(([, info]) => info.error)) {
     body.append(el("p", "", `${sourceNames[name]}: ${info.error}`));
+  }
   const actions = el("div", "ui-actiongroup ui-notice-actions");
   actions.setAttribute("role", "group");
   actions.setAttribute("aria-label", "Connection warning actions");
@@ -1596,12 +1775,13 @@ function renderSync() {
   };
   actions.append(button, logs);
   notice.replaceChildren(header, body, actions);
-  if (noticeFocused && !notice.hidden)
+  if (noticeFocused && !notice.hidden) {
     (
       [dismiss, body, button, logs].find(
         (node) => node.dataset.noticeFocus === focusKey,
       ) || body
     ).focus();
+  }
 }
 const projectEditableFields = ["title", "detail", "url", "status", "cwd"];
 let projectEditor = null,
@@ -1652,15 +1832,17 @@ function restoreFormFocus(current, target) {
     !target?.isConnected ||
     target.disabled ||
     target.hidden
-  )
+  ) {
     return;
+  }
   const dialog = current.host.closest("dialog");
   if (
     [...document.querySelectorAll("dialog[open]")].some(
       (open) => open !== dialog && !open.contains(dialog),
     )
-  )
+  ) {
     return;
+  }
   target.focus({ preventScroll: true });
 }
 function projectCorrectionTarget(current, form) {
@@ -1676,22 +1858,25 @@ function projectControls(host, current, locked) {
     if (
       control.dataset.projectRecovery ||
       control.closest("#app-chat-panel,.xterm")
-    )
+    ) {
       continue;
-    if (!current.controls.has(control))
+    }
+    if (!current.controls.has(control)) {
       current.controls.set(control, control.disabled);
+    }
     control.disabled = control.classList.contains("close-dialog")
-      ? !!current.pending
+      ? Boolean(current.pending)
       : locked || current.controls.get(control);
   }
   host.setAttribute(
     "aria-busy",
-    String(!!(current.pending || current.loading || current.refreshing)),
+    String(Boolean(current.pending || current.loading || current.refreshing)),
   );
 }
 function releaseProjectControls(current) {
-  for (const [control, disabled] of current?.controls || [])
+  for (const [control, disabled] of current?.controls || []) {
     control.disabled = disabled;
+  }
   current?.host?.setAttribute("aria-busy", "false");
 }
 function disposeProjectStatusAction() {
@@ -1706,7 +1891,9 @@ function projectUnknown(error) {
   return ![400, 401, 403, 404, 409].includes(error.status);
 }
 function inspectProjects(dialog, isCurrent) {
-  if (!isCurrent()) return;
+  if (!isCurrent()) {
+    return;
+  }
   dialog.close();
   source = "notes";
   persist();
@@ -1714,8 +1901,12 @@ function inspectProjects(dialog, isCurrent) {
 }
 async function openNote(item = null) {
   const dialog = $("#note-dialog");
-  if (projectEditor?.pending && dialog.open) return;
-  if (!requestDialogNavigation()) return false;
+  if (projectEditor?.pending && dialog.open) {
+    return;
+  }
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   releaseProjectControls(projectEditor);
   const form = $("#note-form");
   form.reset();
@@ -1724,7 +1915,7 @@ async function openNote(item = null) {
     page: source,
     baseline: null,
     pending: false,
-    loading: !!item,
+    loading: Boolean(item),
     accepted: null,
     unknown: false,
     conflicted: false,
@@ -1733,8 +1924,9 @@ async function openNote(item = null) {
     projectEditor === current && dialog.open && source === current.page;
   current.isCurrent = isCurrent;
   form.elements.id.value = current.id;
-  for (const key of projectEditableFields)
+  for (const key of projectEditableFields) {
     form.elements[key].value = key === "status" ? "todo" : "";
+  }
   $("#note-dialog-title").textContent = item ? "Edit project" : "New project";
   const remove = $("#delete-note");
   remove.hidden = !item;
@@ -1744,11 +1936,12 @@ async function openNote(item = null) {
   current.ui.inspect.onclick = () => inspectProjects(dialog, isCurrent);
   current.ui.refresh.onclick = () => refreshProjectEditor(current);
   current.ui.reload.onclick = () => {
-    if (isCurrent() && !current.pending)
+    if (isCurrent() && !current.pending) {
       void openNote(current.id ? { id: current.id } : null);
+    }
   };
   current.ui.message.textContent = item ? "Loading current project…" : "";
-  projectControls(form, current, !!item);
+  projectControls(form, current, Boolean(item));
   dialog.showModal();
   if (!item) {
     form.elements.title.focus();
@@ -1760,15 +1953,17 @@ async function openNote(item = null) {
       name: "projects.read",
       args: { id: current.id },
     });
-    if (!isCurrent()) return;
+    if (!isCurrent()) {
+      return;
+    }
     current.baseline = baseline;
-    for (const key of projectEditableFields)
+    for (const key of projectEditableFields) {
       form.elements[key].value = baseline.project[key] ?? "";
+    }
     current.ui.message.textContent = "";
   } catch (error) {
     if (isCurrent()) {
-      current.ui.message.textContent =
-        error.message + " Reload the project before editing.";
+      current.ui.message.textContent = `${error.message} Reload the project before editing.`;
       current.ui.reload.textContent = "Reload project";
       current.ui.reload.hidden = false;
     }
@@ -1784,16 +1979,21 @@ async function openNote(item = null) {
   }
 }
 async function refreshProjectEditor(current) {
-  if (!current.isCurrent() || current.pending || current.refreshing) return;
+  if (!current.isCurrent() || current.pending || current.refreshing) {
+    return;
+  }
   holdFormFocus($("#note-form"), current);
   current.refreshing = true;
   projectControls($("#note-form"), current, true);
   current.ui.refresh.disabled = true;
   try {
     const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted)
+    if (!snapshot.accepted) {
       throw new Error("The dashboard changed while refreshing.");
-    if (!current.isCurrent()) return;
+    }
+    if (!current.isCurrent()) {
+      return;
+    }
     render();
     if (current.unknown) {
       current.ui.message.textContent =
@@ -1840,8 +2040,9 @@ async function saveProjectEditor(event) {
     current.unknown ||
     current.conflicted ||
     (current.id && !current.baseline)
-  )
+  ) {
     return;
+  }
   const form = $("#note-form"),
     values = Object.fromEntries(
       projectEditableFields.map((key) => [key, form.elements[key].value]),
@@ -1905,20 +2106,22 @@ async function saveProjectEditor(event) {
         "The project save outcome is unknown. Inspect Projects before creating or saving again. This draft will not be resubmitted.";
       current.ui.refresh.hidden = false;
       current.ui.inspect.hidden = false;
-    } else current.ui.message.textContent = error.message;
+    } else {
+      current.ui.message.textContent = error.message;
+    }
   } finally {
     current.pending = false;
     if (projectEditor === current && $("#note-dialog").open) {
       projectControls(
         form,
         current,
-        !!(current.accepted || current.unknown || !current.isCurrent()),
+        Boolean(current.accepted || current.unknown || !current.isCurrent()),
       );
       if (current.conflicted) {
         $("#note-form button[type=submit]").disabled = true;
         $("#delete-note").disabled = true;
       }
-      if (!current.accepted)
+      if (!current.accepted) {
         restoreFormFocus(
           current,
           current.conflicted
@@ -1927,14 +2130,18 @@ async function saveProjectEditor(event) {
               ? current.ui.inspect
               : projectCorrectionTarget(current, form),
         );
+      }
     }
   }
-  if (current.accepted && current.isCurrent())
+  if (current.accepted && current.isCurrent()) {
     await refreshProjectEditor(current);
+  }
 }
 async function changeProjectStatus(item, status, { close = false } = {}) {
   const dialog = $("#item-dialog");
-  if (projectStatusAction) return;
+  if (projectStatusAction) {
+    return;
+  }
   const current = (projectStatusAction = {
       item,
       status,
@@ -1960,33 +2167,41 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
   ui.message.textContent = "Reading current project status…";
   ui.inspect.onclick = () => inspectProjects(dialog, isCurrent);
   const present = async () => {
-    if (!isCurrent() || current.pending || current.refreshing) return;
+    if (!isCurrent() || current.pending || current.refreshing) {
+      return;
+    }
     holdFormFocus(dialog, current);
     current.refreshing = true;
     projectControls(dialog, current, true);
     ui.refresh.disabled = true;
     try {
       const snapshot = await loadStateSnapshot({ attempts: 2 });
-      if (!snapshot.accepted) throw new Error("Dashboard changed.");
-      if (!isCurrent()) return;
+      if (!snapshot.accepted) {
+        throw new Error("Dashboard changed.");
+      }
+      if (!isCurrent()) {
+        return;
+      }
       render();
       if (current.unknown) {
         ui.message.textContent =
           "The status save outcome is unknown. Projects were refreshed. Inspect them before changing status again.";
         return;
       }
-      if (close) dialog.close();
-      else {
+      if (close) {
+        dialog.close();
+      } else {
         const latest = allItems().find((row) => row.id === item.id);
         if (latest) {
           currentItem = latest;
           $("#item-title").textContent = latest.title;
           $("#item-detail").textContent = latest.detail || "";
-          $("#item-meta").textContent =
-            (latest.project || "Personal") +
-            " · Source status: " +
-            (latest.sourceStatus ||
-              labels[latest.sourceStatusCode || latest.status]);
+          $("#item-meta").textContent = `${
+            latest.project || "Personal"
+          } · Source status: ${
+            latest.sourceStatus ||
+            labels[latest.sourceStatusCode || latest.status]
+          }`;
           $("#item-link").hidden = !latest.url;
           $("#item-link").href = latest.url || "#";
           $("#item-status").value = latest.status;
@@ -1995,7 +2210,9 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
         }
       }
       releaseProjectControls(current);
-      if (!close) restoreFormFocus(current, $("#item-status"));
+      if (!close) {
+        restoreFormFocus(current, $("#item-status"));
+      }
       ui.region.remove();
       toast(
         status === "done"
@@ -2026,7 +2243,9 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
       name: "projects.read",
       args: { id: item.id },
     });
-    if (!isCurrent()) return;
+    if (!isCurrent()) {
+      return;
+    }
     ui.message.textContent = "Saving project status…";
     if (baseline.project.status !== status) {
       current.writeStarted = true;
@@ -2040,18 +2259,20 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
       });
     }
     current.accepted = true;
-    if (!isCurrent())
+    if (!isCurrent()) {
       toast(
         "Project status saved locally. Refresh Projects to see it; do not change status again.",
       );
+    }
   } catch (error) {
     if (!isCurrent()) {
-      if (current.writeStarted)
+      if (current.writeStarted) {
         toast(
           projectUnknown(error)
             ? "The project status save outcome is unknown. Inspect Projects before changing status again."
             : error.message,
         );
+      }
       return;
     }
     if (error.status === 409 && current.writeStarted) {
@@ -2060,29 +2281,34 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
       ui.reload.textContent = "Reload project";
       ui.reload.hidden = false;
       ui.reload.onclick = async () => {
-        if (!isCurrent() || current.refreshing) return;
+        if (!isCurrent() || current.refreshing) {
+          return;
+        }
         holdFormFocus(dialog, current);
         current.refreshing = true;
         projectControls(dialog, current, true);
         ui.reload.disabled = true;
         try {
           const snapshot = await loadStateSnapshot({ attempts: 2 });
-          if (!snapshot.accepted)
+          if (!snapshot.accepted) {
             throw new Error("Dashboard changed while refreshing.");
+          }
           if (isCurrent()) {
             const latest = allItems().find((row) => row.id === item.id);
             if (latest) {
               releaseProjectControls(current);
               projectStatusAction = null;
               openItem(latest);
-            } else
+            } else {
               ui.message.textContent =
                 "This project is unavailable in the refreshed dashboard.";
+            }
           }
         } catch {
-          if (isCurrent())
+          if (isCurrent()) {
             ui.message.textContent =
               "The project could not reload. Your newer changes were kept. Try Reload project again.";
+          }
         } finally {
           current.refreshing = false;
           if (isCurrent()) {
@@ -2109,26 +2335,33 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
       projectControls(
         dialog,
         current,
-        !!(current.accepted || current.unknown || ui.reload.hidden === false),
+        Boolean(
+          current.accepted || current.unknown || ui.reload.hidden === false,
+        ),
       );
-      if (!current.accepted)
+      if (!current.accepted) {
         restoreFormFocus(current, current.unknown ? ui.inspect : ui.reload);
+      }
     } else if (projectStatusAction === current) {
       releaseProjectControls(current);
       projectStatusAction = null;
     }
   }
-  if (current.accepted && isCurrent()) await present();
+  if (current.accepted && isCurrent()) {
+    await present();
+  }
 }
 function openItem(item) {
-  if (!requestDialogNavigation()) return false;
+  if (!requestDialogNavigation()) {
+    return false;
+  }
   disposeProjectStatusAction();
   currentItem = item;
   $("#item-reference").textContent =
     `${sourceNames[item.source]} · ${workReference(item)}`;
   $("#item-title").textContent = item.title;
   $("#item-meta").textContent =
-    `${item.project}${githubRole(item) ? " · " + githubRole(item).detail : ""} · Source status: ${item.sourceStatus || labels[item.sourceStatusCode]}`;
+    `${item.project}${githubRole(item) ? ` · ${githubRole(item).detail}` : ""} · Source status: ${item.sourceStatus || labels[item.sourceStatusCode]}`;
   $("#item-detail").textContent = item.detail || "";
   renderItemSessions(item);
   renderRelatedWork(item);
@@ -2139,7 +2372,7 @@ function openItem(item) {
   if (item.sentryLinks?.length) {
     sentryList.append(el("h3", "", "Sentry errors"));
     for (const error of item.sentryLinks) {
-      const link = el("a", "linear-ticket-link", error.title + " ↗");
+      const link = el("a", "linear-ticket-link", `${error.title} ↗`);
       link.href = error.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
@@ -2149,9 +2382,10 @@ function openItem(item) {
   renderCI(item);
   $("#item-status").value = item.status;
   $("#item-status").closest("label").hidden =
-    !!item.archivedAt && item.source !== "notes";
+    Boolean(item.archivedAt) && item.source !== "notes";
   $("#reset-status").disabled = !item.overridden;
-  $("#reset-status").hidden = item.source === "notes" || !!item.archivedAt;
+  $("#reset-status").hidden =
+    item.source === "notes" || Boolean(item.archivedAt);
   $("#override-hint").textContent =
     item.archivedAt && item.source !== "notes"
       ? "Archived in the source. Restore it there to return it to active work."
@@ -2166,13 +2400,15 @@ function renderIssueFamily(item) {
   const section = $("#issue-family");
   section.hidden = item.source !== "linear";
   section.replaceChildren();
-  if (section.hidden) return;
+  if (section.hidden) {
+    return;
+  }
   if (item.parent) {
     const line = el("p", "form-hint", "Parent: "),
       link = el(
         "a",
         "linear-ticket-link",
-        (item.parent.reference || "") + " · " + item.parent.title,
+        `${item.parent.reference || ""} · ${item.parent.title}`,
       );
     link.href = item.parent.url;
     link.target = "_blank";
@@ -2193,20 +2429,21 @@ function renderIssueFamily(item) {
         link = el(
           "a",
           "linear-ticket-link",
-          child.reference + " · " + child.title,
+          `${child.reference} · ${child.title}`,
         );
       link.href = child.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       line.append(
         link,
-        el("span", "status-pill " + child.status, workStatusLabel(child)),
+        el("span", `status-pill ${child.status}`, workStatusLabel(child)),
       );
       section.append(line);
     }
   }
-  if (!item.parent && !item.children?.length)
+  if (!item.parent && !item.children?.length) {
     section.append(el("p", "form-hint", "No parent or sub-issues."));
+  }
 }
 function ciInfo(ci) {
   switch (ci?.state) {
@@ -2228,18 +2465,20 @@ function ciInfo(ci) {
 function renderCI(item) {
   const section = $("#ci-section");
   section.hidden = item.kind !== "Pull request";
-  if (section.hidden) return;
+  if (section.hidden) {
+    return;
+  }
   const ci = item.ci;
   $("#ci-title").textContent = ciInfo(ci).label;
   $("#ci-count").textContent = ci?.total ? `${ci.total} checks` : "";
   const mergeState = item.mergeState
     ? item.mergeState.replaceAll("_", " ").toLowerCase()
     : "not synced";
-  $("#ci-summary").textContent =
-    `Merge state: ${mergeState}.` +
-    (ci && ci.total > ci.checks.length
+  $("#ci-summary").textContent = `Merge state: ${mergeState}.${
+    ci && ci.total > ci.checks.length
       ? ` Showing ${ci.checks.length} of ${ci.total} checks; the indicator includes all checks.`
-      : "");
+      : ""
+  }`;
   const list = $("#ci-checks");
   list.replaceChildren();
   const marks = {
@@ -2262,7 +2501,7 @@ function renderCI(item) {
     );
   })) {
     const row = el("div", "ci-check");
-    row.append(el("span", "ci-mark " + check.state, marks[check.state]));
+    row.append(el("span", `ci-mark ${check.state}`, marks[check.state]));
     const name = el(check.url ? "a" : "span", "ci-check-name", check.name);
     if (check.url) {
       name.href = check.url;
@@ -2273,21 +2512,23 @@ function renderCI(item) {
       name,
       el("span", "ci-result", check.result.replaceAll("_", " ").toLowerCase()),
     );
-    if (check.url) row.append(el("span", "ci-link-arrow", "↗"));
+    if (check.url) {
+      row.append(el("span", "ci-link-arrow", "↗"));
+    }
     list.append(row);
   }
 }
 
 function openSettings() {
   $("#connections").replaceChildren();
-  if (state)
+  if (state) {
     for (const source of ["github", "linear", "sentry"]) {
       const info = state.sources[source] || { error: "Not configured" };
       const row = el("div", "connection-row", sourceNames[source]);
       row.append(
         el(
           "span",
-          "live-dot" + (info.error || !info.lastSuccess ? " warning" : ""),
+          `live-dot${info.error || !info.lastSuccess ? " warning" : ""}`,
         ),
       );
       row.append(
@@ -2305,26 +2546,34 @@ function openSettings() {
       );
       $("#connections").append(row);
     }
+  }
   const sentry = state?.sources?.sentry;
-  const configured = !!sentry && !sentry.disabled;
+  const configured = Boolean(sentry) && !sentry.disabled;
   $("#sentry-credential-status").textContent = configured
-    ? `Credentials are already configured${state.sentryScope?.org ? " for " + state.sentryScope.org : ""}. The connection status above shows whether the latest sync succeeded.`
+    ? `Credentials are already configured${state.sentryScope?.org ? ` for ${state.sentryScope.org}` : ""}. The connection status above shows whether the latest sync succeeded.`
     : "Sentry is not configured on this server yet.";
   $("#sentry-setup-help").open = !configured;
   $("#settings-dialog").showModal();
 }
 $("#sources").onclick = (event) => {
   const button = event.target.closest("[data-source]");
-  if (!button) return;
+  if (!button) {
+    return;
+  }
   source = button.dataset.source;
   if (
     typeof resetSavedViewState === "function" &&
     typeof currentSavedViewState === "function" &&
     currentSavedViewState()?.id
-  )
+  ) {
     resetSavedViewState();
-  if (source === "linear") scopePrefs.linear = "";
-  if (typeof savedViewUsePage === "function") savedViewUsePage(source);
+  }
+  if (source === "linear") {
+    scopePrefs.linear = "";
+  }
+  if (typeof savedViewUsePage === "function") {
+    savedViewUsePage(source);
+  }
   if (source === "agents") {
     showAgentWorkspace();
     return;
@@ -2333,8 +2582,9 @@ $("#sources").onclick = (event) => {
   render();
 };
 $("#search").oninput = () => {
-  if (typeof savedViewCapturePresentation === "function")
+  if (typeof savedViewCapturePresentation === "function") {
     savedViewCapturePresentation();
+  }
   render();
 };
 statusFilter.onchange = () => {
@@ -2343,19 +2593,23 @@ statusFilter.onchange = () => {
 };
 $("#group-by").onchange = () => {
   groupingPrefs[source] = $("#group-by").value;
-  if (typeof savedViewCapturePresentation === "function")
+  if (typeof savedViewCapturePresentation === "function") {
     savedViewCapturePresentation();
+  }
   persist();
   render();
 };
-for (const metric of document.querySelectorAll("[data-metric]"))
+for (const metric of document.querySelectorAll("[data-metric]")) {
   metric.onclick = () => {
-    if (typeof setSavedViewStatus === "function" && currentSavedViewState())
+    if (typeof setSavedViewStatus === "function" && currentSavedViewState()) {
       setSavedViewStatus(metric.dataset.metric);
-    else statusFilter.value = metric.dataset.metric;
+    } else {
+      statusFilter.value = metric.dataset.metric;
+    }
     persist();
     render();
   };
+}
 $("#new-note").onclick = () => quickStart();
 $("#settings").onclick = openSettings;
 const dialogReturnFocus = new WeakMap();
@@ -2370,7 +2624,9 @@ function captureDialogReturn(
   } = {},
 ) {
   const previous = dialogReturnFocus.get(dialog);
-  if (preserve && previous?.scope === scope) return;
+  if (preserve && previous?.scope === scope) {
+    return;
+  }
   const external =
     trigger && !dialog.contains(trigger) && trigger !== document.body
       ? trigger
@@ -2387,7 +2643,9 @@ function captureDialogReturn(
 }
 function restoreDialogReturn(dialog) {
   const token = dialogReturnFocus.get(dialog);
-  if (!token || dialog.open) return;
+  if (!token || dialog.open) {
+    return;
+  }
   dialogReturnFocus.delete(dialog);
   const active = document.activeElement;
   if (
@@ -2395,19 +2653,22 @@ function restoreDialogReturn(dialog) {
     active !== document.body &&
     active.isConnected &&
     !dialog.contains(active)
-  )
+  ) {
     return;
+  }
   if (
     !token.isCurrent() ||
     (token.parent && (!token.parent.isConnected || !token.parent.open))
-  )
+  ) {
     return;
+  }
   if (
     [...document.querySelectorAll("dialog[open]")].some(
       (open) => open !== token.parent && !open.contains(token.parent),
     )
-  )
+  ) {
     return;
+  }
   const visible = (node) =>
     node?.isConnected &&
     !node.disabled &&
@@ -2428,15 +2689,18 @@ function restoreDialogReturn(dialog) {
   target?.focus({ preventScroll: true });
 }
 function requestDialogClose(dialog) {
-  if (dialog.dispatchEvent(new Event("cancel", { cancelable: true })))
+  if (dialog.dispatchEvent(new Event("cancel", { cancelable: true }))) {
     dialog.close();
+  }
 }
 function captureDialogNavigation() {
   const page = source,
     dialogs = [...document.querySelectorAll("dialog[open]")];
   let live = true;
   const changed = (records) => {
-    if (records.some((record) => record.target.matches("dialog"))) live = false;
+    if (records.some((record) => record.target.matches("dialog"))) {
+      live = false;
+    }
   };
   const observer = new MutationObserver(changed);
   observer.observe(document.body, {
@@ -2465,19 +2729,28 @@ function requestDialogNavigation() {
   const original = new Set(document.querySelectorAll("dialog[open]"));
   while (true) {
     const open = [...document.querySelectorAll("dialog[open]")];
-    if (!open.length) return true;
+    if (!open.length) {
+      return true;
+    }
     // Native modal focus identifies the topmost owner even when DOM order differs.
     const focused = document.activeElement?.closest?.("dialog[open]");
     const dialog = open.includes(focused) ? focused : open.at(-1);
-    if (!original.has(dialog)) return false;
+    if (!original.has(dialog)) {
+      return false;
+    }
     requestDialogClose(dialog);
-    if (dialog.open) return false;
+    if (dialog.open) {
+      return false;
+    }
   }
 }
-for (const button of document.querySelectorAll(".close-dialog"))
+for (const button of document.querySelectorAll(".close-dialog")) {
   button.onclick = () => requestDialogClose(button.closest("dialog"));
+}
 function dismissOpenDialog(event) {
-  if (event.key !== "Escape" || event.isComposing) return;
+  if (event.key !== "Escape" || event.isComposing) {
+    return;
+  }
   if (globalThis.truffleGuidance?.dismiss()) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -2486,7 +2759,9 @@ function dismissOpenDialog(event) {
   const dialog =
     event.target.closest?.("dialog[open]") ||
     [...document.querySelectorAll("dialog[open]")].at(-1);
-  if (!dialog) return;
+  if (!dialog) {
+    return;
+  }
   if (
     dialog.id === "settings-dialog" &&
     typeof settingsDirty !== "undefined" &&
@@ -2500,32 +2775,39 @@ function dismissOpenDialog(event) {
   }
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (!dialog.dismissLayer?.()) requestDialogClose(dialog);
+  if (!dialog.dismissLayer?.()) {
+    requestDialogClose(dialog);
+  }
 }
 document.addEventListener("keydown", dismissOpenDialog, true);
 
-for (const dialog of document.querySelectorAll("dialog"))
+for (const dialog of document.querySelectorAll("dialog")) {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) {
       if (
         dialog.id === "settings-dialog" &&
         typeof settingsDirty !== "undefined" &&
         settingsDirty
-      )
+      ) {
         return;
+      }
       const rect = dialog.getBoundingClientRect();
       if (
         event.clientX < rect.left ||
         event.clientX > rect.right ||
         event.clientY < rect.top ||
         event.clientY > rect.bottom
-      )
+      ) {
         requestDialogClose(dialog);
+      }
     }
   });
+}
 $("#note-form").onsubmit = saveProjectEditor;
 $("#note-dialog").addEventListener("cancel", (event) => {
-  if (projectEditor?.pending) event.preventDefault();
+  if (projectEditor?.pending) {
+    event.preventDefault();
+  }
 });
 $("#note-dialog").addEventListener("close", () => {
   if (!$("#note-dialog").open) {
@@ -2534,10 +2816,14 @@ $("#note-dialog").addEventListener("close", () => {
   }
 });
 $("#item-dialog").addEventListener("cancel", (event) => {
-  if (projectStatusAction?.pending) event.preventDefault();
+  if (projectStatusAction?.pending) {
+    event.preventDefault();
+  }
 });
 $("#item-dialog").addEventListener("close", () => {
-  if (!$("#item-dialog").open) disposeProjectStatusAction();
+  if (!$("#item-dialog").open) {
+    disposeProjectStatusAction();
+  }
 });
 $("#delete-note").onclick = async () => {
   const button = $("#delete-note"),
@@ -2550,8 +2836,9 @@ $("#delete-note").onclick = async () => {
     current.accepted ||
     current.unknown ||
     current.conflicted
-  )
+  ) {
     return;
+  }
   if (!button.dataset.confirm) {
     button.dataset.confirm = "yes";
     button.textContent = "Click again to delete";
@@ -2564,8 +2851,11 @@ $("#delete-note").onclick = async () => {
     const result = await mutate({ action: "delete-note", id: current.id });
     current.localWriteResult = result;
     current.acceptedText = "Project deleted.";
-    if (result.kind === "accepted") current.accepted = result;
-    else if (result.kind === "unknown") current.unknown = true;
+    if (result.kind === "accepted") {
+      current.accepted = result;
+    } else if (result.kind === "unknown") {
+      current.unknown = true;
+    }
     if (!current.isCurrent()) {
       toast(localWriteMessage(result, current.acceptedText));
       return;
@@ -2589,7 +2879,7 @@ $("#delete-note").onclick = async () => {
       projectControls(
         $("#note-form"),
         current,
-        !!(current.accepted || current.unknown),
+        Boolean(current.accepted || current.unknown),
       );
       restoreFormFocus(
         current,
@@ -2600,7 +2890,9 @@ $("#delete-note").onclick = async () => {
 };
 async function changeLocalItemStatus(item, status) {
   const dialog = $("#item-dialog");
-  if (projectStatusAction) return;
+  if (projectStatusAction) {
+    return;
+  }
   const acceptedText =
     status === null
       ? "Using source status."
@@ -2626,7 +2918,9 @@ async function changeLocalItemStatus(item, status) {
   projectControls(dialog, current, true);
   ui.message.textContent = "Saving dashboard status…";
   const presentationPending = (error) => {
-    if (!isCurrent()) return;
+    if (!isCurrent()) {
+      return;
+    }
     current.result = {
       kind: "accepted",
       presentation: "pending",
@@ -2639,7 +2933,9 @@ async function changeLocalItemStatus(item, status) {
   };
   const showReady = () => {
     try {
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        return;
+      }
       const latest = allItems().find((row) => row.id === item.id);
       releaseProjectControls(current);
       if (latest) {
@@ -2657,31 +2953,40 @@ async function changeLocalItemStatus(item, status) {
     }
   };
   ui.refresh.onclick = async () => {
-    if (!isCurrent() || current.pending || current.refreshing) return;
+    if (!isCurrent() || current.pending || current.refreshing) {
+      return;
+    }
     holdFormFocus(dialog, current);
     current.refreshing = true;
     projectControls(dialog, current, true);
     ui.refresh.disabled = true;
     try {
       const snapshot = await loadStateSnapshot({ attempts: 2 });
-      if (!snapshot.accepted)
+      if (!snapshot.accepted) {
         throw new Error("Dashboard changed while refreshing.");
-      if (!isCurrent()) return;
+      }
+      if (!isCurrent()) {
+        return;
+      }
       render();
       if (current.result.kind === "accepted") {
         current.result = { kind: "accepted", presentation: "ready" };
         showReady();
-      } else
-        ui.message.textContent =
-          localWriteMessage(current.result, acceptedText) +
-          " The dashboard was refreshed; this action was not repeated.";
+      } else {
+        ui.message.textContent = `${localWriteMessage(
+          current.result,
+          acceptedText,
+        )} The dashboard was refreshed; this action was not repeated.`;
+      }
     } catch (error) {
-      if (current.result.kind === "accepted") presentationPending(error);
-      else if (isCurrent())
+      if (current.result.kind === "accepted") {
+        presentationPending(error);
+      } else if (isCurrent()) {
         ui.message.textContent = localWriteMessage(
           current.result,
           acceptedText,
         );
+      }
     } finally {
       current.refreshing = false;
       if (isCurrent()) {
@@ -2722,7 +3027,9 @@ async function changeLocalItemStatus(item, status) {
 $("#item-status").onchange = async () => {
   const item = currentItem,
     status = $("#item-status").value;
-  if (!item) return;
+  if (!item) {
+    return;
+  }
   if (item.source === "notes") {
     await changeProjectStatus(item, status);
     return;
@@ -2731,7 +3038,9 @@ $("#item-status").onchange = async () => {
 };
 $("#reset-status").onclick = async () => {
   const item = currentItem;
-  if (item) await changeLocalItemStatus(item, null);
+  if (item) {
+    await changeLocalItemStatus(item, null);
+  }
 };
 async function refreshSources(force, button) {
   button.disabled = true;
@@ -2744,7 +3053,7 @@ async function refreshSources(force, button) {
     if (
       Number.isFinite(receipt.forceRefreshAfter) &&
       receipt.forceRefreshAfter >= 0
-    )
+    ) {
       state = {
         ...state,
         forceRefreshAfter: Math.max(
@@ -2752,6 +3061,7 @@ async function refreshSources(force, button) {
           receipt.forceRefreshAfter,
         ),
       };
+    }
     const result = await loadStateSnapshot({ attempts: 2 });
     render();
     toast(
@@ -2763,7 +3073,7 @@ async function refreshSources(force, button) {
   } catch (error) {
     toast(
       receipt
-        ? receipt.message + " Dashboard could not refresh: " + error.message
+        ? `${receipt.message} Dashboard could not refresh: ${error.message}`
         : error.message,
     );
     render();
@@ -2802,8 +3112,12 @@ document.addEventListener("DOMContentLoaded", () => {
   void bootstrapAgentWorkspace();
 });
 setInterval(() => {
-  if (!document.hidden && !document.querySelector("dialog[open]")) refresh();
+  if (!document.hidden && !document.querySelector("dialog[open]")) {
+    refresh();
+  }
 }, 10000);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refresh();
+  if (!document.hidden) {
+    refresh();
+  }
 });

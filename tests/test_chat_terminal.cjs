@@ -56,8 +56,11 @@ function fixture({ api, embedded = true, empty = false } = {}) {
         contains: (name) => this.className.split(" ").includes(name),
         toggle: (name, on) => {
           const classes = new Set(this.className.split(" ").filter(Boolean));
-          if (on) classes.add(name);
-          else classes.delete(name);
+          if (on) {
+            classes.add(name);
+          } else {
+            classes.delete(name);
+          }
           this.className = [...classes].join(" ");
         },
         remove: (name) => this.classList.toggle(name, false),
@@ -74,20 +77,26 @@ function fixture({ api, embedded = true, empty = false } = {}) {
       }
     }
     remove() {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
+      }
       const parent = this.parentElement;
-      if (parent)
+      if (parent) {
         parent.children = parent.children.filter((child) => child !== this);
+      }
       this.parentElement = null;
     }
     replaceChildren(...nodes) {
-      for (const child of [...this.children]) child.remove();
+      for (const child of [...this.children]) {
+        child.remove();
+      }
       this.append(...nodes);
     }
     before(node) {
       const parent = this.parentElement;
-      if (node.parentElement) node.remove();
+      if (node.parentElement) {
+        node.remove();
+      }
       node.parentElement = parent;
       parent.children.splice(parent.children.indexOf(this), 0, node);
     }
@@ -120,8 +129,9 @@ function fixture({ api, embedded = true, empty = false } = {}) {
       if (
         selector === ".inline-attach[open]" &&
         this.classList.contains("agent-context-grid")
-      )
+      ) {
         return editing;
+      }
       return this.querySelectorAll(selector)[0] || null;
     }
     focus() {
@@ -134,7 +144,9 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     real = Object.fromEntries(realNames.map((name) => [name, c[name]]));
   // The script parks terminals in its own const pool node, so turn that node into a fixture node.
   const adopt = (node) => {
-    for (const key of Object.keys(node)) delete node[key];
+    for (const key of Object.keys(node)) {
+      delete node[key];
+    }
     return Object.assign(
       Object.setPrototypeOf(node, Node.prototype),
       new Node(),
@@ -183,7 +195,9 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     messages = [];
   let disposed = 0;
   const viewFor = (record) => {
-    if (views.has(record.id)) return views.get(record.id);
+    if (views.has(record.id)) {
+      return views.get(record.id);
+    }
     const node = new Node("div", "embedded-terminal"),
       input = new Node("textarea", "xterm-helper-textarea");
     node.append(input);
@@ -192,7 +206,7 @@ function fixture({ api, embedded = true, empty = false } = {}) {
       input,
       alive: true,
       stopped: false,
-      generation: "g-" + record.id,
+      generation: `g-${record.id}`,
       resizes: 0,
       resize() {
         this.resizes++;
@@ -220,11 +234,11 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     window: {},
     requestAnimationFrame: (callback) => frames.push(callback),
     visibleAgentCandidates: () => candidates,
-    candidateKey: (candidate) => "embedded:" + candidate.recordId,
+    candidateKey: (candidate) => `embedded:${candidate.recordId}`,
     recordForCandidate: (candidate) =>
       records.find((record) => record.id === candidate.recordId),
     currentAgentRecord: () =>
-      records.find((record) => "embedded:" + record.id === c.selectedAgentKey),
+      records.find((record) => `embedded:${record.id}` === c.selectedAgentKey),
     inventory: {},
     agentRename: null,
     persist() {},
@@ -232,14 +246,18 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     candidateForRecord: () => null,
     ensureTerminal: viewFor,
     parkTerminals: () => {
-      for (const view of views.values())
-        if (view.node.isConnected && !pool.contains(view.node))
+      for (const view of views.values()) {
+        if (view.node.isConnected && !pool.contains(view.node)) {
           pool.append(view.node);
+        }
+      }
     },
     api: async (path, args) => {
       calls.push({ path, args });
-      if (api) return api(path, args);
-      return { id: "shell-" + args.recordId, cwd: "/" + args.recordId };
+      if (api) {
+        return api(path, args);
+      }
+      return { id: `shell-${args.recordId}`, cwd: `/${args.recordId}` };
     },
     toast: (message) => messages.push(message),
   });
@@ -248,7 +266,9 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     c.renderAgentWorkspace();
   };
   const flush = () => {
-    while (frames.length) frames.shift()();
+    while (frames.length) {
+      frames.shift()();
+    }
   };
   c.render();
   flush();
@@ -270,7 +290,7 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     render: () => c.render(),
     toggle: () => c.toggleChatTerminal(),
     select: (id) => {
-      c.selectedAgentKey = "embedded:" + id;
+      c.selectedAgentKey = `embedded:${id}`;
     },
     panel: () =>
       body
@@ -351,8 +371,10 @@ test("pending open deduplicates requests and late completion never focuses or pa
 test("captured restart stays on A across delayed close while B is selected and never steals B focus", async () => {
   const f = fixture({
     api: async (path, args) => {
-      if (path.endsWith("/close")) return closing.promise;
-      return { id: "shell-" + args.recordId, cwd: "/" + args.recordId };
+      if (path.endsWith("/close")) {
+        return closing.promise;
+      }
+      return { id: `shell-${args.recordId}`, cwd: `/${args.recordId}` };
     },
   });
   await f.toggle();
@@ -574,7 +596,7 @@ test("actual inventory arrival and workspace render cannot consume central saved
     };
     f.c.api = async (path, payload) => {
       f.calls.push({ path, payload });
-      if (path === "/api/commands/invoke")
+      if (path === "/api/commands/invoke") {
         return {
           status: "accepted",
           recordId: "a",
@@ -582,8 +604,11 @@ test("actual inventory arrival and workspace render cannot consume central saved
           localSaved: true,
           terminal: { state: "acknowledged", generation: "g-a" },
         };
+      }
       if (path === "/api/agents") {
-        if (invalidated) owns = false;
+        if (invalidated) {
+          owns = false;
+        }
         f.candidates.push({
           recordId: "a",
           host: "embedded",
@@ -592,16 +617,17 @@ test("actual inventory arrival and workspace render cannot consume central saved
         });
         return { candidates: f.candidates, directories: [] };
       }
-      throw Error("Unexpected " + path);
+      throw Error(`Unexpected ${path}`);
     };
     const render = f.c.render;
     f.c.render = () => {
       render();
-      if (evaluate(f.c, "pendingSessionResumes.size") && !selections.length)
+      if (evaluate(f.c, "pendingSessionResumes.size") && !selections.length) {
         observations.push({
           key: f.c.selectedAgentKey,
           host: f.body.querySelector("#agent-workspace"),
         });
+      }
     };
     const outcome = await f.c.openSavedSession(f.records[0], null, {
       isCurrent: () => owns && f.c.selectedAgentKey === "",
@@ -616,7 +642,9 @@ test("actual inventory arrival and workspace render cannot consume central saved
     assert.deepEqual(selections, invalidated ? [] : ["a"]);
     assert.equal(f.c.selectedAgentKey, invalidated ? "" : "embedded:a");
     assert.equal(f.views.has("a"), !invalidated);
-    if (!invalidated) assert.equal(f.views.get("a").node.isConnected, true);
+    if (!invalidated) {
+      assert.equal(f.views.get("a").node.isConnected, true);
+    }
     assert.equal(
       f.calls.filter((call) => call.payload?.name === "chats.open").length,
       1,
@@ -680,8 +708,9 @@ test("actual initial DOM bootstrap waits for inventory and selects through its n
   installInventoryOwner(f, () => pending.promise);
   let boot;
   const start = () => {
-    for (const listener of f.host.document.listeners.DOMContentLoaded)
+    for (const listener of f.host.document.listeners.DOMContentLoaded) {
       listener();
+    }
   };
   const owner = f.c.bootstrapAgentWorkspace;
   f.c.bootstrapAgentWorkspace = () => (boot = owner());
@@ -708,7 +737,9 @@ test("bootstrap cannot adopt a first terminal behind a modal or a pending saved-
       modal.open = true;
       f.body.append(modal);
       modal.focus();
-    } else f.c.pendingSessionResumes.add("a");
+    } else {
+      f.c.pendingSessionResumes.add("a");
+    }
     pending.resolve(firstLive());
     assert.equal(await boot, false);
     f.flush();
@@ -717,7 +748,9 @@ test("bootstrap cannot adopt a first terminal behind a modal or a pending saved-
     if (modal) {
       assert.equal(f.document.activeElement, modal);
       modal.remove();
-    } else f.c.pendingSessionResumes.clear();
+    } else {
+      f.c.pendingSessionResumes.clear();
+    }
     f.render();
     f.flush();
     assert.equal(f.c.selectedAgentKey, "");
@@ -740,8 +773,11 @@ test("late bootstrap cannot reclaim Agents after page ABA or a deliberate same-p
       f.render();
       f.c.source = "agents";
       f.render();
-    } else if (navigation === "saved") f.c.selectAgent(f.records[1], null);
-    else f.c.showAgentWorkspace();
+    } else if (navigation === "saved") {
+      f.c.selectAgent(f.records[1], null);
+    } else {
+      f.c.showAgentWorkspace();
+    }
     outside.focus();
     pending.resolve(firstLive());
     assert.equal(await boot, false);
@@ -789,7 +825,9 @@ test("valid saved selection is retained when deliberate Agents navigation has ot
 test("selected snooze and close choose a remaining live chat only through their action owners", async () => {
   for (const action of ["snooze", "close"]) {
     const f = fixture();
-    for (const candidate of f.candidates) candidate.live = true;
+    for (const candidate of f.candidates) {
+      candidate.live = true;
+    }
     f.c.inventory = { candidates: [...f.candidates], directories: [] };
     Object.assign(f.c, workspaceOwners(f));
     if (action === "snooze") {

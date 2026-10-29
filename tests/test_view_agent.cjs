@@ -2,7 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { workViewRequest } = require("../static/view-agent.js");
 test("view context includes all filtered matches beyond the rendered first page, with stable order", () => {
-  const items = Array.from({ length: 150 }, (_, i) => ({ id: "item-" + i }));
+  const items = Array.from({ length: 150 }, (_, i) => ({ id: `item-${i}` }));
   const filters = {
     query: "bug",
     scope: "org/repo",

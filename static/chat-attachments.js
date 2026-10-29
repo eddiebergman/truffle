@@ -1,9 +1,13 @@
 "use strict";
 (() => {
   const form = $(".app-chat-form");
-  if (!form) return;
+  if (!form) {
+    return;
+  }
   const input = $("textarea", form);
-  if (!input) return;
+  if (!input) {
+    return;
+  }
   let images = [];
   const strip = el("div", "chat-attachment-strip"),
     status = el("p", "form-hint");
@@ -27,8 +31,8 @@
     for (const [index, image] of images.entries()) {
       const card = el("div", "chat-attachment"),
         preview = el("img");
-      preview.src = "data:" + image.mediaType + ";base64," + image.data;
-      preview.alt = "Attached screenshot " + (index + 1);
+      preview.src = `data:${image.mediaType};base64,${image.data}`;
+      preview.alt = `Attached screenshot ${index + 1}`;
       const remove = featureButton(
         "×",
         () => {
@@ -38,11 +42,11 @@
         "text-button",
       );
       remove.type = "button";
-      remove.setAttribute("aria-label", "Remove screenshot " + (index + 1));
+      remove.setAttribute("aria-label", `Remove screenshot ${index + 1}`);
       card.append(preview, remove);
       strip.append(card);
     }
-    if (images.length)
+    if (images.length) {
       strip.append(
         el(
           "small",
@@ -50,11 +54,13 @@
           "Sent with your next message. Screenshots are not saved in chat history.",
         ),
       );
+    }
     input.dispatchEvent(new Event("input"));
   }
   async function encode(file) {
-    if (file.size > 20 * 1024 * 1024)
+    if (file.size > 20 * 1024 * 1024) {
       throw new Error("Choose an image under 20 MiB.");
+    }
     const bitmap = await createImageBitmap(file);
     try {
       const canvas = document.createElement("canvas"),
@@ -68,8 +74,9 @@
       let url = "";
       for (const quality of [0.9, 0.75, 0.6, 0.45]) {
         url = canvas.toDataURL("image/jpeg", quality);
-        if (url.length < 790000)
+        if (url.length < 790000) {
           return { mediaType: "image/jpeg", data: url.split(",")[1] };
+        }
       }
       throw new Error(
         "This screenshot is too large. Crop it before attaching.",
@@ -79,13 +86,18 @@
     }
   }
   async function add(files) {
-    if ($(".app-chat-messages")?.getAttribute("aria-busy") === "true") return;
+    if ($(".app-chat-messages")?.getAttribute("aria-busy") === "true") {
+      return;
+    }
     status.hidden = true;
     try {
       for (const file of files) {
-        if (images.length >= 2)
+        if (images.length >= 2) {
           throw new Error("Attach at most two screenshots per message.");
-        if (!file.type.startsWith("image/")) continue;
+        }
+        if (!file.type.startsWith("image/")) {
+          continue;
+        }
         images.push(await encode(file));
       }
       draw();

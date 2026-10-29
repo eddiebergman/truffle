@@ -39,8 +39,8 @@ terminalPool.hidden = true;
 document.body.append(terminalPool);
 function candidateKey(c) {
   return c.host === "embedded"
-    ? "embedded:" + c.recordId
-    : c.agent + ":" + c.sessionId;
+    ? `embedded:${c.recordId}`
+    : `${c.agent}:${c.sessionId}`;
 }
 function liveCandidates() {
   return (inventory.candidates || []).filter(
@@ -96,7 +96,9 @@ function snoozeAgentTab(candidate) {
 }
 async function restoreSnoozedTab(key, button) {
   const entry = snoozedAgentTabs[key];
-  if (!entry) return;
+  if (!entry) {
+    return;
+  }
   const candidate = liveCandidates().find((c) => candidateKey(c) === key),
     record = candidate
       ? recordForCandidate(candidate)
@@ -131,7 +133,7 @@ function renderSnoozedAgents() {
   menu.replaceChildren();
   const due = entries.filter(([, entry]) => snoozeDue(entry)).length;
   $("#snoozed-agent-count").textContent = due
-    ? due + " due"
+    ? `${due} due`
     : entries.length || "";
   $("#snoozed-agents").classList.toggle("has-due", due > 0);
   if (!entries.length) {
@@ -162,7 +164,7 @@ function renderSnoozedAgents() {
               : "Conversation unavailable"),
       ),
     );
-    open.title = "Snoozed " + new Date(entry.at).toLocaleString();
+    open.title = `Snoozed ${new Date(entry.at).toLocaleString()}`;
     const remove = featureButton(
       "×",
       () => {
@@ -180,14 +182,14 @@ function renderSnoozedAgents() {
     remove.title = "Remove from snoozed · keep conversation in History";
     remove.setAttribute(
       "aria-label",
-      "Remove " + (record?.title || entry.title) + " from snoozed",
+      `Remove ${record?.title || entry.title} from snoozed`,
     );
     row.append(open, remove);
     menu.append(row, snoozeScheduleControl(key, entry));
   }
 }
 function runtimeInfo(candidate, record) {
-  if (!candidate)
+  if (!candidate) {
     return {
       label: "Closed",
       kind: "closed",
@@ -195,6 +197,7 @@ function runtimeInfo(candidate, record) {
       attention: false,
       summary: "Closed",
     };
+  }
   const report = record?.runtime,
     fresh =
       report &&
@@ -238,19 +241,23 @@ function runtimeInfo(candidate, record) {
       }[report.reason] || label;
   }
   const activity = [];
-  if (subagents > 0) activity.push(subagents + " sub");
+  if (subagents > 0) {
+    activity.push(`${subagents} sub`);
+  }
   for (const [type, count] of Object.entries(counts).sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
-    if (type !== "subagent" && Number.isInteger(count) && count > 0)
-      activity.push(count + " " + type + (count === 1 ? "" : "s"));
+    if (type !== "subagent" && Number.isInteger(count) && count > 0) {
+      activity.push(`${count} ${type}${count === 1 ? "" : "s"}`);
+    }
   }
-  if (fresh && report.scheduledWakeups > 0)
+  if (fresh && report.scheduledWakeups > 0) {
     activity.push(
-      report.scheduledWakeups +
-        " timer" +
-        (report.scheduledWakeups === 1 ? "" : "s"),
+      `${report.scheduledWakeups} timer${
+        report.scheduledWakeups === 1 ? "" : "s"
+      }`,
     );
+  }
   if (kind === "waiting" && activity.length) {
     label = "Background";
     kind = "background";
@@ -267,7 +274,7 @@ function workSummary(record) {
   const items = record?.items || [];
   return (
     items.slice(0, 2).map(workReference).filter(Boolean).join(" · ") +
-    (items.length > 2 ? " +" + (items.length - 2) : "")
+    (items.length > 2 ? ` +${items.length - 2}` : "")
   );
 }
 function agentIcon(name) {
@@ -309,7 +316,9 @@ function agentIcon(name) {
   return svg;
 }
 function beginAgentRename() {
-  if (source !== "agents") return;
+  if (source !== "agents") {
+    return;
+  }
   if (agentRename) {
     agentRename.input.focus();
     return;
@@ -321,9 +330,7 @@ function beginAgentRename() {
   const tab =
     candidate &&
     $(
-      '#live-agent-bar .agent-tab[data-agent-key="' +
-        candidateKey(candidate) +
-        '"]',
+      `#live-agent-bar .agent-tab[data-agent-key="${candidateKey(candidate)}"]`,
     );
   if (!record || !tab) {
     toast("Select a saved agent chat to rename.");
@@ -339,7 +346,9 @@ function beginAgentRename() {
     key: candidateKey(candidate),
     pending: false,
     cancel() {
-      if (editor.pending) return;
+      if (editor.pending) {
+        return;
+      }
       input.remove();
       agentRename = null;
       terminalViews.get(candidate.recordId)?.terminal.focus();
@@ -347,17 +356,23 @@ function beginAgentRename() {
   };
   agentRename = editor;
   input.onkeydown = async (event) => {
-    if (event.isComposing) return;
+    if (event.isComposing) {
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       editor.cancel();
       return;
     }
-    if (event.key !== "Enter") return;
+    if (event.key !== "Enter") {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
-    if (editor.pending) return;
+    if (editor.pending) {
+      return;
+    }
     const title = input.value.trim();
     if (!title) {
       input.setCustomValidity("Enter a chat title.");
@@ -380,16 +395,24 @@ function beginAgentRename() {
           agentRename === editor &&
           selectedAgentKey === editor.key &&
           source === "agents"
-        )
+        ) {
           input.focus();
+        }
         return;
       }
       const ownsEditor = agentRename === editor;
       input.remove();
-      if (ownsEditor) agentRename = null;
+      if (ownsEditor) {
+        agentRename = null;
+      }
       render();
-      if (ownsEditor && selectedAgentKey === editor.key && source === "agents")
+      if (
+        ownsEditor &&
+        selectedAgentKey === editor.key &&
+        source === "agents"
+      ) {
         terminalViews.get(candidate.recordId)?.terminal.focus();
+      }
     } catch (error) {
       editor.pending = false;
       input.disabled = false;
@@ -397,8 +420,9 @@ function beginAgentRename() {
         agentRename === editor &&
         selectedAgentKey === editor.key &&
         source === "agents"
-      )
+      ) {
         input.focus();
+      }
       toast(error.message);
     }
   };
@@ -430,7 +454,7 @@ function agentActionsMenu(record) {
       kind === "work" ? "Link work" : "Attach result",
       () => {
         menu.open = false;
-        agentContextReveals.add(record.id + ":" + kind);
+        agentContextReveals.add(`${record.id}:${kind}`);
         agentSidebarCollapsed = false;
         contextSectionsCollapsed.results = false;
         linkedWorkCollapsed = false;
@@ -439,11 +463,13 @@ function agentActionsMenu(record) {
           kind === "work" ? ".agent-work-section" : ".agent-results-section",
         );
         const attach = $(".inline-attach", section);
-        if (attach) attach.open = true;
+        if (attach) {
+          attach.open = true;
+        }
       },
       "text-button",
     );
-    button.dataset.agentControl = "attach-" + kind;
+    button.dataset.agentControl = `attach-${kind}`;
     options.append(button);
   }
   menu.append(summary, options);
@@ -461,8 +487,9 @@ function observeAgentNavigation() {
   if (
     agentNavigationSource !== source ||
     agentNavigationKey !== selectedAgentKey
-  )
+  ) {
     markAgentNavigation();
+  }
 }
 function chooseDefaultAgentSelection() {
   if (
@@ -470,17 +497,21 @@ function chooseDefaultAgentSelection() {
     source !== "agents" ||
     pendingSessionResumes.size ||
     document.querySelector("dialog[open]")
-  )
+  ) {
     return false;
+  }
   const live = visibleAgentCandidates();
   if (
     live.some((candidate) => candidateKey(candidate) === selectedAgentKey) ||
     (state.sessions || []).some(
-      (record) => selectedAgentKey === "record:" + record.id,
+      (record) => selectedAgentKey === `record:${record.id}`,
     )
-  )
+  ) {
     return false;
-  if (!live.length) return false;
+  }
+  if (!live.length) {
+    return false;
+  }
   selectedAgentKey = candidateKey(live[0]);
   markAgentNavigation();
   return true;
@@ -497,18 +528,24 @@ async function bootstrapAgentWorkspace() {
   const epoch = agentNavigationEpoch;
   const [, agents] = await Promise.all([refresh(), loadInventory()]);
   observeAgentNavigation();
-  if (agentNavigationEpoch !== epoch || !agents) return false;
-  if (!chooseDefaultAgentSelection()) return false;
+  if (agentNavigationEpoch !== epoch || !agents) {
+    return false;
+  }
+  if (!chooseDefaultAgentSelection()) {
+    return false;
+  }
   persist();
   render();
   return true;
 }
 function selectAgent(record, candidate) {
   agentRename?.cancel();
-  if (candidate) delete snoozedAgentTabs[candidateKey(candidate)];
+  if (candidate) {
+    delete snoozedAgentTabs[candidateKey(candidate)];
+  }
   selectedAgentKey = candidate
     ? candidateKey(candidate)
-    : "record:" + record.id;
+    : `record:${record.id}`;
   source = "agents";
   markAgentNavigation();
   persist();
@@ -520,9 +557,11 @@ function selectAgent(record, candidate) {
 }
 async function attachCandidate(candidate) {
   const existing = recordForCandidate(candidate);
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
   const result = await prepareSavedChat(
-    "attach:" + candidate.agent + ":" + candidate.sessionId,
+    `attach:${candidate.agent}:${candidate.sessionId}`,
     "attach",
     {
       agent: candidate.agent,
@@ -558,12 +597,16 @@ function renderTitlebarEditor() {
   if (!button) {
     const header = $("#agent-topbar"),
       launcher = $(".compact-launcher", header);
-    if (!header || !launcher) return;
+    if (!header || !launcher) {
+      return;
+    }
     button = featureButton(
       "",
       async () => {
         const directory = button.dataset.directory;
-        if (!directory || button.disabled) return;
+        if (!directory || button.disabled) {
+          return;
+        }
         button.disabled = true;
         try {
           await serviceClient.openDiff(directory);
@@ -606,7 +649,7 @@ function renderLiveBar() {
     const record = recordForCandidate(c);
     return { candidate: c, record, runtime: runtimeInfo(c, record) };
   });
-  for (const row of rows)
+  for (const row of rows) {
     row.runtime.snoozeTipReady =
       typeof guidanceReadyToSnooze === "function" &&
       row.candidate.host === "embedded" &&
@@ -616,6 +659,7 @@ function renderLiveBar() {
         row.candidate.startedAt,
         Date.now() / 1000,
       );
+  }
   const processKey = (c) =>
     typeof c.generation === "string" && c.generation
       ? JSON.stringify([c.host, c.agent, c.recordId, c.generation])
@@ -697,14 +741,16 @@ function renderLiveBar() {
       tab.dataset.agentProcess = process;
       tab.classList.toggle("snooze-tip-ready", runtime.snoozeTipReady);
       tab.dataset.agentKey = candidateKey(candidate);
-      if (record) tab.dataset.reviewAgent = record.id;
+      if (record) {
+        tab.dataset.reviewAgent = record.id;
+      }
       const button = el(
         "button",
-        "live-agent " +
-          runtime.kind +
-          (source === "agents" && selectedAgentKey === candidateKey(candidate)
+        `live-agent ${runtime.kind}${
+          source === "agents" && selectedAgentKey === candidateKey(candidate)
             ? " selected"
-            : ""),
+            : ""
+        }`,
       );
       const words = el("span", "live-agent-words");
       words.append(
@@ -721,23 +767,25 @@ function renderLiveBar() {
       }
       button.append(words);
       if (index < 9) {
-        button.append(el("kbd", "agent-shortcut", "⌘" + (index + 1)));
-        button.setAttribute("aria-keyshortcuts", "Meta+" + (index + 1));
+        button.append(el("kbd", "agent-shortcut", `⌘${index + 1}`));
+        button.setAttribute("aria-keyshortcuts", `Meta+${index + 1}`);
       }
       button.title = `${record?.title || candidate.title} · ${runtime.summary}${runtime.attention ? " · Needs your attention" : ""}${runtime.subagents === null ? " · Subagent count unavailable" : ""} · ${workSummary(record) || candidate.cwd || ""} · Rename ⌘R${record ? " · Right-click for actions" : ""}`;
-      if (record)
+      if (record) {
         tab.oncontextmenu = (event) => {
           event.preventDefault();
-          if (source !== "agents" || selectedAgentKey !== key)
+          if (source !== "agents" || selectedAgentKey !== key) {
             selectAgent(record, candidate);
+          }
           const menu = $(
-            '#live-agent-bar .agent-tab[data-agent-key="' + key + '"]',
+            `#live-agent-bar .agent-tab[data-agent-key="${key}"]`,
           )?.querySelector(".agent-menu");
           if (menu) {
             menu.open = true;
             menu.querySelector(".text-button")?.focus();
           }
         };
+      }
       button.setAttribute("aria-label", button.title);
       button.setAttribute(
         "aria-pressed",
@@ -756,8 +804,9 @@ function renderLiveBar() {
       snooze.title = "Snooze tab · keep agent running";
       snooze.setAttribute(
         "aria-label",
-        "Snooze " +
-          (record?.title || candidate.title || agentName(candidate.agent)),
+        `Snooze ${
+          record?.title || candidate.title || agentName(candidate.agent)
+        }`,
       );
       tab.append(bind(snooze, key, process, "snooze"));
       if (candidate.host === "embedded") {
@@ -769,8 +818,9 @@ function renderLiveBar() {
         close.title = "Close terminal · conversation stays in History";
         close.setAttribute(
           "aria-label",
-          "Close terminal for " +
-            (record?.title || candidate.title || agentName(candidate.agent)),
+          `Close terminal for ${
+            record?.title || candidate.title || agentName(candidate.agent)
+          }`,
         );
         tab.append(bind(close, key, process, "close"));
       }
@@ -782,27 +832,35 @@ function renderLiveBar() {
           menus.some(
             ([oldKey, oldProcess]) => oldKey === key && oldProcess === process,
           );
-        for (const node of menu.querySelectorAll("[data-agent-control]"))
+        for (const node of menu.querySelectorAll("[data-agent-control]")) {
           bind(node, key, process, node.dataset.agentControl);
+        }
         tab.append(menu);
       }
       bar.append(tab);
-      if (agentRename?.key === key)
+      if (agentRename?.key === key) {
         tab.append(bind(agentRename.input, key, process, "rename"));
+      }
     }
     renderSnoozedAgents();
     for (const id of pendingSessionResumes) {
-      if (live.some((c) => c.recordId === id)) continue;
+      if (live.some((c) => c.recordId === id)) {
+        continue;
+      }
       const saved = state.sessions.find((s) => s.id === id),
         pending = el(
           "span",
           "agent-tab resuming-agent-tab",
-          (saved?.title || "Chat") + " · Resuming…",
+          `${saved?.title || "Chat"} · Resuming…`,
         );
       pending.setAttribute("role", "status");
       bar.append(pending);
     }
-    if (!live.length && !liveCandidates().length && !pendingSessionResumes.size)
+    if (
+      !live.length &&
+      !liveCandidates().length &&
+      !pendingSessionResumes.size
+    ) {
       bar.append(
         el(
           "span",
@@ -812,6 +870,7 @@ function renderLiveBar() {
             : "No active agents",
         ),
       );
+    }
     if (
       focus &&
       source === page &&
@@ -824,20 +883,23 @@ function renderLiveBar() {
         !document.activeElement?.isConnected)
     ) {
       const visible = (node) => {
-        if (!node?.isConnected || node.disabled || node.closest("[hidden]"))
+        if (!node?.isConnected || node.disabled || node.closest("[hidden]")) {
           return false;
+        }
         for (
           let child = node, parent = node.parentElement;
           parent;
           child = parent, parent = parent.parentElement
-        )
+        ) {
           if (
             parent.tagName === "DETAILS" &&
             !parent.open &&
             child !==
               [...parent.children].find((entry) => entry.tagName === "SUMMARY")
-          )
+          ) {
             return false;
+          }
+        }
         return node.getClientRects().length > 0;
       };
       const same = targets.filter(
@@ -866,10 +928,14 @@ function renderLiveBar() {
           ?.node ||
         nearby.find((target) => target && visible(target.node))?.node ||
         $("#new-note");
-      if (visible(target)) target.focus({ preventScroll: true });
+      if (visible(target)) {
+        target.focus({ preventScroll: true });
+      }
     }
   }
-  if (typeof paintReviewDraftBadges === "function") paintReviewDraftBadges();
+  if (typeof paintReviewDraftBadges === "function") {
+    paintReviewDraftBadges();
+  }
   updateTabDensity();
   const unread = skillInboxCounts(state);
   const badge = $("#skills-unread");
@@ -881,7 +947,9 @@ function rememberClosedTab(id) {
   closedAgentTabs = closedAgentTabs.slice(-20);
 }
 async function runTabCommand(command) {
-  if (document.querySelector("dialog[open]")) return;
+  if (document.querySelector("dialog[open]")) {
+    return;
+  }
   if (command === "rename") {
     beginAgentRename();
     return;
@@ -901,8 +969,11 @@ async function runTabCommand(command) {
       (c) => candidateKey(c) === selectedAgentKey,
     );
     const terminal = terminalViews.get(candidate?.recordId);
-    if (terminal) terminal.terminal.focus();
-    else $("#new-note").focus();
+    if (terminal) {
+      terminal.terminal.focus();
+    } else {
+      $("#new-note").focus();
+    }
     return;
   }
   if (command === "close") {
@@ -914,16 +985,22 @@ async function runTabCommand(command) {
       return;
     }
     const button = $(
-      '#live-agent-bar .agent-tab[data-agent-key="' +
-        candidateKey(candidate) +
-        '"] .agent-tab-close',
+      `#live-agent-bar .agent-tab[data-agent-key="${candidateKey(
+        candidate,
+      )}"] .agent-tab-close`,
     );
-    if (button) await closeAgentTab(candidate, button);
+    if (button) {
+      await closeAgentTab(candidate, button);
+    }
     return;
   }
-  if (command !== "reopen") return;
+  if (command !== "reopen") {
+    return;
+  }
   reopenRequests++;
-  if (reopeningTab) return;
+  if (reopeningTab) {
+    return;
+  }
   reopeningTab = true;
   try {
     while (reopenRequests > 0) {
@@ -931,8 +1008,9 @@ async function runTabCommand(command) {
       while (
         closedAgentTabs.length &&
         !state.sessions.some((s) => s.id === closedAgentTabs.at(-1))
-      )
+      ) {
         closedAgentTabs.pop();
+      }
       const id = closedAgentTabs.at(-1),
         record = state.sessions.find((s) => s.id === id);
       if (!record) {
@@ -942,8 +1020,11 @@ async function runTabCommand(command) {
         break;
       }
       const existing = candidateForRecord(record);
-      if (existing) selectAgent(record, existing);
-      else await openSavedSession(record);
+      if (existing) {
+        selectAgent(record, existing);
+      } else {
+        await openSavedSession(record);
+      }
       await loadInventory();
       if (candidateForRecord(record)) {
         closedAgentTabs.pop();
@@ -958,7 +1039,9 @@ async function runTabCommand(command) {
   }
 }
 async function closeAgentTab(candidate, button) {
-  if (button.disabled) return;
+  if (button.disabled) {
+    return;
+  }
   button.disabled = true;
   try {
     await api("/api/terminal/close", {
@@ -1011,20 +1094,21 @@ function updateTabDensity() {
       const statusWidth = status?.scrollWidth || 0;
       const available =
         $("#live-agent-bar").clientWidth - Math.max(0, count - 1) * 54;
-      tab.style.flexBasis =
-        Math.min(
-          Math.max(120, available),
-          Math.ceil(titleWidth + statusWidth + 132),
-        ) + "px";
+      tab.style.flexBasis = `${Math.min(
+        Math.max(120, available),
+        Math.ceil(titleWidth + statusWidth + 132),
+      )}px`;
     }
   }
 }
 const titlebarObserver = new ResizeObserver(updateTabDensity);
 titlebarObserver.observe($("#agent-topbar"));
 function parkTerminals() {
-  for (const view of terminalViews.values())
-    if (view.node.isConnected && !terminalPool.contains(view.node))
+  for (const view of terminalViews.values()) {
+    if (view.node.isConnected && !terminalPool.contains(view.node)) {
       terminalPool.append(view.node);
+    }
+  }
 }
 function terminalMultilineKey(terminal, event) {
   if (
@@ -1034,20 +1118,27 @@ function terminalMultilineKey(terminal, event) {
     event.ctrlKey ||
     event.metaKey ||
     event.altKey
-  )
+  ) {
     return true;
+  }
   event.preventDefault();
   // ESC + Return is the multiline shortcut supported by Claude and Codex.
   // Keep it on xterm's onData path so it stays ordered with typed/pasted text.
-  if (event.type === "keydown") terminal.input("\x1b\r", true);
+  if (event.type === "keydown") {
+    terminal.input("\x1b\r", true);
+  }
   return false;
 }
 function ensureTerminal(record) {
   const endpoint =
     record.terminalRole === "shell" ? "/api/shell-terminal" : "/api/terminal";
-  if (terminalViews.has(record.id)) return terminalViews.get(record.id);
+  if (terminalViews.has(record.id)) {
+    return terminalViews.get(record.id);
+  }
   for (const [id, old] of terminalViews) {
-    if (terminalViews.size < 16) break;
+    if (terminalViews.size < 16) {
+      break;
+    }
     if (old.stopped) {
       old.observer.disconnect();
       old.terminal.dispose();
@@ -1093,8 +1184,9 @@ function ensureTerminal(record) {
       brightWhite: "#e0def4",
     },
   });
-  if (typeof terminalSettings === "function")
+  if (typeof terminalSettings === "function") {
     Object.assign(terminal.options, terminalSettings());
+  }
   const fit = new FitAddon.FitAddon();
   terminal.loadAddon(fit);
   terminal.open(screen);
@@ -1117,7 +1209,7 @@ function ensureTerminal(record) {
   terminal.onData((data) => {
     inputQueue = inputQueue
       .then(() =>
-        serviceClient.request(endpoint + "/input", { id: record.id, data }),
+        serviceClient.request(`${endpoint}/input`, { id: record.id, data }),
       )
       .catch((error) => {
         status.textContent = error.message;
@@ -1130,16 +1222,19 @@ function ensureTerminal(record) {
       !node.isConnected ||
       screen.clientWidth < 20 ||
       screen.clientHeight < 20
-    )
+    ) {
       return;
+    }
     fit.fit();
     const cols = Math.max(10, Math.min(500, terminal.cols)),
       rows = Math.max(2, Math.min(200, terminal.rows));
-    if (cols === view.cols && rows === view.rows) return;
+    if (cols === view.cols && rows === view.rows) {
+      return;
+    }
     view.cols = cols;
     view.rows = rows;
     void serviceClient
-      .request(endpoint + "/resize", { id: record.id, cols, rows })
+      .request(`${endpoint}/resize`, { id: record.id, cols, rows })
       .catch(() => {});
   };
   view.resize = resize;
@@ -1148,23 +1243,25 @@ function ensureTerminal(record) {
   void (async () => {
     while (!view.stopped) {
       try {
-        const packet = await serviceClient.request(endpoint + "/poll", {
+        const packet = await serviceClient.request(`${endpoint}/poll`, {
           id: record.id,
           cursor: view.cursor,
           generation: view.generation,
         });
         if (packet.reset) {
           terminal.reset();
-          if (packet.truncated)
+          if (packet.truncated) {
             terminal.writeln("[Earlier terminal scrollback was discarded.]");
+          }
         }
         view.generation = packet.generation;
         view.cursor = packet.cursor;
         view.alive = packet.alive;
-        if (packet.bytes.length)
+        if (packet.bytes.length) {
           await new Promise((resolve) =>
             terminal.write(new Uint8Array(packet.bytes), resolve),
           );
+        }
         status.hidden = packet.alive;
         status.textContent =
           record.terminalRole === "shell"
@@ -1184,7 +1281,7 @@ function ensureTerminal(record) {
           void loadInventory();
           break;
         }
-        status.textContent = error.message + " Reconnecting…";
+        status.textContent = `${error.message} Reconnecting…`;
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     }
@@ -1192,7 +1289,9 @@ function ensureTerminal(record) {
   return view;
 }
 function agentWork(record) {
-  if (!record) return [];
+  if (!record) {
+    return [];
+  }
   const catalog = new Map(
     [...(state.relatedItems || []), ...allItems(), ...record.items].map((x) => [
       x.id,
@@ -1200,7 +1299,9 @@ function agentWork(record) {
     ]),
   );
   // Prefer full current source records over saved link summaries.
-  for (const item of allItems()) catalog.set(item.id, item);
+  for (const item of allItems()) {
+    catalog.set(item.id, item);
+  }
   const ids = new Set(record.items.map((x) => x.id));
   return [...ids].map((id) => catalog.get(id)).filter(Boolean);
 }
@@ -1210,7 +1311,7 @@ function linkedWorkCI(record, item) {
     badge = featureButton(
       info.short,
       () => openItem(item),
-      "ci-pill " + (item.ci?.state || "unknown"),
+      `ci-pill ${item.ci?.state || "unknown"}`,
     );
   const checks = item.ci?.checks || [],
     failed = checks.filter((check) => check.state === "failed");
@@ -1237,18 +1338,26 @@ function linkedWorkCI(record, item) {
   const recovery = chatDispatchRecovery(record.id, {
     canPresent,
     onChange: () => {
-      if (!group.isConnected) return;
-      if (investigate)
+      if (!group.isConnected) {
+        return;
+      }
+      if (investigate) {
         investigate.disabled = pending || chatDispatchBlocked(record.id);
-      if (clear) clear.disabled = chatDispatchBlocked(record.id);
+      }
+      if (clear) {
+        clear.disabled = chatDispatchBlocked(record.id);
+      }
     },
   });
   // One record-level recovery panel, independent of whichever PR owns the receipt.
   queueMicrotask(() => {
-    if (!group.isConnected) return;
+    if (!group.isConnected) {
+      return;
+    }
     const section = group.closest(".agent-work-section");
-    if (section && !section.querySelector("[data-dispatch-record]"))
+    if (section && !section.querySelector("[data-dispatch-record]")) {
       section.append(recovery);
+    }
   });
   const investigation = record.ciInvestigations?.[item.id],
     active = ["queued", "investigating"].includes(investigation?.state);
@@ -1262,12 +1371,14 @@ function linkedWorkCI(record, item) {
           ? "Queued"
           : "Investigating",
     );
-    label.title = "CI investigation · " + relative(investigation.updatedAt);
+    label.title = `CI investigation · ${relative(investigation.updatedAt)}`;
     clear = featureIconButton(
       "×",
       "Clear CI investigation indicator",
       async () => {
-        if (!canPresent() || chatDispatchBlocked(record.id)) return;
+        if (!canPresent() || chatDispatchBlocked(record.id)) {
+          return;
+        }
         try {
           await api("/api/session/ci-investigation", {
             id: record.id,
@@ -1276,9 +1387,13 @@ function linkedWorkCI(record, item) {
             state: "cancelled",
           });
           const snapshot = await loadStateSnapshot({ attempts: 2 });
-          if (snapshot.accepted && canPresent()) render();
+          if (snapshot.accepted && canPresent()) {
+            render();
+          }
         } catch (error) {
-          if (canPresent()) toast(error.message);
+          if (canPresent()) {
+            toast(error.message);
+          }
         }
       },
       "text-button",
@@ -1294,7 +1409,9 @@ function linkedWorkCI(record, item) {
     investigate = featureButton(
       "",
       async () => {
-        if (pending || !canPresent()) return;
+        if (pending || !canPresent()) {
+          return;
+        }
         pending = true;
         investigate.disabled = true;
         try {
@@ -1305,8 +1422,9 @@ function linkedWorkCI(record, item) {
           );
           if (receipt.finalized) {
             await refreshChatDispatch(receipt, { canPresent });
-            if (canPresent())
+            if (canPresent()) {
               window.truffleGuidance?.complete("ci.investigate");
+            }
           }
         } catch (error) {
           if (canPresent()) {
@@ -1316,8 +1434,9 @@ function linkedWorkCI(record, item) {
           }
         } finally {
           pending = false;
-          if (canPresent())
+          if (canPresent()) {
             investigate.disabled = chatDispatchBlocked(record.id);
+          }
         }
       },
       "icon-button investigate-ci",
@@ -1326,7 +1445,7 @@ function linkedWorkCI(record, item) {
     investigate.title = "Ask this chat to investigate CI failures";
     investigate.setAttribute(
       "aria-label",
-      "Investigate CI failures for " + workReference(item),
+      `Investigate CI failures for ${workReference(item)}`,
     );
     investigate.disabled = chatDispatchBlocked(record.id);
     group.append(investigate);
@@ -1345,7 +1464,7 @@ function renderAgentWorkspace() {
     key = candidate
       ? candidateKey(candidate)
       : record
-        ? "record:" + record.id
+        ? `record:${record.id}`
         : "empty";
   const focusedTerminal = document.activeElement?.classList.contains(
     "xterm-helper-textarea",
@@ -1387,7 +1506,9 @@ function renderAgentWorkspace() {
     ),
   );
   heading.replaceChildren();
-  if (!editing) context.replaceChildren();
+  if (!editing) {
+    context.replaceChildren();
+  }
   if (!candidate && !record) {
     heading.hidden = false;
     terminalFocus = false;
@@ -1404,7 +1525,7 @@ function renderAgentWorkspace() {
             : "No active agents",
       ),
     );
-    if (Object.keys(snoozedAgentTabs).length)
+    if (Object.keys(snoozedAgentTabs).length) {
       conversation.append(
         featureButton(
           "Snoozed agents",
@@ -1414,6 +1535,7 @@ function renderAgentWorkspace() {
           "text-button",
         ),
       );
+    }
     conversation.append(
       featureButton(
         "History",
@@ -1439,8 +1561,9 @@ function renderAgentWorkspace() {
       existing.node.remove();
     }
     const terminal = ensureTerminal(record);
-    if (!conversation.contains(terminal.node))
+    if (!conversation.contains(terminal.node)) {
       conversation.replaceChildren(terminal.node);
+    }
     requestAnimationFrame(() => {
       terminal.resize();
       if (
@@ -1448,15 +1571,21 @@ function renderAgentWorkspace() {
         !$("#launch-options").open &&
         (document.activeElement === document.body ||
           terminal.node.contains(document.activeElement))
-      )
+      ) {
         terminal.terminal.focus();
+      }
     });
   } else {
     const shellPanel = $(".chat-shell-panel", conversation);
     if (shellPanel) {
-      for (const child of [...conversation.children])
-        if (child !== shellPanel) child.remove();
-    } else conversation.replaceChildren();
+      for (const child of [...conversation.children]) {
+        if (child !== shellPanel) {
+          child.remove();
+        }
+      }
+    } else {
+      conversation.replaceChildren();
+    }
     const gateway = el("div", "terminal-gateway");
     gateway.append(
       el("span", "terminal-gateway-mark", ">_"),
@@ -1490,10 +1619,11 @@ function renderAgentWorkspace() {
             inventory.warning &&
             record.destination === "cmux" &&
             !savedSessionOpenState(record.id)
-          )
+          ) {
             throw new Error(
               "Cannot confirm whether this cmux agent is still running. Restore the connection before resuming it.",
             );
+          }
           await openSavedSession(record, open, { target: "embedded" });
         } catch (error) {
           toast(error.message);
@@ -1501,13 +1631,15 @@ function renderAgentWorkspace() {
       },
       "button primary",
     );
-    if (record) open.dataset.savedOpenRecord = record.id;
+    if (record) {
+      open.dataset.savedOpenRecord = record.id;
+    }
     if (pendingSessionResumes.has(record?.id)) {
       open.disabled = true;
       open.textContent = "Resuming…";
     }
     gateway.append(open);
-    if (record && !candidate && !opening)
+    if (record && !candidate && !opening) {
       gateway.append(
         featureButton(
           "Start new with context",
@@ -1519,21 +1651,31 @@ function renderAgentWorkspace() {
           "button",
         ),
       );
-    if (shellPanel) shellPanel.before(gateway);
-    else conversation.append(gateway);
+    }
+    if (shellPanel) {
+      shellPanel.before(gateway);
+    } else {
+      conversation.append(gateway);
+    }
     if (candidate) {
       const hint = el(
         "p",
         "form-hint",
         "Existing cmux processes stay in their terminal. New sessions open embedded here. Closed conversations can resume in Truffle with their saved context.",
       );
-      if (shellPanel) shellPanel.before(hint);
-      else conversation.append(hint);
+      if (shellPanel) {
+        shellPanel.before(hint);
+      } else {
+        conversation.append(hint);
+      }
     }
   }
-  if (record && typeof renderChatTerminal === "function")
+  if (record && typeof renderChatTerminal === "function") {
     renderChatTerminal(record, conversation);
-  if (editing) return;
+  }
+  if (editing) {
+    return;
+  }
   const items = agentWork(record),
     work = el("section", "agent-work-section"),
     workHead = el("div", "section-heading"),
@@ -1569,7 +1711,9 @@ function renderAgentWorkspace() {
   const workTitle = el("h3");
   workTitle.append(workToggle);
   workHead.append(workTitle);
-  if (record) workHead.append(inlineAttach(record, "work"));
+  if (record) {
+    workHead.append(inlineAttach(record, "work"));
+  }
   work.append(workHead, workBody);
   for (const item of items) {
     const row = el("article", "context-work-row"),
@@ -1595,19 +1739,18 @@ function renderAgentWorkspace() {
     }
     meta.append(ref);
     meta.append(
-      el("span", "status-pill " + item.status, workStatusLabel(item)),
-      featureIconButton(
-        "⋯",
-        "Open " + (workReference(item) || item.title),
-        () => openItem(item),
+      el("span", `status-pill ${item.status}`, workStatusLabel(item)),
+      featureIconButton("⋯", `Open ${workReference(item) || item.title}`, () =>
+        openItem(item),
       ),
     );
     meta.append(detachLinkButton(record, "itemIds", item.id));
     const titleRow = el("div", "context-work-heading");
     title.title = item.title;
     titleRow.append(title);
-    if (item.source === "github" && item.kind === "Pull request")
+    if (item.source === "github" && item.kind === "Pull request") {
       titleRow.append(linkedWorkCI(record, item));
+    }
     row.append(titleRow, meta);
     workBody.append(row);
   }
@@ -1615,7 +1758,9 @@ function renderAgentWorkspace() {
   const results = el("section", "agent-results-section"),
     resultHead = el("div", "section-heading");
   resultHead.append(el("h3", "", "Results"));
-  if (record) resultHead.append(inlineAttach(record, "artifact"));
+  if (record) {
+    resultHead.append(inlineAttach(record, "artifact"));
+  }
   results.append(resultHead);
   const outputs = (artifactLibrary?.artifacts || state.artifacts || []).filter(
     (x) => (x.sessionIds || []).includes(record?.id),
@@ -1629,18 +1774,24 @@ function renderAgentWorkspace() {
     results.append(row);
   }
 
-  if (record && directory) context.append(agentGitSection(record, directory));
+  if (record && directory) {
+    context.append(agentGitSection(record, directory));
+  }
   const commands = agentCommandSection(record);
-  if (commands) context.append(commands);
-  if (record?.resources?.length)
+  if (commands) {
+    context.append(commands);
+  }
+  if (record?.resources?.length) {
     context.append(
       collapsibleContextSection(
         resourceSection(record, expandedResources),
         "resources",
       ),
     );
-  if (items.length || agentContextReveals.has(record?.id + ":work"))
+  }
+  if (items.length || agentContextReveals.has(`${record?.id}:work`)) {
     context.append(work);
+  }
   const trees = (record?.worktrees || []).filter(
     (x) => x.primary || x.isWorktree,
   );
@@ -1677,7 +1828,7 @@ function renderAgentWorkspace() {
         const stamp = el(
           "small",
           "worktree-observed",
-          "Reported " + relative(tree.updatedAt),
+          `Reported ${relative(tree.updatedAt)}`,
         );
         stamp.title = new Date(tree.updatedAt * 1000).toLocaleString();
         details.append(stamp);
@@ -1685,7 +1836,7 @@ function renderAgentWorkspace() {
       const refs = el("div", "worktree-items");
       for (const id of tree.itemIds || []) {
         const item = byId.get(id);
-        if (item)
+        if (item) {
           refs.append(
             featureButton(
               workReference(item) || item.title,
@@ -1693,6 +1844,7 @@ function renderAgentWorkspace() {
               "text-button",
             ),
           );
+        }
       }
       details.append(refs);
       section.append(details);
@@ -1701,10 +1853,11 @@ function renderAgentWorkspace() {
       collapsibleContextSection(section, "worktrees", trees.length),
     );
   }
-  if (outputs.length || agentContextReveals.has(record?.id + ":artifact"))
+  if (outputs.length || agentContextReveals.has(`${record?.id}:artifact`)) {
     context.append(
       collapsibleContextSection(results, "results", outputs.length),
     );
+  }
   void loadArtifactLibrary();
   if (
     contextFocusKey &&
@@ -1719,7 +1872,9 @@ function renderAgentWorkspace() {
 }
 function agentCommandSection(record) {
   const commands = [...(record?.agentCommands || [])].reverse();
-  if (!commands.length) return null;
+  if (!commands.length) {
+    return null;
+  }
   const section = el("section", "agent-commands-section"),
     head = el("div", "section-heading");
   head.append(el("h3", "", "Agent commands"));
@@ -1731,7 +1886,7 @@ function agentCommandSection(record) {
           : command.ok === true
             ? "ran"
             : "running",
-      row = el("div", "agent-command-row " + outcome),
+      row = el("div", `agent-command-row ${outcome}`),
       when = el("small", "", relative(command.at));
     when.title = new Date(command.at * 1000).toLocaleString();
     row.append(
@@ -1741,15 +1896,16 @@ function agentCommandSection(record) {
     );
     section.append(row);
   }
-  if (!("agentCommands" in contextSectionsCollapsed))
+  if (!("agentCommands" in contextSectionsCollapsed)) {
     contextSectionsCollapsed.agentCommands = false;
+  }
   return collapsibleContextSection(section, "agentCommands", commands.length);
 }
 function collapsibleContextSection(section, key, count) {
   const heading = $("h3", section),
     head = heading.parentElement,
     body = el("div", "context-section-body");
-  body.id = "context-section-" + key;
+  body.id = `context-section-${key}`;
   const label = heading.textContent,
     toggle = el("button", "work-section-toggle"),
     chevron = el("span", "work-section-chevron");
@@ -1758,13 +1914,20 @@ function collapsibleContextSection(section, key, count) {
   toggle.type = "button";
   toggle.setAttribute("aria-controls", body.id);
   const existingCount = head.querySelector("small");
-  if (count === undefined && existingCount) count = existingCount.textContent;
+  if (count === undefined && existingCount) {
+    count = existingCount.textContent;
+  }
   existingCount?.remove();
   toggle.append(chevron, el("span", "", label));
-  if (count !== undefined) toggle.append(el("small", "", String(count)));
+  if (count !== undefined) {
+    toggle.append(el("small", "", String(count)));
+  }
   heading.replaceChildren(toggle);
-  for (const child of [...section.children])
-    if (child !== head) body.append(child);
+  for (const child of [...section.children]) {
+    if (child !== head) {
+      body.append(child);
+    }
+  }
   section.append(body);
   const paint = () => {
     const closed = contextSectionsCollapsed[key] !== false;
@@ -1790,7 +1953,7 @@ function inlineAttach(record, kind) {
   summary.title = kind === "work" ? "Link work" : "Attach result";
   summary.setAttribute("aria-label", summary.title);
   details.append(summary);
-  summary.dataset.focusKey = record.id + ":attach:" + kind;
+  summary.dataset.focusKey = `${record.id}:attach:${kind}`;
   details.dataset.attachRecordId = record.id;
   details.dataset.attachKind = kind;
   const form = el("form", "inline-attach-form"),
@@ -1813,7 +1976,9 @@ function inlineAttach(record, kind) {
   const closeAndRestore = () => {
     const restore = details.contains(document.activeElement);
     details.open = false;
-    if (details.isConnected) render();
+    if (details.isConnected) {
+      render();
+    }
     if (restore) {
       const opener = details.isConnected
         ? details
@@ -1826,11 +1991,13 @@ function inlineAttach(record, kind) {
     }
   };
   const dismiss = () => {
-    if (!attachmentPending) closeAndRestore();
+    if (!attachmentPending) {
+      closeAndRestore();
+    }
   };
   const actions = el("div", "ui-actiongroup");
   actions.setAttribute("role", "group");
-  actions.setAttribute("aria-label", summary.title + " actions");
+  actions.setAttribute("aria-label", `${summary.title} actions`);
   const submit = el("button", "button ui-control", "Attach");
   submit.type = "submit";
   submit.dataset.variant = "primary";
@@ -1862,18 +2029,25 @@ function inlineAttach(record, kind) {
   };
   details.ontoggle = () => {
     if (attachmentPending) {
-      if (!details.open) details.open = true;
+      if (!details.open) {
+        details.open = true;
+      }
       return;
     }
-    if (details.open) input.focus();
-    else if (details.isConnected) render();
+    if (details.open) {
+      input.focus();
+    } else if (details.isConnected) {
+      render();
+    }
   };
   const savedLabel = () =>
     kind === "artifact"
-      ? "Artifact " + attachmentReceipt.artifactId
-      : "Work links for chat " + attachmentReceipt.recordId;
+      ? `Artifact ${attachmentReceipt.artifactId}`
+      : `Work links for chat ${attachmentReceipt.recordId}`;
   async function attachSavedLink(refreshOnly = false) {
-    if (attachmentPending || (!refreshOnly && attachmentReceipt)) return;
+    if (attachmentPending || (!refreshOnly && attachmentReceipt)) {
+      return;
+    }
     const focused = details.contains(document.activeElement);
     attachmentPending = true;
     details.setAttribute("aria-busy", "true");
@@ -1889,7 +2063,9 @@ function inlineAttach(record, kind) {
       : kind === "work"
         ? "Linking work…"
         : "Attaching result…";
-    if (focused) summary.focus({ preventScroll: true });
+    if (focused) {
+      summary.focus({ preventScroll: true });
+    }
     try {
       if (!refreshOnly) {
         const target = input.value.trim();
@@ -1919,40 +2095,42 @@ function inlineAttach(record, kind) {
           ? loadArtifactLibrary(true)
           : Promise.resolve({ accepted: true }),
       ]);
-      if (!snapshot.accepted || !library.accepted)
+      if (!snapshot.accepted || !library.accepted) {
         throw new Error(
           library.error ||
             "Dashboard changed while refreshing. Your newer changes were kept.",
         );
-      if (details.isConnected) closeAndRestore();
+      }
+      if (details.isConnected) {
+        closeAndRestore();
+      }
     } catch (failure) {
       const message = attachmentReceipt
-        ? savedLabel() +
-          " saved locally. " +
-          failure.message +
-          " Use " +
-          retry.textContent +
-          " to update this view; do not attach it again."
+        ? `${savedLabel()} saved locally. ${failure.message} Use ${
+            retry.textContent
+          } to update this view; do not attach it again.`
         : failure.message;
       if (details.isConnected) {
         error.textContent = message;
         error.hidden = false;
-        if (retry) retry.hidden = !attachmentReceipt;
-      } else if (attachmentReceipt)
+        if (retry) {
+          retry.hidden = !attachmentReceipt;
+        }
+      } else if (attachmentReceipt) {
         toast(
-          savedLabel() +
-            " saved locally. " +
-            failure.message +
-            " Refresh the dashboard to see the saved link; do not attach it again.",
+          `${savedLabel()} saved locally. ${
+            failure.message
+          } Refresh the dashboard to see the saved link; do not attach it again.`,
         );
+      }
     } finally {
       attachmentPending = false;
       if (details.isConnected) {
         details.setAttribute("aria-busy", "false");
         summary.setAttribute("aria-disabled", "false");
-        submit.disabled = !!attachmentReceipt;
-        input.disabled = !!attachmentReceipt;
-        title.disabled = !!attachmentReceipt;
+        submit.disabled = Boolean(attachmentReceipt);
+        input.disabled = Boolean(attachmentReceipt);
+        title.disabled = Boolean(attachmentReceipt);
         cancel.disabled = false;
         retry.disabled = false;
       }
@@ -1994,7 +2172,7 @@ function renderHistory() {
     const label =
       recovery.availability === "unavailable"
         ? "Pending chat requests · Unavailable"
-        : "Pending chat requests · " + recovery.total;
+        : `Pending chat requests · ${recovery.total}`;
     requests = featureButton(
       label,
       () => {
@@ -2014,15 +2192,16 @@ function renderHistory() {
     focusKey &&
     (document.activeElement === document.body ||
       !document.activeElement?.isConnected)
-  )
+  ) {
     (focusKey === "recovery" && requests ? requests : archive).focus({
       preventScroll: true,
     });
+  }
   const rows = state.sessions
     .filter(
       (s) =>
         !candidateForRecord(s) &&
-        (historyArchived ? !!s.archivedAt : !s.archivedAt) &&
+        (historyArchived ? Boolean(s.archivedAt) : !s.archivedAt) &&
         [s.title, s.cwd, workSummary(s)]
           .join(" ")
           .toLowerCase()
@@ -2056,13 +2235,13 @@ function renderHistory() {
         relative(session.lastOpenedAt || session.updatedAt),
       ),
       resume,
-      featureIconButton("⋯", "Chat options for " + session.title, () =>
+      featureIconButton("⋯", `Chat options for ${session.title}`, () =>
         showSession(session),
       ),
     );
     list.append(row);
   }
-  if (!rows.length)
+  if (!rows.length) {
     list.append(
       el(
         "p",
@@ -2070,12 +2249,15 @@ function renderHistory() {
         "No saved conversations match. Live agents stay in the bar above.",
       ),
     );
+  }
 }
 function editSchedule(preset) {
   return openSkillSchedule(preset);
 }
 async function runSkill(preset, button) {
-  if (button.disabled) return;
+  if (button.disabled) {
+    return;
+  }
   button.disabled = true;
   let receipt;
   const page = source,
@@ -2086,8 +2268,9 @@ async function runSkill(preset, button) {
       args: { presetId: preset.id },
     });
     if (receipt.openReceipt) {
-      if (!adoptSavedSessionOpen(receipt.openReceipt, receipt.recordId))
+      if (!adoptSavedSessionOpen(receipt.openReceipt, receipt.recordId)) {
         throw new Error("The skill open receipt could not be confirmed.");
+      }
       await openSavedSession({ id: receipt.recordId }, null, {
         isCurrent: () => source === page && selectedAgentKey === key,
         notify: false,
@@ -2101,20 +2284,23 @@ async function runSkill(preset, button) {
       return;
     }
     const result = await loadStateSnapshot({ attempts: 2 });
-    if (!result.accepted)
+    if (!result.accepted) {
       throw new Error(
         "Dashboard changed while refreshing. Your newer changes were kept.",
       );
+    }
     const record = state.sessions.find(
       (session) => session.id === receipt.recordId,
     );
-    if (!record)
+    if (!record) {
       throw new Error(
         "The skill chat is unavailable in the refreshed dashboard.",
       );
+    }
     if (receipt.status === "preview") {
-      if (source === page && selectedAgentKey === key)
+      if (source === page && selectedAgentKey === key) {
         selectAgent(record, null);
+      }
       toast("Preview prepared. No agent was started.");
       return;
     }
@@ -2125,25 +2311,25 @@ async function runSkill(preset, button) {
           candidate.host === "embedded" &&
           candidate.live === true,
       );
-    if (candidate && source === page && selectedAgentKey === key)
+    if (candidate && source === page && selectedAgentKey === key) {
       selectAgent(record, candidate);
-    else
+    } else {
       toast(
         "Skill request accepted. Check its chat in History; do not run the skill again.",
       );
+    }
   } catch (error) {
     toast(
       receipt
-        ? (receipt.status === "unknown"
-            ? "Skill open outcome unknown"
-            : receipt.status === "preview"
-              ? "Skill preview prepared"
-              : "Skill request accepted") +
-            " for chat " +
-            receipt.recordId +
-            ". " +
-            error.message +
-            " Refresh Skills to inspect it; do not run the skill again."
+        ? `${
+            receipt.status === "unknown"
+              ? "Skill open outcome unknown"
+              : receipt.status === "preview"
+                ? "Skill preview prepared"
+                : "Skill request accepted"
+          } for chat ${receipt.recordId}. ${
+            error.message
+          } Refresh Skills to inspect it; do not run the skill again.`
         : error.message,
     );
   } finally {
@@ -2182,8 +2368,9 @@ function renderSkills() {
         .join(" ")
         .toLowerCase()
         .includes(query)
-    )
+    ) {
       continue;
+    }
     const schedule = state.skillSchedules?.[preset.id],
       row = el("article", "skill-row"),
       words = el("div", "skill-name");
@@ -2192,24 +2379,23 @@ function renderSkills() {
       el(
         "small",
         "",
-        preset.command +
-          " · " +
-          agentName(preset.agent) +
-          (preset.available ? "" : " · Folder or skill unavailable"),
+        `${preset.command} · ${agentName(
+          preset.agent,
+        )}${preset.available ? "" : " · Folder or skill unavailable"}`,
       ),
     );
     const when = schedule?.enabled
       ? schedule.mode === "daily"
-        ? "Daily " + schedule.time
-        : "Every " + schedule.everyMinutes + " min"
+        ? `Daily ${schedule.time}`
+        : `Every ${schedule.everyMinutes} min`
       : "On demand";
     const timing = el("span", "skill-timing", when);
     timing.title = schedule?.enabled
-      ? "Next: " +
-        dated(schedule.nextRun) +
-        (schedule.missed === "skip"
-          ? " · Skip missed runs"
-          : " · Catch up once")
+      ? `Next: ${dated(schedule.nextRun)}${
+          schedule.missed === "skip"
+            ? " · Skip missed runs"
+            : " · Catch up once"
+        }`
       : "";
     const run = featureButton("Run now", () => runSkill(preset, run), "button");
     run.disabled = !preset.available;
@@ -2226,10 +2412,11 @@ function renderSkills() {
     );
     if (results.length) {
       const output = el("div", "skill-results");
-      for (const artifact of results.slice(0, 20))
+      for (const artifact of results.slice(0, 20)) {
         output.append(libraryRow(artifact));
+      }
       group.append(output);
-    } else
+    } else {
       group.append(
         el(
           "p",
@@ -2237,16 +2424,17 @@ function renderSkills() {
           "No results yet. Reports from this skill will appear here.",
         ),
       );
+    }
     if (runs.length) {
       const history = el("details", "skill-history"),
-        summary = el("summary", "", runs.length + " recent runs");
+        summary = el("summary", "", `${runs.length} recent runs`);
       history.append(summary);
       for (const entry of runs.slice(0, 20)) {
         const record = state.sessions.find((r) => r.id === entry.sessionId),
           line = el("div", "skill-run-row");
         line.append(
           el("time", "", dated(entry.at)),
-          el("span", "run-outcome " + entry.outcome, entry.outcome),
+          el("span", `run-outcome ${entry.outcome}`, entry.outcome),
           record
             ? featureButton(
                 "Open run",
@@ -2261,7 +2449,7 @@ function renderSkills() {
     }
     list.append(group);
   }
-  if (!list.children.length)
+  if (!list.children.length) {
     list.append(
       el(
         "p",
@@ -2269,6 +2457,7 @@ function renderSkills() {
         "No skills match. Add an installed skill to run it on demand or schedule it.",
       ),
     );
+  }
   void loadArtifactLibrary();
 }
 $("#skills-inbox").onclick = (() => {
@@ -2278,7 +2467,9 @@ $("#skills-inbox").onclick = (() => {
       source = "skills";
       persist();
       render();
-      if (pending) return;
+      if (pending) {
+        return;
+      }
       pending = true;
       const button = $("#skills-inbox"),
         busy = button.getAttribute("aria-busy");
@@ -2287,12 +2478,16 @@ $("#skills-inbox").onclick = (() => {
         const result = await presentLocalWrite(() =>
           api("/api/skills/read", {}),
         );
-        if (result.kind !== "accepted" || result.presentation !== "ready")
+        if (result.kind !== "accepted" || result.presentation !== "ready") {
           toast(localWriteMessage(result, "Skills inbox marked read."));
+        }
       } finally {
         pending = false;
-        if (busy === null) button.removeAttribute("aria-busy");
-        else button.setAttribute("aria-busy", busy);
+        if (busy === null) {
+          button.removeAttribute("aria-busy");
+        } else {
+          button.setAttribute("aria-busy", busy);
+        }
       }
     } catch (error) {
       toast(error.message);
@@ -2310,21 +2505,31 @@ function parseCSV(text) {
       if (quoted && text[i + 1] === '"') {
         value += '"';
         i++;
-      } else if (quoted || !value) quoted = !quoted;
-      else value += c;
+      } else if (quoted || !value) {
+        quoted = !quoted;
+      } else {
+        value += c;
+      }
     } else if (!quoted && (c === "," || c === "\n" || c === "\r")) {
       row.push(value);
       value = "";
       if (c !== ",") {
         rows.push(row);
         row = [];
-        if (c === "\r" && text[i + 1] === "\n") i++;
+        if (c === "\r" && text[i + 1] === "\n") {
+          i++;
+        }
       }
-    } else value += c;
-    if (rows.length > 10000)
+    } else {
+      value += c;
+    }
+    if (rows.length > 10000) {
       throw new Error("Tables support up to 10,000 rows.");
+    }
   }
-  if (quoted) throw new Error("CSV has an unterminated quoted field.");
+  if (quoted) {
+    throw new Error("CSV has an unterminated quoted field.");
+  }
   if (value || row.length) {
     row.push(value);
     rows.push(row);
@@ -2338,26 +2543,32 @@ function appendResultTable(node, text, format) {
     (!["truffle.table/v1", "mydash.table/v1"].includes(data.schema) ||
       !Array.isArray(data.columns) ||
       !Array.isArray(data.rows))
-  )
+  ) {
     throw new Error("Unsupported table schema.");
+  }
   const values = data ? [data.columns, ...data.rows] : parseCSV(text);
-  if (!values.length) return;
+  if (!values.length) {
+    return;
+  }
   const table = el("table", "result-table"),
     head = el("thead"),
     header = el("tr");
-  for (const value of values[0]) header.append(el("th", "", String(value)));
+  for (const value of values[0]) {
+    header.append(el("th", "", String(value)));
+  }
   head.append(header);
   table.append(head);
   const body = el("tbody");
   for (const row of values.slice(1, 1001)) {
     const tr = el("tr");
-    for (const value of row)
+    for (const value of row) {
       tr.append(el("td", "", value === null ? "" : String(value)));
+    }
     body.append(tr);
   }
   table.append(body);
   node.append(table);
-  if (values.length > 1001)
+  if (values.length > 1001) {
     node.append(
       el(
         "p",
@@ -2365,6 +2576,7 @@ function appendResultTable(node, text, format) {
         `Showing 1,000 of ${values.length - 1} rows. The saved file contains the full table.`,
       ),
     );
+  }
 }
 const workSessionControls = itemSessionChip;
 itemSessionChip = function (item) {
@@ -2374,7 +2586,7 @@ itemSessionChip = function (item) {
     );
   if (record) {
     const button = control.querySelector("button");
-    button.title = "Show agent workspace · " + record.title;
+    button.title = `Show agent workspace · ${record.title}`;
     button.onclick = () => selectAgent(record, candidateForRecord(record));
   }
   return control;
@@ -2390,11 +2602,13 @@ function renderSourceSubmenus(items) {
         .map(scopeKey),
     ),
   ].sort((a, b) => a.localeCompare(b));
-  if (scopePrefs.linear && !projects.includes(scopePrefs.linear))
+  if (scopePrefs.linear && !projects.includes(scopePrefs.linear)) {
     projects.push(scopePrefs.linear);
+  }
   const counts = new Map();
-  for (const item of items.filter((item) => workViewAllows(item, "linear")))
+  for (const item of items.filter((item) => workViewAllows(item, "linear"))) {
     counts.set(scopeKey(item), (counts.get(scopeKey(item)) || 0) + 1);
+  }
   const signature = JSON.stringify([
     source === "linear",
     scopePrefs.linear,
@@ -2409,15 +2623,16 @@ function renderSourceSubmenus(items) {
       ...projects.map((project) => {
         const button = el(
           "button",
-          "source-project" +
-            (source === "linear" && scopePrefs.linear === project
+          `source-project${
+            source === "linear" && scopePrefs.linear === project
               ? " active"
-              : ""),
+              : ""
+          }`,
         );
         button.type = "button";
         button.dataset.linearProject = project;
         button.title = project;
-        button.setAttribute("aria-label", "Filter Linear project: " + project);
+        button.setAttribute("aria-label", `Filter Linear project: ${project}`);
         button.setAttribute(
           "aria-pressed",
           String(source === "linear" && scopePrefs.linear === project),
@@ -2429,8 +2644,9 @@ function renderSourceSubmenus(items) {
         button.onclick = () => {
           source = "linear";
           scopePrefs.linear = scopePrefs.linear === project ? "" : project;
-          if (typeof setSavedViewScope === "function")
+          if (typeof setSavedViewScope === "function") {
             setSavedViewScope(scopePrefs.linear, "linear");
+          }
           persist();
           render();
         };
@@ -2438,28 +2654,38 @@ function renderSourceSubmenus(items) {
       }),
     );
     linear.scrollTop = scroll;
-    if (focused !== undefined)
-      for (const button of linear.children)
-        if (button.dataset.linearProject === focused)
+    if (focused !== undefined) {
+      for (const button of linear.children) {
+        if (button.dataset.linearProject === focused) {
           button.focus({ preventScroll: true });
+        }
+      }
+    }
   }
 }
 function prepareWorkspaceRender() {
-  if (typeof prepareSavedViewPage === "function") prepareSavedViewPage();
+  if (typeof prepareSavedViewPage === "function") {
+    prepareSavedViewPage();
+  }
   observeAgentNavigation();
   $("#search").placeholder =
     source === "skills" ? "Search skills and results…" : "Fuzzy find work…";
-  if (typeof maybeOfferOnboarding === "function") void maybeOfferOnboarding();
+  if (typeof maybeOfferOnboarding === "function") {
+    void maybeOfferOnboarding();
+  }
   document.body.classList.toggle("agent-page", source === "agents");
-  if (source !== "agents") terminalFocus = false;
+  if (source !== "agents") {
+    terminalFocus = false;
+  }
   document.body.classList.toggle("terminal-focused", terminalFocus);
   if (workspaceIndexedState !== state) {
     buildBundleIndex(allItems());
     workspaceIndexedState = state;
   }
   const navigationItems = allItems();
-  for (const name of ["all", "linear", "github", "sentry", "notes"])
-    $("#count-" + name).textContent = workViewCount(navigationItems, name);
+  for (const name of ["all", "linear", "github", "sentry", "notes"]) {
+    $(`#count-${name}`).textContent = workViewCount(navigationItems, name);
+  }
   $("#count-sessions").textContent = state.sessions.filter(
     (x) => !candidateForRecord(x) && !x.archivedAt,
   ).length;
@@ -2480,8 +2706,9 @@ function renderWorkspacePage() {
         : source === "skills"
           ? "Skills"
           : "History";
-    for (const button of document.querySelectorAll("[data-source]"))
+    for (const button of document.querySelectorAll("[data-source]")) {
       button.classList.toggle("active", button.dataset.source === source);
+    }
     for (const selector of [
       "#active-sessions",
       ".metrics",
@@ -2493,8 +2720,9 @@ function renderWorkspacePage() {
       "#session-filter-bar",
       "#project-only",
       "#feature-controls",
-    ])
+    ]) {
       $(selector).hidden = true;
+    }
     $(".toolbar").hidden = source === "agents" || source === "chat-results";
     $("#status-filter").hidden = true;
     $("#group-by").hidden = true;
@@ -2505,9 +2733,13 @@ function renderWorkspacePage() {
       renderLiveBar();
     } else {
       parkTerminals();
-      if (source === "skills") renderSkills();
-      else if (source === "chat-results") renderChatSearchResults();
-      else renderHistory();
+      if (source === "skills") {
+        renderSkills();
+      } else if (source === "chat-results") {
+        renderChatSearchResults();
+      } else {
+        renderHistory();
+      }
     }
     renderSync();
     return;
@@ -2525,14 +2757,19 @@ function renderWorkspacePage() {
 registerRenderHook(
   "workspace:controls",
   () => {
-    if (typeof renderSavedViewControls === "function")
+    if (typeof renderSavedViewControls === "function") {
       renderSavedViewControls();
-    if (typeof renderSavedViewSidebar === "function") renderSavedViewSidebar();
-    if (typeof renderPageSettingsGear === "function") renderPageSettingsGear();
+    }
+    if (typeof renderSavedViewSidebar === "function") {
+      renderSavedViewSidebar();
+    }
+    if (typeof renderPageSettingsGear === "function") {
+      renderPageSettingsGear();
+    }
   },
   { order: 10 },
 );
-for (const button of document.querySelectorAll("[data-source]"))
+for (const button of document.querySelectorAll("[data-source]")) {
   if (
     [
       "move",
@@ -2542,8 +2779,10 @@ for (const button of document.querySelectorAll("[data-source]"))
       "artifacts",
       "archive",
     ].includes(button.dataset.source)
-  )
+  ) {
     button.hidden = true;
+  }
+}
 $("#summarize-work").hidden = true;
 $(".workspace").hidden = true;
 $(".brand").setAttribute("href", "#");
@@ -2584,16 +2823,20 @@ function paintWorkSelection() {
     workKeyboardMode = false;
   }
   const rows = workRows();
-  if (!rows.some((row) => row.dataset.workId === keyboardWorkId))
+  if (!rows.some((row) => row.dataset.workId === keyboardWorkId)) {
     keyboardWorkId = rows[0]?.dataset.workId || "";
-  for (const row of rows)
+  }
+  for (const row of rows) {
     row.classList.toggle(
       "keyboard-selected",
       workKeyboardMode && row.dataset.workId === keyboardWorkId,
     );
+  }
 }
 function chooseWorkRow(row, focus = true) {
-  if (!row) return;
+  if (!row) {
+    return;
+  }
   keyboardWorkId = row.dataset.workId;
   workKeyboardMode = true;
   paintWorkSelection();
@@ -2604,7 +2847,9 @@ function chooseWorkRow(row, focus = true) {
 }
 function openKeyboardWork(external) {
   const item = allItems().find((x) => x.id === keyboardWorkId);
-  if (!item) return;
+  if (!item) {
+    return;
+  }
   if (external && item.url) {
     const link = el("a");
     link.href = item.url;
@@ -2613,8 +2858,11 @@ function openKeyboardWork(external) {
     document.body.append(link);
     link.click();
     link.remove();
-  } else if (item.source === "notes") openNote(item);
-  else openItem(item);
+  } else if (item.source === "notes") {
+    openNote(item);
+  } else {
+    openItem(item);
+  }
 }
 const originalSearchInput = $("#search").oninput;
 $("#search").oninput = (event) => {
@@ -2623,8 +2871,10 @@ $("#search").oninput = (event) => {
   originalSearchInput?.(event);
 };
 for (const name of Object.values(sidebarKeys)) {
-  const button = $('#sources [data-source="' + name + '"]');
-  if (!button) continue;
+  const button = $(`#sources [data-source="${name}"]`);
+  if (!button) {
+    continue;
+  }
   const hint = el("kbd", "nav-shortcut");
   hint.hidden = true;
   button.append(hint);
@@ -2633,7 +2883,9 @@ $("#new-note").title = "Start session";
 document.addEventListener(
   "keydown",
   (event) => {
-    if (event.isComposing || event.altKey) return;
+    if (event.isComposing || event.altKey) {
+      return;
+    }
     const primary = /Mac|iPhone|iPad/.test(navigator.platform)
       ? event.metaKey
       : event.ctrlKey;
@@ -2687,15 +2939,22 @@ document.addEventListener(
         if (
           typeof currentSavedViewState === "function" &&
           currentSavedViewState()?.id
-        )
+        ) {
           resetSavedViewState();
-        if (source === "linear") scopePrefs.linear = "";
-        if (typeof savedViewUsePage === "function") savedViewUsePage(source);
+        }
+        if (source === "linear") {
+          scopePrefs.linear = "";
+        }
+        if (typeof savedViewUsePage === "function") {
+          savedViewUsePage(source);
+        }
         persist();
         render();
         return;
       }
-      if (event.shiftKey) return;
+      if (event.shiftKey) {
+        return;
+      }
       if (key === "n" && !document.querySelector("dialog[open]")) {
         consume();
         if (terminalFocus) {
@@ -2705,7 +2964,9 @@ document.addEventListener(
         openLocationPrompt();
         return;
       }
-      if (document.querySelector("dialog[open]")) return;
+      if (document.querySelector("dialog[open]")) {
+        return;
+      }
       if (/^[1-9]$/.test(key)) {
         const candidate = visibleAgentCandidates()[Number(key) - 1];
         if (candidate) {
@@ -2722,8 +2983,9 @@ document.addEventListener(
       event.ctrlKey ||
       !workSearchSources.has(source) ||
       document.querySelector("dialog[open]")
-    )
+    ) {
       return;
+    }
     const target = event.target,
       search = target === $("#search");
     const editing = target.closest(
@@ -2737,10 +2999,14 @@ document.addEventListener(
       paintWorkSelection();
       return;
     }
-    if (editing && !search) return;
+    if (editing && !search) {
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       const rows = workRows();
-      if (!rows.length) return;
+      if (!rows.length) {
+        return;
+      }
       consume();
       const current = rows.findIndex(
         (row) => row.dataset.workId === keyboardWorkId,
@@ -2786,22 +3052,29 @@ document.addEventListener(
 );
 document.addEventListener("click", (event) => {
   const snoozed = $("#snoozed-agents");
-  if (snoozed.open && !snoozed.contains(event.target)) snoozed.open = false;
+  if (snoozed.open && !snoozed.contains(event.target)) {
+    snoozed.open = false;
+  }
   const options = $("#launch-options");
-  if (options.open && !options.contains(event.target)) options.open = false;
+  if (options.open && !options.contains(event.target)) {
+    options.open = false;
+  }
   const folder = $("#folder-dialog");
   if (
     folder.open &&
     !folder.contains(event.target) &&
     !event.target.closest("#launch-options")
-  )
+  ) {
     folder.close();
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     $("#snoozed-agents").open = false;
     $("#launch-options").open = false;
-    if ($("#folder-dialog").open) $("#folder-dialog").close();
+    if ($("#folder-dialog").open) {
+      $("#folder-dialog").close();
+    }
   }
 });
 

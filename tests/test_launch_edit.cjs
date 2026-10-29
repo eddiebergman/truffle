@@ -74,9 +74,10 @@ function fixture({
               expected,
             };
       }
-      if (path === "/api/state")
+      if (path === "/api/state") {
         return read ? read() : structuredClone(canonical);
-      throw Error("Unexpected " + path);
+      }
+      throw Error(`Unexpected ${path}`);
     },
   });
   f.c.state = {
@@ -179,10 +180,11 @@ function fixture({
       return { presentation: "ready" };
     },
   });
-  if (paintFailure)
+  if (paintFailure) {
     f.c.render = () => {
       throw Error("Paint unavailable");
     };
+  }
   f.c.inventory = { candidates: [] };
   dialog.showModal();
   f.c.beginManagedLaunch("saved-a", 1);
@@ -190,13 +192,19 @@ function fixture({
     submit = (value = "save") =>
       form.onsubmit({ preventDefault() {}, submitter: { value } }),
     setValues = (patch) => {
-      for (const [key, value] of Object.entries(patch))
-        if (form.elements[key]) form.elements[key].value = value;
-        else mode[key] = value;
+      for (const [key, value] of Object.entries(patch)) {
+        if (form.elements[key]) {
+          form.elements[key].value = value;
+        } else {
+          mode[key] = value;
+        }
+      }
     };
   const ready = tick().then(() => setValues({ title: "Submitted title" }));
   form.reset = () => {
-    for (const control of Object.values(form.elements)) control.value = "";
+    for (const control of Object.values(form.elements)) {
+      control.value = "";
+    }
   };
   const populateCandidates = f.c.populateCandidates;
   Object.assign(f.c, {
@@ -267,7 +275,9 @@ test("known rejection retains draft and reenables correction without stealing ex
     const saving = f.submit();
     const external = new f.Node("input");
     f.document.body.append(external);
-    if (outside) external.focus();
+    if (outside) {
+      external.focus();
+    }
     const error = Error("Invalid folder");
     error.status = 400;
     pending.reject(error);
@@ -293,7 +303,9 @@ test("unknown save and accepted failed view stay read-only; Refresh never replay
         return { recordId: "saved-a", saved: true };
       },
       read: async () => {
-        if (fail) throw Error("Read unavailable");
+        if (fail) {
+          throw Error("Read unavailable");
+        }
         return {
           revision: 3,
           sessions: [{ id: "saved-a", title: "Refreshed", items: [] }],
@@ -324,7 +336,9 @@ test("unknown save and accepted failed view stay read-only; Refresh never replay
       await open.onclick();
       assert.equal(f.opens.length, 1);
       assert.equal(f.opens[0].record.id, "saved-a");
-    } else assert.match(f.ui().ui.message.textContent, /outcome is unknown/);
+    } else {
+      assert.match(f.ui().ui.message.textContent, /outcome is unknown/);
+    }
   }
 });
 test("Save and open uses the captured existing ID only after authoritative ready presentation", async () => {
@@ -393,7 +407,9 @@ test("accepted recovery refresh cannot close a replacement dialog opened by its 
   let fail = true;
   const f = fixture({
     read: async () => {
-      if (fail) throw Error("Offline");
+      if (fail) {
+        throw Error("Offline");
+      }
       return {
         revision: 3,
         sessions: [{ id: "saved-a", title: "Refreshed", items: [] }],
@@ -584,7 +600,9 @@ test("read failure never enables stale Save and read-only Reload can load a vali
   let fail = true;
   const f = fixture({
     metadataRead: async (args) => {
-      if (fail) throw Error("Read unavailable");
+      if (fail) {
+        throw Error("Read unavailable");
+      }
       return {
         recordId: args.recordId,
         chat: {
@@ -737,10 +755,18 @@ test("unknown destination, mismatched identity, invalid tokens and missing redac
           ),
           redacted: false,
         };
-        if (invalid === "destination") value.chat.destination = "unknown";
-        if (invalid === "recordId") value.recordId = "another-chat";
-        if (invalid === "expected") value.expected.title = "bad";
-        if (invalid === "redacted") delete value.redacted;
+        if (invalid === "destination") {
+          value.chat.destination = "unknown";
+        }
+        if (invalid === "recordId") {
+          value.recordId = "another-chat";
+        }
+        if (invalid === "expected") {
+          value.expected.title = "bad";
+        }
+        if (invalid === "redacted") {
+          delete value.redacted;
+        }
         return value;
       },
     });
@@ -815,28 +841,38 @@ test("Manage open focus leaves a replacement chat, dialog, external input or unr
     f.document.body.append(outside);
     f.c.openSavedSession = async () => {
       const live = manageTerminal(f);
-      if (replacement === "chat")
+      if (replacement === "chat") {
         f.c.selectedAgentKey = "embedded:another-chat";
-      if (replacement === "dialog") outside.showModal();
-      if (["dialog", "input", "navigate-false"].includes(replacement))
+      }
+      if (replacement === "dialog") {
+        outside.showModal();
+      }
+      if (["dialog", "input", "navigate-false"].includes(replacement)) {
         outside.focus();
-      if (replacement === "navigate-body") f.document.body.focus();
+      }
+      if (replacement === "navigate-body") {
+        f.document.body.focus();
+      }
       return {
         presentation: replacement === "pending" ? "pending" : "ready",
         navigated: true,
         ...live,
       };
     };
-    if (replacement.startsWith("navigate-")) outside.focus();
-    else f.save.focus();
+    if (replacement.startsWith("navigate-")) {
+      outside.focus();
+    } else {
+      f.save.focus();
+    }
     await f.submit("open");
     assert.equal(
       f.c.terminalViews.get("saved-a").node.contains(f.document.activeElement),
       false,
       replacement,
     );
-    if (["dialog", "input", "navigate-false"].includes(replacement))
+    if (["dialog", "input", "navigate-false"].includes(replacement)) {
       assert.equal(f.document.activeElement, outside, replacement);
+    }
     assert.equal(f.posts.length, 1);
   }
 });
@@ -927,13 +963,15 @@ test("Manage bounded layout keeps field scrolling separate from action and recov
   assert.equal(f.form.elements.id.value, "");
 });
 test("owned conflict and read-only recovery focus is revealed without scrolling an external input", async () => {
-  for (const outcome of ["conflict", "unknown", "accepted"])
+  for (const outcome of ["conflict", "unknown", "accepted"]) {
     for (const external of [false, true]) {
       const pending = deferred(),
         f = fixture({
           write: () => pending.promise,
           read: async () => {
-            if (outcome === "accepted") throw Error("View unavailable");
+            if (outcome === "accepted") {
+              throw Error("View unavailable");
+            }
             return {
               revision: 4,
               sessions: [{ id: "saved-a", title: "Current", items: [] }],
@@ -945,10 +983,12 @@ test("owned conflict and read-only recovery focus is revealed without scrolling 
       const saving = f.submit("save"),
         outside = new f.Node("input");
       f.document.body.append(outside);
-      if (external) outside.focus();
-      if (outcome === "accepted")
+      if (external) {
+        outside.focus();
+      }
+      if (outcome === "accepted") {
         pending.resolve({ recordId: "saved-a", saved: true });
-      else {
+      } else {
         const error = Error(outcome);
         error.status = outcome === "conflict" ? 409 : 503;
         pending.reject(error);
@@ -971,4 +1011,5 @@ test("owned conflict and read-only recovery focus is revealed without scrolling 
       }
       assert.equal(f.posts.length, 1);
     }
+  }
 });

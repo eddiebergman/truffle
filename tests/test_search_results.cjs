@@ -147,8 +147,9 @@ test("chat result filtering preserves title, folder and existing metadata matchi
     "Research",
     "EXP-42",
     "codex",
-  ])
+  ]) {
     assert.equal(f.match(result, query), true, query);
+  }
   assert.equal(f.match(result, "unrelatedzzzz"), false);
 });
 test("displayed results actually retain a detail-only result when the filter input changes", () => {
@@ -163,10 +164,14 @@ test("displayed results actually retain a detail-only result when the filter inp
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
     replaceChildren(...nodes) {
-      for (const node of this.children) node.parentElement = null;
+      for (const node of this.children) {
+        node.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -261,8 +266,9 @@ test("work query membership never creates matches across field boundaries or fuz
       "thinkingv2 missingzzzz",
       { title: "thinking-v2", detail: "Existing text" },
     ],
-  ])
+  ]) {
     assert.equal(f.c.workSearchScore(query, item), -Infinity, query);
+  }
   assert.equal(f.c.workSearchScore(" --- ", { title: "anything" }), 0);
 });
 test("work ranking preserves exact matches above fuzzy matches and metadata field priorities", () => {
@@ -305,8 +311,9 @@ test("mixed chat results match linked work titles, references, URLs and projects
     "optimizer/pull/123",
     "Research Platform",
     "thinkingv2 ENG42",
-  ])
+  ]) {
     assert.equal(f.match(result, query), true, query);
+  }
   assert.equal(f.match(result, "unrelatedzzzz"), false);
 });
 test("mixed chat filtering and displayed references share current linked records instead of stale projections", () => {
@@ -373,7 +380,9 @@ test("mixed chat cards display the same current linked references used by filter
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
   }
   Object.assign(f.c, {
@@ -420,10 +429,14 @@ test("mixed result Back restores its local filter and scroll without rewriting t
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
     replaceChildren(...nodes) {
-      for (const node of this.children) node.parentElement = null;
+      for (const node of this.children) {
+        node.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -471,7 +484,7 @@ test("mixed result Back restores its local filter and scroll without rewriting t
             ? title
             : selector === "#search"
               ? search
-              : descendants(list).find((node) => "#" + node.id === selector),
+              : descendants(list).find((node) => `#${node.id}` === selector),
     },
     el: (...args) => new Node(...args),
     renderRow: () => new Node("article"),
@@ -518,10 +531,14 @@ function pendingResultsFixture() {
     }
     append(...nodes) {
       this.children.push(...nodes);
-      for (const node of nodes) node.parentElement = this;
+      for (const node of nodes) {
+        node.parentElement = this;
+      }
     }
     replaceChildren(...nodes) {
-      for (const node of this.children) node.parentElement = null;
+      for (const node of this.children) {
+        node.parentElement = null;
+      }
       this.children = [];
       this.append(...nodes);
     }
@@ -583,9 +600,13 @@ test("a pending chat search captures its query and cannot replace a newer page o
     const f = pendingResultsFixture(),
       pending = f.submit();
     assert.equal(f.requests[0].args.args.query, "alpha");
-    if (change === "navigate") f.c.source = "github";
-    if (change === "edit") f.input.value = "beta";
-    if (change === "replace")
+    if (change === "navigate") {
+      f.c.source = "github";
+    }
+    if (change === "edit") {
+      f.input.value = "beta";
+    }
+    if (change === "replace") {
       f.c.showChatResults({
         type: "chat-results",
         query: "new",
@@ -594,7 +615,10 @@ test("a pending chat search captures its query and cannot replace a newer page o
         recommendedId: "",
         reason: "",
       });
-    if (change === "detach") f.form.isConnected = false;
+    }
+    if (change === "detach") {
+      f.form.isConnected = false;
+    }
     f.requests[0].resolve({
       chats: [{ id: "alpha-chat", title: "Alpha", cwd: "/work" }],
       total: 1,
@@ -606,7 +630,9 @@ test("a pending chat search captures its query and cannot replace a newer page o
       "alpha-chat",
       change,
     );
-    if (change === "edit") assert.equal(f.input.value, "beta");
+    if (change === "edit") {
+      assert.equal(f.input.value, "beta");
+    }
   }
 });
 test("a current chat search renders its result while obsolete errors stay off the page", async () => {
@@ -625,7 +651,9 @@ test("a current chat search renders its result while obsolete errors stay off th
   for (const obsolete of [false, true]) {
     const f = pendingResultsFixture(),
       failed = f.submit();
-    if (obsolete) f.input.value = "beta";
+    if (obsolete) {
+      f.input.value = "beta";
+    }
     f.requests[0].reject(new Error("Search unavailable"));
     await failed;
     assert.equal(
@@ -653,9 +681,13 @@ test("pending chat opens preserve navigation intent and only the latest selectio
     }
     const first = f.c.openChatSearchTarget("a");
     let second;
-    if (change === "navigate") f.c.source = "linear";
-    if (change === "select-chat") f.c.selectedAgentKey = "second";
-    if (change === "replace")
+    if (change === "navigate") {
+      f.c.source = "linear";
+    }
+    if (change === "select-chat") {
+      f.c.selectedAgentKey = "second";
+    }
+    if (change === "replace") {
       f.c.showChatResults({
         type: "chat-results",
         query: "replacement",
@@ -664,8 +696,13 @@ test("pending chat opens preserve navigation intent and only the latest selectio
         recommendedId: "",
         reason: "",
       });
-    if (change === "newer-open") second = f.c.openChatSearchTarget("b");
-    if (change === "inventory-render") f.c.render();
+    }
+    if (change === "newer-open") {
+      second = f.c.openChatSearchTarget("b");
+    }
+    if (change === "inventory-render") {
+      f.c.render();
+    }
     loads[0]();
     await first;
     if (second) {
@@ -725,10 +762,11 @@ function stableResultsFixture(items = []) {
     }
     append(...children) {
       for (const child of children) {
-        if (child.parentElement)
+        if (child.parentElement) {
           child.parentElement.children = child.parentElement.children.filter(
             (node) => node !== child,
           );
+        }
         child.parentElement = this;
         this.children.push(child);
       }
@@ -739,27 +777,36 @@ function stableResultsFixture(items = []) {
       );
     }
     replaceChildren(...children) {
-      if (this.children.some((child) => child.contains(document.activeElement)))
+      if (
+        this.children.some((child) => child.contains(document.activeElement))
+      ) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentElement = null;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.scrollTop = 0;
       this.append(...children);
     }
     remove() {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      if (this.parentElement)
+      }
+      if (this.parentElement) {
         this.parentElement.children = this.parentElement.children.filter(
           (node) => node !== this,
         );
+      }
       this.parentElement = null;
     }
     setAttribute(key, value) {
       this.attrs[key] = value;
     }
     focus() {
-      if (this.isConnected && !this.disabled) document.activeElement = this;
+      if (this.isConnected && !this.disabled) {
+        document.activeElement = this;
+      }
     }
     setSelectionRange(start, end) {
       this.selectionStart = start;
@@ -776,13 +823,13 @@ function stableResultsFixture(items = []) {
   ]) {
     const node = new Node(tag);
     node.id = id;
-    nodes.set("#" + id, node);
+    nodes.set(`#${id}`, node);
     document.body.append(node);
   }
   const visit = (node) => [node, ...node.children.flatMap(visit)],
     $ = (selector) =>
       nodes.get(selector) ||
-      visit(document.body).find((node) => "#" + node.id === selector) ||
+      visit(document.body).find((node) => `#${node.id}` === selector) ||
       null;
   Object.assign(f.c, {
     document,
@@ -790,9 +837,14 @@ function stableResultsFixture(items = []) {
     el: (...args) => new Node(...args),
     persist() {},
     render: () => {
-      for (const hook of f.hooks)
-        if (hook.options.phase === "before") hook.run();
-      if (f.c.source === "chat-results") f.c.renderChatSearchResults();
+      for (const hook of f.hooks) {
+        if (hook.options.phase === "before") {
+          hook.run();
+        }
+      }
+      if (f.c.source === "chat-results") {
+        f.c.renderChatSearchResults();
+      }
     },
     requestAnimationFrame: (callback) => frames.push(callback),
     api: async (path, payload) =>
@@ -822,11 +874,15 @@ function stableResultsFixture(items = []) {
     requests,
     stored,
     flush: () => {
-      while (frames.length) frames.shift()();
+      while (frames.length) {
+        frames.shift()();
+      }
     },
     show: (command) => {
       f.c.showChatResults(command);
-      while (frames.length) frames.shift()();
+      while (frames.length) {
+        frames.shift()();
+      }
     },
     form: () => $("#work-list").children[0],
     input: () => $("#work-list").children[0].children[0],
@@ -882,8 +938,7 @@ test("same-page rich result refresh retains the exact focused filter, caret, com
   // Native typing resumes at the retained caret after the same render used by sidebar toggles.
   input.compositionActive = false;
   const at = input.selectionStart;
-  input.value =
-    input.value.slice(0, at) + "a" + input.value.slice(input.selectionEnd);
+  input.value = `${input.value.slice(0, at)}a${input.value.slice(input.selectionEnd)}`;
   input.setSelectionRange(at + 1, at + 1);
   input.oninput();
   assert.equal(input.value, "Saved");
@@ -998,7 +1053,9 @@ test("source-away ABA, replacement command and replacement host invalidate the o
       f.c.source = "chat-results";
       f.c.render();
     }
-    if (mode === "command") f.show(emptySearch("new command"));
+    if (mode === "command") {
+      f.show(emptySearch("new command"));
+    }
     if (mode === "host") {
       const host = new f.Node("main");
       host.id = "work-list";
@@ -1046,7 +1103,9 @@ test("refreshing rows never focuses the filter over an outside or modal input", 
       dialog.open = true;
       dialog.append(outside);
       f.document.body.append(dialog);
-    } else f.document.body.append(outside);
+    } else {
+      f.document.body.append(outside);
+    }
     outside.focus();
     f.c.render();
     assert.equal(f.input(), input);

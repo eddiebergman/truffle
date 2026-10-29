@@ -2,8 +2,9 @@
 "use strict";
 if (serviceClient.isDesktop) {
   document.documentElement.classList.add("desktop-app");
-  if (/Mac/.test(navigator.platform))
+  if (/Mac/.test(navigator.platform)) {
     document.documentElement.classList.add("mac-titlebar");
+  }
   window.addEventListener("truffle-tab-command", (event) => {
     void runTabCommand(event.detail);
   });
@@ -14,8 +15,9 @@ if (serviceClient.isDesktop) {
       event.target.closest(
         "button,a,input,select,textarea,summary,details,.agent-tab",
       )
-    )
+    ) {
       return;
+    }
     event.preventDefault();
     void window.__TAURI__.core.invoke("drag_titlebar").catch(() => {});
   });
@@ -77,9 +79,13 @@ if (serviceClient.isDesktop) {
       await window.__TAURI__.core.invoke("service_status");
       const reconnect = panel.hidden === false || !state;
       panel.hidden = true;
-      if (reconnect) await refresh();
+      if (reconnect) {
+        await refresh();
+      }
     } catch (error) {
-      if (!state) panel.hidden = false;
+      if (!state) {
+        panel.hidden = false;
+      }
       panel.querySelector("h1").textContent = String(error).includes("update")
         ? "Restart your local service"
         : "Connect your local service";
@@ -88,7 +94,9 @@ if (serviceClient.isDesktop) {
   window.addEventListener("truffle-connection", (event) => {
     if (event.detail) {
       panel.hidden = true;
-    } else if (!state) panel.hidden = false;
+    } else if (!state) {
+      panel.hidden = false;
+    }
   });
   void checkDesktopService();
   setInterval(checkDesktopService, 30000);

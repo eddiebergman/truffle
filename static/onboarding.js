@@ -26,10 +26,11 @@ function onboardingReviewPatch(skill, agent) {
     !skill?.available ||
     !["claude", "codex"].includes(agent) ||
     !skill.commands?.[agent]
-  )
+  ) {
     throw new Error(
       "The portable review skill is unavailable for this assistant.",
     );
+  }
   return {
     [agent === "codex" ? "codexReviewCommand" : "claudeReviewCommand"]:
       skill.commands[agent],
@@ -43,7 +44,7 @@ function onboardingKeymapPreset(current) {
     },
     bindings = { ...current, ...basics },
     displaced = [];
-  for (const [id, value] of Object.entries(current))
+  for (const [id, value] of Object.entries(current)) {
     if (
       !Object.hasOwn(basics, id) &&
       value &&
@@ -54,15 +55,17 @@ function onboardingKeymapPreset(current) {
       bindings[id] = "";
       displaced.push(id);
     }
+  }
   return { bindings, displaced };
 }
 function onboardingCompanyMessage(instructions) {
   const guide = instructions.trim();
-  if (!guide) throw new Error("Paste your team instructions first.");
-  return (
-    "Help me adapt these team setup instructions for Truffle. Explain the steps and propose changes for review. Review commands and sharing access in Settings; credentials belong in Connections. Do not apply settings or run commands automatically.\n\nTeam instructions:\n" +
+  if (!guide) {
+    throw new Error("Paste your team instructions first.");
+  }
+  return `Help me adapt these team setup instructions for Truffle. Explain the steps and propose changes for review. Review commands and sharing access in Settings; credentials belong in Connections. Do not apply settings or run commands automatically.\n\nTeam instructions:\n${
     guide
-  );
+  }`;
 }
 (function () {
   let documentState,
@@ -96,8 +99,12 @@ function onboardingCompanyMessage(instructions) {
   };
   const node = (tag, text, cls) => {
     const n = document.createElement(tag);
-    if (text) n.textContent = text;
-    if (cls) n.className = cls;
+    if (text) {
+      n.textContent = text;
+    }
+    if (cls) {
+      n.className = cls;
+    }
     return n;
   };
   function onboardingRoot() {
@@ -114,24 +121,29 @@ function onboardingCompanyMessage(instructions) {
   function disposeStep() {
     for (const setup of content?.querySelectorAll(
       ".onboarding-company-instructions",
-    ) || [])
+    ) || []) {
       setup.disposeCompanySetup?.();
+    }
     for (const importer of content?.querySelectorAll(
       ".settings-profile-import",
-    ) || [])
+    ) || []) {
       importer.disposeProfileImport?.();
-    for (const setup of content?.querySelectorAll(".connection-setup") || [])
+    }
+    for (const setup of content?.querySelectorAll(".connection-setup") || []) {
       void setup.disposeConnectionSetup?.();
+    }
   }
   function closeOnboarding({ host: requestedHost, forChild = false } = {}) {
     if (
       requestedHost !== undefined &&
       requestedHost !== host &&
       requestedHost !== resume?.host
-    )
+    ) {
       return false;
-    if (forChild) resume = { host, ticket: ++returnGeneration };
-    else {
+    }
+    if (forChild) {
+      resume = { host, ticket: ++returnGeneration };
+    } else {
       resume = null;
       returnGeneration++;
     }
@@ -143,8 +155,11 @@ function onboardingCompanyMessage(instructions) {
       actionPending = false;
     }
     disposeStep();
-    if (host) host.hidden = true;
-    else if (dialog?.open) dialog.close();
+    if (host) {
+      host.hidden = true;
+    } else if (dialog?.open) {
+      dialog.close();
+    }
     return true;
   }
   function showSurface() {
@@ -153,13 +168,17 @@ function onboardingCompanyMessage(instructions) {
       host.append(shell);
     } else {
       dialog.append(shell);
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+      }
     }
     active = true;
     setBusy(actionPending);
   }
   function ensureRenderer() {
-    if (shell) return;
+    if (shell) {
+      return;
+    }
     dialog = node("dialog", null, "onboarding-dialog");
     dialog.id = "onboarding-dialog";
     shell = node("section", null, "onboarding-shell");
@@ -177,7 +196,9 @@ function onboardingCompanyMessage(instructions) {
       back = button("Back", async () => {
         const session = openGeneration;
         await save(onboardingNextStep(documentState.progress.step, -1));
-        if (session === openGeneration && onboardingIsOpen()) await paint();
+        if (session === openGeneration && onboardingIsOpen()) {
+          await paint();
+        }
       });
     back.id = "onboarding-back";
     const spacer = node("span", null, "onboarding-spacer"),
@@ -190,11 +211,15 @@ function onboardingCompanyMessage(instructions) {
     dialog.append(shell);
     document.body.append(dialog);
     dialog.addEventListener("close", () => {
-      if (!host && !dialog.open && active) closeOnboarding();
+      if (!host && !dialog.open && active) {
+        closeOnboarding();
+      }
     });
   }
   async function runAction(action) {
-    if (actionPending) return;
+    if (actionPending) {
+      return;
+    }
     const serial = ++actionSerial,
       focus = captureActionFocus(serial);
     actionPending = true;
@@ -202,7 +227,9 @@ function onboardingCompanyMessage(instructions) {
     try {
       await action();
     } catch (e) {
-      if (serial === actionSerial) showError(e);
+      if (serial === actionSerial) {
+        showError(e);
+      }
     } finally {
       if (serial === actionSerial) {
         actionPending = false;
@@ -213,10 +240,13 @@ function onboardingCompanyMessage(instructions) {
   }
   function captureActionFocus(serial) {
     const trigger = document.activeElement;
-    if (!trigger || !onboardingIsOpen() || !shell?.contains(trigger))
+    if (!trigger || !onboardingIsOpen() || !shell?.contains(trigger)) {
       return null;
+    }
     const holder = shell.querySelector(".onboarding-heading h2");
-    if (!holder) return null;
+    if (!holder) {
+      return null;
+    }
     const focus = {
       trigger,
       holder,
@@ -240,15 +270,17 @@ function onboardingCompanyMessage(instructions) {
       !onboardingIsOpen() ||
       document.activeElement !== focus.holder ||
       !focus.holder.isConnected
-    )
+    ) {
       return;
+    }
     const parent = focus.root.closest("dialog");
     if (
       [...document.querySelectorAll("dialog[open]")].some(
         (open) => open !== parent && !open.contains(parent),
       )
-    )
+    ) {
       return;
+    }
     const sameStep = focus.step === documentState.progress.step,
       original = focus.trigger;
     const target =
@@ -259,28 +291,36 @@ function onboardingCompanyMessage(instructions) {
       !original.hidden
         ? original
         : content.querySelector("h3") || focus.holder;
-    if (target.tagName === "H3") target.tabIndex = -1;
+    if (target.tagName === "H3") {
+      target.tabIndex = -1;
+    }
     target.focus({ preventScroll: sameStep });
   }
   function setBusy(busy) {
     const root = onboardingRoot();
-    if (!root) return;
+    if (!root) {
+      return;
+    }
     root.setAttribute("aria-busy", String(busy));
     for (const control of root.querySelectorAll(
       ".onboarding-shell button,.onboarding-shell select",
     )) {
-      if (control.closest(".connection-setup,.settings-profile-import"))
+      if (control.closest(".connection-setup,.settings-profile-import")) {
         continue;
+      }
       control.disabled = busy || Boolean(documentState.progressReadOnly);
     }
     const back = $("#onboarding-back");
-    if (back)
+    if (back) {
       back.disabled =
         busy ||
         Boolean(documentState.progressReadOnly) ||
         documentState.progress.step === "assistant";
+    }
     const close = root.querySelector("[data-onboarding-close]");
-    if (close) close.disabled = busy;
+    if (close) {
+      close.disabled = busy;
+    }
   }
   const button = (text, action, primary = false) => {
     const b = node("button", text, "button ui-control");
@@ -308,29 +348,38 @@ function onboardingCompanyMessage(instructions) {
     return progress;
   }
   async function next(status = "complete") {
-    if (!onboardingIsOpen()) return;
+    if (!onboardingIsOpen()) {
+      return;
+    }
     const session = openGeneration;
     await save(documentState.progress.step, status);
-    if (session !== openGeneration || !onboardingIsOpen()) return;
+    if (session !== openGeneration || !onboardingIsOpen()) {
+      return;
+    }
     if (documentState.progress.step === "finish") {
       closeOnboarding();
       void window.truffleGuidance?.refresh();
       return;
     }
     await save(onboardingNextStep(documentState.progress.step));
-    if (session === openGeneration && onboardingIsOpen()) await paint();
+    if (session === openGeneration && onboardingIsOpen()) {
+      await paint();
+    }
   }
   async function preference(patch) {
     const session = openGeneration,
       current = await api("/api/settings");
-    if (session !== openGeneration || !onboardingIsOpen()) return;
+    if (session !== openGeneration || !onboardingIsOpen()) {
+      return;
+    }
     await api("/api/settings", {
       revision: current.revision,
       contentHash: current.contentHash,
       patch,
     });
-    if (session === openGeneration && onboardingIsOpen())
+    if (session === openGeneration && onboardingIsOpen()) {
       await loadAppSettings();
+    }
   }
   function paragraph(text) {
     content.append(node("p", text));
@@ -344,9 +393,10 @@ function onboardingCompanyMessage(instructions) {
     controls.setAttribute("aria-label", question);
     const options = [];
     const update = () => {
-      for (const [item, control] of options)
+      for (const [item, control] of options) {
         control.setAttribute("aria-pressed", String(item.id === selected.id));
-      $("#onboarding-continue").textContent = "Use " + selected.label;
+      }
+      $("#onboarding-continue").textContent = `Use ${selected.label}`;
     };
     if (items.length > 1) {
       for (const item of items) {
@@ -361,8 +411,9 @@ function onboardingCompanyMessage(instructions) {
             documentState.progressReadOnly ||
             session !== openGeneration ||
             !onboardingIsOpen()
-          )
+          ) {
             return;
+          }
           selected = item;
           update();
         };
@@ -370,11 +421,15 @@ function onboardingCompanyMessage(instructions) {
         controls.append(control);
       }
       content.append(controls);
-    } else paragraph("We found " + selected.label + ".");
+    } else {
+      paragraph(`We found ${selected.label}.`);
+    }
     update();
     continueAction = async () => {
       await preference({ [key]: selected.id });
-      if (session === openGeneration && onboardingIsOpen()) await next();
+      if (session === openGeneration && onboardingIsOpen()) {
+        await next();
+      }
     };
   }
   function choices(rows, change, current, label) {
@@ -400,17 +455,19 @@ function onboardingCompanyMessage(instructions) {
       !onboardingIsOpen() ||
       ticket !== paintGeneration ||
       documentState.progress.step !== step
-    )
+    ) {
       return;
+    }
     closeOnboarding({ forChild: true });
     const suspended = resume;
     try {
       const accepted = await openPreferences({ category });
       const child = $("#settings-dialog");
-      if (accepted !== true || !child?.open)
+      if (accepted !== true || !child?.open) {
         throw new Error(
           "Settings could not open. Your setup progress is saved; try again.",
         );
+      }
       if (resume !== suspended) {
         child.close();
         return;
@@ -439,13 +496,16 @@ function onboardingCompanyMessage(instructions) {
           !suspended ||
           resume !== suspended ||
           suspended.ticket !== returnGeneration
-        )
+        ) {
           return;
+        }
         resume = null;
         void window
           .openOnboarding({ host: suspended.host || undefined })
           .catch((e) => {
-            if (onboardingIsOpen()) showError(e);
+            if (onboardingIsOpen()) {
+              showError(e);
+            }
           });
       },
       { once: true },
@@ -457,7 +517,9 @@ function onboardingCompanyMessage(instructions) {
     acceptedPresetId = null;
     savedPreset = null;
     await save("skills", "pending");
-    if (!onboardingIsOpen() || session !== openGeneration) return;
+    if (!onboardingIsOpen() || session !== openGeneration) {
+      return;
+    }
     closeOnboarding({ forChild: true });
     const suspended = resume,
       child = $("#skill-editor");
@@ -470,8 +532,9 @@ function onboardingCompanyMessage(instructions) {
           ? currentAgentRecord()?.cwd || ""
           : "",
       onSaved: (id) => {
-        if (resume === suspended && suspended?.ticket === returnGeneration)
+        if (resume === suspended && suspended?.ticket === returnGeneration) {
           acceptedPresetId = id;
+        }
       },
     });
     returnAfter(child);
@@ -481,7 +544,9 @@ function onboardingCompanyMessage(instructions) {
       query = node("input", null, "ui-field"),
       results = node("div");
     query.type = "search";
-    if (review) query.value = "review";
+    if (review) {
+      query.value = "review";
+    }
     query.placeholder = "Find an installed skill by name or path";
     query.setAttribute("aria-label", query.placeholder);
     box.append(query, results);
@@ -493,7 +558,9 @@ function onboardingCompanyMessage(instructions) {
           ? currentAgentRecord()?.cwd || ""
           : "",
     });
-    if (!isCurrent() || documentState.progress.step !== expectedStep) return;
+    if (!isCurrent() || documentState.progress.step !== expectedStep) {
+      return;
+    }
     const draw = () => {
       results.replaceChildren();
       const matches = skillPickerMatches(
@@ -516,14 +583,17 @@ function onboardingCompanyMessage(instructions) {
               (agent === "codex" ? "$" : "/") +
               (skill.commandName || skill.name),
           });
-          if (isCurrent()) await next();
+          if (isCurrent()) {
+            await next();
+          }
         });
         b.className = "onboarding-result";
         b.append(node("small", skill.description), node("small", skill.path));
         results.append(b);
       }
-      if (!matches.length)
+      if (!matches.length) {
         results.append(node("p", "No matching installed skills."));
+      }
     };
     query.oninput = draw;
     draw();
@@ -542,13 +612,15 @@ function onboardingCompanyMessage(instructions) {
     input.setAttribute("style", "width:100%;max-width:100%;resize:vertical");
     input.autocomplete = "off";
     input.spellcheck = false;
-    for (const target of [card, input])
+    for (const target of [card, input]) {
       for (const marker of [
         "data-private",
         "data-agent-private",
         "data-agent-context-exclude",
-      ])
+      ]) {
         target.setAttribute(marker, "true");
+      }
+    }
     let disposed = false;
     card.disposeCompanySetup = () => {
       disposed = true;
@@ -557,12 +629,15 @@ function onboardingCompanyMessage(instructions) {
     const review = button(
       "Review in App chat",
       () => {
-        if (disposed) return;
+        if (disposed) {
+          return;
+        }
         const message = onboardingCompanyMessage(input.value);
-        if (typeof window.prepareAppChatMessage !== "function")
+        if (typeof window.prepareAppChatMessage !== "function") {
           throw new Error(
             "App chat is unavailable. Your instructions are kept here.",
           );
+        }
         window.prepareAppChatMessage(message);
         input.value = "";
         closeOnboarding();
@@ -592,16 +667,23 @@ function onboardingCompanyMessage(instructions) {
     );
   }
   async function paint() {
-    if (!onboardingIsOpen()) return;
+    if (!onboardingIsOpen()) {
+      return;
+    }
     const ticket = ++paintGeneration;
     for (const setup of content.querySelectorAll(
       ".onboarding-company-instructions",
-    ))
+    )) {
       setup.disposeCompanySetup?.();
-    for (const importer of content.querySelectorAll(".settings-profile-import"))
+    }
+    for (const importer of content.querySelectorAll(
+      ".settings-profile-import",
+    )) {
       importer.disposeProfileImport?.();
-    for (const setup of content.querySelectorAll(".connection-setup"))
+    }
+    for (const setup of content.querySelectorAll(".connection-setup")) {
       setup.disposeConnectionSetup?.();
+    }
     if (documentState.progressReadOnly) {
       content.replaceChildren(
         node("h3", "Setup unavailable"),
@@ -620,16 +702,16 @@ function onboardingCompanyMessage(instructions) {
       documentState.progress.step === step;
     content.replaceChildren(node("h3", labels[step]));
     error.textContent = "";
-    $("#onboarding-step-count").textContent =
-      Object.keys(labels).indexOf(step) +
-      1 +
-      " / " +
-      Object.keys(labels).length;
+    $("#onboarding-step-count").textContent = `${
+      Object.keys(labels).indexOf(step) + 1
+    } / ${Object.keys(labels).length}`;
     $("#onboarding-back").disabled = step === "assistant";
     $("#onboarding-continue").textContent =
       step === "finish" ? "Finish" : "Continue";
     $("#onboarding-skip").hidden = step === "finish";
-    if (documentState.progressError) paragraph(documentState.progressError);
+    if (documentState.progressError) {
+      paragraph(documentState.progressError);
+    }
     try {
       if (step === "assistant") {
         paragraph(
@@ -663,7 +745,7 @@ function onboardingCompanyMessage(instructions) {
             ["system", "Follow system"],
             ...Object.values(window.truffleThemeCatalog || {}).map((t) => [
               t.id,
-              t.label + " · " + t.type,
+              `${t.label} · ${t.type}`,
             ]),
           ],
           (v) => preference({ theme: v }),
@@ -686,68 +768,76 @@ function onboardingCompanyMessage(instructions) {
           $("#onboarding-continue").textContent = "Continue without an editor";
           continueAction = () => next("skipped");
         }
-        if (documentState.editors.some((e) => e.installed && !e.diffSupported))
+        if (
+          documentState.editors.some((e) => e.installed && !e.diffSupported)
+        ) {
           paragraph(
             "VS Code or Cursor was detected, but its current adapter opens a folder rather than a diff. It is not offered as a diff editor yet.",
           );
+        }
       } else if (step === "keymap") {
         paragraph(
           "Keep your current shortcuts, or use VS Code / Cursor basics for three common actions. This changes only shortcuts in truffle.",
         );
         const current = await api("/api/settings");
-        if (!isCurrent()) return;
+        if (!isCurrent()) {
+          return;
+        }
         const preview = onboardingKeymapPreset(current.values.keybindings),
           label = (id) =>
             appSettings.commands.find((command) => command.id === id)?.label ||
             id;
         const list = node("ul", null, "onboarding-keymap-preview");
-        for (const id of ["commands", "find-work", "toggle-left"])
+        for (const id of ["commands", "find-work", "toggle-left"]) {
           list.append(
             node(
               "li",
-              label(id) +
-                ": " +
-                (current.values.keybindings[id] || "Unassigned") +
-                " → " +
-                preview.bindings[id],
+              `${label(id)}: ${
+                current.values.keybindings[id] || "Unassigned"
+              } → ${preview.bindings[id]}`,
             ),
           );
-        for (const id of preview.displaced)
+        }
+        for (const id of preview.displaced) {
           list.append(
             node(
               "li",
-              label(id) +
-                ": " +
-                current.values.keybindings[id] +
-                " → Unassigned",
+              `${label(id)}: ${current.values.keybindings[id]} → Unassigned`,
             ),
           );
+        }
         content.append(list);
-        if (preview.displaced.length)
+        if (preview.displaced.length) {
           paragraph(
             "The conflicting shortcuts listed above become unassigned. You can set new shortcuts in Settings.",
           );
+        }
         content.append(
           button("Keep current shortcuts", () => next()),
           button(
             "Apply these shortcuts",
             async () => {
               const latest = await api("/api/settings");
-              if (!isCurrent()) return;
+              if (!isCurrent()) {
+                return;
+              }
               if (
                 latest.revision !== current.revision ||
                 latest.contentHash !== current.contentHash
-              )
+              ) {
                 throw new Error(
                   "Shortcuts changed in another window. Go Back and return to review the updated preview.",
                 );
+              }
               await api("/api/settings", {
                 revision: current.revision,
                 contentHash: current.contentHash,
                 patch: { keybindings: preview.bindings },
               });
               await loadAppSettings();
-              if (isCurrent()) await next();
+              if (isCurrent()) {
+                await next();
+              }
             },
             true,
           ),
@@ -760,7 +850,9 @@ function onboardingCompanyMessage(instructions) {
           "Connect your work accounts, or skip and return later. Token inputs stay outside chat. Validate a token to preview its account and accessible resources before you save it.",
         );
         await renderConnectionSetup(content);
-        if (!isCurrent()) return;
+        if (!isCurrent()) {
+          return;
+        }
       } else if (step === "skills") {
         paragraph(
           "Would you like to add any of your installed Claude or Codex skills? Choose one below, or enter a direct path. Adding a skill does not run it.",
@@ -779,10 +871,14 @@ function onboardingCompanyMessage(instructions) {
         );
         content.append(button("Enter a skill path", () => addSkill(null)));
         await discoverSkills(false, isCurrent);
-        if (!isCurrent()) return;
+        if (!isCurrent()) {
+          return;
+        }
         if (pendingImport && acceptedPresetId) {
           const library = await api("/api/library");
-          if (!isCurrent()) return;
+          if (!isCurrent()) {
+            return;
+          }
           savedPreset =
             library.presets.find((preset) => preset.id === acceptedPresetId) ||
             savedPreset;
@@ -792,7 +888,9 @@ function onboardingCompanyMessage(instructions) {
           documentState.progress.steps?.skills === "pending"
         ) {
           const library = await api("/api/library");
-          if (!isCurrent()) return;
+          if (!isCurrent()) {
+            return;
+          }
           if (library.presets.length) {
             paragraph(
               "If you already saved a skill, choose it to configure its schedule.",
@@ -809,7 +907,9 @@ function onboardingCompanyMessage(instructions) {
                   (p) => p.id === saved.value,
                 );
                 await save("skills", "pending");
-                if (!isCurrent()) return;
+                if (!isCurrent()) {
+                  return;
+                }
                 closeOnboarding({ forChild: true });
                 editSchedule(preset);
                 returnAfter($("#schedule-editor"));
@@ -823,34 +923,37 @@ function onboardingCompanyMessage(instructions) {
               typeof state === "undefined"
                 ? null
                 : state?.skillSchedules?.[savedPreset.id];
-          card.append(node("strong", "Added: " + savedPreset.title));
+          card.append(node("strong", `Added: ${savedPreset.title}`));
           if (skillIntent === "schedule" || schedule?.enabled) {
             const timing = schedule?.enabled
               ? schedule.mode === "daily"
-                ? "Daily at " + schedule.time
-                : "Every " + schedule.everyMinutes + " minutes"
+                ? `Daily at ${schedule.time}`
+                : `Every ${schedule.everyMinutes} minutes`
               : null;
             card.append(
               node(
                 "p",
                 timing
-                  ? "Schedule enabled: " +
-                      timing +
-                      ". You can also run this skill on demand."
+                  ? `Schedule enabled: ${
+                      timing
+                    }. You can also run this skill on demand.`
                   : "Choose the time and explicitly enable the schedule if you want it to run.",
               ),
               button("Configure schedule", async () => {
                 await save("skills", "pending");
-                if (!isCurrent()) return;
+                if (!isCurrent()) {
+                  return;
+                }
                 closeOnboarding({ forChild: true });
                 editSchedule(savedPreset);
                 returnAfter($("#schedule-editor"));
               }),
             );
-          } else
+          } else {
             card.append(
               node("p", "Available on demand. No schedule is enabled."),
             );
+          }
           content.append(card);
         }
       } else if (step === "review") {
@@ -859,26 +962,31 @@ function onboardingCompanyMessage(instructions) {
           paragraph(
             "The portable review uses four independent reviewers for requirements, simplification, correctness and performance across related repositories. Choosing it does not start a review or enable a schedule.",
           );
-          paragraph("Edit its instructions at " + builtin.path);
+          paragraph(`Edit its instructions at ${builtin.path}`);
           for (const agent of documentState.assistants.filter(
             (agent) => agent.installed,
-          ))
+          )) {
             content.append(
               button(
-                "Use portable review with " + agent.label,
+                `Use portable review with ${agent.label}`,
                 async () => {
                   await preference(onboardingReviewPatch(builtin, agent.id));
-                  if (isCurrent()) await next();
+                  if (isCurrent()) {
+                    await next();
+                  }
                 },
                 agent.id === setting("defaultAgent", "claude"),
               ),
             );
+          }
         }
         paragraph(
           "You can choose another available review skill, or skip this step.",
         );
         await discoverSkills(true, isCurrent);
-        if (!isCurrent()) return;
+        if (!isCurrent()) {
+          return;
+        }
         content.append(
           button("Enter review command in Settings", () =>
             leaveSettings("agents"),
@@ -892,8 +1000,9 @@ function onboardingCompanyMessage(instructions) {
         );
         for (const [id, status] of Object.entries(
           documentState.progress.steps || {},
-        ))
-          content.append(node("p", (labels[id] || id) + " · " + status));
+        )) {
+          content.append(node("p", `${labels[id] || id} · ${status}`));
+        }
         content.append(
           button("Start setup again", async () => {
             const session = openGeneration;
@@ -901,25 +1010,33 @@ function onboardingCompanyMessage(instructions) {
               revision: documentState.progress.revision,
               reset: true,
             });
-            if (session !== openGeneration || !onboardingIsOpen()) return;
+            if (session !== openGeneration || !onboardingIsOpen()) {
+              return;
+            }
             documentState.progress = progress;
             await paint();
           }),
         );
       }
     } catch (e) {
-      if (isCurrent()) showError(e);
+      if (isCurrent()) {
+        showError(e);
+      }
     }
   }
   window.openOnboarding = async function ({ host: target } = {}) {
-    if (typeof settingsDirty !== "undefined" && settingsDirty)
+    if (typeof settingsDirty !== "undefined" && settingsDirty) {
       throw new Error("Save or discard settings before opening setup.");
+    }
     if (
       target !== undefined &&
       (!target?.isConnected || target.tagName !== "SECTION")
-    )
+    ) {
       throw new Error("Setup needs a connected section host.");
-    if (!requestDialogNavigation()) return false;
+    }
+    if (!requestDialogNavigation()) {
+      return false;
+    }
     closeOnboarding();
     host = target || null;
     ensureRenderer();
@@ -932,9 +1049,13 @@ function onboardingCompanyMessage(instructions) {
     let nextDocument;
     try {
       nextDocument = await api("/api/onboarding");
-      if (!current()) return false;
+      if (!current()) {
+        return false;
+      }
       await loadAppSettings({ canApply: current });
-      if (!current()) return false;
+      if (!current()) {
+        return false;
+      }
     } finally {
       navigation.dispose();
     }
@@ -945,7 +1066,7 @@ function onboardingCompanyMessage(instructions) {
   window.closeOnboarding = closeOnboarding;
   window.onboardingIsOpen = onboardingIsOpen;
   window.onboardingRoot = onboardingRoot;
-  if (typeof module !== "undefined")
+  if (typeof module !== "undefined") {
     module.exports.onboardingInternals = {
       runAction,
       setBusy,
@@ -960,4 +1081,5 @@ function onboardingCompanyMessage(instructions) {
         return actionPending;
       },
     };
+  }
 })();

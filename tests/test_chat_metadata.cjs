@@ -42,7 +42,9 @@ function fixture() {
     reportValidity() {}
   }
   const $ = (selector) => {
-    if (!targets.has(selector)) targets.set(selector, new Node("div"));
+    if (!targets.has(selector)) {
+      targets.set(selector, new Node("div"));
+    }
     return targets.get(selector);
   };
   const c = browserContext({
@@ -66,11 +68,15 @@ function fixture() {
     },
     toast: (message, callback) => {
       messages.push(message);
-      if (callback) undo.push(callback);
+      if (callback) {
+        undo.push(callback);
+      }
     },
     api: async (path, payload) => {
       calls.push({ path, payload });
-      if (fail) throw new Error("Metadata failed");
+      if (fail) {
+        throw new Error("Metadata failed");
+      }
       const previous = c.state.sessions[0],
         args = payload.args,
         chat = {
@@ -307,7 +313,9 @@ test("pending rename completion preserves newer editor identity and does not foc
     });
     f.c.selectedAgentKey = "record:other";
     const newer = { input: new f.Node("input"), key: "record:other" };
-    if (replaced) f.c.agentRename = newer;
+    if (replaced) {
+      f.c.agentRename = newer;
+    }
     pending.resolve({
       chat: {
         id: "saved-chat",

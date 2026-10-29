@@ -21,7 +21,7 @@ const pageScripts = [
     .readFileSync("static/index.html", "utf8")
     .matchAll(/<script src="\/([^"]+)"/g),
 ]
-  .map((match) => "static/" + match[1])
+  .map((match) => `static/${match[1]}`)
   .filter(
     (file) =>
       !file.startsWith("static/vendor/xterm") &&
@@ -99,8 +99,9 @@ test("context commands retain separate source links and checkout targets for mul
   );
   for (const entry of entries.filter((x) =>
     x.title.startsWith("review: changes"),
-  ))
+  )) {
     entry.run();
+  }
   assert.deepEqual(reviews, ["/repo/first", "/repo/second"]);
 });
 
@@ -121,7 +122,7 @@ test("refresh Claude closes only the selected terminal generation and resumes th
     selectedAgentKey: "embedded:chat",
     loadInventory: async () => {},
     candidateForRecord: () => candidate,
-    candidateKey: (c) => "embedded:" + c.recordId,
+    candidateKey: (c) => `embedded:${c.recordId}`,
     api: async (route, payload) => {
       calls.push({ route, payload });
       candidate = null;
@@ -175,8 +176,11 @@ function paletteFixture({
       this.classList = {
         toggle: (name, on) => {
           const names = new Set(this.className.split(" ").filter(Boolean));
-          if (on) names.add(name);
-          else names.delete(name);
+          if (on) {
+            names.add(name);
+          } else {
+            names.delete(name);
+          }
           this.className = [...names].join(" ");
         },
       };
@@ -204,18 +208,22 @@ function paletteFixture({
       (this.listeners[name] ??= []).push(handler);
     }
     dispatchEvent(event) {
-      for (const handler of this.listeners[event.type] || []) handler(event);
+      for (const handler of this.listeners[event.type] || []) {
+        handler(event);
+      }
       return !event.defaultPrevented;
     }
     closest(selector) {
-      if (selector === ".action-command")
+      if (selector === ".action-command") {
         return this.className.split(" ").includes("action-command")
           ? this
           : null;
-      if (selector === "dialog[open]")
+      }
+      if (selector === "dialog[open]") {
         return nodes.get("#action-palette").open
           ? nodes.get("#action-palette")
           : null;
+      }
       return null;
     }
     showModal() {
@@ -223,7 +231,9 @@ function paletteFixture({
     }
     close() {
       this.open = false;
-      for (const handler of this.listeners.close || []) handler();
+      for (const handler of this.listeners.close || []) {
+        handler();
+      }
     }
     focus() {
       active = this;
@@ -234,11 +244,12 @@ function paletteFixture({
     }
   }
   const $ = (selector) => {
-    if (!nodes.has(selector))
+    if (!nodes.has(selector)) {
       nodes.set(
         selector,
         new Node(selector === "#action-query" ? "input" : "div"),
       );
+    }
     return nodes.get(selector);
   };
   const entries = [
@@ -270,10 +281,13 @@ function paletteFixture({
   // Scripts load against a fake document that keeps only capturing keydown listeners, and attach the palette handlers to this fixture's nodes.
   const loadDocument = new FakeDocument();
   loadDocument.addEventListener = (name, handler, useCapture) => {
-    if (name === "keydown" && useCapture) capture.push(handler);
+    if (name === "keydown" && useCapture) {
+      capture.push(handler);
+    }
   };
-  for (const id of ["#action-query", "#action-palette"])
+  for (const id of ["#action-query", "#action-palette"]) {
     loadDocument.elements.set(id, $(id));
+  }
   const c = browserContext({
     Event,
     document: loadDocument,
@@ -321,11 +335,15 @@ function paletteFixture({
     };
     for (const handler of capture) {
       handler(event);
-      if (event.stopped) return event;
+      if (event.stopped) {
+        return event;
+      }
     }
     for (const handler of $("#action-palette").listeners.keydown || []) {
       handler(event);
-      if (event.stopped) break;
+      if (event.stopped) {
+        break;
+      }
     }
     return event;
   }
@@ -427,14 +445,17 @@ test("IME and modified arrows keep editing behavior, Escape uses the shared dial
   assert.deepEqual(f.calls, []);
   f.query("theme", { isComposing: true });
   assert.equal(f.rows()[0], rows[0]);
-  for (const handler of f.$("#action-query").listeners.compositionend)
+  for (const handler of f.$("#action-query").listeners.compositionend) {
     handler();
+  }
   assert.equal(f.rows().length, 1);
   f.key("Escape", { isComposing: true });
   assert.equal(f.$("#action-palette").open, true);
   let blockCancel = true;
   f.$("#action-palette").addEventListener("cancel", (event) => {
-    if (blockCancel) event.preventDefault();
+    if (blockCancel) {
+      event.preventDefault();
+    }
   });
   f.key("Escape");
   assert.equal(f.$("#action-palette").open, true);
@@ -554,7 +575,9 @@ test("an allowed child dismissal still aborts palette opening when its parent ve
   let block = true;
   parent.addEventListener("cancel", (event) => {
     order.push("parent");
-    if (block) event.preventDefault();
+    if (block) {
+      event.preventDefault();
+    }
   });
   child.addEventListener("cancel", () => order.push("child"));
   f.c.openCommands();
@@ -593,7 +616,7 @@ test("go Agents uses the explicit workspace owner after saved-view handling whil
         events.push("reset");
         state.id = null;
       },
-      savedViewUsePage: (view) => events.push("page:" + view),
+      savedViewUsePage: (view) => events.push(`page:${view}`),
       showAgentWorkspace: () => {
         assert.equal(c.source, "agents");
         assert.equal(state.id, null);
@@ -643,8 +666,8 @@ test("actual commandEntries retains every owner presentation label/detail/exact 
     effects = 0;
   const descriptors = Array.from({ length: 8 }, (_, i) => ({
     verb: i % 3 === 0 ? "show" : i % 3 === 1 ? "retry" : "dismiss",
-    noun: "agent results · Result " + i,
-    detail: "Exact result status " + i,
+    noun: `agent results · Result ${i}`,
+    detail: `Exact result status ${i}`,
     run: () => effects++,
   }));
   f.c.presentationCommands = () => {
@@ -656,7 +679,7 @@ test("actual commandEntries retains every owner presentation label/detail/exact 
   assert.equal(effects, 0);
   for (const descriptor of descriptors) {
     const found = entries.find(
-      (entry) => entry.title === descriptor.verb + ": " + descriptor.noun,
+      (entry) => entry.title === `${descriptor.verb}: ${descriptor.noun}`,
     );
     assert.ok(found);
     assert.equal(found.detail, descriptor.detail);

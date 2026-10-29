@@ -37,7 +37,9 @@ function fixture(handler = async () => ({ pending: [], receipts: [] })) {
       activeElement: null,
       modal: null,
       querySelector(selector) {
-        if (selector === "dialog[open]") return this.modal;
+        if (selector === "dialog[open]") {
+          return this.modal;
+        }
         return nodes.get(selector) || null;
       },
       addEventListener(type, fn) {
@@ -73,8 +75,11 @@ function fixture(handler = async () => ({ pending: [], receipts: [] })) {
       this.attrs[k] = v;
     }
     getClientRects() {
-      for (let node = this; node; node = node.parent)
-        if (node.hidden || !node.isConnected) return [];
+      for (let node = this; node; node = node.parent) {
+        if (node.hidden || !node.isConnected) {
+          return [];
+        }
+      }
       return [{}];
     }
     focus(options) {
@@ -125,7 +130,9 @@ function fixture(handler = async () => ({ pending: [], receipts: [] })) {
       c.source = "chat-results";
     },
     render: () => {
-      for (const h of hooks) h.run();
+      for (const h of hooks) {
+        h.run();
+      }
     },
   });
   loadScripts(c, "static/presentation.js", {
@@ -149,7 +156,9 @@ function fixture(handler = async () => ({ pending: [], receipts: [] })) {
 // the same fixture nodes through document.querySelector.
 function loadMore(f, files, { drop = [] } = {}) {
   const raw = rawContext(f.c);
-  for (const name of drop) delete raw[name];
+  for (const name of drop) {
+    delete raw[name];
+  }
   return loadScripts(f.c, files);
 }
 const appFiles = ["static/client.js", "static/app.js"],
@@ -162,8 +171,12 @@ function loadAppChat(f) {
     el = f.c.el;
   f.c.el = (tag, cls, text) => {
     const node = doc.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
+    if (cls) {
+      node.className = cls;
+    }
+    if (text !== undefined) {
+      node.textContent = text;
+    }
     created.push(node);
     return node;
   };
@@ -234,17 +247,27 @@ test("shared saved-view await rejects stale navigation, modal, setup, dirty sett
     await f.c.refreshPresentations({ force: true });
     f.ui().show.focus();
     const action = f.ui().show.onclick();
-    if (mode === "navigate") f.c.source = "notes";
+    if (mode === "navigate") {
+      f.c.source = "notes";
+    }
     if (mode === "aba") {
       f.c.source = "notes";
       f.c.render();
       f.c.source = "github";
       f.c.render();
     }
-    if (mode === "modal") f.document.modal = { open: true };
-    if (mode === "setup") f.nodes.set("#app-chat-setup", { hidden: false });
-    if (mode === "dirty") f.c.settingsDirty = true;
-    if (mode === "input") new f.Node("input").focus();
+    if (mode === "modal") {
+      f.document.modal = { open: true };
+    }
+    if (mode === "setup") {
+      f.nodes.set("#app-chat-setup", { hidden: false });
+    }
+    if (mode === "dirty") {
+      f.c.settingsDirty = true;
+    }
+    if (mode === "input") {
+      new f.Node("input").focus();
+    }
     wait.resolve();
     await action;
     assert.equal(
@@ -287,13 +310,24 @@ test("same-parent saved view and provider-filter changes including ABA invalidat
     f.c.loadSavedViews = () => wait.promise;
     await f.c.refreshPresentations({ force: true });
     const action = f.ui().show.onclick();
-    if (mode === "view" || mode === "aba") view = { ...view, id: "second" };
-    if (mode === "lifecycle") view.draft.lifecycle = "any";
-    if (mode === "filter")
+    if (mode === "view" || mode === "aba") {
+      view = { ...view, id: "second" };
+    }
+    if (mode === "lifecycle") {
+      view.draft.lifecycle = "any";
+    }
+    if (mode === "filter") {
       view.draft.filter = { op: "in", field: "source", values: ["github"] };
-    if (mode === "scope") f.c.scopePrefs.github = "all";
-    if (mode === "github") f.c.githubView = "mine";
-    if (mode === "sentry") f.c.sentryFilters.environment = "qa";
+    }
+    if (mode === "scope") {
+      f.c.scopePrefs.github = "all";
+    }
+    if (mode === "github") {
+      f.c.githubView = "mine";
+    }
+    if (mode === "sentry") {
+      f.c.sentryFilters.environment = "qa";
+    }
     f.c.render();
     if (mode === "aba") {
       view = { ...view, id: "first" };
@@ -314,14 +348,20 @@ test("same-parent saved view and provider-filter changes including ABA invalidat
   }
 });
 test("initial dirty/modal/setup guards defer both presentation types and never request a saved view", async () => {
-  for (const command of [saved, mixed])
+  for (const command of [saved, mixed]) {
     for (const mode of ["dirty", "modal", "setup"]) {
       const f = fixture();
       let reads = 0;
       f.c.loadSavedViews = async () => reads++;
-      if (mode === "dirty") f.c.settingsDirty = true;
-      if (mode === "modal") f.document.modal = {};
-      if (mode === "setup") f.nodes.set("#app-chat-setup", { hidden: false });
+      if (mode === "dirty") {
+        f.c.settingsDirty = true;
+      }
+      if (mode === "modal") {
+        f.document.modal = {};
+      }
+      if (mode === "setup") {
+        f.nodes.set("#app-chat-setup", { hidden: false });
+      }
       await assert.rejects(
         f.c.applyResultPresentation(command),
         /Save or discard|Close/,
@@ -329,15 +369,19 @@ test("initial dirty/modal/setup guards defer both presentation types and never r
       assert.equal(reads, 0);
       assert.equal(f.calls.length, 0);
     }
+  }
 });
 test("failed acknowledgement retains shown state; Show and polling can only retry ACK, never redisplay", async () => {
   let acks = 0;
   const f = fixture(async (payload) => {
-    if (payload.name === "ui.presentations.read")
+    if (payload.name === "ui.presentations.read") {
       return acks > 1
         ? { pending: [], receipts: [{ requestId: id, status: "shown" }] }
         : queued(mixed);
-    if (++acks === 1) throw Error("offline");
+    }
+    if (++acks === 1) {
+      throw Error("offline");
+    }
     return { requestId: id, status: "shown" };
   });
   await f.c.refreshPresentations({ force: true });
@@ -360,8 +404,12 @@ test("failed acknowledgement retains shown state; Show and polling can only retr
 test("Dismiss never applies a result and ACK failure retry keeps the dismissed outcome", async () => {
   let acks = 0;
   const f = fixture(async (p) => {
-    if (p.name === "ui.presentations.read") return queued();
-    if (++acks === 1) throw Error("offline");
+    if (p.name === "ui.presentations.read") {
+      return queued();
+    }
+    if (++acks === 1) {
+      throw Error("offline");
+    }
     return { requestId: id, status: "dismissed" };
   });
   await f.c.refreshPresentations({ force: true });
@@ -453,7 +501,9 @@ test("invalid or oversized queue cannot replace safe notice or navigate", async 
 test("authoritative absence drops unshown stale notices and offers local dismissal for expired ACK-only entries", async () => {
   let data = queued();
   const f = fixture(async (p) => {
-    if (p.name === "ui.presentations.read") return data;
+    if (p.name === "ui.presentations.read") {
+      return data;
+    }
     throw Error("ACK offline");
   });
   await f.c.refreshPresentations({ force: true });
@@ -496,7 +546,9 @@ test("an actual display owner paint failure remains unacknowledged and can be ex
     },
     persist() {},
     render() {
-      if (++paints === 1) throw Error("View could not render.");
+      if (++paints === 1) {
+        throw Error("View could not render.");
+      }
     },
   });
   loadMore(f, [...appFiles, "static/features.js", "static/chat-results.js"], {
@@ -570,14 +622,15 @@ test("actual App chat apply delegates both result types and keeps failed paints 
   for (const command of [saved, mixed]) {
     const f = fixture();
     const chat = loadAppChat(f);
-    if (command.type === "saved-view")
+    if (command.type === "saved-view") {
       f.c.loadSavedViews = async () => {
         throw Error("Offline view definitions.");
       };
-    else
+    } else {
       f.c.showChatResults = () => {
         throw Error("Results paint failed.");
       };
+    }
     await chat.panel.apply([command]);
     assert.equal(chat.panel.deferred[0], command);
     assert.match(
@@ -651,8 +704,11 @@ test("palette Show uses the existing owner without any sidebar or with a hidden 
         ? queued(mixed)
         : { requestId: payload.args.requestId, status: payload.args.outcome },
     );
-    if (sidebar === "missing") f.nodes.delete("#sidebar-notices");
-    else f.nodes.get("#sidebar-notices").hidden = true;
+    if (sidebar === "missing") {
+      f.nodes.delete("#sidebar-notices");
+    } else {
+      f.nodes.get("#sidebar-notices").hidden = true;
+    }
     await f.c.refreshPresentations({ force: true });
     assert.equal(f.c.presentationCommands().length, 1);
     const count = f.calls.length;
@@ -670,8 +726,12 @@ test("palette retry descriptors preserve shown and dismissed ACK-only outcomes w
   for (const outcome of ["shown", "dismissed"]) {
     let acks = 0;
     const f = fixture(async (payload) => {
-      if (payload.name === "ui.presentations.read") return queued(mixed);
-      if (++acks === 1) throw Error("offline");
+      if (payload.name === "ui.presentations.read") {
+        return queued(mixed);
+      }
+      if (++acks === 1) {
+        throw Error("offline");
+      }
       return {
         requestId: payload.args.requestId,
         status: payload.args.outcome,
@@ -680,12 +740,14 @@ test("palette retry descriptors preserve shown and dismissed ACK-only outcomes w
     f.nodes.delete("#sidebar-notices");
     await f.c.refreshPresentations({ force: true });
     const original = f.c.presentationCommands()[0];
-    if (outcome === "shown")
+    if (outcome === "shown") {
       await assert.rejects(
         original.run(),
         /Results were shown.*Acknowledgement failed/,
       );
-    else await f.c.dismissPendingPresentation(f.entries()[0]);
+    } else {
+      await f.c.dismissPendingPresentation(f.entries()[0]);
+    }
     const retry = f.c.presentationCommands()[0];
     assert.equal(retry.verb, "retry");
     assert.match(
@@ -715,7 +777,9 @@ test("palette retry descriptors preserve shown and dismissed ACK-only outcomes w
 test("expired palette notices dismiss locally and old callbacks cannot act on replacement identities", async () => {
   let data = queued();
   const f = fixture(async (payload) => {
-    if (payload.name === "ui.presentations.read") return data;
+    if (payload.name === "ui.presentations.read") {
+      return data;
+    }
     throw Error("ACK offline");
   });
   f.nodes.delete("#sidebar-notices");
@@ -870,7 +934,9 @@ test("actual bootstrap state/client CSRF completion admits the first presentatio
   const client = createDashboardClient({
     fetch: async (path, options = {}) => {
       requests.push({ path, options });
-      if (path === "/api/state") return gate.promise;
+      if (path === "/api/state") {
+        return gate.promise;
+      }
       const authorized = options.headers?.["X-CSRF-Token"] === "fixture-csrf";
       return {
         status: authorized ? 200 : 403,
@@ -913,7 +979,9 @@ test("actual bootstrap state/client CSRF completion admits the first presentatio
       csrf: "fixture-csrf",
     }),
   });
-  for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+  for (let tick = 0; tick < 20; tick++) {
+    await Promise.resolve();
+  }
   await f.c.refreshPresentations();
   const reads = requests.filter(
     (request) => request.path === "/api/commands/invoke",
@@ -942,7 +1010,7 @@ test("failed bootstrap does not admit presentation polling and a later state rea
   const client = createDashboardClient({
     fetch: async (path, options = {}) => {
       requests.push({ path, options });
-      if (path === "/api/state")
+      if (path === "/api/state") {
         return {
           status: unavailable ? 503 : 200,
           json: async () =>
@@ -950,6 +1018,7 @@ test("failed bootstrap does not admit presentation polling and a later state rea
               ? { error: "Unavailable" }
               : { revision: "later", csrf: "later-csrf" },
         };
+      }
       return { status: 200, json: async () => queued() };
     },
   });
@@ -982,23 +1051,30 @@ test("explicit palette Show focuses painted result search before delayed ACK and
     const ack = deferred();
     let attempts = 0;
     const f = fixture(async (payload) => {
-      if (payload.name === "ui.presentations.read") return queued(command);
-      if (++attempts === 1) return ack.promise;
+      if (payload.name === "ui.presentations.read") {
+        return queued(command);
+      }
+      if (++attempts === 1) {
+        return ack.promise;
+      }
       return { requestId: id, status: "shown" };
     });
     f.nodes.delete("#sidebar-notices");
     const resultFilter = new f.Node("input");
-    if (command.type === "display-items")
+    if (command.type === "display-items") {
       f.c.showChatResults = (value) => {
         f.calls.push({ display: value });
         f.c.source = "chat-results";
         f.nodes.set(".chat-search-form input", resultFilter);
       };
+    }
     await f.c.refreshPresentations({ force: true });
     const target =
         command.type === "saved-view" ? f.nodes.get("#search") : resultFilter,
       action = f.c.presentationCommands()[0].run();
-    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+    for (let tick = 0; tick < 5; tick++) {
+      await Promise.resolve();
+    }
     assert.equal(f.document.activeElement, target);
     assert.equal(target.focusOptions.preventScroll, true);
     assert.equal(attempts, 1);
@@ -1033,7 +1109,9 @@ test("automatic, notice, ACK-only and expired presentation actions do not opt in
   assert.equal(input.focusCount, undefined);
   let data = queued();
   const expired = fixture(async (payload) => {
-    if (payload.name === "ui.presentations.read") return data;
+    if (payload.name === "ui.presentations.read") {
+      return data;
+    }
     throw Error("offline");
   });
   expired.nodes.delete("#sidebar-notices");
@@ -1068,28 +1146,43 @@ test("palette focus requires a successful paint and a connected visible target w
     f.nodes.delete("#sidebar-notices");
     f.nodes.set(".chat-search-form input", target);
     f.c.showChatResults = () => {
-      if (mode === "paint-failure") throw Error("Paint failed");
+      if (mode === "paint-failure") {
+        throw Error("Paint failed");
+      }
       f.c.source = "chat-results";
-      if (mode === "outside") outside.focus();
-      if (mode === "modal") f.document.modal = { open: true };
+      if (mode === "outside") {
+        outside.focus();
+      }
+      if (mode === "modal") {
+        f.document.modal = { open: true };
+      }
     };
     if (mode === "hidden") {
       const parent = new f.Node("div");
       parent.hidden = true;
       parent.append(target);
     }
-    if (mode === "detached") target.isConnected = false;
-    if (mode === "disabled") target.disabled = true;
+    if (mode === "detached") {
+      target.isConnected = false;
+    }
+    if (mode === "disabled") {
+      target.disabled = true;
+    }
     await f.c.refreshPresentations({ force: true });
-    if (mode === "paint-failure")
+    if (mode === "paint-failure") {
       await assert.rejects(f.c.presentationCommands()[0].run(), /Paint failed/);
-    else await f.c.presentationCommands()[0].run();
+    } else {
+      await f.c.presentationCommands()[0].run();
+    }
     assert.equal(target.focusCount, undefined, mode);
-    if (mode === "outside") assert.equal(f.document.activeElement, outside);
-    if (mode === "paint-failure")
+    if (mode === "outside") {
+      assert.equal(f.document.activeElement, outside);
+    }
+    if (mode === "paint-failure") {
       assert.equal(
         f.calls.filter((call) => call.name === "ui.presentations.ack").length,
         0,
       );
+    }
   }
 });

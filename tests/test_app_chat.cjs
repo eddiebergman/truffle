@@ -20,8 +20,9 @@ test("assistant view commands preserve validated filters and reject arbitrary ex
     { type: "show", source: "javascript:alert(1)", query: "", status: "all" },
     { type: "show", source: "all", query: "x".repeat(501), status: "all" },
     { type: "show", source: "all", query: "", status: "bad" },
-  ])
+  ]) {
     assert.throws(() => appChatCommand(command), /unsupported view/);
+  }
 });
 
 test("open-chat accepts an exact chat target and rejects malformed commands", () => {
@@ -29,11 +30,12 @@ test("open-chat accepts an exact chat target and rejects malformed commands", ()
     appChatCommand({ type: "open-chat", id: "embedded:chat-1" }),
     { type: "open-chat", id: "embedded:chat-1" },
   );
-  for (const id of ["", null, {}, "x".repeat(161)])
+  for (const id of ["", null, {}, "x".repeat(161)]) {
     assert.throws(
       () => appChatCommand({ type: "open-chat", id }),
       /unsupported view/,
     );
+  }
 });
 
 test("chat results keep verified recommendations and reject unknown targets", () => {
@@ -106,11 +108,12 @@ test("saved view navigation accepts verified IDs without interpreting code", () 
     }),
     { type: "saved-view", id: "github-review", name: "To Review" },
   );
-  for (const id of ["", "../other", "javascript:alert(1)", "x".repeat(81)])
+  for (const id of ["", "../other", "javascript:alert(1)", "x".repeat(81)]) {
     assert.throws(
       () => appChatCommand({ type: "saved-view", id, name: "View" }),
       /unsupported view/,
     );
+  }
 });
 
 const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
@@ -130,8 +133,12 @@ function loadAppChat(globals = {}, { files = [], loading = {} } = {}) {
     selector === "dialog[open]" ? null : lookup(selector);
   const el = (tag, cls, text) => {
     const node = doc.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
+    if (cls) {
+      node.className = cls;
+    }
+    if (text !== undefined) {
+      node.textContent = text;
+    }
     created.push(node);
     return node;
   };
@@ -144,7 +151,7 @@ function loadAppChat(globals = {}, { files = [], loading = {} } = {}) {
     scopePrefs: {},
     sourceNames: {},
     $: (selector) =>
-      created.find((node) => "#" + node.id === selector) ||
+      created.find((node) => `#${node.id}` === selector) ||
       doc.querySelector(selector),
     document: doc,
     window: new FakeWindow(doc),
@@ -193,7 +200,9 @@ function watch(node, key, record) {
 function recordDeferred(ui, calls) {
   const query = ui.panel.querySelector.bind(ui.panel);
   ui.panel.querySelector = (selector) => {
-    if (selector === ".app-chat-show-results") calls.push("deferred");
+    if (selector === ".app-chat-show-results") {
+      calls.push("deferred");
+    }
     return query(selector);
   };
 }
@@ -255,11 +264,12 @@ test("known navigation intents reject extra actions, arbitrary targets and categ
     "logs",
     "settings",
     "sharing-inbox",
-  ])
+  ]) {
     assert.deepEqual(appChatCommand({ type: "navigate", destination }), {
       type: "navigate",
       destination,
     });
+  }
   assert.deepEqual(
     appChatCommand({
       type: "navigate",
@@ -278,8 +288,9 @@ test("known navigation intents reject extra actions, arbitrary targets and categ
     { type: "navigate", destination: "logs", category: "data" },
     { type: "navigate", destination: "settings", category: null },
     { type: "navigate", destination: "settings", token: "benign-fixture" },
-  ])
+  ]) {
     assert.throws(() => appChatCommand(command), /unsupported view/);
+  }
 });
 
 test("auxiliary page navigation captures work presentation and preserves every work filter", async () => {
@@ -358,7 +369,9 @@ test("setup failures remain deferred when opener is missing or returns without a
   for (const opener of [undefined, async () => {}]) {
     const { c, nodes, chat, error } = setupApplyFixture();
     nodes.set("#onboarding-dialog", { open: false });
-    if (opener) c.openOnboarding = opener;
+    if (opener) {
+      c.openOnboarding = opener;
+    }
     await chat.apply([{ type: "navigate", destination: "setup" }]);
     assert.equal(chat.deferred[0].destination, "setup");
     assert.match(error(), /Setup (?:is unavailable|could not open)/);
@@ -766,11 +779,12 @@ test("settings proposals require a bounded patch and an exact revision, and copy
     { patch: "text" },
     { patch: { editor: "x".repeat(65536) } },
     { extra: "unexpected" },
-  ])
+  ]) {
     assert.throws(
       () => appChatCommand({ ...input, ...change }),
       /invalid settings proposal/,
     );
+  }
 });
 function proposalFixture() {
   class Node {
@@ -977,9 +991,13 @@ test("closing or replacing App chat disposes only its own setup host", async () 
       } = loadAppChat({ api: async () => {} });
     button.onclick();
     c.window.closeOnboarding = (options) => calls.push(options.host);
-    if (action === "close") close.onclick();
-    else if (action === "launcher") button.onclick();
-    else await fresh.onclick();
+    if (action === "close") {
+      close.onclick();
+    } else if (action === "launcher") {
+      button.onclick();
+    } else {
+      await fresh.onclick();
+    }
     assert.deepEqual(calls, [host]);
   }
 });
@@ -1085,7 +1103,9 @@ async function preparedMessageFixture({
       }),
     }),
     { input } = ui;
-  if (pending) await chat.poll();
+  if (pending) {
+    await chat.poll();
+  }
   // A poll reaches the server through api, so this also rejects polling.
   c.api = () => {
     throw new Error("Draft preparation must not call the server");
@@ -1248,7 +1268,9 @@ function providerComposerFixture() {
     appChatRefreshSavedViews: async () => {},
     loadAppSettings: async () => {},
     api: async (path, payload) => {
-      if (path === "/api/app-chat") return metadata;
+      if (path === "/api/app-chat") {
+        return metadata;
+      }
       calls.push({ path, payload });
       return {};
     },
@@ -1494,7 +1516,7 @@ test("chat-recovery navigation is strictly view-only and reports an unavailable 
     { open: true },
     { clear: true },
     { category: "data" },
-  ])
+  ]) {
     assert.throws(
       () =>
         appChatCommand({
@@ -1504,6 +1526,7 @@ test("chat-recovery navigation is strictly view-only and reports an unavailable 
         }),
       /unsupported view/,
     );
+  }
   const { c, nodes } = navigationFixture();
   let calls = 0;
   c.openChatRecovery = () => {

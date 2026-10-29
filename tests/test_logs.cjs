@@ -29,9 +29,11 @@ function fixture(entries) {
   const copied = [],
     c = browserContext({
       el: (...args) => new Node(...args),
-      Option: function (text, value) {
-        this.text = text;
-        this.value = value;
+      Option: class {
+        constructor(text, value) {
+          this.text = text;
+          this.value = value;
+        }
       },
       appChatDiagnosticRows,
       logData: { entries },

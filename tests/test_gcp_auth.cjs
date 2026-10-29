@@ -9,16 +9,17 @@ function fixture() {
     messages = [],
     events = {};
   function node(id) {
-    if (!nodes.has(id))
+    if (!nodes.has(id)) {
       nodes.set(id, {
         dataset: {},
         setAttribute(k, v) {
           this[k] = v;
         },
         querySelector() {
-          return node(id + "label");
+          return node(`${id}label`);
         },
       });
+    }
     return nodes.get(id);
   }
   const initial = { runId: "", running: false };
@@ -28,7 +29,9 @@ function fixture() {
     $: node,
     api: async (path, payload) => {
       calls.push({ path, payload });
-      if (reply instanceof Error) throw reply;
+      if (reply instanceof Error) {
+        throw reply;
+      }
       return reply;
     },
     toast: (m) => messages.push(m),

@@ -26,7 +26,9 @@ function fixture() {
     },
   });
   const $ = (id) => {
-    if (!nodes.has(id)) nodes.set(id, node());
+    if (!nodes.has(id)) {
+      nodes.set(id, node());
+    }
     return nodes.get(id);
   };
   $("#group-by").value = "project";
@@ -57,7 +59,9 @@ function fixture() {
     orderedGithubItems: require("../static/github-actions.js")
       .orderedGithubItems,
     appendGithubStacks: (group, items, all, limit) => {
-      for (const item of items.slice(0, limit)) context.renderRow(item);
+      for (const item of items.slice(0, limit)) {
+        context.renderRow(item);
+      }
     },
     workReference: (item) => item.id,
     scopeKey: (item) => item.project,
@@ -67,7 +71,9 @@ function fixture() {
       return node();
     },
     appendLinearTree: (group, items) => {
-      for (const item of items) context.renderRow(item);
+      for (const item of items) {
+        context.renderRow(item);
+      }
     },
     sessionWorkState: () => "active",
     source: "sentry",
@@ -76,8 +82,8 @@ function fixture() {
     sentryView: "",
     state: {
       items: Array.from({ length: 250 }, (_, i) => ({
-        id: "id" + i,
-        title: "Issue " + String(i).padStart(3, "0"),
+        id: `id${i}`,
+        title: `Issue ${String(i).padStart(3, "0")}`,
         project: i < 150 ? "A" : "B",
         source: "sentry",
         status: "todo",
@@ -394,7 +400,9 @@ test("stack grouping receives the full catalog but respects filtered paging and 
   f.context.appendGithubStacks = (list, visible, all, limit) => {
     catalogSize = all.length;
     matched = visible.length;
-    for (const item of visible.slice(0, limit)) f.context.renderRow(item);
+    for (const item of visible.slice(0, limit)) {
+      f.context.renderRow(item);
+    }
   };
   f.render();
   assert.equal(catalogSize, 250);
@@ -422,12 +430,12 @@ test("default GitHub repository grouping orders stack layers before paginating",
     headRepository: "org/repo",
     headRefName: head,
     baseRefName: base,
-    reference: "#" + id,
+    reference: `#${id}`,
     status: "todo",
   });
   f.context.state.items = [
     ...Array.from({ length: 101 }, (_, i) =>
-      pr("solo" + i, "A standalone " + i, "solo" + i, "main"),
+      pr(`solo${i}`, `A standalone ${i}`, `solo${i}`, "main"),
     ),
     pr("tip", "B tip", "tip", "middle"),
     pr("middle", "Y middle", "middle", "base"),
@@ -462,13 +470,14 @@ test("status grouping retains unknown and missing statuses under Unknown", () =>
 test("disabled connections show a finite honest sync state", () => {
   const nodes = new Map();
   const $ = (id) => {
-    if (!nodes.has(id))
+    if (!nodes.has(id)) {
       nodes.set(id, {
         classList: { toggle() {} },
         setAttribute() {},
         replaceChildren() {},
         append() {},
       });
+    }
     return nodes.get(id);
   };
   $("#connection-notice").parentElement = $("#sidebar-notices");

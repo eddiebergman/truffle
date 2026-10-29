@@ -69,11 +69,15 @@ async function fixture({
       return this.children.flatMap((node) => [node, ...node.descendants()]);
     }
     matches(selector) {
-      if (selector === "dialog[open]")
+      if (selector === "dialog[open]") {
         return this.tagName === "DIALOG" && this.open;
-      if (selector.startsWith("#")) return this.id === selector.slice(1);
-      if (selector.startsWith("."))
+      }
+      if (selector.startsWith("#")) {
+        return this.id === selector.slice(1);
+      }
+      if (selector.startsWith(".")) {
         return this.className.split(" ").includes(selector.slice(1));
+      }
       return this.tagName === selector.toUpperCase();
     }
     before(node) {
@@ -94,23 +98,32 @@ async function fixture({
     }
     close() {
       this.open = false;
-      if (document.activeElement) document.activeElement.focused = false;
+      if (document.activeElement) {
+        document.activeElement.focused = false;
+      }
       document.activeElement = body;
       closeEvents.push(() => {
-        for (const listener of this.listeners.close || []) listener.callback();
+        for (const listener of this.listeners.close || []) {
+          listener.callback();
+        }
         this.listeners.close = (this.listeners.close || []).filter(
           (listener) => !listener.once,
         );
       });
     }
     focus() {
-      if (document.activeElement) document.activeElement.focused = false;
+      if (document.activeElement) {
+        document.activeElement.focused = false;
+      }
       this.focused = true;
       document.activeElement = this;
     }
     closest(selector) {
-      for (let node = this; node; node = node.parent)
-        if (selector.split(",").some((part) => node.matches(part))) return node;
+      for (let node = this; node; node = node.parent) {
+        if (selector.split(",").some((part) => node.matches(part))) {
+          return node;
+        }
+      }
       return null;
     }
   }
@@ -144,12 +157,13 @@ async function fixture({
   };
   const api = async (path, payload) => {
     calls.push({ path, payload });
-    if (payload)
+    if (payload) {
       feedback.progress = {
         ...feedback.progress,
         revision: 2,
         hint: "dismissed",
       };
+    }
     return structuredClone(feedback);
   };
   const c = browserContext({
@@ -202,7 +216,9 @@ async function fixture({
   c.$(".app-chat-messages").append(new Node("article", "is-assistant"));
   const mark = launcher.setAttribute.bind(launcher);
   launcher.setAttribute = (key, value) => {
-    if (key === "aria-busy") prepared.push("update");
+    if (key === "aria-busy") {
+      prepared.push("update");
+    }
     mark(key, value);
   };
   let position = scrollTop,
@@ -257,7 +273,9 @@ async function fixture({
       clock += milliseconds;
     },
     flushClose: () => {
-      for (const event of closeEvents.splice(0)) event();
+      for (const event of closeEvents.splice(0)) {
+        event();
+      }
     },
     check: intervals[0],
     get writes() {
@@ -378,8 +396,11 @@ test("feedback focuses the prepared composer after native dialog close, without 
     const next = await fixture(),
       report = next.openDraft();
     report.ask.onclick();
-    if (blocked === "hidden") next.panel.hidden = true;
-    else next.openDraft("Another report");
+    if (blocked === "hidden") {
+      next.panel.hidden = true;
+    } else {
+      next.openDraft("Another report");
+    }
     const active = next.document.activeElement;
     next.flushClose();
     assert.equal(next.document.activeElement, active, blocked);
@@ -413,7 +434,7 @@ test("two-day star prompt reaches idle empty Agents without interrupting live or
     f.advance(20000);
     await f.check();
     assert.equal(
-      !!f.document.querySelector("#feedback-star"),
+      Boolean(f.document.querySelector("#feedback-star")),
       scenario.shown,
       scenario.name,
     );
@@ -439,10 +460,18 @@ test("eligible empty Agents retains idle, typing, modal, App chat and terminal-f
       starEligible: true,
       page: "agents",
     });
-    if (guard !== "recent interaction") f.advance(20000);
-    if (guard === "App chat") f.panel.hidden = false;
-    if (guard === "modal") f.openDraft();
-    if (guard === "typing") f.input.focus();
+    if (guard !== "recent interaction") {
+      f.advance(20000);
+    }
+    if (guard === "App chat") {
+      f.panel.hidden = false;
+    }
+    if (guard === "modal") {
+      f.openDraft();
+    }
+    if (guard === "typing") {
+      f.input.focus();
+    }
     if (
       guard === "main terminal focus" ||
       guard === "secondary terminal focus"

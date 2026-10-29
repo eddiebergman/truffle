@@ -14,19 +14,22 @@ function guidanceReadyToSnooze(report, startedAt, now) {
     report.at <= 0 ||
     report.at > now ||
     report.at < (startedAt || 0)
-  )
+  ) {
     return false;
+  }
   if (
     report.subagents > 0 ||
     report.scheduledWakeups > 0 ||
     Object.values(report.backgroundCounts || {}).some((n) => n > 0)
-  )
+  ) {
     return false;
+  }
   return now - report.at >= 3 * 60 * 60;
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = { guidanceEligible, guidanceReadyToSnooze };
-if (typeof document !== "undefined")
+}
+if (typeof document !== "undefined") {
   (() => {
     let data = null,
       active = null,
@@ -38,7 +41,9 @@ if (typeof document !== "undefined")
       write = Promise.resolve();
     const sessionCompleted = new Set();
     async function load() {
-      if (loading) return;
+      if (loading) {
+        return;
+      }
       loading = true;
       try {
         data = await api("/api/guidance");
@@ -49,28 +54,40 @@ if (typeof document !== "undefined")
       }
     }
     function remove() {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       const { anchor, node, highlight, previousDescription } = active;
-      if (previousDescription)
+      if (previousDescription) {
         anchor.setAttribute("aria-describedby", previousDescription);
-      else anchor.removeAttribute("aria-describedby");
+      } else {
+        anchor.removeAttribute("aria-describedby");
+      }
       const focused = node.contains(document.activeElement);
       highlight.remove();
       node.remove();
       active = null;
-      if (focused && anchor.isConnected)
+      if (focused && anchor.isConnected) {
         anchor.focus?.({ preventScroll: true });
+      }
     }
     function update(action, id, enabled) {
-      if (id) sessionCompleted.add(id);
-      if (active?.id === id || action === "enabled" || action === "replay")
+      if (id) {
+        sessionCompleted.add(id);
+      }
+      if (active?.id === id || action === "enabled" || action === "replay") {
         remove();
+      }
       write = write
         .catch(() => {})
         .then(async () => {
           for (let attempt = 0; attempt < 2; attempt++) {
-            if (!data) await load();
-            if (!data) return;
+            if (!data) {
+              await load();
+            }
+            if (!data) {
+              return;
+            }
             try {
               data.progress = await api("/api/guidance", {
                 revision: data.progress.revision,
@@ -81,14 +98,18 @@ if (typeof document !== "undefined")
               return;
             } catch (error) {
               await load();
-              if (attempt) throw error;
+              if (attempt) {
+                throw error;
+              }
             }
           }
         });
       return write;
     }
     function dismissTip() {
-      if (!active) return false;
+      if (!active) {
+        return false;
+      }
       const id = active.id;
       remove();
       void update("dismiss", id).catch(() => {});
@@ -164,7 +185,9 @@ if (typeof document !== "undefined")
       );
     };
     function visible(node) {
-      if (!node?.isConnected || node.disabled) return false;
+      if (!node?.isConnected || node.disabled) {
+        return false;
+      }
       const r = node.getBoundingClientRect();
       if (
         r.width <= 0 ||
@@ -173,8 +196,9 @@ if (typeof document !== "undefined")
         r.left < 0 ||
         r.bottom > innerHeight ||
         r.right > innerWidth
-      )
+      ) {
         return false;
+      }
       for (
         let parent = node;
         parent;
@@ -185,29 +209,34 @@ if (typeof document !== "undefined")
           parent.hidden ||
           style.visibility === "hidden" ||
           style.display === "none"
-        )
+        ) {
           return false;
-        if (parent === node) continue;
+        }
+        if (parent === node) {
+          continue;
+        }
         const clip = parent.getBoundingClientRect();
         if (
           /auto|scroll|hidden|clip/.test(style.overflowX) &&
           (r.left < clip.left || r.right > clip.right)
-        )
+        ) {
           return false;
+        }
         if (
           /auto|scroll|hidden|clip/.test(style.overflowY) &&
           (r.top < clip.top || r.bottom > clip.bottom)
-        )
+        ) {
           return false;
+        }
       }
       return true;
     }
     function typing() {
       const a = document.activeElement;
       return (
-        !!a?.closest('input,textarea,[contenteditable="true"]') ||
-        !!window.getSelection()?.toString() ||
-        (typeof shortcutRecording !== "undefined" && !!shortcutRecording)
+        Boolean(a?.closest('input,textarea,[contenteditable="true"]')) ||
+        Boolean(window.getSelection()?.toString()) ||
+        (typeof shortcutRecording !== "undefined" && Boolean(shortcutRecording))
       );
     }
     function candidate() {
@@ -216,17 +245,21 @@ if (typeof document !== "undefined")
         !data.assistantUsed &&
         !sessionCompleted.has("assistant.after-setup") &&
         guidanceEligible(data.progress, "assistant.after-setup")
-      )
+      ) {
         return ["assistant.after-setup", $("#app-chat-toggle")];
-      if ($("#app-chat-panel") && !$("#app-chat-panel").hidden) return null;
+      }
+      if ($("#app-chat-panel") && !$("#app-chat-panel").hidden) {
+        return null;
+      }
       const review = typeof reviewState === "undefined" ? null : reviewState,
         dialog = $("#diff-review-dialog");
       if (review && dialog?.open) {
         if (
           !$("#diff-review-composer")?.hidden ||
           $("#diff-review-drawer")?.open
-        )
+        ) {
           return null;
+        }
         const draft = review.draft;
         if (
           guidanceEligible(data.progress, "review.pending-comments") &&
@@ -234,8 +267,9 @@ if (typeof document !== "undefined")
           draft.comments.some(
             (c) => c.author === "You" && reviewEntryPending(draft, c),
           )
-        )
+        ) {
           return ["review.pending-comments", $("#diff-review-drawer-toggle")];
+        }
         if (
           guidanceEligible(data.progress, "review.comment-selection") &&
           !sessionCompleted.has("review.comment-selection")
@@ -246,7 +280,9 @@ if (typeof document !== "undefined")
                 "[data-gutter] [data-line-number-content]",
               ) || []),
             ].find(visible);
-            if (gutter) return ["review.comment-selection", gutter];
+            if (gutter) {
+              return ["review.comment-selection", gutter];
+            }
           }
         }
         const record = review.record;
@@ -258,8 +294,9 @@ if (typeof document !== "undefined")
             "",
           ) &&
           candidateForRecord(record)?.host === "embedded"
-        )
+        ) {
           return ["review.agent-scope", $("#diff-review-agent")];
+        }
         return null;
       }
       const snooze = document.querySelector(
@@ -270,13 +307,15 @@ if (typeof document !== "undefined")
         visible(snooze) &&
         guidanceEligible(data.progress, "chat.snooze") &&
         !sessionCompleted.has("chat.snooze")
-      )
+      ) {
         return ["chat.snooze", snooze];
+      }
       if (
         source !== "agents" ||
         candidateForRecord(currentAgentRecord() || {})?.host !== "embedded"
-      )
+      ) {
         return null;
+      }
       const ci = [...document.querySelectorAll(".investigate-ci")].find(
         (node) => {
           const id = node
@@ -296,17 +335,21 @@ if (typeof document !== "undefined")
         ci &&
         guidanceEligible(data.progress, "ci.investigate") &&
         !sessionCompleted.has("ci.investigate")
-      )
+      ) {
         return ["ci.investigate", ci];
+      }
       if (
         guidanceEligible(data.progress, "chat.shell") &&
         !sessionCompleted.has("chat.shell")
-      )
+      ) {
         return ["chat.shell", $("#chat-terminal-toggle")];
+      }
       return null;
     }
     function position() {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       const { node, anchor, highlight } = active;
       if (!visible(anchor)) {
         remove();
@@ -314,8 +357,7 @@ if (typeof document !== "undefined")
       }
       const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1,
         margin = 12;
-      node.style.maxWidth =
-        Math.max(0, (innerWidth - margin * 2) / zoom) + "px";
+      node.style.maxWidth = `${Math.max(0, (innerWidth - margin * 2) / zoom)}px`;
       const r = anchor.getBoundingClientRect(),
         bounds = node.getBoundingClientRect(),
         gap = 10;
@@ -329,8 +371,9 @@ if (typeof document !== "undefined")
             Math.min(r.left, innerWidth - bounds.width - margin),
           );
           top = r.bottom + gap;
-          if (top + bounds.height > innerHeight - margin)
+          if (top + bounds.height > innerHeight - margin) {
             top = r.top - bounds.height - gap;
+          }
         }
       }
       left = Math.max(
@@ -341,19 +384,21 @@ if (typeof document !== "undefined")
         margin,
         Math.min(top, innerHeight - bounds.height - margin),
       );
-      node.style.left = left / zoom + "px";
-      node.style.top = top / zoom + "px";
+      node.style.left = `${left / zoom}px`;
+      node.style.top = `${top / zoom}px`;
       const padding = 4;
       Object.assign(highlight.style, {
-        left: (r.left - padding) / zoom + "px",
-        top: (r.top - padding) / zoom + "px",
-        width: (r.width + padding * 2) / zoom + "px",
-        height: (r.height + padding * 2) / zoom + "px",
+        left: `${(r.left - padding) / zoom}px`,
+        top: `${(r.top - padding) / zoom}px`,
+        width: `${(r.width + padding * 2) / zoom}px`,
+        height: `${(r.height + padding * 2) / zoom}px`,
       });
     }
     function show(id, anchor) {
       const tip = data.definitions.tips.find((t) => t.id === id);
-      if (!tip) return;
+      if (!tip) {
+        return;
+      }
       const node = el("aside", "guidance-tip");
       node.id = "truffle-guidance-tip";
       node.setAttribute("aria-label", tip.title);
@@ -393,17 +438,20 @@ if (typeof document !== "undefined")
         previousDescription: anchor.getAttribute("aria-describedby"),
       };
       // ARIA ID references cannot cross a shadow-root boundary.
-      if (!(root instanceof ShadowRoot))
+      if (!(root instanceof ShadowRoot)) {
         anchor.setAttribute(
           "aria-describedby",
           [active.previousDescription, node.id].filter(Boolean).join(" "),
         );
+      }
       shownEpoch = epoch;
       position();
-      live.textContent = tip.title + ". " + copy.textContent;
+      live.textContent = `${tip.title}. ${copy.textContent}`;
     }
     function tick() {
-      if (!data || data.demo || document.hidden) return remove();
+      if (!data || data.demo || document.hidden) {
+        return remove();
+      }
       const reviewOpen = $("#diff-review-dialog")?.open,
         newEpoch = [
           source,
@@ -434,9 +482,11 @@ if (typeof document !== "undefined")
           target[1] !== active.anchor ||
           !guidanceEligible(data.progress, active.id) ||
           sessionCompleted.has(active.id)
-        )
+        ) {
           remove();
-        else position();
+        } else {
+          position();
+        }
         return;
       }
       if (
@@ -446,23 +496,26 @@ if (typeof document !== "undefined")
         sessionCompleted.has(target[0]) ||
         !guidanceEligible(data.progress, target[0]) ||
         !visible(target[1])
-      )
+      ) {
         return;
+      }
       show(...target);
     }
     document.addEventListener(
       "pointerdown",
       (event) => {
-        if (!active?.node.contains(event.composedPath()[0]))
+        if (!active?.node.contains(event.composedPath()[0])) {
           lastInput = Date.now();
+        }
       },
       true,
     );
     document.addEventListener(
       "keydown",
       (event) => {
-        if (!active?.node.contains(event.composedPath()[0]))
+        if (!active?.node.contains(event.composedPath()[0])) {
           lastInput = Date.now();
+        }
       },
       true,
     );
@@ -474,10 +527,12 @@ if (typeof document !== "undefined")
     document.addEventListener("scroll", position, true);
     setInterval(tick, 500);
     setInterval(() => {
-      if (!document.hidden) void load();
+      if (!document.hidden) {
+        void load();
+      }
     }, 15000);
     void load();
-    if (typeof module !== "undefined")
+    if (typeof module !== "undefined") {
       module.exports.guidanceTip = {
         remove,
         position,
@@ -489,4 +544,6 @@ if (typeof document !== "undefined")
           return active;
         },
       };
+    }
   })();
+}

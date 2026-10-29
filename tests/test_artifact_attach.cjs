@@ -27,12 +27,15 @@ function fixture({ command, library } = {}) {
     }
     append(...children) {
       this.children.push(...children);
-      for (const child of children) child.parentElement = this;
+      for (const child of children) {
+        child.parentElement = this;
+      }
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document.activeElement === this)
+      if (value && document.activeElement === this) {
         document.activeElement = null;
+      }
     }
     get disabled() {
       return this._disabled;
@@ -76,10 +79,11 @@ function fixture({ command, library } = {}) {
     toast: (message) => messages.push(message),
     api: async (path, args) => {
       calls.push({ path, args });
-      if (path === "/api/commands/invoke")
+      if (path === "/api/commands/invoke") {
         return command
           ? command()
           : { artifactId: "exact-artifact", recordId: "chat", saved: true };
+      }
       const read = deferred();
       reads.push(read);
       return read.promise;
@@ -135,7 +139,9 @@ test("attachment uses strict named file/url commands, freezes pending input and 
   for (const url of [false, true]) {
     const pending = deferred(),
       f = fixture({ command: () => pending.promise });
-    if (url) f.input.value = "https://example.invalid/report";
+    if (url) {
+      f.input.value = "https://example.invalid/report";
+    }
     const action = f.send();
     await tick();
     assert.equal(f.input.disabled, true);
@@ -295,7 +301,9 @@ test("actual library final render retains the open attachment form and its saved
   };
   const originalApi = f.c.api;
   f.c.api = async (path, args) => {
-    if (path === "/api/library") throw Error("Library unavailable");
+    if (path === "/api/library") {
+      throw Error("Library unavailable");
+    }
     return originalApi(path, args);
   };
   const action = f.send();
@@ -353,7 +361,7 @@ test("Cancel and Escape restore the exact surviving attachment opener after its 
     if (action === "cancel") {
       f.cancel.focus();
       f.cancel.onclick();
-    } else
+    } else {
       f.details.onkeydown({
         key: "Escape",
         preventDefault() {
@@ -363,6 +371,7 @@ test("Cancel and Escape restore the exact surviving attachment opener after its 
           stopped = true;
         },
       });
+    }
     assert.equal(f.details.open, false);
     assert.equal(
       f.document.activeElement,
@@ -444,7 +453,7 @@ test("pending artifact write and presentation cannot be dismissed and accepted r
 });
 
 test("successful save and read-only recovery restore the replacement opener without stealing outside focus", async () => {
-  for (const recovery of [false, true])
+  for (const recovery of [false, true]) {
     for (const outside of [false, true]) {
       let libraries = 0;
       const f = fixture({
@@ -468,7 +477,9 @@ test("successful save and read-only recovery restore the replacement opener with
         const retry = f.retry.onclick();
         await tick();
         const external = new f.Node("input");
-        if (outside) external.focus();
+        if (outside) {
+          external.focus();
+        }
         f.reads[1].resolve({ revision: "three", sessions: [] });
         await retry;
         assert.equal(
@@ -477,7 +488,9 @@ test("successful save and read-only recovery restore the replacement opener with
         );
       } else {
         const external = new f.Node("input");
-        if (outside) external.focus();
+        if (outside) {
+          external.focus();
+        }
         f.reads[0].resolve({ revision: "two", sessions: [] });
         await first;
         assert.equal(
@@ -491,9 +504,10 @@ test("successful save and read-only recovery restore the replacement opener with
         1,
       );
     }
+  }
 });
 test("actual workspace redraw preserves a dismissed opener through subsequent polls without stealing other focus", () => {
-  for (const kind of ["work", "artifact"])
+  for (const kind of ["work", "artifact"]) {
     for (const action of ["escape", "cancel"]) {
       const f = fixture(),
         body = new f.Node("body"),
@@ -508,7 +522,7 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
           node.children.flatMap((child) => [child, ...descendants(child)]),
         matches = (node, selector) =>
           selector === "[data-focus-key]"
-            ? !!node.dataset.focusKey
+            ? Boolean(node.dataset.focusKey)
             : selector.startsWith(".")
               ? node.className
                   .split(" ")
@@ -522,9 +536,12 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
         return this.querySelectorAll(selector)[0] || null;
       };
       f.Node.prototype.replaceChildren = function (...children) {
-        for (const child of descendants(this)) child.isConnected = false;
-        if (this.contains(f.document.activeElement))
+        for (const child of descendants(this)) {
+          child.isConnected = false;
+        }
+        if (this.contains(f.document.activeElement)) {
           f.document.activeElement = body;
+        }
         this.children = [];
         this.append(...children);
       };
@@ -540,7 +557,9 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
       Object.assign(f.c, {
         el: (...args) => {
           const node = new f.Node(...args);
-          if (node.tagName === "details") node.open = false;
+          if (node.tagName === "details") {
+            node.open = false;
+          }
           return node;
         },
         source: "agents",
@@ -565,18 +584,19 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
         .find((node) => node.dataset.attachKind === kind);
       details.open = true;
       details.querySelector("input").focus();
-      if (action === "escape")
+      if (action === "escape") {
         details.onkeydown({
           key: "Escape",
           preventDefault() {},
           stopPropagation() {},
         });
-      else
+      } else {
         details
           .querySelectorAll("button")
           .find((node) => node.textContent === "Cancel")
           .onclick();
-      const key = "chat:attach:" + kind;
+      }
+      const key = `chat:attach:${kind}`;
       assert.equal(f.document.activeElement.dataset.focusKey, key);
       const prior = f.document.activeElement;
       f.c.render();
@@ -602,4 +622,5 @@ test("actual workspace redraw preserves a dismissed opener through subsequent po
       f.c.render();
       assert.equal(f.document.activeElement, body);
     }
+  }
 });

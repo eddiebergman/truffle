@@ -25,12 +25,17 @@ class FakeClassList {
   }
   toggle(name, force) {
     const on = force === undefined ? !this.contains(name) : Boolean(force);
-    if (on) this.add(name);
-    else this.remove(name);
+    if (on) {
+      this.add(name);
+    } else {
+      this.remove(name);
+    }
     return on;
   }
   replace(from, to) {
-    if (!this.contains(from)) return false;
+    if (!this.contains(from)) {
+      return false;
+    }
     this.remove(from);
     this.add(to);
     return true;
@@ -50,9 +55,10 @@ class FakeEventTarget {
     );
   }
   dispatchEvent(event) {
-    for (const listener of this.listeners[event.type] || [])
+    for (const listener of this.listeners[event.type] || []) {
       listener.call(this, event);
-    this["on" + event.type]?.call(this, event);
+    }
+    this[`on${event.type}`]?.call(this, event);
     return true;
   }
 }
@@ -87,9 +93,12 @@ class FakeElement extends FakeEventTarget {
       {},
       {
         get: (_, name) => {
-          if (typeof name !== "string") return undefined;
-          if (!named.has(name))
+          if (typeof name !== "string") {
+            return undefined;
+          }
+          if (!named.has(name)) {
             named.set(name, new FakeElement("input", ownerDocument));
+          }
           return named.get(name);
         },
       },
@@ -115,7 +124,9 @@ class FakeElement extends FakeEventTarget {
   }
   setAttribute(name, value) {
     this.attributes[name] = String(value);
-    if (name === "id") this.id = String(value);
+    if (name === "id") {
+      this.id = String(value);
+    }
   }
   getAttribute(name) {
     return Object.hasOwn(this.attributes, name) ? this.attributes[name] : null;
@@ -128,8 +139,11 @@ class FakeElement extends FakeEventTarget {
   }
   toggleAttribute(name, force) {
     const on = force === undefined ? !this.hasAttribute(name) : Boolean(force);
-    if (on) this.setAttribute(name, "");
-    else this.removeAttribute(name);
+    if (on) {
+      this.setAttribute(name, "");
+    } else {
+      this.removeAttribute(name);
+    }
     return on;
   }
   append(...nodes) {
@@ -152,8 +166,11 @@ class FakeElement extends FakeEventTarget {
     this.children.push(...rest);
   }
   replaceChildren(...nodes) {
-    for (const child of this.children)
-      if (child instanceof FakeElement) child.parentElement = null;
+    for (const child of this.children) {
+      if (child instanceof FakeElement) {
+        child.parentElement = null;
+      }
+    }
     this.children = [];
     this.append(...nodes);
   }
@@ -165,11 +182,12 @@ class FakeElement extends FakeEventTarget {
   }
   insertBefore(nodes, reference, offset = 0) {
     nodes = [nodes].flat();
-    for (const node of nodes)
+    for (const node of nodes) {
       if (node instanceof FakeElement) {
         node.remove();
         node.parentElement = this;
       }
+    }
     const index = this.children.indexOf(reference);
     this.children.splice(
       index < 0 ? this.children.length : index + offset,
@@ -180,8 +198,9 @@ class FakeElement extends FakeEventTarget {
   }
   remove() {
     const parent = this.parentElement;
-    if (parent)
+    if (parent) {
       parent.children = parent.children.filter((child) => child !== this);
+    }
     this.parentElement = null;
   }
   add(option) {
@@ -198,8 +217,9 @@ class FakeElement extends FakeEventTarget {
   // Ancestors are created on first use too, one per selector.
   closest(selector) {
     this.ancestors ??= new Map();
-    if (!this.ancestors.has(selector))
+    if (!this.ancestors.has(selector)) {
       this.ancestors.set(selector, new FakeElement("div", this.ownerDocument));
+    }
     return this.ancestors.get(selector);
   }
   matches() {
@@ -212,7 +232,9 @@ class FakeElement extends FakeEventTarget {
     return [];
   }
   focus() {
-    if (this.ownerDocument) this.ownerDocument.activeElement = this;
+    if (this.ownerDocument) {
+      this.ownerDocument.activeElement = this;
+    }
   }
   blur() {}
   click() {
@@ -265,7 +287,9 @@ class FakeDocument extends FakeEventTarget {
   querySelector(selector) {
     if (!this.elements.has(selector)) {
       const element = new FakeElement("div", this);
-      if (selector.startsWith("#")) element.id = selector.slice(1);
+      if (selector.startsWith("#")) {
+        element.id = selector.slice(1);
+      }
       this.elements.set(selector, element);
     }
     return this.elements.get(selector);
@@ -274,7 +298,7 @@ class FakeDocument extends FakeEventTarget {
     return [];
   }
   getElementById(id) {
-    return this.querySelector("#" + id);
+    return this.querySelector(`#${id}`);
   }
 }
 
@@ -379,8 +403,11 @@ function browserHost() {
     dispatchEvent: (event) => window.dispatchEvent(event),
     console: { log() {}, info() {}, warn() {}, error() {}, debug() {} },
   };
-  for (const [name, value] of Object.entries(host))
-    if (!(name in window)) window[name] = value;
+  for (const [name, value] of Object.entries(host)) {
+    if (!(name in window)) {
+      window[name] = value;
+    }
+  }
   window.window = window;
   return host;
 }

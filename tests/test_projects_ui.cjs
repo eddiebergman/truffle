@@ -38,14 +38,15 @@ function fixture({ handler } = {}) {
     }
     set disabled(value) {
       this._disabled = value;
-      if (value && document?.activeElement === this)
+      if (value && document?.activeElement === this) {
         document.activeElement = document.body;
+      }
     }
     get disabled() {
       return this._disabled;
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     contains(node) {
       return (
@@ -66,26 +67,32 @@ function fixture({ handler } = {}) {
     closest(selector) {
       let node = this;
       while (node) {
-        if (node.matches(selector)) return node;
+        if (node.matches(selector)) {
+          return node;
+        }
         node = node.parentElement;
       }
       return null;
     }
     append(...children) {
       this.children.push(...children);
-      for (const child of children) child.parentElement = this;
+      for (const child of children) {
+        child.parentElement = this;
+      }
     }
     replaceChildren(...children) {
       this.children = [];
       this.append(...children);
     }
     remove() {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      if (this.parentElement)
+      }
+      if (this.parentElement) {
         this.parentElement.children = this.parentElement.children.filter(
           (child) => child !== this,
         );
+      }
       this.parentElement = null;
     }
     setAttribute(key, value) {
@@ -118,7 +125,9 @@ function fixture({ handler } = {}) {
       (this.events[name] ??= []).push(fn);
     }
     dispatchEvent(event) {
-      for (const fn of this.events[event.type] || []) fn(event);
+      for (const fn of this.events[event.type] || []) {
+        fn(event);
+      }
       return !event.defaultPrevented;
     }
     showModal() {
@@ -126,7 +135,9 @@ function fixture({ handler } = {}) {
     }
     close() {
       this.open = false;
-      for (const fn of this.events.close || []) fn();
+      for (const fn of this.events.close || []) {
+        fn();
+      }
     }
     focus(options) {
       if (!this.disabled) {
@@ -157,8 +168,9 @@ function fixture({ handler } = {}) {
     form.append(input);
   }
   form.reset = () => {
-    for (const input of Object.values(form.elements))
+    for (const input of Object.values(form.elements)) {
       input.value = input.name === "status" ? "todo" : "";
+    }
   };
   const remove = node("#delete-note", "button"),
     cancel = new Node("button", "close-dialog"),
@@ -175,8 +187,12 @@ function fixture({ handler } = {}) {
     itemClose = new Node("button", "close-dialog");
   itemDialog.append(itemStatus, complete, edit, archive, itemClose);
   const $ = (selector) => {
-    if (selector === "#note-form button[type=submit]") return save;
-    if (!ids.has(selector)) node(selector);
+    if (selector === "#note-form button[type=submit]") {
+      return save;
+    }
+    if (!ids.has(selector)) {
+      node(selector);
+    }
     return ids.get(selector);
   };
   document.body.append(note, itemDialog);
@@ -219,7 +235,7 @@ function fixture({ handler } = {}) {
     renderItemSessions: () => {},
     api: async (path, args) => {
       calls.push({ path, ...args });
-      if (handler)
+      if (handler) {
         return handler(path, args, {
           read,
           project,
@@ -227,13 +243,17 @@ function fixture({ handler } = {}) {
             project = next;
           },
         });
-      if (path === "/api/state")
+      }
+      if (path === "/api/state") {
         return {
           revision: ++c.state.revision,
           items: [{ ...project }],
           overrides: {},
         };
-      if (args.name === "projects.read") return read();
+      }
+      if (args.name === "projects.read") {
+        return read();
+      }
       if (args.name === "projects.update") {
         project = { ...project, ...args.args.patch };
         return {
@@ -246,7 +266,7 @@ function fixture({ handler } = {}) {
         project = { ...project, ...args.args, id: "note:created" };
         return { ...read(), saved: true, created: true, changedFields: fields };
       }
-      throw Error("Unexpected " + path);
+      throw Error(`Unexpected ${path}`);
     },
   });
   // Load-time code fills the status select with options, which this fake does not model, so its handler is copied over.
@@ -411,7 +431,9 @@ test("accepted create with failed presentation offers reads only and never repea
     handler: async (path, args, owner) => {
       if (path === "/api/state") {
         stateReads++;
-        if (stateReads === 1) throw Error("Read unavailable");
+        if (stateReads === 1) {
+          throw Error("Read unavailable");
+        }
         return { revision: 2, items: [owner.read().project] };
       }
       assert.equal(args.name, "projects.create");
@@ -438,8 +460,9 @@ test("accepted create with failed presentation offers reads only and never repea
 test("ambiguous create keeps the draft locked even after successful read-only refresh", async () => {
   const f = fixture({
     handler: async (path, args, owner) => {
-      if (path === "/api/state")
+      if (path === "/api/state") {
         return { revision: 2, items: [owner.read().project] };
+      }
       assert.equal(args.name, "projects.create");
       const error = Error("Lost response");
       error.status = 503;
@@ -532,10 +555,14 @@ test("status save presentation failure retries snapshots only and the complete b
   const f = fixture({
     handler: async (path, args, owner) => {
       if (path === "/api/state") {
-        if (++reads === 1) throw Error("State unavailable");
+        if (++reads === 1) {
+          throw Error("State unavailable");
+        }
         return { revision: 2, items: [owner.read().project] };
       }
-      if (args.name === "projects.read") return owner.read();
+      if (args.name === "projects.read") {
+        return owner.read();
+      }
       assert.equal(args.name, "projects.update");
       owner.setProject({ ...owner.read().project, ...args.args.patch });
       return { ...owner.read(), saved: true };
@@ -569,9 +596,12 @@ test("status conflict blocks reapplication until explicit reload and unknown wri
   for (const code of [409, 503]) {
     const f = fixture({
         handler: async (path, args, owner) => {
-          if (path === "/api/state")
+          if (path === "/api/state") {
             return { revision: 2, items: [owner.read().project] };
-          if (args.name === "projects.read") return owner.read();
+          }
+          if (args.name === "projects.read") {
+            return owner.read();
+          }
           const error = Error("Rejected response");
           error.status = code;
           throw error;
@@ -670,10 +700,14 @@ test("status read-only recovery success clears the old recovery actions and busy
   const f = fixture({
       handler: async (path, args, owner) => {
         if (path === "/api/state") {
-          if (++reads === 1) throw Error("Offline");
+          if (++reads === 1) {
+            throw Error("Offline");
+          }
           return { revision: 2, items: [owner.read().project] };
         }
-        if (args.name === "projects.read") return owner.read();
+        if (args.name === "projects.read") {
+          return owner.read();
+        }
         owner.setProject({ ...owner.read().project, ...args.args.patch });
         return { ...owner.read(), saved: true };
       },
@@ -729,14 +763,20 @@ function installItemOpen(f) {
       : f.Node.prototype.closest.call(f.itemStatus, selector);
   const closeEvents = [];
   f.itemDialog.close = () => {
-    if (!f.itemDialog.open) return;
+    if (!f.itemDialog.open) {
+      return;
+    }
     f.itemDialog.open = false;
     closeEvents.push(() => {
-      for (const fn of f.itemDialog.events.close || []) fn();
+      for (const fn of f.itemDialog.events.close || []) {
+        fn();
+      }
     });
   };
   return () => {
-    while (closeEvents.length) closeEvents.shift()();
+    while (closeEvents.length) {
+      closeEvents.shift()();
+    }
   };
 }
 test("actual item dialog reuse invalidates pending status ownership before queued close and replacement actions", async () => {
@@ -744,13 +784,18 @@ test("actual item dialog reuse invalidates pending status ownership before queue
   let newer;
   const f = fixture({
       handler: async (path, args, owner) => {
-        if (path === "/api/state") return { revision: 2, items: [newer] };
-        if (args.name === "projects.read")
+        if (path === "/api/state") {
+          return { revision: 2, items: [newer] };
+        }
+        if (args.name === "projects.read") {
           return {
             ...owner.read(),
             project: args.args.id === "note:two" ? newer : owner.read().project,
           };
-        if (args.args.id === "note:one") return firstWrite.promise;
+        }
+        if (args.args.id === "note:one") {
+          return firstWrite.promise;
+        }
         newer = { ...newer, ...args.args.patch };
         return { ...owner.read(), project: newer, saved: true };
       },
@@ -788,16 +833,20 @@ test("accepted old status refresh cannot repaint or reset a reused item dialog a
   const f = fixture({
       handler: async (path, args, owner) => {
         if (path === "/api/state") {
-          if (++stateReads === 1) return oldRead.promise;
+          if (++stateReads === 1) {
+            return oldRead.promise;
+          }
           return { revision: 3, items: [newer] };
         }
-        if (args.name === "projects.read")
+        if (args.name === "projects.read") {
           return {
             ...owner.read(),
             project: args.args.id === "note:two" ? newer : owner.read().project,
           };
-        if (args.args.id === "note:two")
+        }
+        if (args.args.id === "note:two") {
           newer = { ...newer, ...args.args.patch };
+        }
         return { ...owner.read(), saved: true };
       },
     }),
@@ -825,7 +874,9 @@ test("accepted status paint exception retains valid ownership and exposes read-o
     item = f.openStatus();
   let fail = true;
   f.c.renderItemSessions = () => {
-    if (fail) throw Error("Details renderer failed");
+    if (fail) {
+      throw Error("Details renderer failed");
+    }
   };
   await f.c.changeProjectStatus(item, "done");
   assert.equal(f.c.currentItem.status, "done");
@@ -855,13 +906,18 @@ test("old status completion cannot release the replacement project controls whil
   let newer;
   const f = fixture({
       handler: async (path, args, owner) => {
-        if (path === "/api/state") return { revision: 2, items: [newer] };
-        if (args.name === "projects.read")
+        if (path === "/api/state") {
+          return { revision: 2, items: [newer] };
+        }
+        if (args.name === "projects.read") {
           return {
             ...owner.read(),
             project: args.args.id === "note:two" ? newer : owner.read().project,
           };
-        if (args.args.id === "note:one") return oldWrite.promise;
+        }
+        if (args.args.id === "note:one") {
+          return oldWrite.promise;
+        }
         newer = { ...newer, ...args.args.patch };
         return newWrite.promise;
       },
@@ -890,7 +946,7 @@ test("old status completion cannot release the replacement project controls whil
   assert.equal(f.itemDialog.querySelector("[data-project-notice]"), null);
 });
 test("completed Close and fresh open clean owned status notices after pending, unknown and definite failures", async () => {
-  for (const failure of ["read", "unknown", "pending"])
+  for (const failure of ["read", "unknown", "pending"]) {
     for (const explicitClose of [false, true]) {
       const write = deferred(),
         f = fixture({
@@ -903,7 +959,9 @@ test("completed Close and fresh open clean owned status notices after pending, u
               }
               return owner.read();
             }
-            if (failure === "pending") return write.promise;
+            if (failure === "pending") {
+              return write.promise;
+            }
             const error = Error("Save response lost");
             error.status = 503;
             throw error;
@@ -912,7 +970,9 @@ test("completed Close and fresh open clean owned status notices after pending, u
         old = f.openStatus(),
         pending = f.c.changeProjectStatus(old, "done");
       await tick();
-      if (failure !== "pending") await pending;
+      if (failure !== "pending") {
+        await pending;
+      }
       assert.ok(f.itemDialog.querySelector("[data-project-notice]"));
       Object.assign(f.c, {
         workReference: () => "",
@@ -952,6 +1012,7 @@ test("completed Close and fresh open clean owned status notices after pending, u
         assert.equal(f.itemDialog.querySelector("[data-project-notice]"), null);
       }
     }
+  }
 });
 test("project editor holds focus before disabling Save and routes rejection to enabled correction or recovery", async () => {
   for (const code of [400, 409, 503]) {
@@ -1034,8 +1095,12 @@ test("project completions never steal Close, App chat, terminal, new-dialog or r
         panel.id = "app-chat-panel";
         panel.append(external);
         f.note.append(panel);
-      } else f.document.body.append(external);
-      if (place === "dialog") external.open = true;
+      } else {
+        f.document.body.append(external);
+      }
+      if (place === "dialog") {
+        external.open = true;
+      }
     }
     external.focus();
     const error = Error("Conflict");
@@ -1050,7 +1115,9 @@ test("status pending holds focus inside and restores conflict, correction or acc
     const write = deferred(),
       f = fixture({
         handler: async (path, args, owner) => {
-          if (path === "/api/state") throw Error("Read unavailable");
+          if (path === "/api/state") {
+            throw Error("Read unavailable");
+          }
           return args.name === "projects.read" ? owner.read() : write.promise;
         },
       }),
@@ -1060,8 +1127,9 @@ test("status pending holds focus inside and restores conflict, correction or acc
     assert.equal(f.document.activeElement, f.notice(f.itemDialog).message);
     assert.equal(f.itemStatus.disabled, true);
     await tick();
-    if (code === "snapshot") write.resolve({ ...f.read(), saved: true });
-    else {
+    if (code === "snapshot") {
+      write.resolve({ ...f.read(), saved: true });
+    } else {
       const error = Error("Rejected");
       error.status = code;
       write.reject(error);
@@ -1105,7 +1173,9 @@ test("unknown create focuses Inspect while read-only recovery never steals a del
   const read = deferred(),
     f = fixture({
       handler: async (path) => {
-        if (path === "/api/state") return read.promise;
+        if (path === "/api/state") {
+          return read.promise;
+        }
         const error = Error("Lost create response");
         error.status = 503;
         throw error;
@@ -1136,7 +1206,9 @@ test("unknown create focuses Inspect while read-only recovery never steals a del
 test("a correction keeps the original editable field and pending status leaves App chat focus and controls alone", async () => {
   const f = fixture({
     handler: async (_path, args, owner) => {
-      if (args.name === "projects.read") return owner.read();
+      if (args.name === "projects.read") {
+        return owner.read();
+      }
       const error = Error("Invalid details");
       error.status = 400;
       throw error;
@@ -1231,7 +1303,9 @@ test("a later read-only Refresh click that leaves Close focused does not transfe
   const read = deferred(),
     f = fixture({
       handler: async (path) => {
-        if (path === "/api/state") return read.promise;
+        if (path === "/api/state") {
+          return read.promise;
+        }
         const error = Error("Lost response");
         error.status = 503;
         throw error;
@@ -1253,8 +1327,12 @@ test("local status accepted with failed presentation holds focus and retries rea
   let reads = 0;
   const f = fixture({
     handler: async (path) => {
-      if (path === "/api/edit") return { revision: "ignored" };
-      if (++reads === 1) throw Error("Offline");
+      if (path === "/api/edit") {
+        return { revision: "ignored" };
+      }
+      if (++reads === 1) {
+        throw Error("Offline");
+      }
       return {
         revision: "current",
         items: [
@@ -1348,7 +1426,9 @@ test("accepted deletion with failed presentation is read-only while definite rej
     const f = fixture({
       handler: async (path, args, owner) => {
         if (path === "/api/state") {
-          if (++reads === 1) throw Error("Offline");
+          if (++reads === 1) {
+            throw Error("Offline");
+          }
           return { revision: 3, items: [] };
         }
         if (path === "/api/edit") {

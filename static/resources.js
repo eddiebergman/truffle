@@ -1,10 +1,13 @@
 "use strict";
 function resourceTime(value) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0)
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return value * 1000;
+  }
   if (typeof value === "string" && /^\d{4}-\d\d-\d\dT/.test(value)) {
     const time = Date.parse(value);
-    if (Number.isFinite(time)) return time;
+    if (Number.isFinite(time)) {
+      return time;
+    }
   }
   return null;
 }
@@ -13,8 +16,9 @@ function resourceLinks(resource) {
   for (const [category, values] of Object.entries(resource.uris || {})) {
     for (const entry of Array.isArray(values) ? values : [values]) {
       const value = typeof entry === "string" ? entry : entry?.uri;
-      if (typeof value === "string" && value)
+      if (typeof value === "string" && value) {
         result.push({ category, value, title: entry?.title || category });
+      }
     }
   }
   return result;
@@ -41,13 +45,11 @@ function resourceMayCost(resource) {
   );
 }
 function resourceCheckPrompt(resource) {
-  return (
-    "Check this existing resource and report its current state to truffle with an observation timestamp: " +
-    JSON.stringify(resource) +
-    ". Inspect only. Do not create, stop, delete or change resources. Include expiry and cleanup instructions if known."
-  );
+  return `Check this existing resource and report its current state to truffle with an observation timestamp: ${JSON.stringify(
+    resource,
+  )}. Inspect only. Do not create, stop, delete or change resources. Include expiry and cleanup instructions if known.`;
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = {
     resourceTime,
     resourceLinks,
@@ -55,6 +57,7 @@ if (typeof module !== "undefined")
     resourceMayCost,
     resourceCheckPrompt,
   };
+}
 function resourceSection(record, expanded = new Set()) {
   const section = el("section", "agent-resource-section"),
     head = el("div", "section-heading"),
@@ -97,12 +100,14 @@ function resourceSection(record, expanded = new Set()) {
       el(
         "small",
         "resource-kind",
-        (resource.kind || "resource").replace(/[_-]/g, " ") +
-          " · " +
-          resource.provider,
+        `${(resource.kind || "resource").replace(/[_-]/g, " ")} · ${
+          resource.provider
+        }`,
       ),
     );
-    if (resource.purpose) details.append(el("p", "", resource.purpose));
+    if (resource.purpose) {
+      details.append(el("p", "", resource.purpose));
+    }
     const observed = resourceTime(resource.observedAt || resource.checked_at),
       reported = resourceTime(resource.reportedAt);
     const known =
@@ -145,13 +150,14 @@ function resourceSection(record, expanded = new Set()) {
         async () => {
           try {
             await loadInventory();
-            if (candidateForRecord(record)?.host !== "embedded")
+            if (candidateForRecord(record)?.host !== "embedded") {
               throw new Error(
                 "Resume this chat before asking it to check a resource.",
               );
+            }
             await api("/api/terminal/input", {
               id: record.id,
-              data: "\x1b[200~" + resourceCheckPrompt(resource) + "\x1b[201~\r",
+              data: `\x1b[200~${resourceCheckPrompt(resource)}\x1b[201~\r`,
             });
             toast("Resource check sent to chat.");
           } catch (error) {
@@ -172,13 +178,14 @@ function resourceSection(record, expanded = new Set()) {
       );
       expiry.classList.toggle("due", expires - Date.now() < 3600000);
       details.append(expiry);
-    } else if (resource.expiry)
+    } else if (resource.expiry) {
       details.append(
-        el("small", "resource-expiry", "Expiry: " + resource.expiry),
+        el("small", "resource-expiry", `Expiry: ${resource.expiry}`),
       );
+    }
     const cleanup = resource.cleanup || resource.cleanup_responsibility;
     if (cleanup) {
-      details.append(el("p", "resource-cleanup", "Cleanup: " + cleanup));
+      details.append(el("p", "resource-cleanup", `Cleanup: ${cleanup}`));
       actions.append(
         featureButton(
           "Copy cleanup",
@@ -211,7 +218,7 @@ function resourceSection(record, expanded = new Set()) {
         details.append(a);
       } else {
         const copy = featureButton(
-          ref.category + " ⧉",
+          `${ref.category} ⧉`,
           async () => {
             try {
               await serviceClient.copyText(ref.value);
@@ -240,8 +247,9 @@ function resourceSection(record, expanded = new Set()) {
           !["https:", "http:"].includes(url.protocol) ||
           url.username ||
           url.password
-        )
+        ) {
           continue;
+        }
         const a = el(
           "a",
           "resource-link",
@@ -264,11 +272,15 @@ function resourceSection(record, expanded = new Set()) {
     details.append(metadata);
     return details;
   }
-  for (const resource of recent) section.append(row(resource));
+  for (const resource of recent) {
+    section.append(row(resource));
+  }
   if (past.length) {
     const history = el("details", "resource-history");
-    history.append(el("summary", "", "Past resources · " + past.length));
-    for (const resource of past) history.append(row(resource));
+    history.append(el("summary", "", `Past resources · ${past.length}`));
+    for (const resource of past) {
+      history.append(row(resource));
+    }
     section.append(history);
   }
   return section;

@@ -25,8 +25,9 @@ test("named render hooks run in explicit order regardless of registration order"
       ];
     for (const [name, phase, order] of reverse
       ? registers.toReversed()
-      : registers)
+      : registers) {
       f.c.registerRenderHook(name, () => f.events.push(name), { phase, order });
+    }
     assert.equal(f.c.render(), 42);
     assert.deepEqual(f.events, ["prepare", "page", "alpha", "beta", "last"]);
     assert.throws(
@@ -87,7 +88,9 @@ test("workspace owner routes each page while shared controls and gear always ref
       dataset: {},
     }),
     $ = (key) => {
-      if (!nodes.has(key)) nodes.set(key, node());
+      if (!nodes.has(key)) {
+        nodes.set(key, node());
+      }
       return nodes.get(key);
     };
   const c = browserContext({
@@ -149,17 +152,17 @@ test("workspace owner routes each page while shared controls and gear always ref
     )
       ? page
       : "work";
-    assert.ok(events.includes(owner), page + " page renderer");
+    assert.ok(events.includes(owner), `${page} page renderer`);
     assert.deepEqual(
       events.slice(-3),
       ["saved-controls", "saved-sidebar", "gear"],
-      page + " shared controls",
+      `${page} shared controls`,
     );
     assert.equal(events[0], "saved-state");
     assert.equal(
       events.includes("park"),
       page !== "agents",
-      page + " terminal lifecycle",
+      `${page} terminal lifecycle`,
     );
   }
 });
@@ -176,7 +179,9 @@ test("shared UX hook cleans active chat effects on every page, including a faile
     });
   f.c.document = {
     querySelector: (key) => {
-      if (!nodes.has(key)) nodes.set(key, node());
+      if (!nodes.has(key)) {
+        nodes.set(key, node());
+      }
       return nodes.get(key);
     },
     body: {
@@ -229,7 +234,9 @@ test("restart availability and GitHub attention hooks retain their actual UI eff
       querySelectorAll: () => [],
     }),
     $ = (key) => {
-      if (!nodes.has(key)) nodes.set(key, node());
+      if (!nodes.has(key)) {
+        nodes.set(key, node());
+      }
       return nodes.get(key);
     };
   f.c.document = {

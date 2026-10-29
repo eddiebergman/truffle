@@ -182,7 +182,7 @@ test("settings and visibility loaders discard delayed background responses after
       "static/client.js",
       "static/app.js",
       "static/features.js",
-      "static/" + file,
+      `static/${file}`,
     ]);
     const pending = c[functionName]({ canApply: () => allow });
     allow = false;

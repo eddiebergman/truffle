@@ -177,7 +177,7 @@ test("closing a tab targets its process generation and retains saved conversatio
       ],
     },
     selectedAgentKey: "embedded:one",
-    candidateKey: (c) => "embedded:" + c.recordId,
+    candidateKey: (c) => `embedded:${c.recordId}`,
     persist() {},
     render() {},
     loadInventory: async () => {},
@@ -209,7 +209,9 @@ test("reopening closed tabs uses a persisted LIFO stack and queues repeated pres
     selectAgent() {},
     openSavedSession: async (r) => {
       opened.push(r.id);
-      if (r.id === "three") await gate;
+      if (r.id === "three") {
+        await gate;
+      }
       live.add(r.id);
     },
     loadInventory: async () => {},
@@ -320,8 +322,9 @@ test("Shift-Enter sends one multiline sequence while preserving normal submit, a
     { altKey: true },
     { isComposing: true },
     { key: "a" },
-  ])
+  ]) {
     assert.equal(handle(terminal, event(extra)), true);
+  }
   assert.equal(sent.length, 1);
   assert.equal(prevented, 2);
 });
@@ -338,7 +341,7 @@ function snoozeContext(extra = {}) {
     agentRename: null,
     inventory: { candidates: [candidate, other] },
     state: { sessions: [{ id: "one", title: "First" }] },
-    candidateKey: (c) => "embedded:" + c.recordId,
+    candidateKey: (c) => `embedded:${c.recordId}`,
     recordForCandidate: (c) => ({ id: c.recordId, title: c.title }),
     liveCandidates: () => [candidate, other],
     persist() {},
@@ -423,7 +426,7 @@ test("selecting an agent through a work link restores its snoozed tab", () => {
     selectedAgentKey: "",
     agentRename: null,
     snoozedAgentTabs: { "embedded:one": { at: 1 } },
-    candidateKey: (c) => "embedded:" + c.recordId,
+    candidateKey: (c) => `embedded:${c.recordId}`,
     persist() {
       saved++;
     },
@@ -460,9 +463,11 @@ function tabKeyboardFixture() {
       );
     },
     closest(selector) {
-      for (let current = this; current; current = current.parent)
-        if (selector === ".xterm" && current.cls.split(" ").includes("xterm"))
+      for (let current = this; current; current = current.parent) {
+        if (selector === ".xterm" && current.cls.split(" ").includes("xterm")) {
           return current;
+        }
+      }
       return null;
     },
   });
@@ -493,10 +498,11 @@ function tabKeyboardFixture() {
       c.selectedAgentKey = x.recordId;
     },
   });
-  for (const x of candidates)
+  for (const x of candidates) {
     c.terminalViews.set(x.recordId, {
       terminal: { focus: () => focused.push(x.recordId) },
     });
+  }
   const press = (target = input, flags = {}) => {
     let prevented = 0,
       stopped = 0;
@@ -511,7 +517,9 @@ function tabKeyboardFixture() {
       },
       ...flags,
     };
-    for (const listener of host.document.listeners.keydown) listener(event);
+    for (const listener of host.document.listeners.keydown) {
+      listener(event);
+    }
     return { prevented, stopped };
   };
   return {
@@ -530,12 +538,14 @@ function tabKeyboardFixture() {
 
 test("Tab and Shift+Tab reach the terminal and page instead of switching chats", () => {
   const f = tabKeyboardFixture();
-  for (const target of [f.input, f.body, f.terminal])
-    for (const shiftKey of [false, true])
+  for (const target of [f.input, f.body, f.terminal]) {
+    for (const shiftKey of [false, true]) {
       assert.deepEqual(f.press(target, { shiftKey }), {
         prevented: 0,
         stopped: 0,
       });
+    }
+  }
   assert.deepEqual(f.selected, []);
 });
 test("agent tabs show an evidenced attention reason without guessing from an idle process", () => {
@@ -546,11 +556,12 @@ test("agent tabs show an evidenced attention reason without guessing from an idl
     ["approval", "Approval"],
     ["question", "Question"],
     ["failed", "Failed"],
-  ])
+  ]) {
     assert.equal(
       info(candidate, { runtime: { state: "waiting", reason, at: 200 } }).label,
       label,
     );
+  }
   assert.equal(
     info(candidate, { runtime: { state: "waiting", at: 200 } }).label,
     "Waiting",
@@ -575,10 +586,12 @@ test("inventory waiters share the pending request and a fresh request waits for 
       querySelector: (selector) =>
         selector === "dialog[open]" ? null : { replaceChildren() {} },
     },
-    Option: function () {},
+    Option: class {},
     api: async () => {
       requests++;
-      if (requests === 1) await gate;
+      if (requests === 1) {
+        await gate;
+      }
       return {
         candidates: requests === 1 ? [] : [{ recordId: "chat", live: true }],
         directories: [],
@@ -608,11 +621,13 @@ function titlebarEditorHarness() {
       selector === ".compact-launcher" ? launcher : null,
     insertBefore(node, before) {
       children.splice(children.indexOf(before), 0, node);
-      nodes.set("#" + node.id, node);
+      nodes.set(`#${node.id}`, node);
     },
     append(node) {
       const index = children.indexOf(node);
-      if (index >= 0) children.splice(index, 1);
+      if (index >= 0) {
+        children.splice(index, 1);
+      }
       children.push(node);
     },
   };
@@ -635,7 +650,7 @@ function titlebarEditorHarness() {
     }),
     agentIcon: () => ({}),
     liveCandidates: () => [candidate],
-    candidateKey: (c) => "embedded:" + c.recordId,
+    candidateKey: (c) => `embedded:${c.recordId}`,
     recordForCandidate: () => record,
     state: { sessions: [record] },
     selectedAgentKey: "embedded:one",
@@ -738,10 +753,15 @@ function liveBarFixture() {
   const matches = (node, selector) =>
     selector.split(",").some((part) => {
       part = part.trim();
-      if (part === "[hidden]") return node.hidden;
-      if (part === "dialog[open]")
+      if (part === "[hidden]") {
+        return node.hidden;
+      }
+      if (part === "dialog[open]") {
         return node.tagName === "DIALOG" && node.open;
-      if (part === "[data-agent-control]") return !!node.dataset.agentControl;
+      }
+      if (part === "[data-agent-control]") {
+        return Boolean(node.dataset.agentControl);
+      }
       return (
         part.startsWith(".") &&
         node.className.split(" ").includes(part.slice(1))
@@ -760,8 +780,9 @@ function liveBarFixture() {
       this.disabled = false;
       this.classList = {
         add: (name) => {
-          if (!this.className.split(" ").includes(name))
-            this.className += " " + name;
+          if (!this.className.split(" ").includes(name)) {
+            this.className += ` ${name}`;
+          }
         },
         contains: (name) => this.className.split(" ").includes(name),
         toggle: (name, enabled) => {
@@ -769,12 +790,14 @@ function liveBarFixture() {
             .split(" ")
             .filter((value) => value !== name)
             .join(" ");
-          if (enabled) this.className += " " + name;
+          if (enabled) {
+            this.className += ` ${name}`;
+          }
         },
       };
     }
     get isConnected() {
-      return this === document.body || !!this.parentElement?.isConnected;
+      return this === document.body || Boolean(this.parentElement?.isConnected);
     }
     contains(node) {
       return (
@@ -790,8 +813,9 @@ function liveBarFixture() {
     }
     remove() {
       if (this.parentElement) {
-        if (this.contains(document.activeElement))
+        if (this.contains(document.activeElement)) {
           document.activeElement = document.body;
+        }
         this.parentElement.children = this.parentElement.children.filter(
           (child) => child !== this,
         );
@@ -799,9 +823,12 @@ function liveBarFixture() {
       }
     }
     replaceChildren(...children) {
-      if (this.contains(document.activeElement))
+      if (this.contains(document.activeElement)) {
         document.activeElement = document.body;
-      for (const child of this.children) child.parentElement = null;
+      }
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
       this.children = [];
       this.append(...children);
     }
@@ -815,15 +842,20 @@ function liveBarFixture() {
       return this.querySelectorAll(selector)[0] || null;
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
-        if (matches(node, selector)) return node;
+      for (let node = this; node; node = node.parentElement) {
+        if (matches(node, selector)) {
+          return node;
+        }
+      }
       return null;
     }
     setAttribute(key, value) {
       this.attrs[key] = value;
     }
     getClientRects() {
-      if (!this.isConnected || this.closest("[hidden]")) return [];
+      if (!this.isConnected || this.closest("[hidden]")) {
+        return [];
+      }
       for (
         let child = this, parent = this.parentElement;
         parent;
@@ -835,8 +867,9 @@ function liveBarFixture() {
             !parent.open &&
             child !==
               parent.children.find((node) => node.tagName === "SUMMARY"))
-        )
+        ) {
           return [];
+        }
       }
       return [{}];
     }
@@ -859,10 +892,11 @@ function liveBarFixture() {
       const tab = selector.match(
         /^#live-agent-bar \.agent-tab\[data-agent-key="([^"]+)"\]$/,
       );
-      if (tab)
+      if (tab) {
         return nodes
           .get("#live-agent-bar")
           .children.find((node) => node.dataset.agentKey === tab[1]);
+      }
       return nodes.get(selector) || document.body.querySelector(selector);
     },
     querySelectorAll: (selector) => document.body.querySelectorAll(selector),
@@ -876,7 +910,7 @@ function liveBarFixture() {
     ["new-note", "button"],
   ]) {
     const node = new Node(tag);
-    nodes.set("#" + id, node);
+    nodes.set(`#${id}`, node);
     document.body.append(node);
   }
   const candidates = ["one", "two", "three"].map((id, index) => ({
@@ -885,7 +919,7 @@ function liveBarFixture() {
       recordId: id,
       sessionId: null,
       live: true,
-      generation: "generation-" + id,
+      generation: `generation-${id}`,
       startedAt: 100 + index,
     })),
     state = {
@@ -920,10 +954,10 @@ function liveBarFixture() {
     updateTabDensity() {},
     skillInboxCounts: () => ({ total: 0 }),
     openLaunch: () => actions.push("manage"),
-    snoozeAgentTab: (candidate) => actions.push("snooze:" + candidate.recordId),
-    closeAgentTab: (candidate) => actions.push("close:" + candidate.recordId),
+    snoozeAgentTab: (candidate) => actions.push(`snooze:${candidate.recordId}`),
+    closeAgentTab: (candidate) => actions.push(`close:${candidate.recordId}`),
     selectAgent: (record, candidate) =>
-      actions.push("select:" + candidate.recordId),
+      actions.push(`select:${candidate.recordId}`),
     persist() {},
     toast() {},
   });
@@ -931,7 +965,7 @@ function liveBarFixture() {
   c.renderLiveBar();
   const bar = nodes.get("#live-agent-bar"),
     tab = (id) =>
-      bar.children.find((node) => node.dataset.agentKey === "embedded:" + id),
+      bar.children.find((node) => node.dataset.agentKey === `embedded:${id}`),
     control = (id, role) =>
       tab(id)
         ?.querySelectorAll("[data-agent-control]")
@@ -967,8 +1001,9 @@ test("actual live bar keeps focused tab actions across runtime, title and subage
     "attach-artifact",
   ]) {
     const f = liveBarFixture();
-    if (["manage", "attach-work", "attach-artifact"].includes(role))
+    if (["manage", "attach-work", "attach-artifact"].includes(role)) {
       f.menu("one").open = true;
+    }
     const old = f.control("one", role);
     old.focus();
     assert.equal(f.document.activeElement, old);
@@ -1011,7 +1046,7 @@ test("actual live bar preserves only currently open selected actions for the sam
     f.control("one", role).onclick();
     assert.equal(f.menu("one").open, false);
     assert.equal(attach.open, true);
-    assert.equal(f.c.agentContextReveals.has("one:" + kind), true);
+    assert.equal(f.c.agentContextReveals.has(`one:${kind}`), true);
     assert.equal(f.c.agentSidebarCollapsed, false);
     assert.equal(f.c.linkedWorkCollapsed, false);
     assert.equal(f.c.contextSectionsCollapsed.results, false);
@@ -1108,8 +1143,11 @@ test("live bar never takes outside or terminal focus, nor focuses behind a modal
       }
     };
     f.control("one", "snooze").focus();
-    if (mode.startsWith("during-")) f.c.renderSnoozedAgents = change;
-    else change();
+    if (mode.startsWith("during-")) {
+      f.c.renderSnoozedAgents = change;
+    } else {
+      change();
+    }
     f.bump();
     assert.equal(f.document.activeElement, expected, mode);
     assert.deepEqual(f.actions, []);
@@ -1169,8 +1207,11 @@ test("deliberate source or selection navigation does not revive old menu ownersh
     const f = liveBarFixture();
     f.menu("one").open = true;
     f.control("one", "manage").focus();
-    if (mode === "page") f.c.source = "notes";
-    else f.c.selectedAgentKey = "embedded:two";
+    if (mode === "page") {
+      f.c.source = "notes";
+    } else {
+      f.c.selectedAgentKey = "embedded:two";
+    }
     f.c.renderLiveBar();
     assert.equal(f.document.activeElement, f.document.body);
     assert.equal(f.menu(mode === "page" ? "one" : "two").open, false);
@@ -1201,7 +1242,7 @@ test("agent tabs show the title and shortcut and open their actions on right-cli
     selected = [];
   f.c.selectAgent = (record, candidate) => {
     selected.push(record.id);
-    f.c.selectedAgentKey = "embedded:" + candidate.recordId;
+    f.c.selectedAgentKey = `embedded:${candidate.recordId}`;
     f.c.renderLiveBar();
   };
   assert.equal(f.tab("one").querySelectorAll(".live-agent-state").length, 0);

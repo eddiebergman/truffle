@@ -106,14 +106,18 @@ const pageSettingsCatalog = {
   },
 };
 function pageSettingsAllows(item, page = source) {
-  if (item.source !== page) return true;
+  if (item.source !== page) {
+    return true;
+  }
   const scopes = pageSettingsDocument?.pages?.[item.source]?.scopes;
   return !Array.isArray(scopes) || scopes.includes(scopeKey(item));
 }
 async function loadPageSettings({ canApply = () => true } = {}) {
   try {
     const next = await api("/api/page-settings");
-    if (!canApply()) return null;
+    if (!canApply()) {
+      return null;
+    }
     pageSettingsDocument = next;
     render();
     return next;
@@ -125,8 +129,8 @@ function pageSettingsGear(page) {
   const button = el("button", "text-button page-settings-gear");
   button.type = "button";
   button.title = pageSettingsCatalog[page]?.scope
-    ? "Configure " + pageSettingsCatalog[page].label + " visibility"
-    : (pageSettingsCatalog[page]?.label || "Page") + " settings";
+    ? `Configure ${pageSettingsCatalog[page].label} visibility`
+    : `${pageSettingsCatalog[page]?.label || "Page"} settings`;
   button.setAttribute("aria-label", button.title);
   button.innerHTML =
     '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.8 2.5-2 .9L3.8 6l-2 3.5 1.7 1.9v2l-1.7 1.9 2 3.5 2.4-.4 2 .9L9 22h4l.8-2.7 2-.9 2.4.4 2-3.5-1.7-1.9v-2l1.7-1.9-2-3.5-2.4.4-2-.9L13 3Z"/><circle cx="11" cy="12.5" r="3"/></svg>';
@@ -140,7 +144,9 @@ function renderPageSettingsGear() {
     return;
   }
   const host = source === "agents" ? $("#agent-topbar") : $(".page-heading");
-  if (!host) return;
+  if (!host) {
+    return;
+  }
   if (!button) {
     button = pageSettingsGear(source);
     button.dataset.pageSettingsGear = source;
@@ -148,12 +154,14 @@ function renderPageSettingsGear() {
   if (button.dataset.pageSettingsGear !== source) {
     button.dataset.pageSettingsGear = source;
     button.title = pageSettingsCatalog[source].scope
-      ? "Configure " + pageSettingsCatalog[source].label + " visibility"
-      : pageSettingsCatalog[source].label + " settings";
+      ? `Configure ${pageSettingsCatalog[source].label} visibility`
+      : `${pageSettingsCatalog[source].label} settings`;
     button.setAttribute("aria-label", button.title);
   }
   button.onclick = () => void openPageSettings(source);
-  if (button.parentElement !== host) host.append(button);
+  if (button.parentElement !== host) {
+    host.append(button);
+  }
 }
 async function openPageSettingsCategory(category) {
   return openPreferences({ category });
@@ -173,17 +181,19 @@ function pageSettingsActions(label) {
 }
 async function openPageSettings(page) {
   const definition = pageSettingsCatalog[page];
-  if (!definition) return;
+  if (!definition) {
+    return;
+  }
   if (
     typeof currentSavedViewState === "function" &&
     currentSavedViewState(page)
   ) {
     const dialog = el("dialog", "page-settings-dialog");
-    dialog.setAttribute("aria-label", definition.label + " settings");
+    dialog.setAttribute("aria-label", `${definition.label} settings`);
     const heading = el("header", "page-settings-header");
-    heading.append(el("h2", "", definition.label + " settings"));
+    heading.append(el("h2", "", `${definition.label} settings`));
     dialog.append(heading);
-    const actions = pageSettingsActions(definition.label + " settings actions");
+    const actions = pageSettingsActions(`${definition.label} settings actions`);
     actions.append(
       pageSettingsButton(
         "Edit this view’s filters",
@@ -194,13 +204,14 @@ async function openPageSettings(page) {
         "primary",
       ),
     );
-    if (definition.scope)
+    if (definition.scope) {
       actions.append(
-        pageSettingsButton("Choose visible " + definition.scope, () => {
+        pageSettingsButton(`Choose visible ${definition.scope}`, () => {
           dialog.close();
           void openPageVisibilitySettings(page);
         }),
       );
+    }
     actions.append(pageSettingsButton("Close", () => dialog.close()));
     dialog.append(actions);
     dialog.addEventListener("close", () => dialog.remove(), { once: true });
@@ -212,13 +223,15 @@ async function openPageSettings(page) {
 }
 async function openPageVisibilitySettings(page) {
   const definition = pageSettingsCatalog[page];
-  if (!definition) return;
+  if (!definition) {
+    return;
+  }
   if (!definition.scope) {
     await openPageSettingsCategory(definition.category);
     return;
   }
   const dialog = el("dialog", "page-settings-dialog");
-  dialog.setAttribute("aria-label", definition.label + " settings");
+  dialog.setAttribute("aria-label", `${definition.label} settings`);
   let saving = false,
     accepted = false,
     conflicted = false,
@@ -226,10 +239,12 @@ async function openPageVisibilitySettings(page) {
     retry = null;
   const dismiss = () => requestDialogClose(dialog);
   dialog.addEventListener("cancel", (event) => {
-    if (saving) event.preventDefault();
+    if (saving) {
+      event.preventDefault();
+    }
   });
   const header = el("header", "page-settings-header");
-  header.append(el("h2", "", definition.label + " settings"));
+  header.append(el("h2", "", `${definition.label} settings`));
   const close = pageSettingsButton("×", dismiss);
   close.dataset.size = "icon";
   close.setAttribute("aria-label", "Close page settings");
@@ -253,12 +268,14 @@ async function openPageVisibilitySettings(page) {
   };
   const releaseFocus = (target) => {
     restoreFormFocus(current, target);
-    if (document.activeElement === status)
+    if (document.activeElement === status) {
       status.textContent =
         error.textContent || "Page visibility is ready for review.";
-    else status.hidden = true;
+    } else {
+      status.hidden = true;
+    }
   };
-  const actions = pageSettingsActions(definition.label + " visibility actions");
+  const actions = pageSettingsActions(`${definition.label} visibility actions`);
   try {
     pageSettingsDocument = await api("/api/page-settings");
     const revision = pageSettingsDocument.revision,
@@ -278,19 +295,17 @@ async function openPageVisibilitySettings(page) {
     all.checked = selected === null;
     label.append(
       all,
-      document.createTextNode(
-        "All " + definition.scope + ", including new ones",
-      ),
+      document.createTextNode(`All ${definition.scope}, including new ones`),
     );
     dialog.append(label);
     const search = el("input", "page-settings-search");
     search.type = "search";
-    search.placeholder = "Find " + definition.scope + "…";
+    search.placeholder = `Find ${definition.scope}…`;
     search.setAttribute("aria-label", search.placeholder);
     dialog.append(search);
     const list = el("div", "page-settings-scopes");
     list.setAttribute("role", "group");
-    list.setAttribute("aria-label", "Visible " + definition.scope);
+    list.setAttribute("aria-label", `Visible ${definition.scope}`);
     const inputs = [];
     for (const scope of choices) {
       const row = el("label", "page-settings-choice"),
@@ -310,29 +325,37 @@ async function openPageVisibilitySettings(page) {
       inputs.push(input);
       list.append(row);
     }
-    if (!choices.length)
+    if (!choices.length) {
       list.append(
         el(
           "p",
           "form-hint",
-          "No " +
-            definition.scope +
-            " are cached yet. Connect and sync this source first.",
+          `No ${
+            definition.scope
+          } are cached yet. Connect and sync this source first.`,
         ),
       );
+    }
     all.onchange = () => {
-      if (saving || accepted) return;
-      for (const input of inputs) input.disabled = all.checked;
+      if (saving || accepted) {
+        return;
+      }
+      for (const input of inputs) {
+        input.disabled = all.checked;
+      }
     };
     search.oninput = () => {
-      for (const row of list.children)
+      for (const row of list.children) {
         row.hidden = !row.textContent
           .toLowerCase()
           .includes(search.value.toLowerCase());
+      }
     };
     dialog.append(list);
     const clear = pageSettingsButton("Clear selection", () => {
-      if (saving || accepted) return;
+      if (saving || accepted) {
+        return;
+      }
       all.checked = false;
       for (const input of inputs) {
         input.disabled = false;
@@ -345,8 +368,9 @@ async function openPageVisibilitySettings(page) {
         scopePrefs[page] &&
         Array.isArray(pageSettingsDocument.pages[page].scopes) &&
         !pageSettingsDocument.pages[page].scopes.includes(scopePrefs[page])
-      )
+      ) {
         scopePrefs[page] = "";
+      }
       persist();
       render();
       dialog.close();
@@ -357,7 +381,9 @@ async function openPageVisibilitySettings(page) {
         "Visibility saved. The dashboard could not refresh. Use Refresh view; do not save again.";
       if (!retry) {
         retry = pageSettingsButton("Refresh view", () => {
-          if (saving || !accepted) return;
+          if (saving || !accepted) {
+            return;
+          }
           status.hidden = false;
           status.textContent = "Refreshing view…";
           holdFormFocus(dialog, current);
@@ -374,7 +400,9 @@ async function openPageVisibilitySettings(page) {
     };
     const save = pageSettingsButton("Save visibility", null, "primary");
     save.onclick = async () => {
-      if (saving || accepted || conflicted) return;
+      if (saving || accepted || conflicted) {
+        return;
+      }
       saving = true;
       current.pending = true;
       error.textContent = "";
@@ -399,10 +427,11 @@ async function openPageVisibilitySettings(page) {
           } catch {
             presentationFailed();
           }
-        } else
+        } else {
           toast(
             "Visibility saved. Refresh the dashboard to see the changes; do not save again.",
           );
+        }
       } catch (e) {
         error.dataset.tone = "error";
         if (e.status === 409) {
@@ -413,21 +442,29 @@ async function openPageVisibilitySettings(page) {
             reload = pageSettingsButton(
               "Discard selection and reload",
               async () => {
-                if (saving) return;
+                if (saving) {
+                  return;
+                }
                 dismiss();
-                if (!dialog.open) await openPageVisibilitySettings(page);
+                if (!dialog.open) {
+                  await openPageVisibilitySettings(page);
+                }
               },
             );
             actions.insertBefore(reload, save);
           }
-        } else error.textContent = e.message;
+        } else {
+          error.textContent = e.message;
+        }
       } finally {
         saving = false;
         current.pending = false;
         freezeFeatureForm(current, false);
         if (accepted) {
           all.disabled = true;
-          for (const input of inputs) input.disabled = true;
+          for (const input of inputs) {
+            input.disabled = true;
+          }
           clear.disabled = true;
         }
         save.disabled = conflicted || accepted;
@@ -442,18 +479,22 @@ async function openPageVisibilitySettings(page) {
     error.textContent = e.message;
   }
   const category = pageSettingsButton(
-    "Open " +
-      ({
+    `Open ${
+      {
         connections: "Connections",
         agents: "Agents & workflows",
         appearance: "Appearance",
         data: "Data & profiles",
-      }[definition.category] || "Settings") +
-      " settings",
+      }[definition.category] || "Settings"
+    } settings`,
     () => {
-      if (saving) return;
+      if (saving) {
+        return;
+      }
       dismiss();
-      if (!dialog.open) void openPageSettingsCategory(definition.category);
+      if (!dialog.open) {
+        void openPageSettingsCategory(definition.category);
+      }
     },
   );
   const done = pageSettingsButton("Close", dismiss);
@@ -461,7 +502,9 @@ async function openPageVisibilitySettings(page) {
   if (save?.dataset.variant === "primary") {
     actions.insertBefore(category, save);
     actions.insertBefore(done, save);
-  } else actions.append(category, done);
+  } else {
+    actions.append(category, done);
+  }
   dialog.append(error, status, actions);
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
   document.body.append(dialog);

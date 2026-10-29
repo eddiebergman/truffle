@@ -7,11 +7,12 @@ const context = vm.createContext({ URL });
 for (const filename of [
   "static/vendor/markdown-it.min.js",
   "static/markdown.js",
-])
+]) {
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, "..", filename), "utf8"),
     context,
   );
+}
 const render = (text) => context.renderBriefingMarkdown(text);
 
 test("renders briefing structure, nested lists and code without changing code contents", () => {

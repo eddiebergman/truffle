@@ -82,7 +82,8 @@ function dialogFixture({ fail = false } = {}) {
     }
     get isConnected() {
       return (
-        this === body || (!this.removed && !!this.parentElement?.isConnected)
+        this === body ||
+        (!this.removed && Boolean(this.parentElement?.isConnected))
       );
     }
     contains(node) {
@@ -91,7 +92,7 @@ function dialogFixture({ fail = false } = {}) {
       );
     }
     closest(selector) {
-      for (let node = this; node; node = node.parentElement)
+      for (let node = this; node; node = node.parentElement) {
         if (
           selector
             .split(",")
@@ -101,12 +102,16 @@ function dialogFixture({ fail = false } = {}) {
                 (value[0] === "#" && node.id === value.slice(1)) ||
                 (value[0] === "." && node.classList.contains(value.slice(1))),
             )
-        )
+        ) {
           return node;
+        }
+      }
       return null;
     }
     focus(options) {
-      if (this.disabled || this.hidden || !this.isConnected) return;
+      if (this.disabled || this.hidden || !this.isConnected) {
+        return;
+      }
       document.activeElement = this;
       this.focusOptions = options;
       this.focusCount = (this.focusCount || 0) + 1;
@@ -135,10 +140,10 @@ function dialogFixture({ fail = false } = {}) {
       this.attributes[key] = value;
     }
     addEventListener(name, handler) {
-      this["on" + name] = handler;
+      this[`on${name}`] = handler;
     }
     dispatchEvent(event) {
-      this["on" + event.type]?.(event);
+      this[`on${event.type}`]?.(event);
       return !event.defaultPrevented;
     }
     querySelectorAll(selector) {
@@ -155,16 +160,21 @@ function dialogFixture({ fail = false } = {}) {
     }
     close() {
       this.open = false;
-      if (this.contains(document.activeElement)) document.activeElement = body;
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
       this.onclose?.();
     }
     remove() {
-      if (this.contains(document.activeElement)) document.activeElement = body;
+      if (this.contains(document.activeElement)) {
+        document.activeElement = body;
+      }
       this.removed = true;
-      if (this.parentElement)
+      if (this.parentElement) {
         this.parentElement.children = this.parentElement.children.filter(
           (child) => child !== this,
         );
+      }
     }
   }
   const body = new Node("body");
@@ -188,7 +198,9 @@ function dialogFixture({ fail = false } = {}) {
     openSavedViewEditor: () => calls.push("filters"),
     api: async (path, payload) => {
       calls.push({ path, payload });
-      if (fail) throw new Error("Fixture load failed");
+      if (fail) {
+        throw new Error("Fixture load failed");
+      }
       return {
         revision: 7,
         contentHash: "a".repeat(64),
@@ -601,7 +613,9 @@ test("visibility conflict focuses its exact Reload action while preserving selec
     const f = dialogFixture();
     await f.c.openPageVisibilitySettings("sentry");
     const { dialog, save, clear, checks, group } = visibilityNodes(f);
-    if (!selected) clear.onclick();
+    if (!selected) {
+      clear.onclick();
+    }
     save.focus();
     const outcome = pendingVisibility(f),
       saving = save.onclick(),
@@ -617,8 +631,9 @@ test("visibility conflict focuses its exact Reload action while preserving selec
     assert.equal(reload.focusOptions.preventScroll, true);
     assert.equal(status.hidden, true);
     assert.equal(save.disabled, true);
-    for (const check of checks.filter((node) => node.value))
+    for (const check of checks.filter((node) => node.value)) {
       assert.equal(check.disabled, selected);
+    }
     assert.equal(outcome.writes, 1);
     assert.equal(f.nativeFocusDrops, 0);
     assert.equal(f.nativeHiddenDrops, 0);
@@ -692,7 +707,9 @@ test("visibility settlement never takes outside, child-modal or replacement focu
       outside = new f.Node("input");
       f.body.append(outside);
     } else {
-      if (mode === "closed") dialog.close();
+      if (mode === "closed") {
+        dialog.close();
+      }
       const next = new f.Node("dialog");
       f.body.append(next);
       next.showModal();

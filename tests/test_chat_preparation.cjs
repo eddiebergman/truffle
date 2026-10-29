@@ -1,11 +1,11 @@
 const { test } = require("node:test"),
   assert = require("node:assert/strict");
 const { loadScripts, evaluate, rawContext } = require(
-    __dirname + "/helpers/static-script.cjs",
+    `${__dirname}/helpers/static-script.cjs`,
   ),
-  { FakeDocument } = require(__dirname + "/helpers/fake-dom.cjs");
+  { FakeDocument } = require(`${__dirname}/helpers/fake-dom.cjs`);
 const { scriptFixture: base, loadMore, deferred, tick } = require(
-  __dirname + "/helpers/feature-fixture.cjs",
+  `${__dirname}/helpers/feature-fixture.cjs`,
 );
 const id = "10000000-0000-7000-8000-000000000001",
   request = "20000000-0000-4000-8000-000000000001",
@@ -43,7 +43,7 @@ function fixture({
     handler: async (path, payload) => {
       calls.push({ path, payload });
       if (path === "/api/commands/invoke") {
-        if (payload.name.startsWith("chats.prepare."))
+        if (payload.name.startsWith("chats.prepare.")) {
           return prepare
             ? prepare(payload.args, payload.name)
             : {
@@ -53,7 +53,8 @@ function fixture({
                 status: "prepared",
                 reused: false,
               };
-        if (payload.name === "chats.preparation.read")
+        }
+        if (payload.name === "chats.preparation.read") {
           return lookup
             ? lookup(payload.args)
             : {
@@ -63,6 +64,7 @@ function fixture({
                 status: "prepared",
                 reused: false,
               };
+        }
         if (payload.name === "chats.open") {
           opens++;
           return open
@@ -76,8 +78,9 @@ function fixture({
               };
         }
       }
-      if (path === "/api/state")
+      if (path === "/api/state") {
         return stateRead ? stateRead() : structuredClone(canonical);
+      }
       return {};
     },
   });
@@ -102,13 +105,15 @@ function fixture({
               ]
             : [],
         };
-    if (loaded) c.inventory = loaded;
+    if (loaded) {
+      c.inventory = loaded;
+    }
     return loaded;
   };
   c.selectAgent = (record, candidate) => {
     selections.push({ id: record.id, generation: candidate?.generation });
     c.source = "agents";
-    c.selectedAgentKey = "embedded:" + record.id;
+    c.selectedAgentKey = `embedded:${record.id}`;
     const node = new f.Node("div", "embedded-terminal"),
       input = new f.Node("textarea", "xterm-helper-textarea");
     node.append(input);
@@ -121,21 +126,29 @@ function fixture({
   };
   c.localStorage = {
     getItem: (name) => {
-      if (readStorage) throw Error("Storage unavailable");
+      if (readStorage) {
+        throw Error("Storage unavailable");
+      }
       return storage.get(name) ?? null;
     },
     setItem: (name, value) => {
-      if (writeStorage) writeStorage(name, value);
+      if (writeStorage) {
+        writeStorage(name, value);
+      }
       storage.set(name, value);
     },
     removeItem: (name) => storage.delete(name),
   }; // Workspace hooks paint the agent workspace, which this fixture does not have.
   c.registerRenderHook = (name, callback) => {
-    if (!name.startsWith("workspace:")) hooks.push(callback);
+    if (!name.startsWith("workspace:")) {
+      hooks.push(callback);
+    }
   };
   const render = c.render;
   c.render = () => {
-    for (const hook of hooks) hook();
+    for (const hook of hooks) {
+      hook();
+    }
     render();
   };
   // These dialogs are created on first use, so their lookups must not auto-create fixture nodes.
@@ -223,7 +236,9 @@ test("accepted preparation followed by failed GET retains exact ID and recovery 
   let fail = true;
   const f = fixture({
     stateRead: async () => {
-      if (fail) throw Error("GET failed");
+      if (fail) {
+        throw Error("GET failed");
+      }
       return {
         revision: 2,
         sessions: [{ id, agent: "claude", destination: "embedded" }],
@@ -420,7 +435,9 @@ test("post-receipt storage failure preserves known identity and uses phase-neutr
   let count = 0;
   const f = fixture({
     writeStorage: () => {
-      if (++count >= 2) throw Error("Quota");
+      if (++count >= 2) {
+        throw Error("Quota");
+      }
     },
   });
   await f.begin();
@@ -439,7 +456,7 @@ test("actual quick handler strips workflow and freezes folder preference target 
     f = fixture({ prepare: () => waiting.promise });
   Object.assign(f.c, {
     quickStarting: false,
-    folderViewKey: () => f.c.source + ":scope",
+    folderViewKey: () => `${f.c.source}:scope`,
     viewFolderContext: () => null,
     scopeKey: () => "",
     isSource: () => true,
@@ -572,8 +589,9 @@ test("launch attach strips creation fields and unknown creation remains locked t
   assert.ok(f.writes[0], f.$("#launch-error").textContent);
   assert.equal(f.writes[0].payload.name, "chats.prepare.attach");
   const args = f.writes[0].payload.args;
-  for (const field of ["id", "instruction", "projectName", "urls"])
+  for (const field of ["id", "instruction", "projectName", "urls"]) {
     assert.equal(args[field], undefined);
+  }
   assert.equal(f.opens, 0);
   const storage = new Map(),
     g = launchFixture({
@@ -709,7 +727,9 @@ test("pre-open marker must persist before dispatch; a failed completed-marker re
   let writes = 0;
   const before = fixture({
     writeStorage: () => {
-      if (++writes === 3) throw Error("Quota");
+      if (++writes === 3) {
+        throw Error("Quota");
+      }
     },
   });
   await before.begin();
@@ -722,7 +742,9 @@ test("pre-open marker must persist before dispatch; a failed completed-marker re
   let count = 0;
   const after = fixture({
     writeStorage: () => {
-      if (++count === 5) throw Error("Quota");
+      if (++count === 5) {
+        throw Error("Quota");
+      }
     },
   });
   await after.begin();
@@ -759,9 +781,9 @@ test("known preparation does not expose the POST snapshot while its authoritativ
 });
 test("unresolved capacity refuses a new attempt without evicting recovery IDs or sending a command", async () => {
   const attempts = Array.from({ length: 64 }, (_, index) => ({
-      target: "target-" + index,
+      target: `target-${index}`,
       kind: "quick",
-      requestId: "20000000-0000-4000-8000-" + String(index).padStart(12, "0"),
+      requestId: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
       openAttempted: false,
     })),
     storage = new Map([[key, JSON.stringify({ version: 1, attempts })]]),
@@ -812,7 +834,9 @@ test("accepted open keeps durable recovery when selected workspace paint throws 
   const f = fixture();
   let selections = 0;
   f.c.selectAgent = () => {
-    if (++selections === 1) throw Error("Selected workspace paint failed");
+    if (++selections === 1) {
+      throw Error("Selected workspace paint failed");
+    }
   };
   await f.begin();
   const marker = JSON.parse(f.storage.get(key)).attempts[0];
@@ -897,7 +921,7 @@ test("actual quick handler receives recovery after post-open paint failure witho
   const f = fixture();
   Object.assign(f.c, {
     quickStarting: false,
-    folderViewKey: () => f.c.source + ":scope",
+    folderViewKey: () => `${f.c.source}:scope`,
     viewFolderContext: () => null,
     scopeKey: () => "",
     isSource: () => true,
@@ -936,7 +960,7 @@ test("explicit Open prepared chat moves native modal return focus from Plus into
   const view = f.c.terminalViews.get(id);
   assert.equal(f.document.activeElement, view.node.querySelector("textarea"));
   assert.notEqual(f.document.activeElement, f.button);
-  assert.equal(f.c.selectedAgentKey, "embedded:" + id);
+  assert.equal(f.c.selectedAgentKey, `embedded:${id}`);
   assert.equal(f.writes.length, 1);
   assert.equal(f.opens, 1);
 });
@@ -968,7 +992,9 @@ test("prepared terminal focus never steals from replacement input, modal, chat, 
     f.c.selectAgent = (record, candidate) => {
       select(record, candidate);
       const view = f.c.terminalViews.get(id);
-      if (replacement === "input") outside.focus();
+      if (replacement === "input") {
+        outside.focus();
+      }
       if (replacement === "modal") {
         outside.showModal();
         outside.focus();
@@ -978,14 +1004,23 @@ test("prepared terminal focus never steals from replacement input, modal, chat, 
         outside.showModal();
         f.document.body.focus();
       }
-      if (replacement === "chat") f.c.selectedAgentKey = "embedded:replacement";
-      if (replacement === "source") f.c.source = "github";
-      if (replacement === "view-generation") view.generation = "replacement";
-      if (replacement === "generation")
+      if (replacement === "chat") {
+        f.c.selectedAgentKey = "embedded:replacement";
+      }
+      if (replacement === "source") {
+        f.c.source = "github";
+      }
+      if (replacement === "view-generation") {
+        view.generation = "replacement";
+      }
+      if (replacement === "generation") {
         f.c.inventory = {
           candidates: [{ ...candidate, generation: "replacement" }],
         };
-      if (replacement === "disconnected") view.node.remove();
+      }
+      if (replacement === "disconnected") {
+        view.node.remove();
+      }
     };
     f.ui().openButton.focus();
     await f.ui().openButton.onclick();
@@ -995,8 +1030,9 @@ test("prepared terminal focus never steals from replacement input, modal, chat, 
       false,
       replacement,
     );
-    if (["input", "modal"].includes(replacement))
+    if (["input", "modal"].includes(replacement)) {
       assert.equal(f.document.activeElement, outside, replacement);
+    }
     assert.equal(f.opens, 1);
     assert.equal(f.writes.length, 1);
   }
@@ -1077,10 +1113,9 @@ test("pure preparation context prioritizes the connected dialog then newest entr
   const f = fixture(),
     attempts = evaluate(f.raw, "chatPreparations");
   for (let index = 0; index < 64; index++) {
-    const requestId =
-      "30000000-0000-4000-8000-" + String(index).padStart(12, "0");
-    attempts.set("PRIVATE TARGET /secret/" + index, {
-      target: "PRIVATE TARGET /secret/" + index,
+    const requestId = `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+    attempts.set(`PRIVATE TARGET /secret/${index}`, {
+      target: `PRIVATE TARGET /secret/${index}`,
       requestId,
       kind: index % 2 ? "quick" : "recover",
       ...(index % 2 ? { recordId: id } : {}),
@@ -1107,7 +1142,7 @@ test("pure preparation context prioritizes the connected dialog then newest entr
   assert.deepEqual(
     first.entries.map((entry) => entry.requestId),
     [4, 63, 62, 61, 60, 59, 58, 57].map(
-      (index) => "30000000-0000-4000-8000-" + String(index).padStart(12, "0"),
+      (index) => `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     ),
   );
   assert.deepEqual(context(), first);
@@ -1115,13 +1150,14 @@ test("pure preparation context prioritizes the connected dialog then newest entr
     JSON.stringify(first),
     /PRIVATE|secret|target|error|instruction|receipt/i,
   );
-  for (const entry of first.entries)
+  for (const entry of first.entries) {
     assert.deepEqual(
       Object.keys(entry).sort(),
       entry.recordId
         ? ["kind", "openAttempted", "pending", "recordId", "requestId"]
         : ["kind", "openAttempted", "pending", "requestId"],
     );
+  }
   first.entries[0].pending = !first.entries[0].pending;
   assert.equal(context().entries[0].pending, active.pending);
   assert.equal(f.calls.length, calls);
@@ -1131,7 +1167,7 @@ test("pure preparation context prioritizes the connected dialog then newest entr
   assert.deepEqual(
     context().entries.map((entry) => entry.requestId),
     [63, 62, 61, 60, 59, 58, 57, 56].map(
-      (index) => "30000000-0000-4000-8000-" + String(index).padStart(12, "0"),
+      (index) => `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     ),
   );
 });
@@ -1169,13 +1205,14 @@ test("preparation context reports unavailable on invalid recovery state without 
   }
   const f = fixture(),
     attempts = evaluate(f.raw, "chatPreparations");
-  for (let index = 0; index < 65; index++)
+  for (let index = 0; index < 65; index++) {
     attempts.set(String(index), {
-      requestId: "40000000-0000-4000-8000-" + String(index).padStart(12, "0"),
+      requestId: `40000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
       kind: "quick",
       pending: false,
       openAttempted: false,
     });
+  }
   assert.equal(f.c.chatPreparationContext().availability, "unavailable");
   assert.equal(f.calls.length, 0);
 });
@@ -1274,8 +1311,8 @@ test("recovery context canonicalizes UUID duplicate checks even when differently
 });
 function recoveryEntry(f, index = 0, patch = {}) {
   const attempt = {
-    target: "PRIVATE TARGET " + index,
-    requestId: "50000000-0000-4000-8000-" + String(index).padStart(12, "0"),
+    target: `PRIVATE TARGET ${index}`,
+    requestId: `50000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     kind: "quick",
     pending: false,
     openAttempted: false,
@@ -1293,7 +1330,7 @@ function recoveryText(node) {
 test("Chat recovery opens a bounded local list with exact saved titles, honest phases and no private state or effects", () => {
   const f = fixture();
   f.c.state.sessions = [{ id, title: "Known exact title" }];
-  for (let index = 0; index < 64; index++)
+  for (let index = 0; index < 64; index++) {
     recoveryEntry(f, index, {
       ...(index === 63 ? { recordId: id, openAttempted: true } : {}),
       pending: index === 62,
@@ -1301,6 +1338,7 @@ test("Chat recovery opens a bounded local list with exact saved titles, honest p
       instruction: "PRIVATE PROMPT",
       openReceipt: { private: "PRIVATE RECEIPT" },
     });
+  }
   const map = evaluate(f.raw, "chatPreparations"),
     before = JSON.stringify([...map]),
     storage = JSON.stringify([...f.storage]);
@@ -1366,16 +1404,24 @@ test("Inspect rejects removed replaced mutated pending or superseded list rows w
     f.c.openChatRecovery();
     const list = recoveryList(f),
       inspect = list.querySelector("li").querySelector("button");
-    if (change === "removed") map.delete(attempt.target);
-    if (change === "replaced")
+    if (change === "removed") {
+      map.delete(attempt.target);
+    }
+    if (change === "replaced") {
       map.set(attempt.target, { ...attempt, requestId: request });
-    if (change === "request-id") attempt.requestId = request;
-    if (change === "pending") attempt.pending = true;
-    if (change === "list-lifetime")
+    }
+    if (change === "request-id") {
+      attempt.requestId = request;
+    }
+    if (change === "pending") {
+      attempt.pending = true;
+    }
+    if (change === "list-lifetime") {
       list
         .querySelectorAll("button")
         .find((button) => button.textContent === "Update local list")
         .onclick();
+    }
     assert.equal(inspect.onclick(), false, change);
     assert.equal(list.open, true, change);
     assert.equal(f.dialog(), null, change);
@@ -1501,27 +1547,36 @@ test("unavailable clear confirmation refuses changed storage map objects or muta
     const stored = "invalid original",
       f = fixture({ storage: new Map([[key, stored]]) }),
       map = evaluate(f.raw, "chatPreparations");
-    if (["replaced-marker", "mutated-marker"].includes(change))
+    if (["replaced-marker", "mutated-marker"].includes(change)) {
       recoveryEntry(f);
+    }
     f.c.openChatRecovery();
     recoveryList(f)
       .querySelectorAll("button")
       .find((button) => button.textContent === "Review recovery data")
       .onclick();
     f.ui().clearButton.onclick();
-    if (change === "storage") f.storage.set(key, "new window recovery bytes");
-    if (change === "added-marker") recoveryEntry(f);
+    if (change === "storage") {
+      f.storage.set(key, "new window recovery bytes");
+    }
+    if (change === "added-marker") {
+      recoveryEntry(f);
+    }
     if (change === "replaced-marker") {
       const [target, attempt] = [...map][0];
       map.set(target, { ...attempt });
     }
-    if (change === "mutated-marker") [...map.values()][0].pending = true;
-    if (change === "storage-error")
+    if (change === "mutated-marker") {
+      [...map.values()][0].pending = true;
+    }
+    if (change === "storage-error") {
       evaluate(f.raw, "chatPreparationStorageError='PRIVATE CHANGED ERROR'");
-    if (change === "read-failure")
+    }
+    if (change === "read-failure") {
       f.c.localStorage.getItem = () => {
         throw Error("Unavailable read");
       };
+    }
     const before = JSON.stringify([...map]),
       bytes = f.storage.get(key);
     f.ui().confirmButton.onclick();
@@ -1536,16 +1591,18 @@ test("unavailable clear confirmation refuses changed storage map objects or muta
 test("failed unavailable baseline capture disables clear instead of synthesizing an empty recovery baseline", () => {
   for (const bad of ["read", "cyclic", "oversize"]) {
     const f = fixture({ storage: new Map([[key, "invalid original"]]) });
-    if (bad === "read")
+    if (bad === "read") {
       f.c.localStorage.getItem = () => {
         throw Error("No access");
       };
+    }
     if (bad === "cyclic") {
       const attempt = recoveryEntry(f);
       attempt.self = attempt;
     }
-    if (bad === "oversize")
+    if (bad === "oversize") {
       recoveryEntry(f, 0, { error: "private".repeat(12000) });
+    }
     f.c.openChatRecovery();
     recoveryList(f)
       .querySelectorAll("button")
@@ -1570,11 +1627,14 @@ test("explicit successful clear refreshes the presentation once while stale or f
       .find((button) => button.textContent === "Review recovery data")
       .onclick();
     f.ui().clearButton.onclick();
-    if (outcome === "stale") f.storage.set(key, "new recovery bytes");
-    if (outcome === "failed")
+    if (outcome === "stale") {
+      f.storage.set(key, "new recovery bytes");
+    }
+    if (outcome === "failed") {
       f.c.localStorage.removeItem = () => {
         throw Error("Write unavailable");
       };
+    }
     f.ui().confirmButton.onclick();
     assert.equal(renders, outcome === "success" ? 1 : 0, outcome);
     assert.equal(f.storage.has(key), outcome !== "success", outcome);

@@ -25,8 +25,9 @@ try {
 }
 try {
   const stored = JSON.parse(localStorage.getItem(savedViewStorageKey) || "{}");
-  if (stored && typeof stored === "object" && !Array.isArray(stored))
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     savedViewPageStates = stored;
+  }
 } catch {
   // Storage can be unavailable or hold bad JSON; start without saved state.
 }
@@ -64,10 +65,12 @@ function savedViewCalendarFormatter(timezone) {
     timezone.length < 1 ||
     timezone.length > 100 ||
     !/^[-A-Za-z0-9_+]+(?:\/[-A-Za-z0-9_.+]+)*$/.test(timezone)
-  )
+  ) {
     return null;
-  if (savedViewCalendarFormatters.has(timezone))
+  }
+  if (savedViewCalendarFormatters.has(timezone)) {
     return savedViewCalendarFormatters.get(timezone);
+  }
   try {
     const formatter = new Intl.DateTimeFormat("en-US-u-ca-iso8601-nu-latn", {
       timeZone: timezone,
@@ -76,8 +79,9 @@ function savedViewCalendarFormatter(timezone) {
       day: "2-digit",
       era: "short",
     });
-    if (savedViewCalendarFormatters.size >= 32)
+    if (savedViewCalendarFormatters.size >= 32) {
       savedViewCalendarFormatters.clear();
+    }
     savedViewCalendarFormatters.set(timezone, formatter);
     return formatter;
   } catch {
@@ -90,7 +94,9 @@ function savedViewLocalTimeZone() {
 }
 function savedViewCalendarDay(seconds, timezone) {
   const formatter = savedViewCalendarFormatter(timezone);
-  if (!formatter || !Number.isFinite(seconds)) return NaN;
+  if (!formatter || !Number.isFinite(seconds)) {
+    return NaN;
+  }
   try {
     const parts = Object.fromEntries(
       formatter
@@ -113,7 +119,9 @@ function savedViewCalendarDay(seconds, timezone) {
 function matchesSavedViewCalendar(filter, value, nowSeconds) {
   const today = savedViewCalendarDay(nowSeconds, filter.timezone),
     day = savedViewCalendarDay(value, filter.timezone);
-  if (!Number.isFinite(today) || !Number.isFinite(day)) return false;
+  if (!Number.isFinite(today) || !Number.isFinite(day)) {
+    return false;
+  }
   const monday = today - ((new Date(today * 86400000).getUTCDay() + 6) % 7);
   const windows = {
       today: [today, today + 1],
@@ -126,23 +134,28 @@ function matchesSavedViewCalendar(filter, value, nowSeconds) {
   return Boolean(window && day >= window[0] && day < window[1]);
 }
 function savedViewDateSeconds(date) {
-  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return NaN;
-  const value = Date.parse(date + "T00:00:00Z");
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NaN;
+  }
+  const value = Date.parse(`${date}T00:00:00Z`);
   return Number.isFinite(value) &&
     new Date(value).toISOString().slice(0, 10) === date
     ? value / 1000
     : NaN;
 }
 function savedViewTimestamp(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : NaN;
+  }
   if (
     typeof value !== "string" ||
     !/^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i.test(
       value,
     ) ||
     !Number.isFinite(savedViewDateSeconds(value.slice(0, 10)))
-  )
+  ) {
     return NaN;
+  }
   return Date.parse(value) / 1000;
 }
 function validateSavedViewFilter(filter, depth = 0, budget = { nodes: 0 }) {
@@ -152,10 +165,11 @@ function validateSavedViewFilter(filter, depth = 0, budget = { nodes: 0 }) {
     Array.isArray(filter) ||
     depth > 4 ||
     ++budget.nodes > 128
-  )
+  ) {
     throw new Error(
       "Filters support at most four nested levels and 128 conditions.",
     );
+  }
   const keys = Object.keys(filter),
     allowed = (names) => keys.every((key) => names.includes(key));
   if (["all", "any"].includes(filter.op)) {
@@ -163,10 +177,12 @@ function validateSavedViewFilter(filter, depth = 0, budget = { nodes: 0 }) {
       !allowed(["op", "conditions"]) ||
       !Array.isArray(filter.conditions) ||
       filter.conditions.length > 32
-    )
+    ) {
       throw new Error("A filter group supports at most 32 conditions.");
-    for (const condition of filter.conditions)
+    }
+    for (const condition of filter.conditions) {
       validateSavedViewFilter(condition, depth + 1, budget);
+    }
   } else if (["in", "notIn", ...savedViewSetOps].includes(filter.op)) {
     if (
       !allowed(["op", "field", "values"]) ||
@@ -178,20 +194,22 @@ function validateSavedViewFilter(filter, depth = 0, budget = { nodes: 0 }) {
       filter.values.length > 64 ||
       filter.values.some((value) => !savedViewText(value, 500)) ||
       new Set(filter.values).size !== filter.values.length
-    )
+    ) {
       throw new Error(
         "Choose a supported field and one or more distinct values.",
       );
+    }
   } else if (filter.op === "calendarPeriod") {
     if (
       !allowed(["op", "field", "period", "timezone"]) ||
       !savedViewDateFields.includes(filter.field) ||
       !Object.hasOwn(savedViewCalendarPeriods, filter.period) ||
       !savedViewCalendarFormatter(filter.timezone)
-    )
+    ) {
       throw new Error(
         "Choose a calendar period and a supported IANA time zone.",
       );
+    }
   } else if (savedViewDateOps.includes(filter.op)) {
     const relative = ["withinLast", "olderThan"].includes(filter.op);
     if (
@@ -202,16 +220,20 @@ function validateSavedViewFilter(filter, depth = 0, budget = { nodes: 0 }) {
           filter.days < 1 ||
           filter.days > 3650
         : !Number.isFinite(savedViewDateSeconds(filter.date)))
-    )
+    ) {
       throw new Error("Choose a valid UTC date or between 1 and 3650 days.");
+    }
   } else if (filter.op === "equals") {
     if (
       !allowed(["op", "field", "value"]) ||
       filter.field !== "pinned" ||
       typeof filter.value !== "boolean"
-    )
+    ) {
       throw new Error("Pinned must be true or false.");
-  } else throw new Error("Unsupported filter operator.");
+    }
+  } else {
+    throw new Error("Unsupported filter operator.");
+  }
   return filter;
 }
 function validateSavedViewsDocument(doc) {
@@ -227,10 +249,12 @@ function validateSavedViewsDocument(doc) {
     Object.keys(doc).some(
       (key) => !["version", "revision", "contentHash", "views"].includes(key),
     )
-  )
+  ) {
     throw new Error("Unsupported saved views document.");
-  if (new TextEncoder().encode(JSON.stringify(doc)).length > 65536)
+  }
+  if (new TextEncoder().encode(JSON.stringify(doc)).length > 65536) {
     throw new Error("Saved views exceed 64 KiB.");
+  }
   const ids = new Set();
   for (const view of doc.views) {
     if (
@@ -258,8 +282,9 @@ function validateSavedViewsDocument(doc) {
       view.query.includes("\0") ||
       !savedViewGroups.includes(view.groupBy) ||
       (view.groupBy === "stack" && view.parent !== "github")
-    )
+    ) {
       throw new Error("Invalid saved view.");
+    }
     ids.add(view.id);
     validateSavedViewFilter(view.filter);
   }
@@ -271,7 +296,9 @@ function savedViewField(item, field) {
       const match =
         typeof item.url === "string" &&
         item.url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\//);
-      if (match) return match[1];
+      if (match) {
+        return match[1];
+      }
     }
     return typeof item.project === "string" && item.project.length
       ? item.project
@@ -304,10 +331,12 @@ function matchesSavedViewFilter(filter, item, nowSeconds = Date.now() / 1000) {
       if (
         !Array.isArray(values) ||
         values.some((value) => typeof value !== "string")
-      )
+      ) {
         return false;
-      if (filter.op === "containsAny")
+      }
+      if (filter.op === "containsAny") {
         return filter.values.some((value) => values.includes(value));
+      }
       return filter.op === "containsAll"
         ? filter.values.every((value) => values.includes(value))
         : filter.values.every((value) => !values.includes(value));
@@ -323,11 +352,15 @@ function matchesSavedViewFilter(filter, item, nowSeconds = Date.now() / 1000) {
     case "beforeDate":
     case "onOrAfterDate": {
       const value = savedViewTimestamp(item[filter.field]);
-      if (!Number.isFinite(value)) return false;
+      if (!Number.isFinite(value)) {
+        return false;
+      }
       const boundary = ["withinLast", "olderThan"].includes(filter.op)
         ? nowSeconds - filter.days * 86400
         : savedViewDateSeconds(filter.date);
-      if (!Number.isFinite(boundary)) return false;
+      if (!Number.isFinite(boundary)) {
+        return false;
+      }
       return filter.op === "withinLast"
         ? value >= boundary && value <= nowSeconds
         : filter.op === "olderThan"
@@ -371,8 +404,9 @@ function defaultSavedViewState(page) {
         : "status",
   };
   const scope = old.scopes?.[page];
-  if (typeof scope === "string" && scope)
+  if (typeof scope === "string" && scope) {
     draft.filter.conditions.push({ op: "in", field: "scope", values: [scope] });
+  }
   if (legacy && legacy !== "active" && legacy !== "all") {
     draft.lifecycle = "any";
     draft.filter.conditions.push({
@@ -384,7 +418,9 @@ function defaultSavedViewState(page) {
   return { id: "", draft };
 }
 function currentSavedViewState(page = source) {
-  if (!savedViewPages.includes(page)) return null;
+  if (!savedViewPages.includes(page)) {
+    return null;
+  }
   let state = savedViewPageStates[page];
   try {
     if (
@@ -395,8 +431,9 @@ function currentSavedViewState(page = source) {
       !savedViewLifecycles.includes(state.draft.lifecycle) ||
       typeof state.draft.query !== "string" ||
       !savedViewGroups.includes(state.draft.groupBy)
-    )
+    ) {
       throw new Error();
+    }
     validateSavedViewFilter(state.draft.filter);
   } catch {
     state = defaultSavedViewState(page);
@@ -406,7 +443,9 @@ function currentSavedViewState(page = source) {
 }
 function resetSavedViewState(page = source) {
   const state = currentSavedViewState(page);
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   state.id = "";
   delete state.base;
   delete state.stale;
@@ -421,30 +460,37 @@ function resetSavedViewState(page = source) {
   persistSavedViewState();
 }
 function prepareSavedViewPage() {
-  if (savedViewRenderedPage === source) return;
+  if (savedViewRenderedPage === source) {
+    return;
+  }
   savedViewRenderedPage = source;
   savedViewUsePage(source);
 }
 function setSavedViewScope(scope, page = source) {
   const state = currentSavedViewState(page);
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   const previous = state.draft.filter,
     conditions = previous.op === "all" ? previous.conditions : [previous];
   state.draft.filter = {
     op: "all",
     conditions: conditions.filter((condition) => condition.field !== "scope"),
   };
-  if (scope)
+  if (scope) {
     state.draft.filter.conditions.push({
       op: "in",
       field: "scope",
       values: [scope],
     });
+  }
   persistSavedViewState();
 }
 function setSavedViewStatus(status, page = source) {
   const state = currentSavedViewState(page);
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   savedViewCapturePresentation(page);
   const previous = state.draft.filter,
     conditions = previous.op === "all" ? previous.conditions : [previous];
@@ -453,12 +499,13 @@ function setSavedViewStatus(status, page = source) {
     conditions: conditions.filter((condition) => condition.field !== "status"),
   };
   state.draft.lifecycle = status === "active" ? "active" : "any";
-  if (status !== "active")
+  if (status !== "active") {
     state.draft.filter.conditions.push({
       op: "in",
       field: "status",
       values: [status],
     });
+  }
   persistSavedViewState();
 }
 function persistSavedViewState() {
@@ -473,8 +520,12 @@ function persistSavedViewState() {
 }
 function savedViewAllows(item, page = source) {
   const state = currentSavedViewState(page);
-  if (!state) return true;
-  if (savedViewsError) return false;
+  if (!state) {
+    return true;
+  }
+  if (savedViewsError) {
+    return false;
+  }
   return savedViewMatches(state.draft, item);
 }
 function savedViewSearchAllows(query, item) {
@@ -496,7 +547,9 @@ function savedViewCount(view, items, nowSeconds = Date.now() / 1000) {
 }
 function savedViewRefresh() {
   persistSavedViewState();
-  if (typeof render === "function") render();
+  if (typeof render === "function") {
+    render();
+  }
 }
 function applySavedViewPresentation(draft) {
   if (
@@ -514,14 +567,21 @@ function applySavedViewPresentation(draft) {
     scopePrefs[draft.parent] = scope ? scope.values[0] : "";
   }
   const query = document.querySelector("#search");
-  if (query) query.value = draft.query;
-  if (typeof groupingPrefs === "object")
+  if (query) {
+    query.value = draft.query;
+  }
+  if (typeof groupingPrefs === "object") {
     groupingPrefs[draft.parent] = draft.groupBy;
-  if (typeof persist === "function") persist();
+  }
+  if (typeof persist === "function") {
+    persist();
+  }
 }
 function activateSavedView(id) {
   const view = savedViewsDocument?.views.find((view) => view.id === id);
-  if (!view) return;
+  if (!view) {
+    return;
+  }
   savedViewPageStates[view.parent] = {
     id: view.id,
     draft: cloneSavedView(view),
@@ -533,18 +593,25 @@ function activateSavedView(id) {
 }
 function savedViewUsePage(page) {
   const state = currentSavedViewState(page);
-  if (state) applySavedViewPresentation(state.draft);
+  if (state) {
+    applySavedViewPresentation(state.draft);
+  }
 }
 function savedViewCapturePresentation(page = source) {
   const state = currentSavedViewState(page);
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   const query = document.querySelector("#search");
-  if (query) state.draft.query = query.value;
+  if (query) {
+    state.draft.query = query.value;
+  }
   if (
     typeof groupingPrefs === "object" &&
     savedViewGroups.includes(groupingPrefs[page])
-  )
+  ) {
     state.draft.groupBy = groupingPrefs[page];
+  }
   persistSavedViewState();
 }
 function sameSavedViewDefinition(left, right) {
@@ -574,7 +641,9 @@ async function loadSavedViews({ canApply = () => true } = {}) {
   try {
     const previous = savedViewsDocument?.views || [],
       next = validateSavedViewsDocument(await api("/api/views"));
-    if (!canApply()) return null;
+    if (!canApply()) {
+      return null;
+    }
     savedViewsDocument = next;
     savedViewsError = "";
     for (const page of savedViewPages) {
@@ -587,7 +656,7 @@ async function loadSavedViews({ canApply = () => true } = {}) {
         ["mine", "review"].includes(prefs.githubView)
       ) {
         const view = next.views.find(
-          (view) => view.id === "github-" + prefs.githubView,
+          (view) => view.id === `github-${prefs.githubView}`,
         );
         if (view) {
           state.id = view.id;
@@ -595,7 +664,9 @@ async function loadSavedViews({ canApply = () => true } = {}) {
           state.base = cloneSavedView(view);
         }
       }
-      if (!state.id) continue;
+      if (!state.id) {
+        continue;
+      }
       const latest = next.views.find(
         (view) => view.id === state.id && view.parent === page,
       );
@@ -614,8 +685,9 @@ async function loadSavedViews({ canApply = () => true } = {}) {
         delete state.stale;
       } else {
         state.base = cloneSavedView(baseline);
-        if (!knownBaseline || !sameSavedViewDefinition(latest, baseline))
+        if (!knownBaseline || !sameSavedViewDefinition(latest, baseline)) {
           state.stale = "changed";
+        }
       }
     }
     savedViewMigrationComplete = true;
@@ -624,13 +696,16 @@ async function loadSavedViews({ canApply = () => true } = {}) {
     } catch {
       // Storage can be unavailable; the migration runs again next time.
     }
-    if (savedViewPages.includes(source))
+    if (savedViewPages.includes(source)) {
       applySavedViewPresentation(currentSavedViewState().draft);
+    }
     persistSavedViewState();
   } catch (error) {
     savedViewsError = error.message || String(error);
   }
-  if (typeof render === "function") render();
+  if (typeof render === "function") {
+    render();
+  }
   return savedViewsDocument;
 }
 function savedViewButton(label, run, cls = "text-button") {
@@ -647,7 +722,9 @@ function savedViewControl(label, run, variant = "secondary") {
 function savedViewSelect(values, selected, onchange, label) {
   const select = el("select");
   select.setAttribute("aria-label", label);
-  for (const [value, title] of values) select.add(new Option(title, value));
+  for (const [value, title] of values) {
+    select.add(new Option(title, value));
+  }
   select.value = selected;
   select.onchange = () => onchange(select.value);
   return select;
@@ -658,7 +735,7 @@ function savedViewSummary(filter) {
       .map(savedViewSummary)
       .join(filter.op === "all" ? " AND " : " OR ");
     return filter.conditions.length > 1
-      ? "(" + text + ")"
+      ? `(${text})`
       : text || (filter.op === "all" ? "All items" : "No items");
   }
   const field = {
@@ -672,51 +749,44 @@ function savedViewSummary(filter) {
     updatedAt: "Updated",
     createdAt: "Created",
   }[filter.field];
-  if (filter.op === "calendarPeriod")
-    return (
-      field +
-      " during " +
-      savedViewCalendarPeriods[filter.period] +
-      " (" +
-      filter.timezone +
-      "; weeks start Monday)"
-    );
-  if (savedViewDateOps.includes(filter.op))
-    return (
-      field +
-      " " +
+  if (filter.op === "calendarPeriod") {
+    return `${field} during ${savedViewCalendarPeriods[filter.period]} (${
+      filter.timezone
+    }; weeks start Monday)`;
+  }
+  if (savedViewDateOps.includes(filter.op)) {
+    return `${field} ${
       {
         withinLast: "within the last",
         olderThan: "more than",
         beforeDate: "before",
         onOrAfterDate: "on or after",
-      }[filter.op] +
-      " " +
-      (["withinLast", "olderThan"].includes(filter.op)
-        ? filter.days +
-          " days" +
-          (filter.op === "olderThan" ? " ago" : "") +
-          " (rolling 24 hours)"
-        : filter.date + " (UTC)")
-    );
-  if (filter.op === "equals")
-    return field + " is " + (filter.value ? "yes" : "no");
-  return (
-    field +
-    " " +
+      }[filter.op]
+    } ${
+      ["withinLast", "olderThan"].includes(filter.op)
+        ? `${filter.days} days${
+            filter.op === "olderThan" ? " ago" : ""
+          } (rolling 24 hours)`
+        : `${filter.date} (UTC)`
+    }`;
+  }
+  if (filter.op === "equals") {
+    return `${field} is ${filter.value ? "yes" : "no"}`;
+  }
+  return `${field} ${
     {
       in: "is",
       notIn: "is not",
       containsAny: "includes any",
       containsAll: "includes all",
       containsNone: "includes none",
-    }[filter.op] +
-    " " +
-    filter.values.join(", ")
-  );
+    }[filter.op]
+  } ${filter.values.join(", ")}`;
 }
 function savedViewRuleCount(filter) {
-  if (!["all", "any"].includes(filter.op)) return 1;
+  if (!["all", "any"].includes(filter.op)) {
+    return 1;
+  }
   return (
     filter.conditions.reduce(
       (count, condition) => count + savedViewRuleCount(condition),
@@ -728,12 +798,16 @@ function renderSavedViewControls() {
   const state = currentSavedViewState();
   let host = document.querySelector("#saved-view-controls");
   if (!state) {
-    if (host) host.hidden = true;
+    if (host) {
+      host.hidden = true;
+    }
     return;
   }
   if (!host) {
     const toolbar = document.querySelector(".toolbar");
-    if (!toolbar) return;
+    if (!toolbar) {
+      return;
+    }
     host = el("div", "saved-view-controls");
     host.id = "saved-view-controls";
     toolbar.append(host);
@@ -742,7 +816,9 @@ function renderSavedViewControls() {
     ? document.activeElement.dataset.savedViewControl
     : null;
   const restoreFocus = () => {
-    if (!focused) return;
+    if (!focused) {
+      return;
+    }
     const buttons = [...host.querySelectorAll("button")],
       target =
         buttons.find(
@@ -783,7 +859,7 @@ function renderSavedViewControls() {
       state.draft.lifecycle = value;
       savedViewRefresh();
     });
-    button.dataset.savedViewControl = "lifecycle:" + value;
+    button.dataset.savedViewControl = `lifecycle:${value}`;
     button.setAttribute(
       "aria-pressed",
       String(state.draft.lifecycle === value),
@@ -796,7 +872,7 @@ function renderSavedViewControls() {
       view && state.base && !sameSavedViewDefinition(state.draft, state.base),
     );
   const rules = savedViewRuleCount(state.draft.filter),
-    filter = savedViewControl("Filters" + (rules ? " · " + rules : ""), () =>
+    filter = savedViewControl(`Filters${rules ? ` · ${rules}` : ""}`, () =>
       openSavedViewEditor(),
     );
   filter.title = savedViewSummary(state.draft.filter);
@@ -817,9 +893,12 @@ function renderSavedViewControls() {
     );
     notice.setAttribute("role", "status");
     host.append(notice);
-  } else if (modified)
+  } else if (modified) {
     host.append(el("small", "form-hint", "Modified · unsaved filters"));
-  if (view) host.append(el("span", "saved-view-name", label));
+  }
+  if (view) {
+    host.append(el("span", "saved-view-name", label));
+  }
   if (view && (modified || state.stale)) {
     const reset = savedViewControl("Reset", () => activateSavedView(view.id));
     reset.dataset.savedViewControl = "reset";
@@ -829,14 +908,18 @@ function renderSavedViewControls() {
   restoreFocus();
 }
 function renderSavedViewSidebar() {
-  if (!savedViewsDocument || savedViewsError) return;
+  if (!savedViewsDocument || savedViewsError) {
+    return;
+  }
   const items = typeof allItems === "function" ? allItems() : [],
     nowSeconds = Date.now() / 1000;
   for (const page of savedViewPages) {
-    const parent = document.querySelector('[data-source="' + page + '"]');
-    if (!parent) continue;
+    const parent = document.querySelector(`[data-source="${page}"]`);
+    if (!parent) {
+      continue;
+    }
     let host =
-      document.querySelector('[data-saved-view-parent="' + page + '"]') ||
+      document.querySelector(`[data-saved-view-parent="${page}"]`) ||
       (page === "github" ? document.querySelector("#github-subnav") : null);
     if (!host) {
       host = el("div", "source-subnav saved-view-subnav");
@@ -851,8 +934,9 @@ function renderSavedViewSidebar() {
     host.setAttribute("role", "group");
     host.setAttribute(
       "aria-label",
-      (typeof sourceNames === "object" ? sourceNames[page] : page) +
-        " saved views",
+      `${
+        typeof sourceNames === "object" ? sourceNames[page] : page
+      } saved views`,
     );
     host.hidden = source !== page;
     host.replaceChildren();
@@ -927,8 +1011,11 @@ function savedViewValueOptions(field) {
   for (const item of typeof allItems === "function" ? allItems() : []) {
     const value =
       field === "relations" ? item.relations : savedViewField(item, field);
-    for (const entry of Array.isArray(value) ? value : [value])
-      if (typeof entry === "string" && entry.trim()) values.add(entry);
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      if (typeof entry === "string" && entry.trim()) {
+        values.add(entry);
+      }
+    }
   }
   return [...values].sort((a, b) => a.localeCompare(b)).slice(0, 100);
 }
@@ -941,10 +1028,12 @@ function savedViewValueEditor(filter, onchange, canEdit) {
   entry.placeholder = "Add value…";
   entry.setAttribute(
     "aria-label",
-    "Add " + savedViewFieldLabels[filter.field] + " value",
+    `Add ${savedViewFieldLabels[filter.field]} value`,
   );
   const sync = () => {
-    if (!canEdit()) return;
+    if (!canEdit()) {
+      return;
+    }
     filter.values = [
       ...new Set([
         ...committed,
@@ -963,7 +1052,9 @@ function savedViewValueEditor(filter, onchange, canEdit) {
       const remove = savedViewButton(
         "×",
         () => {
-          if (!canEdit()) return;
+          if (!canEdit()) {
+            return;
+          }
           committed = committed.filter((item) => item !== value);
           draw();
           sync();
@@ -971,13 +1062,15 @@ function savedViewValueEditor(filter, onchange, canEdit) {
         },
         "saved-view-chip-remove",
       );
-      remove.setAttribute("aria-label", "Remove " + value);
+      remove.setAttribute("aria-label", `Remove ${value}`);
       chip.append(el("span", "", value), remove);
       chips.append(chip);
     }
   };
   const commit = () => {
-    if (!canEdit()) return;
+    if (!canEdit()) {
+      return;
+    }
     committed = [
       ...new Set([
         ...committed,
@@ -993,7 +1086,9 @@ function savedViewValueEditor(filter, onchange, canEdit) {
   };
   entry.oninput = sync;
   entry.onblur = () => {
-    if (entry.value.trim()) commit();
+    if (entry.value.trim()) {
+      commit();
+    }
   };
   entry.onkeydown = (event) => {
     if (event.key === "Enter" && !event.isComposing) {
@@ -1006,7 +1101,9 @@ function savedViewValueEditor(filter, onchange, canEdit) {
       [["", "Choose value…"], ...options.map((value) => [value, value])],
       "",
       (value) => {
-        if (!canEdit()) return;
+        if (!canEdit()) {
+          return;
+        }
         if (value) {
           committed = [...new Set([...committed, value])];
           draw();
@@ -1014,12 +1111,14 @@ function savedViewValueEditor(filter, onchange, canEdit) {
           select.value = "";
         }
       },
-      "Choose " + savedViewFieldLabels[filter.field] + " value",
+      `Choose ${savedViewFieldLabels[filter.field]} value`,
     );
   select.className = "saved-view-value-select";
   draw();
   node.append(chips);
-  if (options.length) node.append(select);
+  if (options.length) {
+    node.append(select);
+  }
   node.append(entry);
   return node;
 }
@@ -1032,7 +1131,9 @@ function savedViewFilterBuilder(
       values,
       selected,
       (value) => {
-        if (canEdit()) change(value);
+        if (canEdit()) {
+          change(value);
+        }
       },
       label,
     );
@@ -1069,8 +1170,12 @@ function savedViewFilterBuilder(
     );
     node.append(heading, children);
     const add = (group) => {
-      if (!canEdit()) return;
-      if (filter.conditions.length >= 32) return;
+      if (!canEdit()) {
+        return;
+      }
+      if (filter.conditions.length >= 32) {
+        return;
+      }
       const focusFromMenu = menu.contains(document.activeElement);
       filter.conditions.push(
         group
@@ -1079,7 +1184,9 @@ function savedViewFilterBuilder(
       );
       menu.open = false;
       draw();
-      if (focusFromMenu) rendered.at(-1)?.row.querySelector("select")?.focus();
+      if (focusFromMenu) {
+        rendered.at(-1)?.row.querySelector("select")?.focus();
+      }
       onchange();
     };
     const condition = savedViewButton("Condition", () => add(false)),
@@ -1105,7 +1212,9 @@ function savedViewFilterBuilder(
         const remove = savedViewButton(
           "×",
           () => {
-            if (!canEdit()) return;
+            if (!canEdit()) {
+              return;
+            }
             const removedIndex = filter.conditions.indexOf(condition);
             filter.conditions.splice(removedIndex, 1);
             draw({ removedIndex });
@@ -1118,7 +1227,7 @@ function savedViewFilterBuilder(
             "aria-label",
             ["all", "any"].includes(condition.op)
               ? "Remove condition group"
-              : "Remove " + savedViewFieldLabels[condition.field] + " rule",
+              : `Remove ${savedViewFieldLabels[condition.field]} rule`,
           );
         updateRemoveLabel();
         row.append(
@@ -1136,7 +1245,7 @@ function savedViewFilterBuilder(
         children.append(row);
         rendered.push({ condition, row });
       }
-      if (!filter.conditions.length)
+      if (!filter.conditions.length) {
         children.append(
           el(
             "p",
@@ -1146,6 +1255,7 @@ function savedViewFilterBuilder(
               : "No rules · matches no items",
           ),
         );
+      }
       condition.disabled = group.disabled = filter.conditions.length >= 32;
       if (previous) {
         const retained = rendered.find(
@@ -1164,7 +1274,9 @@ function savedViewFilterBuilder(
     if (depth < 4) {
       const actions = el("div", "saved-view-add-options");
       actions.append(condition);
-      if (depth < 3) actions.append(group);
+      if (depth < 3) {
+        actions.append(group);
+      }
       menu.append(summary, actions);
       node.append(menu);
     }
@@ -1175,10 +1287,11 @@ function savedViewFilterBuilder(
         ? document.activeElement.getAttribute("aria-label")
         : null;
       draw();
-      if (focused)
+      if (focused) {
         [...node.querySelectorAll("select")]
           .find((control) => control.getAttribute("aria-label") === focused)
           ?.focus();
+      }
     };
     const draw = () => {
       node.replaceChildren(
@@ -1186,7 +1299,9 @@ function savedViewFilterBuilder(
           Object.entries(savedViewFieldLabels),
           filter.field,
           (value) => {
-            for (const key of Object.keys(filter)) delete filter[key];
+            for (const key of Object.keys(filter)) {
+              delete filter[key];
+            }
             Object.assign(
               filter,
               savedViewDateFields.includes(value)
@@ -1218,7 +1333,9 @@ function savedViewFilterBuilder(
           filter.op,
           (value) => {
             const { field, days, date, period, timezone } = filter;
-            for (const key of Object.keys(filter)) delete filter[key];
+            for (const key of Object.keys(filter)) {
+              delete filter[key];
+            }
             Object.assign(
               filter,
               { field, op: value },
@@ -1248,7 +1365,7 @@ function savedViewFilterBuilder(
             ),
             zone = el("input", "saved-view-time-zone"),
             choices = el("datalist");
-          choices.id = "saved-view-timezones-" + ++savedViewTimeZoneInputId;
+          choices.id = `saved-view-timezones-${++savedViewTimeZoneInputId}`;
           for (const name of new Set([
             savedViewLocalTimeZone(),
             "UTC",
@@ -1264,7 +1381,9 @@ function savedViewFilterBuilder(
           zone.setAttribute("list", choices.id);
           zone.setAttribute("aria-label", "Calendar time zone (IANA)");
           zone.oninput = () => {
-            if (!canEdit()) return;
+            if (!canEdit()) {
+              return;
+            }
             filter.timezone = zone.value.trim();
             zone.setCustomValidity?.(
               savedViewCalendarFormatter(filter.timezone)
@@ -1297,19 +1416,21 @@ function savedViewFilterBuilder(
           relative ? "Number of rolling days" : "Date in UTC",
         );
         value.oninput = () => {
-          if (!canEdit()) return;
-          if (relative)
+          if (!canEdit()) {
+            return;
+          }
+          if (relative) {
             filter.days = value.value === "" ? null : Number(value.value);
-          else filter.date = value.value;
+          } else {
+            filter.date = value.value;
+          }
           onchange();
         };
         const hint = el(
           "span",
           "saved-view-date-hint",
           relative
-            ? "days" +
-                (filter.op === "olderThan" ? " ago" : "") +
-                " · rolling 24h"
+            ? `days${filter.op === "olderThan" ? " ago" : ""} · rolling 24h`
             : "UTC",
         );
         hint.title =
@@ -1367,13 +1488,19 @@ async function saveSavedViewDefinition(
   definition,
   { replaceId = "", baseline = savedViewsDocument } = {},
 ) {
-  if (!baseline) throw new Error("Load saved views before saving.");
+  if (!baseline) {
+    throw new Error("Load saved views before saving.");
+  }
   const views = cloneSavedView(baseline.views),
     index = views.findIndex((view) => view.id === replaceId);
-  if (replaceId && index < 0)
+  if (replaceId && index < 0) {
     throw new Error("This view was removed. Save a new view.");
-  if (index >= 0) views[index] = definition;
-  else views.push(definition);
+  }
+  if (index >= 0) {
+    views[index] = definition;
+  } else {
+    views.push(definition);
+  }
   const next = validateSavedViewsDocument({ ...baseline, views });
   savedViewsDocument = validateSavedViewsDocument(
     await api("/api/views", {
@@ -1386,10 +1513,11 @@ async function saveSavedViewDefinition(
   return savedViewsDocument;
 }
 async function deleteSavedViewDefinition(id, baseline) {
-  if (!baseline || !id || !baseline.views.some((view) => view.id === id))
+  if (!baseline || !id || !baseline.views.some((view) => view.id === id)) {
     throw new Error(
       "This saved view is unavailable. Reload views before deleting.",
     );
+  }
   const views = baseline.views.filter((view) => view.id !== id);
   savedViewsDocument = validateSavedViewsDocument(
     await api("/api/views", {
@@ -1403,7 +1531,9 @@ async function deleteSavedViewDefinition(id, baseline) {
 }
 function openSavedViewEditor() {
   const state = currentSavedViewState();
-  if (!state) return;
+  if (!state) {
+    return;
+  }
   savedViewCapturePresentation();
   const page = source;
   let baseline = savedViewsDocument ? cloneSavedView(savedViewsDocument) : null,
@@ -1421,7 +1551,7 @@ function openSavedViewEditor() {
   close.setAttribute("aria-label", "Close filter editor");
   close.className += " close-dialog";
   header.append(
-    el("h2", "", view ? "Edit " + view.name : "Filter work"),
+    el("h2", "", view ? `Edit ${view.name}` : "Filter work"),
     close,
   );
   dialog.append(header);
@@ -1471,17 +1601,24 @@ function openSavedViewEditor() {
     current.pending = false;
     freezeFeatureForm(current, Boolean(accepted));
     retry.disabled = false;
-    if (!current.isCurrent()) return;
-    if (!accepted) status.textContent = error.textContent;
+    if (!current.isCurrent()) {
+      return;
+    }
+    if (!accepted) {
+      status.textContent = error.textContent;
+    }
     restoreFormFocus(current, accepted ? retry : current.focusReturn);
-    if (!accepted && document.activeElement !== status) status.textContent = "";
+    if (!accepted && document.activeElement !== status) {
+      status.textContent = "";
+    }
   };
   const summary = el("p", "form-hint"),
     changed = () => {
       summary.textContent = savedViewSummary(draft.filter);
     };
-  if (!["all", "any"].includes(draft.filter.op))
+  if (!["all", "any"].includes(draft.filter.op)) {
     draft.filter = { op: "all", conditions: [draft.filter] };
+  }
   const filterEditor = savedViewFilterBuilder(draft.filter, {
     onchange: changed,
     canEdit: mutable,
@@ -1492,34 +1629,42 @@ function openSavedViewEditor() {
   const group = savedViewSelect(
     savedViewGroups
       .filter((value) => value !== "stack" || draft.parent === "github")
-      .map((value) => [value, "Group: " + value]),
+      .map((value) => [value, `Group: ${value}`]),
     draft.groupBy,
     (value) => {
-      if (mutable()) draft.groupBy = value;
+      if (mutable()) {
+        draft.groupBy = value;
+      }
     },
     "Group work",
   );
   options.append(group);
   const presentAccepted = () => {
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     if (
       [...document.querySelectorAll("dialog[open]")].some(
         (open) => open !== dialog && !open.contains(dialog),
       )
-    )
+    ) {
       throw new Error("Close the open dialog before refreshing this view.");
+    }
     if (accepted.kind === "save") {
       if (
         !savedViewsDocument?.views.some(
           (row) => row.id === accepted.id && row.parent === page,
         )
-      )
+      ) {
         throw new Error("The saved view is no longer available.");
+      }
       try {
         activateSavedView(accepted.id);
       } finally {
         const selected = currentSavedViewState(page);
-        if (selected.id === accepted.id) current.state = selected;
+        if (selected.id === accepted.id) {
+          current.state = selected;
+        }
       }
     } else {
       current.state.id = "";
@@ -1529,24 +1674,34 @@ function openSavedViewEditor() {
       applySavedViewPresentation(current.state.draft);
       savedViewRefresh();
     }
-    if (current.isCurrent()) dialog.close();
+    if (current.isCurrent()) {
+      dialog.close();
+    }
   };
   const paintFailed = () => {
-    if (!current.isCurrent()) return;
+    if (!current.isCurrent()) {
+      return;
+    }
     error.textContent = "";
-    status.textContent =
-      (accepted.kind === "save" ? "View saved." : "View deleted.") +
-      " The view could not refresh. Use Refresh view; do not repeat this action.";
+    status.textContent = `${
+      accepted.kind === "save" ? "View saved." : "View deleted."
+    } The view could not refresh. Use Refresh view; do not repeat this action.`;
     retry.hidden = false;
   };
   const retry = savedViewControl("Refresh view", async () => {
-    if (!current.isCurrent() || saving || !accepted) return;
+    if (!current.isCurrent() || saving || !accepted) {
+      return;
+    }
     begin("Refreshing saved view…");
     retry.disabled = true;
     try {
       await loadSavedViews({ canApply: current.isCurrent });
-      if (!current.isCurrent()) return;
-      if (savedViewsError) throw new Error(savedViewsError);
+      if (!current.isCurrent()) {
+        return;
+      }
+      if (savedViewsError) {
+        throw new Error(savedViewsError);
+      }
       presentAccepted();
     } catch {
       paintFailed();
@@ -1562,11 +1717,15 @@ function openSavedViewEditor() {
   footer.dataset.align = "end";
   footer.append(
     savedViewControl("Reload views", async () => {
-      if (!mutable()) return;
+      if (!mutable()) {
+        return;
+      }
       begin("Loading saved views…");
       try {
         await loadSavedViews({ canApply: current.isCurrent });
-        if (!current.isCurrent()) return;
+        if (!current.isCurrent()) {
+          return;
+        }
         if (savedViewsError) {
           error.textContent = savedViewsError;
           return;
@@ -1583,7 +1742,9 @@ function openSavedViewEditor() {
         );
         if (conflictingView) {
           copyBaseline = fresh;
-          if (deletionConfirmation) deletionConfirmation.hidden = true;
+          if (deletionConfirmation) {
+            deletionConfirmation.hidden = true;
+          }
           error.textContent =
             "Saved view changed or was removed. Your draft is kept. Close and reopen to edit the latest view, or choose Save as new view to keep this draft separately.";
         } else {
@@ -1593,7 +1754,9 @@ function openSavedViewEditor() {
             "Saved views reloaded. Your filter edits remain here.";
         }
       } catch (e) {
-        if (current.isCurrent()) error.textContent = e.message;
+        if (current.isCurrent()) {
+          error.textContent = e.message;
+        }
       } finally {
         finish();
       }
@@ -1601,7 +1764,9 @@ function openSavedViewEditor() {
   );
   footer.append(
     savedViewControl("Apply filters", () => {
-      if (!mutable()) return;
+      if (!mutable()) {
+        return;
+      }
       try {
         validateSavedViewFilter(draft.filter);
         state.draft = cloneSavedView(draft);
@@ -1614,19 +1779,22 @@ function openSavedViewEditor() {
     }),
   );
   const save = async (asNew) => {
-    if (!mutable()) return;
+    if (!mutable()) {
+      return;
+    }
     try {
-      if (!asNew && conflictingView)
+      if (!asNew && conflictingView) {
         throw new Error(
           "Close and reopen to edit the latest saved view, or choose Save as new view to keep this draft separately.",
         );
+      }
       validateSavedViewFilter(draft.filter);
       if (!savedViewText(name.value, 120)) {
         options.open = true;
         name.focus();
         throw new Error("Enter a view name.");
       }
-      const id = asNew || !view ? "view-" + crypto.randomUUID() : view.id,
+      const id = asNew || !view ? `view-${crypto.randomUUID()}` : view.id,
         definition = cloneSavedView({ ...draft, id, name: name.value.trim() }),
         capturedBaseline = cloneSavedView(
           asNew && copyBaseline ? copyBaseline : baseline,
@@ -1645,12 +1813,15 @@ function openSavedViewEditor() {
         }
       }
     } catch (e) {
-      if (current.isCurrent())
-        error.textContent =
-          e.message +
-          " Your draft is kept. Reload views to check for changes; if this view changed, close and reopen it or save a new view.";
+      if (current.isCurrent()) {
+        error.textContent = `${
+          e.message
+        } Your draft is kept. Reload views to check for changes; if this view changed, close and reopen it or save a new view.`;
+      }
     } finally {
-      if (saving) finish();
+      if (saving) {
+        finish();
+      }
     }
   };
   const saveButton = savedViewControl(
@@ -1664,7 +1835,9 @@ function openSavedViewEditor() {
     footer.append(
       savedViewControl("Save as new view", () => save(true)),
       savedViewControl("Reset", () => {
-        if (!mutable()) return;
+        if (!mutable()) {
+          return;
+        }
         activateSavedView(view.id);
         dialog.close();
       }),
@@ -1676,9 +1849,9 @@ function openSavedViewEditor() {
       el(
         "p",
         "",
-        "Delete “" +
-          view.name +
-          "”? Your current filters will remain as an unsaved view.",
+        `Delete “${
+          view.name
+        }”? Your current filters will remain as an unsaved view.`,
       ),
     );
     const actions = el("div", "ui-actiongroup");
@@ -1686,13 +1859,17 @@ function openSavedViewEditor() {
     actions.setAttribute("aria-label", "Delete view actions");
     actions.append(
       savedViewControl("Keep view", () => {
-        if (!mutable()) return;
+        if (!mutable()) {
+          return;
+        }
         confirmation.hidden = true;
       }),
       savedViewControl(
         "Confirm delete",
         async () => {
-          if (!mutable()) return;
+          if (!mutable()) {
+            return;
+          }
           if (conflictingView) {
             error.textContent =
               "Close and reopen the latest saved view before deleting it.";
@@ -1713,10 +1890,11 @@ function openSavedViewEditor() {
               }
             }
           } catch (e) {
-            if (current.isCurrent())
-              error.textContent =
-                e.message +
-                " Your draft is kept. Reload views to check for changes, or close and reopen the latest view before deleting.";
+            if (current.isCurrent()) {
+              error.textContent = `${
+                e.message
+              } Your draft is kept. Reload views to check for changes, or close and reopen the latest view before deleting.`;
+            }
           } finally {
             finish();
           }
@@ -1730,7 +1908,9 @@ function openSavedViewEditor() {
       savedViewControl(
         "Delete view",
         () => {
-          if (!mutable()) return;
+          if (!mutable()) {
+            return;
+          }
           if (conflictingView) {
             error.textContent =
               "Close and reopen the latest saved view before deleting it.";
@@ -1744,13 +1924,17 @@ function openSavedViewEditor() {
   }
   footer.append(retry);
   dialog.addEventListener("cancel", (event) => {
-    if (saving) event.preventDefault();
+    if (saving) {
+      event.preventDefault();
+    }
   });
   dialog.append(error, status, footer);
   dialog.addEventListener(
     "close",
     () => {
-      if (savedViewEditor === current) savedViewEditor = null;
+      if (savedViewEditor === current) {
+        savedViewEditor = null;
+      }
       dialog.remove();
     },
     { once: true },
@@ -1761,12 +1945,15 @@ function openSavedViewEditor() {
 }
 
 function applyAgentWorkView(command) {
-  if (!savedViewPages.includes(command.source)) return;
+  if (!savedViewPages.includes(command.source)) {
+    return;
+  }
   const previous = currentSavedViewState(command.source),
     conditions = [];
   const lifecycle = command.status === "active" ? "active" : "any";
-  if (!["active", "all"].includes(command.status))
+  if (!["active", "all"].includes(command.status)) {
     conditions.push({ op: "in", field: "status", values: [command.status] });
+  }
   const draft = {
     parent: command.source,
     lifecycle,
@@ -1778,7 +1965,8 @@ function applyAgentWorkView(command) {
   applySavedViewPresentation(draft);
   persistSavedViewState();
 }
-if (typeof window !== "undefined" && window.addEventListener)
+if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("DOMContentLoaded", () => void loadSavedViews(), {
     once: true,
   });
+}

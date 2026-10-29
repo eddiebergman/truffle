@@ -13,8 +13,9 @@ function appChatCommand(value) {
       typeof value.patch !== "object" ||
       Array.isArray(value.patch) ||
       new TextEncoder().encode(JSON.stringify(value.patch)).length > 65536
-    )
+    ) {
       throw new Error("The assistant returned an invalid settings proposal.");
+    }
     return {
       type: "settings-proposal",
       revision: value.revision,
@@ -51,8 +52,9 @@ function appChatCommand(value) {
       (Object.hasOwn(value, "category") &&
         (value.destination !== "settings" ||
           !categories.includes(value.category)))
-    )
+    ) {
       throw new Error("The assistant returned an unsupported view.");
+    }
     return {
       type: "navigate",
       destination: value.destination,
@@ -66,8 +68,9 @@ function appChatCommand(value) {
     /^[A-Za-z0-9_-]{1,80}$/.test(value.id) &&
     typeof value.name === "string" &&
     value.name.length <= 120
-  )
+  ) {
     return { type: "saved-view", id: value.id, name: value.name };
+  }
   if (
     value?.type === "chat-results" &&
     typeof value.query === "string" &&
@@ -86,7 +89,7 @@ function appChatCommand(value) {
       value.chats.some((c) => c.id === value.recommendedId)) &&
     typeof value.reason === "string" &&
     value.reason.length <= 300
-  )
+  ) {
     return {
       type: "chat-results",
       query: value.query,
@@ -95,6 +98,7 @@ function appChatCommand(value) {
       recommendedId: value.recommendedId,
       reason: value.reason,
     };
+  }
   if (
     value?.type === "open-chat" &&
     typeof value.id === "string" &&
@@ -103,8 +107,9 @@ function appChatCommand(value) {
   ) {
     const command = { type: "open-chat", id: value.id };
     if (value.results) {
-      if (value.results.type !== "chat-results")
+      if (value.results.type !== "chat-results") {
         throw new Error("The assistant returned an unsupported view.");
+      }
       command.results = appChatCommand(value.results);
     }
     return command;
@@ -116,8 +121,9 @@ function appChatCommand(value) {
     value.title.length <= 200 &&
     typeof value.body === "string" &&
     value.body.length <= 4000
-  )
+  ) {
     return { type: "issue-draft", title: value.title, body: value.body };
+  }
   if (
     value?.type === "display-items" &&
     typeof value.title === "string" &&
@@ -141,7 +147,7 @@ function appChatCommand(value) {
       )) &&
     typeof value.reason === "string" &&
     value.reason.length <= 300
-  )
+  ) {
     return {
       type: "display-items",
       title: value.title,
@@ -149,6 +155,7 @@ function appChatCommand(value) {
       recommended: value.recommended,
       reason: value.reason,
     };
+  }
   const pages = [
     "all",
     "linear",
@@ -176,8 +183,9 @@ function appChatCommand(value) {
     typeof value.query !== "string" ||
     value.query.length > 500 ||
     !statuses.includes(value.status)
-  )
+  ) {
     throw new Error("The assistant returned an unsupported view.");
+  }
   return {
     type: "show",
     source: value.source,
@@ -187,14 +195,17 @@ function appChatCommand(value) {
 }
 function appChatOpenSettingsProposal(value) {
   const command = appChatCommand(value);
-  if (command.type !== "settings-proposal")
+  if (command.type !== "settings-proposal") {
     throw new Error("The assistant returned an unsupported settings proposal.");
-  if (typeof settingsDirty !== "undefined" && settingsDirty)
+  }
+  if (typeof settingsDirty !== "undefined" && settingsDirty) {
     throw new Error(
       "Save or discard your Settings changes before reviewing this proposal.",
     );
-  if (document.querySelector("dialog[open]"))
+  }
+  if (document.querySelector("dialog[open]")) {
     throw new Error("Close the open dialog before reviewing this proposal.");
+  }
   const dialog = el("dialog", "settings-proposal-dialog");
   dialog.setAttribute("aria-label", "Review settings proposal");
   const heading = el("header", "settings-proposal-heading"),
@@ -230,68 +241,88 @@ function appChatOpenSettingsProposal(value) {
 }
 async function appChatRefreshSavedViews() {
   await loadSavedViews();
-  if (savedViewsError)
-    throw new Error("Saved views could not refresh. " + savedViewsError);
+  if (savedViewsError) {
+    throw new Error(`Saved views could not refresh. ${savedViewsError}`);
+  }
 }
 async function appChatNavigate(value) {
   const command = appChatCommand(value);
-  if (command.type !== "navigate")
+  if (command.type !== "navigate") {
     throw new Error("The assistant returned an unsupported destination.");
+  }
   switch (command.destination) {
     case "skills":
     case "artifacts":
     case "logs":
-      if (typeof savedViewCapturePresentation === "function")
+      if (typeof savedViewCapturePresentation === "function") {
         savedViewCapturePresentation(source);
+      }
       source = command.destination;
       persist();
       render();
       return;
     case "setup": {
       const host = $("#app-chat-setup");
-      if (!host || $("#app-chat-panel")?.hidden)
+      if (!host || $("#app-chat-panel")?.hidden) {
         throw new Error(
           "Open App chat, then choose Show results to resume setup.",
         );
+      }
       if (host.hidden) {
-        if (typeof openOnboarding !== "function")
+        if (typeof openOnboarding !== "function") {
           throw new Error(
             "Setup is unavailable. Reopen Truffle and try again.",
           );
+        }
         await openOnboarding({ host });
       }
-      if (host.hidden) throw new Error("Setup could not open. Try again.");
+      if (host.hidden) {
+        throw new Error("Setup could not open. Try again.");
+      }
       return;
     }
     case "chat-recovery":
-      if (typeof openChatRecovery !== "function" || openChatRecovery() !== true)
+      if (
+        typeof openChatRecovery !== "function" ||
+        openChatRecovery() !== true
+      ) {
         throw new Error(
           "Chat recovery could not open. Close the current dialog, then try again.",
         );
+      }
       return;
     case "settings":
-      if ((await openPreferences({ category: command.category })) !== true)
+      if ((await openPreferences({ category: command.category })) !== true) {
         throw new Error(
           "Settings could not open. Close the current dialog or finish saving, then try again.",
         );
+      }
       return;
     case "sharing-inbox": {
       const menu = $("#sharing-menu");
-      if (!menu) throw new Error("The sharing inbox is unavailable.");
-      if (!menu.open)
+      if (!menu) {
+        throw new Error("The sharing inbox is unavailable.");
+      }
+      if (!menu.open) {
         await new Promise((resolve) => {
           menu.addEventListener("toggle", resolve, { once: true });
           menu.open = true;
         });
-      if (!menu.open)
+      }
+      if (!menu.open) {
         throw new Error(
           "The sharing menu was closed before navigation finished.",
         );
+      }
       const inbox = [...menu.querySelectorAll(".sharing-tabs button")].find(
         (button) => button.textContent === "Inbox",
       );
-      if (!inbox) throw new Error("The sharing inbox is unavailable.");
-      if (inbox.getAttribute("aria-pressed") !== "true") inbox.click();
+      if (!inbox) {
+        throw new Error("The sharing inbox is unavailable.");
+      }
+      if (inbox.getAttribute("aria-pressed") !== "true") {
+        inbox.click();
+      }
       return;
     }
   }
@@ -310,7 +341,7 @@ function appChatFailureMessage(job) {
         : "App chat could not finish.";
   return (
     (assistant && !message.startsWith(assistant.label)
-      ? assistant.label + " · "
+      ? `${assistant.label} · `
       : "") +
     message +
     (/message is saved/i.test(message)
@@ -331,8 +362,12 @@ function appChatDiagnosticRows(job) {
       typeof value === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(value),
   );
   const assistant = appChatAssistant(job?.assistant);
-  if (assistant) rows.push(["Assistant", assistant.label]);
-  if (requestId) rows.push(["Request ID", requestId]);
+  if (assistant) {
+    rows.push(["Assistant", assistant.label]);
+  }
+  if (requestId) {
+    rows.push(["Request ID", requestId]);
+  }
   const enums = {
       stage: [
         "launch",
@@ -394,25 +429,31 @@ function appChatDiagnosticRows(job) {
       responseShape: "Response shape",
       jsonErrorCategory: "JSON error category",
     };
-  for (const [field, allowed] of Object.entries(enums))
-    if (allowed.includes(diagnostics[field]))
+  for (const [field, allowed] of Object.entries(enums)) {
+    if (allowed.includes(diagnostics[field])) {
       rows.push([labels[field], diagnostics[field]]);
-  if (Number.isSafeInteger(diagnostics.exitCode))
+    }
+  }
+  if (Number.isSafeInteger(diagnostics.exitCode)) {
     rows.push(["Exit code", String(diagnostics.exitCode)]);
+  }
   if (
     Number.isFinite(diagnostics.durationMs) &&
     diagnostics.durationMs >= 0 &&
     diagnostics.durationMs <= 86400000
-  )
-    rows.push(["Duration", (diagnostics.durationMs / 1000).toFixed(2) + " s"]);
+  ) {
+    rows.push(["Duration", `${(diagnostics.durationMs / 1000).toFixed(2)} s`]);
+  }
   for (const [field, label] of [
     ["stdoutBytes", "CLI output bytes"],
     ["stderrBytes", "CLI error bytes"],
     ["jsonErrorLine", "JSON error line"],
     ["jsonErrorColumn", "JSON error column"],
-  ])
-    if (Number.isSafeInteger(diagnostics[field]) && diagnostics[field] >= 0)
+  ]) {
+    if (Number.isSafeInteger(diagnostics[field]) && diagnostics[field] >= 0) {
       rows.push([label, String(diagnostics[field])]);
+    }
+  }
   return rows;
 }
 function appChatFailureActions(job, onOpenLogs) {
@@ -428,7 +469,7 @@ function appChatFailureActions(job, onOpenLogs) {
   const details = el("div", "app-chat-diagnostics");
   details.id = "app-chat-failure-details";
   details.hidden = true;
-  if (!job?.diagnostics)
+  if (!job?.diagnostics) {
     details.append(
       el(
         "p",
@@ -436,9 +477,11 @@ function appChatFailureActions(job, onOpenLogs) {
         "No diagnostic metadata was retained for this request.",
       ),
     );
+  }
   const fields = el("dl");
-  for (const [label, value] of appChatDiagnosticRows(job))
+  for (const [label, value] of appChatDiagnosticRows(job)) {
     fields.append(el("dt", "", label), el("dd", "", value));
+  }
   details.append(fields);
   toggle.onclick = () => {
     details.hidden = !details.hidden;
@@ -454,12 +497,14 @@ function appChatFailureActions(job, onOpenLogs) {
   return root;
 }
 async function appChatOpenFailureLogs(job) {
-  if (typeof settingsDirty !== "undefined" && settingsDirty)
+  if (typeof settingsDirty !== "undefined" && settingsDirty) {
     throw new Error(
       "Save or discard your Settings changes before opening logs.",
     );
-  if (document.querySelector("dialog[open]"))
+  }
+  if (document.querySelector("dialog[open]")) {
     throw new Error("Close the open dialog before opening logs.");
+  }
   await appChatNavigate({ type: "navigate", destination: "logs" });
   if (typeof logFilters !== "undefined") {
     logFilters.source = "";
@@ -472,7 +517,7 @@ async function appChatOpenFailureLogs(job) {
   persist();
   render();
 }
-if (typeof module !== "undefined")
+if (typeof module !== "undefined") {
   module.exports = {
     appChatAssistant,
     appChatFailureMessage,
@@ -484,7 +529,8 @@ if (typeof module !== "undefined")
     appChatOpenSettingsProposal,
     appChatRefreshSavedViews,
   };
-if (typeof document !== "undefined")
+}
+if (typeof document !== "undefined") {
   (() => {
     const icon =
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4h16v12H9l-5 4V4Z"/></svg>';
@@ -670,20 +716,22 @@ if (typeof document !== "undefined")
       return JSON.stringify(snapshot());
     }
     function displayContext(page) {
-      return (
-        "Context · " +
-        (page.ui.dialog ||
-          (page.source === "settings"
-            ? "Settings"
-            : sourceNames[page.source] || page.source)) +
-        (page.recordId && !page.ui.dialog
-          ? " · " + (currentAgentRecord()?.title || page.recordId)
-          : "")
-      );
+      return `Context · ${
+        page.ui.dialog ||
+        (page.source === "settings"
+          ? "Settings"
+          : sourceNames[page.source] || page.source)
+      }${
+        page.recordId && !page.ui.dialog
+          ? ` · ${currentAgentRecord()?.title || page.recordId}`
+          : ""
+      }`;
     }
     function updateContext() {
       const label = displayContext(snapshot());
-      if (context.textContent !== label) context.textContent = label;
+      if (context.textContent !== label) {
+        context.textContent = label;
+      }
     }
     function updateAssistant(value) {
       assistant = appChatAssistant(value.assistant);
@@ -695,13 +743,13 @@ if (typeof document !== "undefined")
       badge.textContent =
         shown?.label || (assistantChecked ? "Unavailable" : "Checking…");
       badge.title = shown
-        ? "Replies use " + shown.label
+        ? `Replies use ${shown.label}`
         : assistantChecked
           ? "Install Claude or Codex to send messages"
           : "Checking installed assistants";
       hint.textContent = pending
         ? jobAssistant
-          ? jobAssistant.label + " is replying…"
+          ? `${jobAssistant.label} is replying…`
           : "Starting reply…"
         : assistant
           ? "Enter to send · Shift+Enter for a new line"
@@ -732,7 +780,7 @@ if (typeof document !== "undefined")
       error.hidden = !message;
       failure.replaceChildren();
       failure.hidden = !job;
-      if (job)
+      if (job) {
         failure.append(
           appChatFailureActions(job, async () => {
             try {
@@ -743,6 +791,7 @@ if (typeof document !== "undefined")
             }
           }),
         );
+      }
     }
     async function apply(commands) {
       if (typeof settingsDirty !== "undefined" && settingsDirty) {
@@ -754,7 +803,9 @@ if (typeof document !== "undefined")
         return;
       }
       const command = commands.at(-1);
-      if (!command) return;
+      if (!command) {
+        return;
+      }
       const setupHost = $("#app-chat-setup"),
         setupOpen = Boolean(setupHost && !setupHost.hidden);
       if (
@@ -832,7 +883,9 @@ if (typeof document !== "undefined")
       }
       if (command.type === "open-chat") {
         try {
-          if (command.results) rememberChatResults(command.results);
+          if (command.results) {
+            rememberChatResults(command.results);
+          }
           await openChatSearchTarget(command.id);
           deferred = [];
           renderDeferred();
@@ -844,10 +897,15 @@ if (typeof document !== "undefined")
       source = command.source;
       $("#search").value = command.query;
       statusFilter.value = command.status;
-      if (typeof applyAgentWorkView === "function") applyAgentWorkView(command);
-      if (["linear", "github", "sentry"].includes(source))
+      if (typeof applyAgentWorkView === "function") {
+        applyAgentWorkView(command);
+      }
+      if (["linear", "github", "sentry"].includes(source)) {
         scopePrefs[source] = "";
-      if (source === "github") githubView = "all";
+      }
+      if (source === "github") {
+        githubView = "all";
+      }
       persist();
       render();
       update();
@@ -856,7 +914,9 @@ if (typeof document !== "undefined")
     }
     function renderDeferred() {
       panel.querySelector(".app-chat-show-results")?.remove();
-      if (!deferred.length) return;
+      if (!deferred.length) {
+        return;
+      }
       const show = el(
         "button",
         "text-button app-chat-show-results",
@@ -867,10 +927,12 @@ if (typeof document !== "undefined")
     }
     function draw(rows) {
       const signature = JSON.stringify(rows);
-      if (signature === lastMessages) return;
+      if (signature === lastMessages) {
+        return;
+      }
       lastMessages = signature;
       messages.replaceChildren();
-      if (!rows.length)
+      if (!rows.length) {
         messages.append(
           el(
             "p",
@@ -878,11 +940,13 @@ if (typeof document !== "undefined")
             "Ask about cached work or change an app setting. The assistant sees this page’s filters and linked work, without terminal text. Paste a screenshot to include it in your next message.",
           ),
         );
+      }
       for (const row of rows) {
         const entry = el(
           "article",
-          "app-chat-message " +
-            (row.role === "user" ? "is-user" : "is-assistant"),
+          `app-chat-message ${
+            row.role === "user" ? "is-user" : "is-assistant"
+          }`,
         );
         const body = el("div", "app-chat-message-body");
         if (row.role === "assistant") {
@@ -891,7 +955,9 @@ if (typeof document !== "undefined")
             row.text,
             typeof allItems === "function" ? allItems() : [],
           );
-        } else body.textContent = row.text;
+        } else {
+          body.textContent = row.text;
+        }
         entry.append(
           el(
             "span",
@@ -902,7 +968,9 @@ if (typeof document !== "undefined")
         );
         messages.append(entry);
       }
-      if (setup.hidden) conversation.scrollTop = conversation.scrollHeight;
+      if (setup.hidden) {
+        conversation.scrollTop = conversation.scrollHeight;
+      }
     }
     async function poll() {
       clearTimeout(timer);
@@ -914,31 +982,38 @@ if (typeof document !== "undefined")
         pending = job?.state === "running";
         if (job && !pending && !handled.has(job.id)) {
           handled.add(job.id);
-          if (job.state === "failed")
+          if (job.state === "failed") {
             showError(appChatFailureMessage(job), job);
-          else {
+          } else {
             const commands = (job.commands || []).map(appChatCommand),
               applyNow = request?.id === job.id && request.stamp === stamp();
             deferred = commands;
             renderDeferred();
-            if (commands.at(-1)?.type !== "saved-view" || !applyNow)
+            if (commands.at(-1)?.type !== "saved-view" || !applyNow) {
               await appChatRefreshSavedViews();
-            if (commands.length && applyNow) await apply(commands);
+            }
+            if (commands.length && applyNow) {
+              await apply(commands);
+            }
           }
-          if (typeof settingsDirty === "undefined" || !settingsDirty)
+          if (typeof settingsDirty === "undefined" || !settingsDirty) {
             await loadAppSettings();
-          else if (job.state !== "failed")
+          } else if (job.state !== "failed") {
             showError(
               "The assistant may have changed settings. Your unsaved settings are kept; save or discard them before reloading.",
             );
-          if (job.state === "succeeded")
+          }
+          if (job.state === "succeeded") {
             await window.truffleGuidance?.refresh();
+          }
         }
       } catch (problem) {
         showError(problem.message);
       }
       update();
-      if (open || pending) timer = setTimeout(poll, pending ? 1000 : 5000);
+      if (open || pending) {
+        timer = setTimeout(poll, pending ? 1000 : 5000);
+      }
     }
     button.onclick = () => {
       open = !open;
@@ -948,11 +1023,15 @@ if (typeof document !== "undefined")
         input.focus();
       } else {
         window.closeOnboarding?.({ host: setup });
-        if (!pending) clearTimeout(timer);
+        if (!pending) {
+          clearTimeout(timer);
+        }
       }
     };
     fresh.onclick = async () => {
-      if (pending) return;
+      if (pending) {
+        return;
+      }
       fresh.disabled = true;
       try {
         await api("/api/app-chat/new", {});
@@ -976,14 +1055,18 @@ if (typeof document !== "undefined")
       open = false;
       window.closeOnboarding?.({ host: setup });
       update();
-      if (!pending) clearTimeout(timer);
+      if (!pending) {
+        clearTimeout(timer);
+      }
       button.focus();
     };
     input.oninput = update;
     input.onkeydown = (event) => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
-        if (!send.disabled) form.requestSubmit();
+        if (!send.disabled) {
+          form.requestSubmit();
+        }
       } else if (event.key === "Escape") {
         event.preventDefault();
         close.click();
@@ -1004,8 +1087,9 @@ if (typeof document !== "undefined")
       if (
         pending ||
         (!input.value.trim() && !window.truffleChatImages?.count())
-      )
+      ) {
         return;
+      }
       if (!assistant) {
         showError(
           assistantChecked
@@ -1044,21 +1128,25 @@ if (typeof document !== "undefined")
       }
     };
     window.prepareAppChatMessage = (text) => {
-      if (typeof text !== "string" || !text.trim())
+      if (typeof text !== "string" || !text.trim()) {
         throw new Error("Enter setup instructions first.");
+      }
       const message = text.trim();
-      if (new TextEncoder().encode(message).length > 4000)
+      if (new TextEncoder().encode(message).length > 4000) {
         throw new Error(
           "This guide is too long for one message. Paste a shorter section.",
         );
-      if (pending)
+      }
+      if (pending) {
         throw new Error(
           "Wait for the current assistant reply before preparing another message.",
         );
-      if (input.value.trim() || window.truffleChatImages?.count())
+      }
+      if (input.value.trim() || window.truffleChatImages?.count()) {
         throw new Error(
           "Send or clear your current App chat draft and attachments first.",
         );
+      }
       input.value = message;
       open = true;
       showError("");
@@ -1076,12 +1164,15 @@ if (typeof document !== "undefined")
         [...document.querySelectorAll("dialog[open]")]
           .filter((dialog) => !panel.contains(dialog))
           .at(-1) || document.body;
-      if (button.parentNode !== host) host.append(button, panel);
+      if (button.parentNode !== host) {
+        host.append(button, panel);
+      }
       update();
     }
     new MutationObserver((changes) => {
-      if (changes.some((change) => change.target.tagName === "DIALOG"))
+      if (changes.some((change) => change.target.tagName === "DIALOG")) {
         placeChat();
+      }
     }).observe(document.body, {
       subtree: true,
       attributes: true,
@@ -1089,14 +1180,18 @@ if (typeof document !== "undefined")
     });
     new MutationObserver(() => {
       update();
-      if (!setup.hidden && open) conversation.scrollTop = setup.offsetTop;
+      if (!setup.hidden && open) {
+        conversation.scrollTop = setup.offsetTop;
+      }
     }).observe(setup, { attributes: true, attributeFilter: ["hidden"] });
     window.addEventListener("truffle-service-restarted", () => {
-      if (open) poll();
+      if (open) {
+        poll();
+      }
     });
     registerRenderHook("app-chat:context", updateContext, { order: 50 });
     update();
-    if (typeof module !== "undefined")
+    if (typeof module !== "undefined") {
       module.exports.appChatPanel = {
         snapshot,
         stamp,
@@ -1121,4 +1216,6 @@ if (typeof document !== "undefined")
           return jobAssistant;
         },
       };
+    }
   })();
+}

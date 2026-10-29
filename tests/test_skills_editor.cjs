@@ -42,9 +42,10 @@ function fixture({
       if (
         path === "/api/commands/invoke" &&
         payload.name === "skills.preset.read"
-      )
+      ) {
         return read ? read(payload.args) : metadata(payload.args.presetId);
-      if (path === "/api/commands/invoke")
+      }
+      if (path === "/api/commands/invoke") {
         return write
           ? write(payload)
           : {
@@ -52,13 +53,14 @@ function fixture({
               created: payload.name === "skills.save",
               presetId: payload.args.presetId || "created-exact",
             };
+      }
       return stateRead ? stateRead() : owner.snapshot();
     },
   });
   const make = (id, fields) => {
-    const dialog = f.$("#" + id),
+    const dialog = f.$(`#${id}`),
       form = f.$(
-        "#" + (id === "skill-editor" ? "skill-editor-form" : "schedule-form"),
+        `#${id === "skill-editor" ? "skill-editor-form" : "schedule-form"}`,
       );
     dialog.tagName = "dialog";
     form.tagName = "form";
@@ -171,7 +173,9 @@ test("Add sends one create-only command and exposes exact accepted ID even after
   const ids = [],
     f = fixture({
       stateRead: async () => {
-        if (++reads === 1) throw Error("GET unavailable");
+        if (++reads === 1) {
+          throw Error("GET unavailable");
+        }
         return { revision: 2, items: [], sessions: [] };
       },
     });
@@ -378,11 +382,15 @@ test("schedule read failure has explicit reload, and accepted state-presentation
     states = 0;
   const f = fixture({
     read: async (args) => {
-      if (++reads === 1) throw Error("Read unavailable");
+      if (++reads === 1) {
+        throw Error("Read unavailable");
+      }
       return metadata(args.presetId);
     },
     stateRead: async () => {
-      if (++states === 1) throw Error("State unavailable");
+      if (++states === 1) {
+        throw Error("State unavailable");
+      }
       return { items: [], sessions: [] };
     },
   });

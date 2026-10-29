@@ -17,7 +17,7 @@ function fixture() {
       this.dataset = {};
       this.attrs = {};
       this.classList = {
-        add: (cls) => (this.className += " " + cls),
+        add: (cls) => (this.className += ` ${cls}`),
         toggle() {},
       };
     }
@@ -44,7 +44,9 @@ function fixture() {
     }
   }
   const $ = (id) => {
-    if (!nodes.has(id)) nodes.set(id, new Element());
+    if (!nodes.has(id)) {
+      nodes.set(id, new Element());
+    }
     return nodes.get(id);
   };
   const c = browserContext({
@@ -70,7 +72,7 @@ function fixture() {
     settingsCategory: "appearance",
     openPreferences: ({ category }) => {
       c.settingsCategory = category;
-      calls.push("settings:" + category);
+      calls.push(`settings:${category}`);
       return true;
     },
     source: "agents",
@@ -96,7 +98,7 @@ function fixture() {
 }
 test("connection warning separates title, safe multiline body, named dismiss and shared action controls", () => {
   const f = fixture(),
-    message = "Long error <script>unsafe()</script>\n" + "a".repeat(5000);
+    message = `Long error <script>unsafe()</script>\n${"a".repeat(5000)}`;
   f.c.state.sources.github.error = message;
   f.render();
   const notice = f.notice,
@@ -114,7 +116,7 @@ test("connection warning separates title, safe multiline body, named dismiss and
   assert.equal(dismiss.dataset.variant, "secondary");
   assert.equal(body.className, "ui-notice-body");
   assert.equal(body.tabIndex, 0);
-  assert.equal(body.children[0].textContent, "GitHub: " + message);
+  assert.equal(body.children[0].textContent, `GitHub: ${message}`);
   assert.equal(body.children[0].children.length, 0);
   assert.match(actions.className, /ui-actiongroup/);
   assert.equal(actions.attrs.role, "group");
@@ -185,8 +187,8 @@ test("all loaded styles leave connection notice layout to the shared header and 
   const styles = [
     ...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g),
   ].map((match) => ({
-    path: "static" + match[1],
-    css: readCompactCss("static" + match[1]),
+    path: `static${match[1]}`,
+    css: readCompactCss(`static${match[1]}`),
   }));
   assert.ok(styles.some((style) => style.path === "static/product-tools.css"));
   assert.ok(styles.some((style) => style.path === "static/ui-controls.css"));
@@ -207,10 +209,7 @@ test("all loaded styles leave connection notice layout to the shared header and 
     assert.doesNotMatch(
       rule.body,
       /(?:^|;)\s*(?:position|inset(?:-[\w-]+)?|top|right|bottom|left|padding(?:-[\w-]+)?|width|height)\s*:/,
-      rule.path +
-        " " +
-        rule.selector +
-        " must not override shared notice layout",
+      `${rule.path} ${rule.selector} must not override shared notice layout`,
     );
   }
   const shared = rules.find((rule) => rule.selector === ".ui-notice-header");
@@ -248,7 +247,9 @@ test("notice replacement restores the same focused action or body; dismissal and
     if (recover) {
       f.c.state.sources.github.error = null;
       f.render();
-    } else f.notice.children[0].children[1].onclick();
+    } else {
+      f.notice.children[0].children[1].onclick();
+    }
     assert.equal(f.document.activeElement, f.$("#activity-open"));
     assert.equal(f.notice.hidden, true);
   }

@@ -5,10 +5,14 @@ let profiling = false,
   profileBuild = null;
 const profileSamples = new Map();
 function profileRecord(name, duration) {
-  if (!profiling || !Number.isFinite(duration)) return;
+  if (!profiling || !Number.isFinite(duration)) {
+    return;
+  }
   const values = profileSamples.get(name) || [];
   values.push(duration);
-  if (values.length > 120) values.shift();
+  if (values.length > 120) {
+    values.shift();
+  }
   profileSamples.set(name, values);
 }
 function profileSummary() {
@@ -17,18 +21,21 @@ function profileSummary() {
     return {
       name,
       samples: values.length,
-      medianMs: +sorted[Math.floor(sorted.length / 2)].toFixed(2),
-      p95Ms:
-        +sorted[
+      medianMs: Number(sorted[Math.floor(sorted.length / 2)].toFixed(2)),
+      p95Ms: Number(
+        sorted[
           Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)
         ].toFixed(2),
-      maxMs: +sorted.at(-1).toFixed(2),
+      ),
+      maxMs: Number(sorted.at(-1).toFixed(2)),
     };
   });
 }
 function profileWrap(name, fn) {
   return function (...args) {
-    if (!profiling) return fn.apply(this, args);
+    if (!profiling) {
+      return fn.apply(this, args);
+    }
     const start = performance.now();
     try {
       return fn.apply(this, args);
@@ -41,9 +48,11 @@ let profileRenderSequence = 0;
 registerRenderHook(
   "performance:start",
   (context) => {
-    if (!profiling) return;
+    if (!profiling) {
+      return;
+    }
     context.profileStart = performance.now();
-    context.profileMark = "truffle-render-" + ++profileRenderSequence;
+    context.profileMark = `truffle-render-${++profileRenderSequence}`;
     performance.mark(context.profileMark);
   },
   { phase: "before", order: -1000 },
@@ -51,9 +60,11 @@ registerRenderHook(
 registerRenderHook(
   "performance:finish",
   (context) => {
-    if (context.profileStart === undefined) return;
+    if (context.profileStart === undefined) {
+      return;
+    }
     profileRecord(
-      "render:" + context.source,
+      `render:${context.source}`,
       performance.now() - context.profileStart,
     );
     performance.clearMeasures("truffle:render");
@@ -67,15 +78,17 @@ buildBundleIndex = profileWrap("projection:associations", buildBundleIndex);
 renderRow = profileWrap("DOM:work row", renderRow);
 const unprofiledApi = api;
 api = async function (path, payload) {
-  if (!profiling) return unprofiledApi(path, payload);
+  if (!profiling) {
+    return unprofiledApi(path, payload);
+  }
   const start = performance.now();
   try {
     return await unprofiledApi(path, payload);
   } finally {
-    profileRecord("request:" + path, performance.now() - start);
+    profileRecord(`request:${path}`, performance.now() - start);
   }
 };
-for (const type of ["click", "input", "change"])
+for (const type of ["click", "input", "change"]) {
   document.addEventListener(
     type,
     (event) => {
@@ -83,20 +96,23 @@ for (const type of ["click", "input", "change"])
         !profiling ||
         document.hidden ||
         event.target.closest?.(".performance-panel")
-      )
+      ) {
         return;
+      }
       const start = performance.now(),
         started = profileStarted;
       // Two animation frames approximate presentation; this is not INP or pure CPU time.
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          if (profiling && started === profileStarted)
-            profileRecord(type + ":next frame", performance.now() - start);
+          if (profiling && started === profileStarted) {
+            profileRecord(`${type}:next frame`, performance.now() - start);
+          }
         }),
       );
     },
     true,
   );
+}
 function renderPerformancePanel() {
   const panel = el("details", "performance-panel");
   panel.open = profiling;
@@ -117,12 +133,13 @@ function renderPerformancePanel() {
         if (profiling) {
           profileSamples.clear();
           profileStarted = performance.now();
-          if (serviceClient.isDesktop)
+          if (serviceClient.isDesktop) {
             try {
               profileBuild = await window.__TAURI__.core.invoke("desktop_info");
             } catch {
               // Build details are optional in a profile.
             }
+          }
         }
         render();
       },
@@ -136,7 +153,7 @@ function renderPerformancePanel() {
     build: profileBuild,
     recording: profiling,
     seconds: profileStarted
-      ? +((performance.now() - profileStarted) / 1000).toFixed(1)
+      ? Number(((performance.now() - profileStarted) / 1000).toFixed(1))
       : 0,
     items: state?.items?.length || 0,
     renderedWorkRows: document.querySelectorAll("#work-list .row").length,
@@ -146,14 +163,21 @@ function renderPerformancePanel() {
     el(
       "p",
       "form-hint",
-      `${report.host}${profileBuild ? " · " + profileBuild.version + " " + profileBuild.profile : ""} · ${report.items} cached items · ${report.seconds}s recorded`,
+      `${report.host}${profileBuild ? ` · ${profileBuild.version} ${profileBuild.profile}` : ""} · ${report.items} cached items · ${report.seconds}s recorded`,
     ),
   );
   const table = el("table", "performance-table"),
     head = el("thead"),
     header = el("tr");
-  for (const label of ["Operation", "Samples", "Median ms", "p95 ms", "Max ms"])
+  for (const label of [
+    "Operation",
+    "Samples",
+    "Median ms",
+    "p95 ms",
+    "Max ms",
+  ]) {
     header.append(el("th", "", label));
+  }
   head.append(header);
   table.append(head);
   const body = el("tbody");
@@ -165,8 +189,9 @@ function renderPerformancePanel() {
       timing.medianMs,
       timing.p95Ms,
       timing.maxMs,
-    ])
+    ]) {
       row.append(el("td", "", String(value)));
+    }
     body.append(row);
   }
   table.append(body);

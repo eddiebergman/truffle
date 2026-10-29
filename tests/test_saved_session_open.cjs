@@ -21,9 +21,10 @@ function fixture({ open, stateRead, agentsRead, run } = {}) {
   const f = base({
     handler: async (path, payload) => {
       calls.push({ path, payload });
-      if (path === "/api/commands/invoke" && payload.name === "skills.run")
+      if (path === "/api/commands/invoke" && payload.name === "skills.run") {
         return run(payload.args);
-      if (path === "/api/commands/invoke")
+      }
+      if (path === "/api/commands/invoke") {
         return open
           ? open(payload.args)
           : {
@@ -33,9 +34,13 @@ function fixture({ open, stateRead, agentsRead, run } = {}) {
               localSaved: true,
               terminal: { state: "acknowledged" },
             };
-      if (path === "/api/state")
+      }
+      if (path === "/api/state") {
         return stateRead ? stateRead() : JSON.parse(JSON.stringify(canonical));
-      if (path === "/api/session/recover") return { savedSessionId: "new" };
+      }
+      if (path === "/api/session/recover") {
+        return { savedSessionId: "new" };
+      }
       return {};
     },
   });
@@ -49,7 +54,7 @@ function fixture({ open, stateRead, agentsRead, run } = {}) {
   f.c.selectAgent = (record, candidate) => {
     selections.push({ id: record.id, generation: candidate?.generation });
     f.c.source = "agents";
-    f.c.selectedAgentKey = "record:" + record.id;
+    f.c.selectedAgentKey = `record:${record.id}`;
   };
   loadMore(f, ["static/sessions.js", "static/workspace.js"], {
     drop: ["agentName", "openSavedSession", "showSession"],
@@ -362,7 +367,7 @@ function gateway(f, id = "a") {
     loadArtifactLibrary: async () => ({ accepted: true }),
   });
   f.c.focusTerminal = () => {};
-  f.c.selectedAgentKey = "record:" + id;
+  f.c.selectedAgentKey = `record:${id}`;
   f.c.renderAgentWorkspace();
   return f.$("#work-list").querySelector(".terminal-gateway");
 }
@@ -422,7 +427,7 @@ function preparedFixture() {
     handler: async (path, payload) => {
       calls.push({ path, payload });
       if (path === "/api/commands/invoke") {
-        if (payload.name.startsWith("chats.prepare."))
+        if (payload.name.startsWith("chats.prepare.")) {
           return {
             requestId: payload.args.requestId,
             recordId: preparedId,
@@ -430,6 +435,7 @@ function preparedFixture() {
             status: "prepared",
             reused: false,
           };
+        }
         if (payload.name === "chats.open") {
           opens++;
           return {
@@ -441,7 +447,9 @@ function preparedFixture() {
           };
         }
       }
-      if (path === "/api/state") return structuredClone(canonical);
+      if (path === "/api/state") {
+        return structuredClone(canonical);
+      }
       return {};
     },
   });
@@ -466,11 +474,11 @@ function preparedFixture() {
   dialog.append(form);
   const buttons = {};
   for (const name of ["recovery-start", "recovery-retry", "recovery-edit"]) {
-    const button = f.$("#" + name);
+    const button = f.$(`#${name}`);
     button.tagName = "button";
     button.remove();
     form.append(button);
-    buttons["#" + name] = button;
+    buttons[`#${name}`] = button;
   }
   loadMore(
     f,
@@ -604,7 +612,9 @@ test("pending focused open action holds neutral status and restores only its sur
     });
     await pending;
     assert.equal(f.document.activeElement, outside ? held : f.button);
-    if (!outside) assert.equal(f.button.focusOptions.preventScroll, true);
+    if (!outside) {
+      assert.equal(f.button.focusOptions.preventScroll, true);
+    }
   }
 });
 test("selection intent captures page, selected chat and query even when focus stays on the same body/input", async () => {
@@ -615,9 +625,15 @@ test("selection intent captures page, selected chat and query even when focus st
         agentsRead: async () => live("a"),
       });
     const pending = f.open();
-    if (changed === "page") f.c.source = "github";
-    if (changed === "chat") f.c.selectedAgentKey = "record:b";
-    if (changed === "query") f.$("#search").value = "new query";
+    if (changed === "page") {
+      f.c.source = "github";
+    }
+    if (changed === "chat") {
+      f.c.selectedAgentKey = "record:b";
+    }
+    if (changed === "query") {
+      f.$("#search").value = "new query";
+    }
     done.resolve({
       status: "accepted",
       recordId: "a",
@@ -720,7 +736,9 @@ test("a pending owned Resume hold cannot authorize navigation after external foc
     });
     await pending;
     assert.deepEqual(f.selections, []);
-    if (outside) assert.equal(f.document.activeElement, outside);
+    if (outside) {
+      assert.equal(f.document.activeElement, outside);
+    }
     assert.equal(
       f.calls.filter((call) => call.payload?.name === "chats.open").length,
       1,
@@ -733,7 +751,9 @@ test("first implicit open receipt fences an older dashboard read even if every f
     let reads = 0;
     const f = fixture({
         stateRead: async () => {
-          if (++reads === 1) return old.promise;
+          if (++reads === 1) {
+            return old.promise;
+          }
           throw Error("Followup unavailable");
         },
         agentsRead: async () => null,
@@ -803,10 +823,11 @@ test("central saved-open reports no navigation after an invalidated away-and-bac
 test("central navigation handoff stays false for read-only opens and failed selected-workspace paint", async () => {
   for (const mode of ["read-only", "paint-failure"]) {
     const f = fixture({ agentsRead: async () => live("a") });
-    if (mode === "paint-failure")
+    if (mode === "paint-failure") {
       f.c.selectAgent = () => {
         throw Error("Paint failed");
       };
+    }
     const outcome = await f.open("a", { navigate: mode !== "read-only" });
     assert.equal(outcome.navigated, false);
     assert.equal(
@@ -842,8 +863,9 @@ test("observed open receipts require accepted embedded locally saved identity an
         generation: "ABCDEF00-0000-4000-8000-000000000001",
       },
     },
-  ])
+  ]) {
     assert.equal(parse({ ...valid, ...changed }), null);
+  }
   assert.equal(
     parse({ ...valid, terminal: { state: "acknowledged" } }).terminal.state,
     "acknowledged",

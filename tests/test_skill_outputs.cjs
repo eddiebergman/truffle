@@ -45,8 +45,9 @@ test("skill results exclude supporting attachments even in the same chat and fol
     { role: "skill-output" },
     { role: "skill-output", presetId: "" },
     { role: "attachment", presetId: "daily", title: "audit.html" },
-  ])
+  ]) {
     assert.equal(ctx.isSkillOutput(artifact), false);
+  }
 });
 test("Skills badge counts only unread declared outputs while preserving failed and skipped run notices", () => {
   const badge = {},
@@ -202,12 +203,13 @@ test("Skills inbox fences pre-write GET on accepted and unknown outcomes without
       sessions: [{ id: "chat", title: "Newest", hidden: true }],
     };
     const latest = f.ctx.state;
-    if (outcome === "accepted")
+    if (outcome === "accepted") {
       f.calls[1].resolve({ revision: "old-post", sessions: [] });
-    else
+    } else {
       f.calls[1].reject(
         Object.assign(new Error("Marker unavailable"), { status: 503 }),
       );
+    }
     await tick();
     assert.notEqual(f.ctx.state, latest);
     assert.equal(f.ctx.state.sessions[0].title, "Newest");
@@ -287,18 +289,18 @@ test("Skills inbox reports rejected, unknown and accepted read/render failure ho
     const f = inboxFixture(),
       before = f.ctx.state,
       pending = f.click();
-    if (outcome === "rejected" || outcome === "unknown")
+    if (outcome === "rejected" || outcome === "unknown") {
       f.calls[0].reject(
         Object.assign(new Error("Marker request failed"), {
           status: outcome === "rejected" ? 409 : 503,
         }),
       );
-    else {
+    } else {
       f.calls[0].resolve({ skillsReadAt: 999 });
       await tick();
-      if (outcome === "read-failed")
+      if (outcome === "read-failed") {
         f.calls[1].reject(new Error("Read failed"));
-      else {
+      } else {
         f.ctx.render = () => {
           throw new Error("Paint failed");
         };
@@ -317,11 +319,12 @@ test("Skills inbox reports rejected, unknown and accepted read/render failure ho
     } else if (outcome === "unknown") {
       assert.notEqual(f.ctx.state, before);
       assert.match(f.messages[0], /outcome is unknown/);
-    } else
+    } else {
       assert.match(
         f.messages[0],
         /Skills inbox marked read.*could not refresh.*do not repeat/,
       );
+    }
   }
 });
 class Node {
@@ -366,9 +369,11 @@ function libraryFixture(source) {
     newsletterOpening: false,
     el: (...args) => new Node(...args),
     featureButton: (label) => new Node("button", "", label),
-    Option: function (label, value) {
-      this.label = label;
-      this.value = value;
+    Option: class {
+      constructor(label, value) {
+        this.label = label;
+        this.value = value;
+      }
     },
     libraryRow: (artifact) => {
       rendered.push(artifact.id);
@@ -510,11 +515,12 @@ test("Run skill retries stale state reads without losing metadata or claiming a 
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(reads.length, 2);
     assert.equal(c.state.sessions[0].hidden, true);
-    if (exhausted)
+    if (exhausted) {
       await c.mutateChatMetadata("chats.rename", {
         id: "existing",
         title: "Newer",
       });
+    }
     reads[1].resolve({
       revision: "fixture:2",
       sessions: [
@@ -570,7 +576,9 @@ test("forced library invalidation during an older read joins one fresh followup 
   assert.equal(forced, also);
   assert.equal(f.calls.length, 1);
   f.calls[0].resolve({ artifacts: [{ id: "old" }] });
-  for (let i = 0; i < 6; i++) await Promise.resolve();
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+  }
   assert.equal(f.calls.length, 2);
   assert.equal(f.library(), null);
   assert.equal(f.fetched(), 0);
@@ -599,7 +607,9 @@ test("library invalidation during shared followup is bounded and cannot mark obs
     pending = f.load();
   f.load(true);
   f.calls[0].resolve({ artifacts: [{ id: "old" }] });
-  for (let i = 0; i < 6; i++) await Promise.resolve();
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+  }
   const latest = f.load(true);
   f.calls[1].resolve({ artifacts: [{ id: "also-old" }] });
   assert.equal((await pending).accepted, false);
