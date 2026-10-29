@@ -16,7 +16,7 @@ fn validate(doc: &Value) -> Result<()> {
     }
     let pages = doc["pages"]
         .as_object()
-        .ok_or(Error::new("Page settings must contain pages."))?;
+        .ok_or_else(|| Error::new("Page settings must contain pages."))?;
     if pages.len() != PROVIDERS.len() || pages.keys().any(|p| !PROVIDERS.contains(&p.as_str())) {
         return Err(Error::new("Unknown page settings."));
     }
@@ -118,7 +118,7 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
     let page = args["page"]
         .as_str()
         .filter(|page| PROVIDERS.contains(page))
-        .ok_or(Error::new("Choose a supported page."))?;
+        .ok_or_else(|| Error::new("Choose a supported page."))?;
     let query = match args.get("query") {
         Some(Value::String(query)) if query.len() <= 500 && !query.contains('\0') => query.as_str(),
         None => "",
@@ -132,7 +132,7 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|offset| *offset <= 4096)
-            .ok_or(Error::new("Choose a visibility offset from 0 to 4096."))?
+            .ok_or_else(|| Error::new("Choose a visibility offset from 0 to 4096."))?
             as usize,
         None => 0,
     };
@@ -155,7 +155,7 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
         let state = repo.state.lock().map_err(|_| Error::io())?;
         for item in state["items"]
             .as_array()
-            .ok_or(Error::new("Cached work is unavailable."))?
+            .ok_or_else(|| Error::new("Cached work is unavailable."))?
         {
             if item["source"] != page {
                 continue;
@@ -279,7 +279,7 @@ fn patch(current: &Value, payload: &Value) -> Result<Value> {
         .as_u64()
         .unwrap()
         .checked_add(1)
-        .ok_or(Error::new("Page settings revision is exhausted."))?);
+        .ok_or_else(|| Error::new("Page settings revision is exhausted."))?);
     validate(&next)?;
     if serde_json::to_vec(&next)?.len() > 128 * 1024 {
         return Err(Error::new("Page settings exceed 128 KiB."));

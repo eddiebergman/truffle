@@ -54,13 +54,15 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
     let entries = report["resources"]
         .as_array()
         .filter(|v| v.len() <= limit)
-        .ok_or(Error::new(format!(
-            "Report up to {limit} resources as a resources array."
-        )))?;
+        .ok_or_else(|| {
+            Error::new(format!(
+                "Report up to {limit} resources as a resources array."
+            ))
+        })?;
     let index = arr(&s["sessions"])
         .iter()
         .position(|r| r["id"] == id)
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let mut resources = match mode {
         SaveMode::Replace => vec![],
         SaveMode::Merge => arr(&s["sessions"][index]["resources"]),

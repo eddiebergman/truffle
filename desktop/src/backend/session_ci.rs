@@ -5,7 +5,7 @@ fn linked_prs(state: &Value, id: &str) -> Result<Vec<Value>> {
     let session = arr(&state["sessions"])
         .into_iter()
         .find(|s| s["id"] == id)
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let ids = arr(&session["items"])
         .iter()
         .map(|i| text(i, "id").to_owned())
@@ -323,7 +323,7 @@ pub(super) fn cancel_dispatch(
         .unwrap()
         .iter()
         .position(|record| record["id"] == id)
-        .ok_or(Error::new("Session unavailable."))?;
+        .ok_or_else(|| Error::new("Session unavailable."))?;
     let progress = &mut state["sessions"][index]["ciInvestigations"][item];
     if progress["id"] == operation && ["queued", "investigating"].contains(&text(progress, "state"))
     {

@@ -7,7 +7,7 @@ const FIELDS: [&str; 5] = ["title", "detail", "url", "cwd", "status"];
 fn object_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let fields = value
         .as_object()
-        .ok_or(Error::new("Project fields must be an object."))?;
+        .ok_or_else(|| Error::new("Project fields must be an object."))?;
     if fields.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(Error::new("Unknown project field."));
     }
@@ -19,13 +19,13 @@ fn project_id(value: &Value) -> Result<&str> {
         .filter(|id| {
             !id.trim().is_empty() && id.chars().count() <= 160 && !id.chars().any(char::is_control)
         })
-        .ok_or(Error::new("Supply the exact local project ID."))
+        .ok_or_else(|| Error::new("Supply the exact local project ID."))
 }
 fn position(state: &Value, id: &str) -> Result<usize> {
     arr(&state["notes"])
         .iter()
         .position(|row| row["id"] == id && row["source"] == "notes")
-        .ok_or(Error::new("Local project no longer exists."))
+        .ok_or_else(|| Error::new("Local project no longer exists."))
 }
 fn field_token(state: &Value, project: &Value, field: &str) -> Result<String> {
     let value = if field == "status" {
@@ -56,7 +56,7 @@ fn view(state: &Value, index: usize) -> Result<Value> {
     let status = state["overrides"][id]["status"]
         .as_str()
         .filter(|status| !status.is_empty())
-        .or(row["status"].as_str())
+        .or_else(|| row["status"].as_str())
         .unwrap_or("todo");
     if status.chars().count() > 32 {
         return Err(Error::new(
@@ -123,9 +123,9 @@ fn normalize(fields: &Value, create: bool) -> Result<Value> {
     Ok(result)
 }
 fn expected_keys(patch: &Value, expected: &Value) -> Result<()> {
-    let expected = expected.as_object().ok_or(Error::new(
-        "Supply captured tokens for exactly the changed project fields.",
-    ))?;
+    let expected = expected.as_object().ok_or_else(|| {
+        Error::new("Supply captured tokens for exactly the changed project fields.")
+    })?;
     if expected.len() != patch.as_object().unwrap().len()
         || patch
             .as_object()
@@ -156,7 +156,7 @@ fn create_normalized(state: &mut Value, fields: &Value) -> Result<Value> {
     row["updatedAt"] = json!(now());
     let rows = state["notes"]
         .as_array_mut()
-        .ok_or(Error::new("Invalid local project storage."))?;
+        .ok_or_else(|| Error::new("Invalid local project storage."))?;
     rows.push(row);
     let index = rows.len() - 1;
     let mut result = view(state, index)?;

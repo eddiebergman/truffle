@@ -27,13 +27,13 @@ fn identity(value: &Value) -> Result<String> {
             !id.trim().is_empty() && id.chars().count() <= 300 && !id.chars().any(char::is_control)
         })
         .map(str::to_owned)
-        .ok_or(Error::new("Supply an exact bounded work item ID."))
+        .ok_or_else(|| Error::new("Supply an exact bounded work item ID."))
 }
 fn pair(value: &Value) -> Result<Pair> {
     let values = value
         .as_array()
         .filter(|values| values.len() == 2)
-        .ok_or(Error::new("Choose two different work items."))?;
+        .ok_or_else(|| Error::new("Choose two different work items."))?;
     let mut ids = [identity(&values[0])?, identity(&values[1])?];
     if ids[0] == ids[1] {
         return Err(Error::new("Choose two different work items."));
@@ -46,9 +46,7 @@ fn stored(state: &Value) -> Result<Vec<Pair>> {
     let rows = state["workLinks"]
         .as_array()
         .filter(|rows| rows.len() <= MAX_LINKS)
-        .ok_or(Error::new(
-            "Stored manual work links exceed their supported bounds.",
-        ))?;
+        .ok_or_else(|| Error::new("Stored manual work links exceed their supported bounds."))?;
     rows.iter().map(pair).collect()
 }
 fn exact_projection(repo: &Repository, value: Value) -> Result<Value> {
@@ -118,9 +116,8 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|offset| *offset <= MAX_LINKS as u64)
-            .ok_or(Error::new(
-                "Choose a manual work-link offset from 0 to 2000.",
-            ))? as usize,
+            .ok_or_else(|| Error::new("Choose a manual work-link offset from 0 to 2000."))?
+            as usize,
         None => 0,
     };
     let supplied = match args.get("snapshot") {

@@ -17,7 +17,7 @@ fn rows(value: &Value) -> Result<&Vec<Value>> {
     let rows = value
         .as_array()
         .filter(|rows| rows.len() <= MAX_PRESETS)
-        .ok_or(Error::new("Keep up to 30 skill presets in an array."))?;
+        .ok_or_else(|| Error::new("Keep up to 30 skill presets in an array."))?;
     let mut ids = BTreeSet::new();
     for row in rows {
         let id = checked(row, "id", 80, true)?;

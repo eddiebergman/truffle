@@ -5,7 +5,7 @@ const MAX_CHANGES: usize = 500;
 fn keys(args: &Value, allowed: &[&str]) -> Result<()> {
     let args = args
         .as_object()
-        .ok_or(Error::new("Change arguments must be an object."))?;
+        .ok_or_else(|| Error::new("Change arguments must be an object."))?;
     if args.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(Error::new("Unknown change argument."));
     }
@@ -17,13 +17,13 @@ fn id(value: &Value) -> Result<&str> {
         .filter(|id| {
             !id.trim().is_empty() && id.chars().count() <= 160 && !id.chars().any(char::is_control)
         })
-        .ok_or(Error::new("Supply a bounded observed change or work ID."))
+        .ok_or_else(|| Error::new("Supply a bounded observed change or work ID."))
 }
 fn ids(value: &Value) -> Result<Vec<String>> {
     let values = value
         .as_array()
         .filter(|values| values.len() <= MAX_CHANGES)
-        .ok_or(Error::new("Supply at most 500 captured change IDs."))?;
+        .ok_or_else(|| Error::new("Supply at most 500 captured change IDs."))?;
     let mut seen = BTreeSet::new();
     let mut result = vec![];
     for value in values {
@@ -39,7 +39,7 @@ fn rows(state: &Value) -> Result<&Vec<Value>> {
     state["changes"]
         .as_array()
         .filter(|rows| rows.len() <= MAX_CHANGES)
-        .ok_or(Error::new("Cached changes exceed their supported limit."))
+        .ok_or_else(|| Error::new("Cached changes exceed their supported limit."))
 }
 fn prefix(repo: &Repository, value: &Value, bound: usize) -> String {
     let mut value = value.as_str().unwrap_or("").to_owned();
@@ -86,7 +86,7 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
         Some(value) => value
             .as_u64()
             .filter(|value| (1..=100).contains(value))
-            .ok_or(Error::new("Choose a change limit from 1 to 100."))?
+            .ok_or_else(|| Error::new("Choose a change limit from 1 to 100."))?
             as usize,
         None => 40,
     };
@@ -97,7 +97,7 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
             value
                 .as_str()
                 .filter(|value| ["github", "linear", "sentry"].contains(value))
-                .ok_or(Error::new("Choose a supported change source."))?,
+                .ok_or_else(|| Error::new("Choose a supported change source."))?,
         ),
         None => None,
     };
@@ -106,7 +106,7 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
         .map(|value| {
             value
                 .as_bool()
-                .ok_or(Error::new("Unread must be a boolean."))
+                .ok_or_else(|| Error::new("Unread must be a boolean."))
         })
         .transpose()?;
     let snapshot = {

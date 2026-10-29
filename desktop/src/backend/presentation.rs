@@ -30,7 +30,7 @@ fn identity(repo: &Repository, value: &Value, max: usize) -> Result<String> {
                 && value.chars().count() <= max
                 && !value.chars().any(char::is_control)
         })
-        .ok_or(Error::new("Supply an exact bounded presentation identity."))?;
+        .ok_or_else(|| Error::new("Supply an exact bounded presentation identity."))?;
     exact(repo, value)?;
     Ok(value.into())
 }
@@ -192,14 +192,14 @@ pub(super) fn saved_view(repo: &Repository, args: &Value) -> Result<Value> {
         .views
         .iter()
         .find(|view| view.id == id)
-        .ok_or(Error::new("Saved view unavailable. Read views.read first."))?;
+        .ok_or_else(|| Error::new("Saved view unavailable. Read views.read first."))?;
     Ok(json!({"type":"saved-view","id":id,"name":clipped(repo,&json!(view.name),120)}))
 }
 pub(super) fn display_items(repo: &Repository, args: &Value) -> Result<Value> {
     let items = args["items"]
         .as_array()
         .filter(|items| !items.is_empty() && items.len() <= 40)
-        .ok_or(Error::new("Supply 1 to 40 exact item targets."))?;
+        .ok_or_else(|| Error::new("Supply 1 to 40 exact item targets."))?;
     let catalog = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
         domain::catalog(&state)
@@ -217,7 +217,7 @@ pub(super) fn display_items(repo: &Repository, args: &Value) -> Result<Value> {
                 repo,
                 catalog
                     .get(&id)
-                    .ok_or(Error::new("A work item is no longer cached. Search again."))?,
+                    .ok_or_else(|| Error::new("A work item is no longer cached. Search again."))?,
             )?,
             "chat" => chat(repo, &chat_search::target(repo, &id)?)?,
             _ => return Err(Error::new("Choose a work or chat target.")),
@@ -271,7 +271,7 @@ fn entries(document: &Value) -> Result<Vec<Value>> {
     let rows = document["entries"]
         .as_array()
         .filter(|rows| rows.len() <= MAX_PENDING + MAX_ACKNOWLEDGED)
-        .ok_or(Error::new("Invalid presentation state."))?;
+        .ok_or_else(|| Error::new("Invalid presentation state."))?;
     let mut seen = BTreeSet::new();
     let mut pending = 0;
     for row in rows {
@@ -314,7 +314,7 @@ fn stored_descriptor(repo: &Repository, value: &Value) -> Result<Value> {
             let rows = value["items"]
                 .as_array()
                 .filter(|rows| !rows.is_empty() && rows.len() <= 40)
-                .ok_or(Error::new("Invalid queued presentation."))?;
+                .ok_or_else(|| Error::new("Invalid queued presentation."))?;
             let mut items = vec![];
             for row in rows {
                 let id = identity(repo, &row["id"], 160)?;
@@ -393,9 +393,9 @@ pub(super) fn acknowledge(repo: &Repository, args: &Value) -> Result<Value> {
         let row = rows
             .iter_mut()
             .find(|row| row["requestId"] == id)
-            .ok_or(conflict(
-                "This presentation request is unavailable or its receipt has expired.",
-            ))?;
+            .ok_or_else(|| {
+                conflict("This presentation request is unavailable or its receipt has expired.")
+            })?;
         if row["status"] != "queued" {
             if row["status"] != outcome {
                 return Err(conflict(

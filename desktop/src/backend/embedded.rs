@@ -106,9 +106,11 @@ impl EmbeddedHost {
             .unwrap()
             .get(id)
             .cloned()
-            .ok_or(Error::new(
-                "This terminal is no longer in memory. Resume the conversation from History.",
-            ))
+            .ok_or_else(|| {
+                Error::new(
+                    "This terminal is no longer in memory. Resume the conversation from History.",
+                )
+            })
     }
     pub fn inventory(&self) -> Vec<Value> {
         self.sessions.lock().unwrap().iter().map(|(id,s)|json!({"host":"embedded","recordId":id,"sessionId":s.record["sessionId"],"agent":s.record["agent"],"title":s.record["title"],"cwd":s.record["cwd"],"live":s.alive.load(Ordering::Relaxed),"running":s.alive.load(Ordering::Relaxed),"active":s.alive.load(Ordering::Relaxed),"lifecycle":if s.alive.load(Ordering::Relaxed){"unknown"}else{"closed"},"generation":s.generation,"startedAt":s.started_at})).collect()

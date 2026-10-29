@@ -260,9 +260,9 @@ impl ProviderRemote {
     }
 }
 fn public_text(value: &Value, key: &str) -> Result<String> {
-    let value = value[key].as_str().ok_or(Error::new(
-        "The provider returned an incomplete identity or resource.",
-    ))?;
+    let value = value[key]
+        .as_str()
+        .ok_or_else(|| Error::new("The provider returned an incomplete identity or resource."))?;
     if value.is_empty() || value.len() > 200 || value.chars().any(char::is_control) {
         return Err(Error::new(
             "The provider returned an invalid identity or resource.",
@@ -271,9 +271,9 @@ fn public_text(value: &Value, key: &str) -> Result<String> {
     Ok(value.into())
 }
 fn names(value: &Value, key: &str) -> Result<Vec<String>> {
-    let rows = value.as_array().ok_or(Error::new(
-        "The provider returned an invalid resource list.",
-    ))?;
+    let rows = value
+        .as_array()
+        .ok_or_else(|| Error::new("The provider returned an invalid resource list."))?;
     rows.iter()
         .take(20)
         .map(|row| public_text(row, key))
@@ -602,7 +602,7 @@ fn github_cli_token() -> Result<Zeroizing<String>> {
     let mut child = command
         .spawn()
         .map_err(|_| Error::new("GitHub CLI could not start. Paste a token or install gh."))?;
-    let output = child.stdout.take().ok_or(Error::io())?;
+    let output = child.stdout.take().ok_or_else(Error::io)?;
     let reader = std::thread::spawn(move || {
         let mut bytes = Zeroizing::new(Vec::new());
         output

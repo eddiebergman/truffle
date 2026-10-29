@@ -8,7 +8,7 @@ fn index(s: &Value, id: &str) -> Result<usize> {
     arr(&s["sessions"])
         .iter()
         .position(|r| r["id"] == id)
-        .ok_or(Error::new("Session unavailable."))
+        .ok_or_else(|| Error::new("Session unavailable."))
 }
 fn snapshot(s: &Value, id: &str) -> Result<Value> {
     let record = &s["sessions"][index(s, id)?];
@@ -32,7 +32,7 @@ pub fn link_work(repo: &Repository, id: &str, item_ids: &Value) -> Result<Value>
     let ids = item_ids
         .as_array()
         .filter(|ids| !ids.is_empty() && ids.len() <= 100)
-        .ok_or(Error::new("Choose 1 to 100 cached work IDs."))?;
+        .ok_or_else(|| Error::new("Choose 1 to 100 cached work IDs."))?;
     if ids.iter().any(|id| {
         id.as_str().is_none_or(|id| {
             id.trim().is_empty() || id.chars().count() > 300 || id.chars().any(char::is_control)
@@ -68,7 +68,7 @@ fn append_work(
         }
         let item = catalog
             .get(item_id.as_str().unwrap())
-            .ok_or(Error::new("Register this work item before linking it."))?;
+            .ok_or_else(|| Error::new("Register this work item before linking it."))?;
         ids.push(item_id.clone());
         if !items.iter().any(|item| item["id"] == *item_id) {
             items.push(domain::item_ref(item));
@@ -161,9 +161,11 @@ fn list<'a>(input: &'a Value, key: &str, limit: usize) -> Result<Option<&'a Vec<
             .as_array()
             .filter(|v| v.len() <= limit)
             .map(Some)
-            .ok_or(Error::new(format!(
-                "{key} must be an array with at most {limit} entries."
-            ))),
+            .ok_or_else(|| {
+                Error::new(format!(
+                    "{key} must be an array with at most {limit} entries."
+                ))
+            }),
     }
 }
 pub fn replace(repo: &Repository, id: &str, input: &Value) -> Result<Value> {
@@ -176,7 +178,7 @@ pub fn replace_receipt(repo: &Repository, id: &str, input: &Value) -> Result<Val
 fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, Value)> {
     let object = input
         .as_object()
-        .ok_or(Error::new("Context must be a JSON object."))?;
+        .ok_or_else(|| Error::new("Context must be a JSON object."))?;
     if object.keys().any(|k| {
         ![
             "revision",
@@ -208,8 +210,9 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
                 .iter()
                 .map(|tree| {
                     let path = directory(text(tree, "path"))?;
-                    let metadata = workflows::worktree_metadata(&path)
-                        .ok_or(Error::new("Choose an existing Git checkout with a commit."))?;
+                    let metadata = workflows::worktree_metadata(&path).ok_or_else(|| {
+                        Error::new("Choose an existing Git checkout with a commit.")
+                    })?;
                     if tree.get("primary").is_some_and(|v| !v.is_boolean()) {
                         return Err(Error::new("Worktree primary must be true or false."));
                     }
@@ -242,13 +245,15 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
             let catalog = domain::catalog(s);
             let mut selected = vec![];
             for id in ids {
-                let key = id.as_str().ok_or(Error::new("Invalid work item ID."))?;
+                let key = id
+                    .as_str()
+                    .ok_or_else(|| Error::new("Invalid work item ID."))?;
                 let item = current
                     .iter()
                     .find(|x| x["id"] == *id)
                     .cloned()
                     .or_else(|| catalog.get(key).map(domain::item_ref))
-                    .ok_or(Error::new("Register this work item before linking it."))?;
+                    .ok_or_else(|| Error::new("Register this work item before linking it."))?;
                 if !selected.iter().any(|x: &Value| x["id"] == *id) {
                     selected.push(item);
                 }

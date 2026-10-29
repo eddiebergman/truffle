@@ -25,7 +25,7 @@ pub(super) fn prepare_with_request(
     let ids = p["itemIds"]
         .as_array()
         .filter(|v| !v.is_empty() && v.len() <= 4096)
-        .ok_or(Error::new("Choose a view containing 1–4,096 items."))?;
+        .ok_or_else(|| Error::new("Choose a view containing 1–4,096 items."))?;
     if ids
         .iter()
         .any(|id| id.as_str().is_none_or(|s| s.is_empty() || s.len() > 160))
@@ -61,7 +61,7 @@ pub(super) fn prepare_with_request(
         let mut seen=std::collections::BTreeSet::new();let mut items=vec![];
         for id in ids {
             let key=id.as_str().unwrap();if !seen.insert(key){continue;}
-            let item=current.get(key).ok_or(Error::new("The view changed: an item is no longer cached. Refresh the list and try again."))?;
+            let item=current.get(key).ok_or_else(|| Error::new("The view changed: an item is no longer cached. Refresh the list and try again."))?;
             if source!="all" && item["source"]!=source { return Err(Error::new("An item does not belong to this page.")); }
             let mut row=json!({});
             for field in ["id","source","kind","title","url","reference","project","status","sourceStatus","relations","ci","parent","updatedAt","eventCount","firstSeen","lastSeen","mergeState","sourceUnavailable","archivedAt"] {

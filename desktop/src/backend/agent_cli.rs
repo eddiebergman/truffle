@@ -47,7 +47,7 @@ impl Options {
         while index < args.len() {
             let key = args[index]
                 .strip_prefix("--")
-                .ok_or(Error::new("Use named command options."))?;
+                .ok_or_else(|| Error::new("Use named command options."))?;
             if [
                 "show",
                 "primary",
@@ -66,7 +66,7 @@ impl Options {
                 let value = args
                     .get(index + 1)
                     .filter(|x| !x.starts_with("--"))
-                    .ok_or(Error::new("Command option needs a value."))?;
+                    .ok_or_else(|| Error::new("Command option needs a value."))?;
                 out.values
                     .entry(key.into())
                     .or_default()
@@ -300,7 +300,7 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
             let cwd = std::env::current_dir()?;
             p["operation"] = json!("worktree");
             p["path"] = json!(path(if o.get("path").is_empty() {
-                cwd.to_str().ok_or(Error::io())?
+                cwd.to_str().ok_or_else(Error::io)?
             } else {
                 o.get("path")
             })?);
@@ -359,7 +359,7 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
                 let report: Value = serde_json::from_slice(&bytes)?;
                 let object = report
                     .as_object()
-                    .ok_or(Error::new("Checkpoint must be an object."))?;
+                    .ok_or_else(|| Error::new("Checkpoint must be an object."))?;
                 if object
                     .keys()
                     .any(|k| !["done", "blocked", "next"].contains(&k.as_str()))

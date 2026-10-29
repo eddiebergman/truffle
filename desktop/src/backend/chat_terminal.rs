@@ -2,7 +2,7 @@ use super::{arr, directory, json, sid, text, uuid, Error, Repository, Result, Va
 pub fn open(repo: &Repository, p: &Value) -> Result<Value> {
     let chat = sid(text(p, "recordId"))?;
     let saved=repo.transaction(|s|{
-  let record=arr(&s["sessions"]).into_iter().find(|r|r["id"]==chat).ok_or(Error::new("Select an existing chat."))?;
+  let record=arr(&s["sessions"]).into_iter().find(|r|r["id"]==chat).ok_or_else(|| Error::new("Select an existing chat."))?;
   if !s["chatTerminals"].is_object(){s["chatTerminals"]=json!({"version":1,"byChat":{}});}
   if !s["chatTerminals"]["byChat"][&chat].is_object(){s["chatTerminals"]["byChat"][&chat]=json!({"id":uuid(),"chatId":chat,"sessionId":"","agent":"shell","title":"Terminal","cwd":directory(text(&record,"cwd"))?});}
   Ok(s["chatTerminals"]["byChat"][&chat].clone())
@@ -37,7 +37,7 @@ pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
         "input" => {
             let data = p["data"]
                 .as_str()
-                .ok_or(Error::new("Expected terminal input."))?;
+                .ok_or_else(|| Error::new("Expected terminal input."))?;
             repo.shells.input(&id, data)?;
             Ok(json!({}))
         }
@@ -45,11 +45,11 @@ pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
             let cols = p["cols"]
                 .as_u64()
                 .filter(|n| (10..=500).contains(n))
-                .ok_or(Error::new("Invalid columns."))?;
+                .ok_or_else(|| Error::new("Invalid columns."))?;
             let rows = p["rows"]
                 .as_u64()
                 .filter(|n| (2..=200).contains(n))
-                .ok_or(Error::new("Invalid rows."))?;
+                .ok_or_else(|| Error::new("Invalid rows."))?;
             repo.shells.resize(&id, cols as u16, rows as u16)?;
             Ok(json!({}))
         }

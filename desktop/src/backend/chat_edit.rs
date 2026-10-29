@@ -43,12 +43,12 @@ fn position(state: &Value, id: &str) -> Result<usize> {
     state["sessions"]
         .as_array()
         .and_then(|rows| rows.iter().position(|row| row["id"] == id))
-        .ok_or(Error::new("Saved chat no longer exists."))
+        .ok_or_else(|| Error::new("Saved chat no longer exists."))
 }
 fn ids(row: &Value) -> Result<Vec<String>> {
     let items = row["items"]
         .as_array()
-        .ok_or(Error::new("Invalid saved chat work links."))?;
+        .ok_or_else(|| Error::new("Invalid saved chat work links."))?;
     let mut ids = Vec::new();
     for item in items {
         let id = item["id"]
@@ -56,7 +56,7 @@ fn ids(row: &Value) -> Result<Vec<String>> {
             .filter(|id| {
                 !id.is_empty() && id.chars().count() <= 300 && !id.chars().any(char::is_control)
             })
-            .ok_or(Error::new("Invalid saved chat work identity."))?;
+            .ok_or_else(|| Error::new("Invalid saved chat work identity."))?;
         ids.push(id.to_owned());
     }
     ids.sort();
@@ -261,7 +261,9 @@ fn association(state: &Value, current: &Value, patch: &Value, repo: &Repository)
             ));
         }
     }
-    let destination = patch.get("destination").unwrap_or(&current["destination"]);
+    let destination = patch
+        .get("destination")
+        .unwrap_or_else(|| &current["destination"]);
     exact(repo, destination.as_str().unwrap_or(""))?;
     if current["agent"] == "claude" && destination == "desktop" {
         return Err(Error::new("Claude chats require the embedded terminal."));
@@ -302,11 +304,11 @@ fn apply(
         for value in &requested {
             let id = value
                 .as_str()
-                .ok_or(Error::new("Invalid imported work identity."))?;
+                .ok_or_else(|| Error::new("Invalid imported work identity."))?;
             exact(repo, id)?;
             let item = catalog
                 .get(id)
-                .ok_or(Error::new("A linked work item no longer exists."))?;
+                .ok_or_else(|| Error::new("A linked work item no longer exists."))?;
             linked.push(
                 arr(&current["items"])
                     .into_iter()
@@ -323,7 +325,7 @@ fn apply(
             if !domain::catalog(state).contains_key(text(item, "id")) {
                 state["items"]
                     .as_array_mut()
-                    .ok_or(Error::io())?
+                    .ok_or_else(Error::io)?
                     .push(item.clone());
             }
         }
@@ -402,7 +404,9 @@ pub(super) fn reject_unchecked_association(state: &Value, args: &Value) -> Resul
 }
 /// Old edit transports require the same captured patch; registration is a separate owner.
 pub(super) fn legacy(repo: &Repository, args: &Value) -> Result<Value> {
-    let object = args.as_object().ok_or(Error::new("Invalid chat edit."))?;
+    let object = args
+        .as_object()
+        .ok_or_else(|| Error::new("Invalid chat edit."))?;
     if object
         .keys()
         .any(|key| !["action", "id", "patch", "expected", "urls"].contains(&key.as_str()))

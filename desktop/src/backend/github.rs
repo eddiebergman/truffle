@@ -42,7 +42,7 @@ pub fn seen(repo: &Repository, p: &Value) -> Result<()> {
     let ids = p["reviews"]
         .as_array()
         .filter(|v| v.len() <= 4096)
-        .ok_or(Error::new("Invalid review notification list."))?;
+        .ok_or_else(|| Error::new("Invalid review notification list."))?;
     if ids.iter().any(|v| {
         text(v, "id").len() > 200
             || !text(v, "id").starts_with("github:")
@@ -92,11 +92,11 @@ fn action_with(
     let old = arr(&repo.state.lock().unwrap()["items"])
         .into_iter()
         .find(|i| i["id"] == id && i["source"] == "github" && i["kind"] == "Pull request")
-        .ok_or(Error::new("Choose a cached GitHub pull request."))?;
+        .ok_or_else(|| Error::new("Choose a cached GitHub pull request."))?;
     let node_id = id
         .strip_prefix("github:")
         .filter(|s| !s.is_empty())
-        .ok_or(Error::new("Invalid GitHub PR identity."))?;
+        .ok_or_else(|| Error::new("Invalid GitHub PR identity."))?;
     let key = format!("github-action:{id}");
     if !repo.opening.lock().unwrap().insert(key.clone()) {
         return Err(Error::new("This PR action is already running."));
@@ -177,9 +177,9 @@ fn action_with(
             .unwrap()
             .iter_mut()
             .find(|i| i["id"] == id)
-            .ok_or(Error::new(
-                "This PR left the cache. Refresh GitHub to see the remote change.",
-            ))?;
+            .ok_or_else(|| {
+                Error::new("This PR left the cache. Refresh GitHub to see the remote change.")
+            })?;
         *row = item.clone();
         let github = arr(&s["items"])
             .into_iter()

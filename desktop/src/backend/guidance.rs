@@ -131,7 +131,7 @@ fn advance(previous: &Value, payload: &Value) -> Result<Value> {
         "enabled" => {
             next["enabled"] = json!(payload["enabled"]
                 .as_bool()
-                .ok_or(Error::new("Choose whether guidance is enabled."))?);
+                .ok_or_else(|| Error::new("Choose whether guidance is enabled."))?);
         }
         "replay" => {
             for id in IDS {
@@ -147,7 +147,7 @@ fn advance(previous: &Value, payload: &Value) -> Result<Value> {
         .unwrap()
         .checked_add(1)
         .filter(|revision| *revision <= 9_007_199_254_740_991)
-        .ok_or(Error::new("Guidance revision is exhausted."))?);
+        .ok_or_else(|| Error::new("Guidance revision is exhausted."))?);
     Ok(next)
 }
 

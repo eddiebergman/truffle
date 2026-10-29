@@ -140,9 +140,9 @@ pub fn search(repo: &Repository, args: &Value) -> Result<Value> {
                 .views
                 .into_iter()
                 .find(|view| view.id == view_id)
-                .ok_or(Error::new(
-                    "Saved view unavailable. Read views.read before searching.",
-                ))?,
+                .ok_or_else(|| {
+                    Error::new("Saved view unavailable. Read views.read before searching.")
+                })?,
         )
     };
     let query = if args.get("query").is_none() {

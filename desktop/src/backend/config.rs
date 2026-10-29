@@ -23,7 +23,7 @@ pub fn install(directory: &Path) -> Result<()> {
                     serde_json::to_vec_pretty(&json!({"version":1,"presets":old}))?
                 } else {
                     super::assets::asset(name)
-                        .ok_or(Error::new("Missing built-in configuration."))?
+                        .ok_or_else(|| Error::new("Missing built-in configuration."))?
                         .to_vec()
                 };
                 std::fs::create_dir_all(target.parent().unwrap())?;

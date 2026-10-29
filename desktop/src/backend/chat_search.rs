@@ -95,7 +95,7 @@ pub fn target(repo: &Repository, id: &str) -> Result<Value> {
     rows(repo)
         .into_iter()
         .find(|row| row["id"] == id)
-        .ok_or(Error::new("That chat is unavailable. Search chats again."))
+        .ok_or_else(|| Error::new("That chat is unavailable. Search chats again."))
 }
 #[cfg(test)]
 mod tests {

@@ -17,7 +17,7 @@ impl CredentialStore for MemoryStore {
                 .lock()
                 .unwrap()
                 .get(account)
-                .ok_or(Error::new("Fixture credential missing."))?,
+                .ok_or_else(|| Error::new("Fixture credential missing."))?,
         )
     }
     fn put(&self, account: &str, token: &str) -> Result<()> {

@@ -111,7 +111,7 @@ impl Providers {
                 dotenv
                     .get(env)
                     .cloned()
-                    .unwrap_or_else(|| ini.get(key).cloned().unwrap_or(default.into()))
+                    .unwrap_or_else(|| ini.get(key).cloned().unwrap_or_else(|| default.into()))
             })
         };
         let org = setting("SENTRY_ORG", "defaults.org", "");
@@ -368,7 +368,7 @@ impl Providers {
     fn fetch_github(&self) -> Result<Vec<Value>> {
         let login = self.github("{viewer{login}}")?["viewer"]["login"]
             .as_str()
-            .ok_or(Error::new("GitHub identity unavailable."))?
+            .ok_or_else(|| Error::new("GitHub identity unavailable."))?
             .to_string();
         let mut items: BTreeMap<String, Value> = BTreeMap::new();
         for (relation, search) in [

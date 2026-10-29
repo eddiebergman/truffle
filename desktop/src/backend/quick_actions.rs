@@ -15,7 +15,7 @@ fn checked_action(repo: &Repository, payload: &Value) -> Result<Value> {
     arr(&snapshot["values"]["quickActions"])
         .into_iter()
         .find(|action| action["id"] == payload["actionId"])
-        .ok_or(Error::new("Quick action unavailable."))
+        .ok_or_else(|| Error::new("Quick action unavailable."))
 }
 // Pipe reads can divide a UTF-8 scalar. Keep only its incomplete trailing bytes.
 #[derive(Default)]
@@ -158,7 +158,7 @@ impl Host {
         }
         let cwd = context
             .get("WORKTREE_PATH")
-            .or(context.get("CHAT_CWD"))
+            .or_else(|| context.get("CHAT_CWD"))
             .filter(|s| !s.is_empty())
             .map_or_else(home, PathBuf::from);
         let id = uuid();
@@ -299,7 +299,7 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
     let record = arr(&state["sessions"])
         .into_iter()
         .find(|r| r["id"] == p["recordId"])
-        .ok_or(Error::new("Selected chat unavailable."))?;
+        .ok_or_else(|| Error::new("Selected chat unavailable."))?;
     for (env, key) in [
         ("CHAT_ID", "id"),
         ("CHAT_TITLE", "title"),
@@ -325,7 +325,7 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
         let item = arr(&record["items"])
             .into_iter()
             .find(|i| i["id"] == p[field] && i["source"] == source)
-            .ok_or(Error::new("Choose a work item linked to this chat."))?;
+            .ok_or_else(|| Error::new("Choose a work item linked to this chat."))?;
         result.insert(format!("{prefix}_URL"), text(&item, "url").into());
         if prefix == "PR" {
             let number = text(&item, "url")

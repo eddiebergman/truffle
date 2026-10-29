@@ -23,9 +23,12 @@ const FRAME_LIMIT: usize = 512 * 1024;
 pub fn socket_directory(data: &Path) -> Result<PathBuf> {
     let parent = data
         .parent()
-        .ok_or(Error::new("Invalid state path."))?
+        .ok_or_else(|| Error::new("Invalid state path."))?
         .canonicalize()?;
-    let canonical = parent.join(data.file_name().ok_or(Error::new("Invalid state path."))?);
+    let canonical = parent.join(
+        data.file_name()
+            .ok_or_else(|| Error::new("Invalid state path."))?,
+    );
     let hash = context_kit::sha256(canonical.to_string_lossy().as_bytes());
     let [current, legacy] = ["truffle", "mydash"].map(|name| {
         PathBuf::from(format!(
@@ -171,7 +174,7 @@ impl Host {
                 .request(json!({"op":"inventory"}))?
                 .as_array()
                 .cloned()
-                .ok_or(Error::new("Terminal inventory response is invalid.")),
+                .ok_or_else(|| Error::new("Terminal inventory response is invalid.")),
         }
     }
     pub fn inventory(&self) -> Vec<Value> {
@@ -392,11 +395,11 @@ fn dispatch(
             let cols = p["cols"]
                 .as_u64()
                 .and_then(|v| u16::try_from(v).ok())
-                .ok_or(Error::new("Invalid terminal columns."))?;
+                .ok_or_else(|| Error::new("Invalid terminal columns."))?;
             let rows = p["rows"]
                 .as_u64()
                 .and_then(|v| u16::try_from(v).ok())
-                .ok_or(Error::new("Invalid terminal rows."))?;
+                .ok_or_else(|| Error::new("Invalid terminal rows."))?;
             host.resize(id, cols, rows)?;
             Ok(json!({}))
         }

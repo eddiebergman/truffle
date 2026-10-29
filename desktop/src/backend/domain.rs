@@ -98,7 +98,7 @@ pub fn item_ref(item: &Value) -> Value {
         "sourceStatus",
         "sentryLinks",
     ] {
-        v[key] = item.get(key).cloned().unwrap_or(json!(""));
+        v[key] = item.get(key).cloned().unwrap_or_else(|| json!(""));
     }
     v
 }
@@ -320,7 +320,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 .unwrap()
                 .iter_mut()
                 .find(|row| row["id"] == key)
-                .ok_or(Error::new("Session unavailable."))?;
+                .ok_or_else(|| Error::new("Session unavailable."))?;
             row["title"] = json!(title);
             row["updatedAt"] = json!(now());
         }
@@ -349,7 +349,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 .unwrap()
                 .iter_mut()
                 .find(|x| x["id"] == key)
-                .ok_or(Error::new("Record no longer exists."))?;
+                .ok_or_else(|| Error::new("Record no longer exists."))?;
             if action == "hide-session" {
                 if !p["hidden"].is_boolean() {
                     return Err(Error::new("Choose a visibility setting."));
@@ -369,7 +369,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             }
             let values = p["value"]
                 .as_object()
-                .ok_or(Error::new("Invalid override."))?;
+                .ok_or_else(|| Error::new("Invalid override."))?;
             for (field, value) in values {
                 match field.as_str() {
                     "hidden" | "pinned" if value.is_boolean() => (),
@@ -405,7 +405,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
         "snooze" => {
             let item = cat
                 .get(key)
-                .ok_or(Error::new("Work item no longer exists."))?;
+                .ok_or_else(|| Error::new("Work item no longer exists."))?;
             match text(p, "mode") {
                 "clear" => {
                     s["snoozes"].as_object_mut().unwrap().remove(key);
@@ -444,14 +444,14 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 .unwrap()
                 .iter_mut()
                 .find(|x| x["id"] == key)
-                .ok_or(Error::new("Session no longer exists."))?;
+                .ok_or_else(|| Error::new("Session no longer exists."))?;
             session["checkpoint"] = value;
         }
         "save-briefing" => {
             let session = arr(&s["sessions"])
                 .into_iter()
                 .find(|x| x["id"] == key && x["workflow"] == "work-review")
-                .ok_or(Error::new("Choose a Work review session."))?;
+                .ok_or_else(|| Error::new("Choose a Work review session."))?;
             let body = checked(p, "body", 24000, true)?;
             let mut reports = arr(&s["briefings"]);
             reports.retain(|x| x["sessionId"] != key);
@@ -463,7 +463,7 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             let name = checked(p, "name", 60, true)?;
             let filters = p["filters"]
                 .as_object()
-                .ok_or(Error::new("Invalid Sentry filters."))?;
+                .ok_or_else(|| Error::new("Invalid Sentry filters."))?;
             for (k, v) in filters {
                 match k.as_str() {
                     "minUsers" | "minEvents" | "days"
