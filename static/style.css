@@ -1,17 +1,5 @@
 :root {
   color-scheme: dark;
-
-  --bg: #101113;
-  --panel: #17191c;
-  --line: #292c31;
-  --text: #e9ebef;
-  --muted: #8c919b;
-  --green: #b5e5c7;
-  --accent: #d2f5df;
-  --sidebar: #141518;
-  --review: #b6a1ee;
-  --progress: #e5bd78;
-  --blocked: #e28c88;
 }
 
 * {
