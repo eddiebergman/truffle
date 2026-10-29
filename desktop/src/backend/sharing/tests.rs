@@ -106,6 +106,7 @@ fn saved_chat_open_import_failed_admission_never_opens_and_preeffect_error_clear
             assert_eq!(s["entries"][&delivery]["imported"], true);
             assert!(s["jobs"][&task]["openReceipt"].is_null());
         }
+        drop(s);
     }
 }
 #[test]
@@ -123,7 +124,7 @@ fn sharing_state_write_limit_matches_load_and_rejects_without_losing_import_iden
         persisted.as_object_mut().unwrap().remove("config");
     }
     let overhead = serde_json::to_vec_pretty(&persisted).unwrap().len();
-    let padding = "x".repeat(MAX_STATE as usize - overhead);
+    let padding = "x".repeat(usize::try_from(MAX_STATE).unwrap() - overhead);
     change(&repo, |state| {
         state["jobs"]["large"]["output"] = json!(padding);
         Ok(())
@@ -211,7 +212,10 @@ fn preparation_carries_attached_results_and_keeps_large_previews_off_the_poll_pa
     assert_eq!(ready["resourceCount"], 2);
     assert!(arr(&bundle.raw()["resources"])
         .iter()
-        .any(|r| r["media_type"] == "text/x-python" && text(r, "name").ends_with(".py")));
+        .any(|r| r["media_type"] == "text/x-python"
+            && Path::new(text(r, "name"))
+                .extension()
+                .is_some_and(|extension| extension == "py")));
 }
 #[test]
 fn preparation_view_exposes_captured_conversation_option_without_payload() {
@@ -677,7 +681,7 @@ fn one_bad_delivery_does_not_hide_good_context() {
 fn conversation_excerpt_excludes_tools_and_machine_notifications() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("session.jsonl");
-    fs::write(&path,[json!({"type":"user","uuid":"1","message":{"content":[{"type":"text","text":"Question"},{"type":"tool_result","content":"SECRET TOOL OUTPUT"}]}}),json!({"type":"assistant","uuid":"2","message":{"content":[{"type":"text","text":"Answer"},{"type":"tool_use","input":{"secret":"not chat"}}]}}),json!({"type":"user","uuid":"3","message":{"content":"<task-notification>not user conversation"}})].iter().map(|v|format!("{v}\n")).collect::<String>()).unwrap();
+    fs::write(&path,[json!({"type":"user","uuid":"1","message":{"content":[{"type":"text","text":"Question"},{"type":"tool_result","content":"SECRET TOOL OUTPUT"}]}}),json!({"type":"assistant","uuid":"2","message":{"content":[{"type":"text","text":"Answer"},{"type":"tool_use","input":{"secret":"not chat"}}]}}),json!({"type":"user","uuid":"3","message":{"content":"<task-notification>not user conversation"}})].iter().map(|v|v.to_string()+"\n").collect::<String>()).unwrap();
     let messages = recent_messages(&path).unwrap();
     assert_eq!(messages.len(), 2);
     let serialized = serde_json::to_string(&messages).unwrap();
