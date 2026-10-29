@@ -1,8 +1,14 @@
 //! Durable, bounded reference snapshots for an explicitly requested agent task.
 use super::*;
 
-pub fn prepare(repo:&Repository,p:&Value)->Result<Value>{prepare_with_request(repo,p,None)}
-pub(super) fn prepare_with_request(repo: &Repository, p: &Value,request:Option<&super::chat_preparation::Request>) -> Result<Value> {
+pub fn prepare(repo: &Repository, p: &Value) -> Result<Value> {
+    prepare_with_request(repo, p, None)
+}
+pub(super) fn prepare_with_request(
+    repo: &Repository,
+    p: &Value,
+    request: Option<&super::chat_preparation::Request>,
+) -> Result<Value> {
     let request_id = sid(text(p, "requestId"))?;
     let agent = text(p, "agent");
     if !["claude", "codex"].contains(&agent) {

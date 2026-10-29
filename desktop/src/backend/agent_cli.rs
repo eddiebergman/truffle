@@ -48,7 +48,16 @@ impl Options {
             let key = args[index]
                 .strip_prefix("--")
                 .ok_or(Error::new("Use named command options."))?;
-            if ["show", "primary", "replace", "help", "inbox", "skill-output"].contains(&key) {
+            if [
+                "show",
+                "primary",
+                "replace",
+                "help",
+                "inbox",
+                "skill-output",
+            ]
+            .contains(&key)
+            {
                 if !out.flags.insert(key.into()) {
                     return Err(Error::new("Duplicate command flag."));
                 }
@@ -124,8 +133,10 @@ fn json_file(options: &Options, limit: usize) -> Result<Value> {
 fn path(value: &str) -> Result<String> {
     Ok(fs::canonicalize(expand(value))?.to_string_lossy().into())
 }
-fn require_context_revision(input:&Value)->Result<()> {
-    if !input["revision"].as_str().is_some_and(|revision|revision.len()==64&&revision.bytes().all(|byte|byte.is_ascii_hexdigit())) {
+fn require_context_revision(input: &Value) -> Result<()> {
+    if !input["revision"].as_str().is_some_and(|revision| {
+        revision.len() == 64 && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) {
         return Err(Error::new("Replacement JSON requires the captured revision from context --record ID --show. Keep that revision while editing; on conflict, re-read context and reapply your intended edits."));
     }
     Ok(())
@@ -136,10 +147,40 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
         p["id"] = json!(sid(o.required("record")?)?);
     }
     match command {
-        "command"=>{o.validate(&["name","file"])?;p["operation"]=json!("command");p["name"]=json!(o.required("name")?);p["args"]=if o.get("file").is_empty(){json!({})}else{json_file(o,64*1024)?};}
+        "command" => {
+            o.validate(&["name", "file"])?;
+            p["operation"] = json!("command");
+            p["name"] = json!(o.required("name")?);
+            p["args"] = if o.get("file").is_empty() {
+                json!({})
+            } else {
+                json_file(o, 64 * 1024)?
+            };
+        }
         "settings" => {
-            o.validate(&["show","file","revision","content-hash"])?;
-            if o.has("show") { if !o.get("file").is_empty(){return Err(Error::new("Read settings separately from updates."));}p["operation"]=json!("settings-read"); } else {p["operation"]=json!("settings-apply");p["patch"]=json_file(o,64*1024)?;p["revision"]=json!(o.required("revision")?.parse::<u64>().map_err(|_|Error::new("Supply the current settings revision."))?);let hash=o.required("content-hash").map_err(|_|Error::new("Read settings --show, then supply its revision and --content-hash with your patch."))?;if hash.len()!=64||!hash.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)){return Err(Error::new("Supply --content-hash from settings --show."));}p["contentHash"]=json!(hash);}
+            o.validate(&["show", "file", "revision", "content-hash"])?;
+            if o.has("show") {
+                if !o.get("file").is_empty() {
+                    return Err(Error::new("Read settings separately from updates."));
+                }
+                p["operation"] = json!("settings-read");
+            } else {
+                p["operation"] = json!("settings-apply");
+                p["patch"] = json_file(o, 64 * 1024)?;
+                p["revision"] = json!(o
+                    .required("revision")?
+                    .parse::<u64>()
+                    .map_err(|_| Error::new("Supply the current settings revision."))?);
+                let hash=o.required("content-hash").map_err(|_|Error::new("Read settings --show, then supply its revision and --content-hash with your patch."))?;
+                if hash.len() != 64
+                    || !hash
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                {
+                    return Err(Error::new("Supply --content-hash from settings --show."));
+                }
+                p["contentHash"] = json!(hash);
+            }
         }
         "register" => {
             o.validate(&[
@@ -248,7 +289,9 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
             if !report["resources"].is_array() {
                 return Err(Error::new("Resource report needs a resources array."));
             }
-            if o.has("replace"){require_context_revision(&report)?;}
+            if o.has("replace") {
+                require_context_revision(&report)?;
+            }
             report["replace"] = json!(o.has("replace"));
             p["operation"] = json!("resources");
             p["report"] = report;
@@ -289,7 +332,9 @@ fn payload(command: &str, o: &Options) -> Result<Value> {
         }
         "artifact" => {
             o.validate(&["record", "file", "url", "title", "skill-output"])?;
-            if o.has("skill-output"){p["skillOutput"]=json!(true);}
+            if o.has("skill-output") {
+                p["skillOutput"] = json!(true);
+            }
             if o.get("file").is_empty() == o.get("url").is_empty() {
                 return Err(Error::new("Choose a file or URL."));
             }
@@ -536,10 +581,14 @@ fn hook(o: &Options, root: &Path) -> Result<()> {
     send(&runtime(root)?, &payload, o.has("inbox"), true)?;
     Ok(())
 }
-fn shown_result<'a>(command:&str,result:&'a Value)->&'a Value {
-    &result[if command=="review"{"review"}else{"context"}]
+fn shown_result<'a>(command: &str, result: &'a Value) -> &'a Value {
+    &result[if command == "review" {
+        "review"
+    } else {
+        "context"
+    }]
 }
-fn command_help(command:&str)->String {
+fn command_help(command: &str) -> String {
     format!("{command}: --record UUID [--home DIRECTORY] [--file PATH] [--state STATE] [--show]\nregister: --agent claude|codex [--session UUID] [--cwd PATH] [--url URL] [--item ID]\nreview/ci: --request UUID [--pass NAME] [--reviewed-revision NUMBER]\ncommand: --name COMMAND [--file ARGUMENTS_JSON]\nsettings: --show OR --file PATCH_JSON --revision NUMBER --content-hash HASH (routine settings only)\ncontext: --record UUID --show OR --file CONTEXT_JSON (replacement requires its captured revision)\nresource: --record UUID --file REPORT_JSON [--replace]; --replace requires report.revision from context --show\nReplacement lists: omitted stays unchanged; [] clears dashboard links only, never external resources/files. On conflict re-read context and reapply intended edits; do not substitute a fresh revision into the stale file.\nUse --inbox to use the private signed local inbox.")
 }
 pub fn run(args: &[String]) -> Option<Result<()>> {
@@ -561,7 +610,7 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
     let result = (|| {
         let options = Options::parse(&prefix)?;
         if options.has("help") {
-            println!("{}",command_help(command));
+            println!("{}", command_help(command));
             return Ok(());
         }
         let root = if options.get("home").is_empty() {
@@ -580,12 +629,17 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
             options.has("inbox"),
             false,
         )?;
-        if command=="command" {println!("{}",serde_json::to_string_pretty(&result["commandResult"])?);} else if command=="settings" { println!("{}",serde_json::to_string_pretty(&result["settings"])?); } else if options.has("show") {
+        if command == "command" {
             println!(
                 "{}",
-                serde_json::to_string_pretty(
-                    shown_result(command,&result)
-                )?
+                serde_json::to_string_pretty(&result["commandResult"])?
+            );
+        } else if command == "settings" {
+            println!("{}", serde_json::to_string_pretty(&result["settings"])?);
+        } else if options.has("show") {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(shown_result(command, &result))?
             );
         } else {
             println!(
@@ -606,30 +660,135 @@ mod tests {
         Options::parse(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap()
     }
     #[test]
-    fn replacement_payloads_require_and_preserve_the_captured_revision_without_new_flags(){
-        let temp=tempfile::tempdir().unwrap();let file=temp.path().join("context.json");let path=file.to_str().unwrap();let id=uuid();let revision="aB".repeat(32);
-        let context=json!({"revision":revision,"resources":[],"itemIds":[],"artifactIds":[]});fs::write(&file,serde_json::to_vec(&context).unwrap()).unwrap();
-        let request=payload("context",&options(&["--record",&id,"--file",path])).unwrap();assert_eq!(request["context"],context);assert_eq!(request["operation"],"context-replace");
-        let request=payload("resource",&options(&["--record",&id,"--file",path,"--replace"])).unwrap();assert_eq!(request["report"]["revision"],revision);assert_eq!(request["report"]["resources"],json!([]));assert_eq!(request["report"]["replace"],true);
-        assert!(payload("context",&options(&["--record",&id,"--file",path,"--revision",&revision])).is_err());assert!(payload("resource",&options(&["--record",&id,"--file",path,"--replace","--revision",&revision])).is_err());
-        for revision in [Value::Null,json!(7),json!(""),json!("fresh"),json!("g".repeat(64))]{fs::write(&file,serde_json::to_vec(&json!({"revision":revision,"resources":[]})).unwrap()).unwrap();for command in ["context","resource"]{let mut args=vec!["--record",&id,"--file",path];if command=="resource"{args.push("--replace");}let error=payload(command,&options(&args)).unwrap_err();assert!(error.message.contains("captured revision"));assert!(error.message.contains("reapply"));}}
-        fs::write(&file,b"{\"resources\":[],\"replace\":true}").unwrap();let additive=payload("resource",&options(&["--record",&id,"--file",path])).unwrap();assert_eq!(additive["report"]["replace"],false);assert!(additive["report"].get("revision").is_none());
-        let shown=payload("context",&options(&["--record",&id,"--show"])).unwrap();assert_eq!(shown["operation"],"context-read");assert!(shown.get("context").is_none());
-        let help=command_help("resource");assert!(help.contains("report.revision from context --show"));assert!(help.contains("re-read context and reapply"));assert!(help.contains("[] clears dashboard links only"));
+    fn replacement_payloads_require_and_preserve_the_captured_revision_without_new_flags() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("context.json");
+        let path = file.to_str().unwrap();
+        let id = uuid();
+        let revision = "aB".repeat(32);
+        let context = json!({"revision":revision,"resources":[],"itemIds":[],"artifactIds":[]});
+        fs::write(&file, serde_json::to_vec(&context).unwrap()).unwrap();
+        let request = payload("context", &options(&["--record", &id, "--file", path])).unwrap();
+        assert_eq!(request["context"], context);
+        assert_eq!(request["operation"], "context-replace");
+        let request = payload(
+            "resource",
+            &options(&["--record", &id, "--file", path, "--replace"]),
+        )
+        .unwrap();
+        assert_eq!(request["report"]["revision"], revision);
+        assert_eq!(request["report"]["resources"], json!([]));
+        assert_eq!(request["report"]["replace"], true);
+        assert!(payload(
+            "context",
+            &options(&["--record", &id, "--file", path, "--revision", &revision])
+        )
+        .is_err());
+        assert!(payload(
+            "resource",
+            &options(&[
+                "--record",
+                &id,
+                "--file",
+                path,
+                "--replace",
+                "--revision",
+                &revision
+            ])
+        )
+        .is_err());
+        for revision in [
+            Value::Null,
+            json!(7),
+            json!(""),
+            json!("fresh"),
+            json!("g".repeat(64)),
+        ] {
+            fs::write(
+                &file,
+                serde_json::to_vec(&json!({"revision":revision,"resources":[]})).unwrap(),
+            )
+            .unwrap();
+            for command in ["context", "resource"] {
+                let mut args = vec!["--record", &id, "--file", path];
+                if command == "resource" {
+                    args.push("--replace");
+                }
+                let error = payload(command, &options(&args)).unwrap_err();
+                assert!(error.message.contains("captured revision"));
+                assert!(error.message.contains("reapply"));
+            }
+        }
+        fs::write(&file, b"{\"resources\":[],\"replace\":true}").unwrap();
+        let additive = payload("resource", &options(&["--record", &id, "--file", path])).unwrap();
+        assert_eq!(additive["report"]["replace"], false);
+        assert!(additive["report"].get("revision").is_none());
+        let shown = payload("context", &options(&["--record", &id, "--show"])).unwrap();
+        assert_eq!(shown["operation"], "context-read");
+        assert!(shown.get("context").is_none());
+        let help = command_help("resource");
+        assert!(help.contains("report.revision from context --show"));
+        assert!(help.contains("re-read context and reapply"));
+        assert!(help.contains("[] clears dashboard links only"));
     }
     #[test]
-    fn context_show_prints_the_owner_context_for_direct_edit_and_resubmit(){
-        let temp=tempfile::tempdir().unwrap();let repo=Repository::open(temp.path().to_path_buf(),None,true).unwrap();let record=repo.transaction(|state|super::super::workflows::save_session(state,&json!({"agent":"codex","title":"Context fixture","cwd":temp.path(),"itemIds":[]}))).unwrap();let id=text(&record,"id");
-        let owner=super::super::workflows::register(&repo,&json!({"operation":"context-read","id":id})).unwrap();let reply=super::super::workflows::registration_reply(&owner);let shown=shown_result("context",&reply);assert_eq!(shown,&owner["context"]);assert!(shown.get("id").is_none());assert!(shown.get("context").is_none());assert_eq!(shown["revision"].as_str().unwrap().len(),64);
-        let file=temp.path().join("context.json");fs::write(&file,serde_json::to_vec(shown).unwrap()).unwrap();let request=payload("context",&options(&["--record",id,"--file",file.to_str().unwrap()])).unwrap();assert_eq!(request["context"],*shown);super::super::workflows::register(&repo,&request).unwrap();
+    fn context_show_prints_the_owner_context_for_direct_edit_and_resubmit() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::open(temp.path().to_path_buf(), None, true).unwrap();
+        let record=repo.transaction(|state|super::super::workflows::save_session(state,&json!({"agent":"codex","title":"Context fixture","cwd":temp.path(),"itemIds":[]}))).unwrap();
+        let id = text(&record, "id");
+        let owner =
+            super::super::workflows::register(&repo, &json!({"operation":"context-read","id":id}))
+                .unwrap();
+        let reply = super::super::workflows::registration_reply(&owner);
+        let shown = shown_result("context", &reply);
+        assert_eq!(shown, &owner["context"]);
+        assert!(shown.get("id").is_none());
+        assert!(shown.get("context").is_none());
+        assert_eq!(shown["revision"].as_str().unwrap().len(), 64);
+        let file = temp.path().join("context.json");
+        fs::write(&file, serde_json::to_vec(shown).unwrap()).unwrap();
+        let request = payload(
+            "context",
+            &options(&["--record", id, "--file", file.to_str().unwrap()]),
+        )
+        .unwrap();
+        assert_eq!(request["context"], *shown);
+        super::super::workflows::register(&repo, &request).unwrap();
     }
     #[test]
     fn settings_updates_carry_the_explicit_captured_content_hash() {
-        let temp=tempfile::tempdir().unwrap();let file=temp.path().join("patch.json");std::fs::write(&file,r#"{"theme":"light"}"#).unwrap();let file=file.to_str().unwrap();let hash="a".repeat(64);
-        let request=payload("settings",&options(&["--file",file,"--revision","7","--content-hash",&hash])).unwrap();
-        assert_eq!(request["revision"],7);assert_eq!(request["contentHash"],hash);assert_eq!(request["patch"],json!({"theme":"light"}));
-        assert!(payload("settings",&options(&["--file",file,"--revision","7"])).unwrap_err().message.contains("--content-hash"));
-        assert!(payload("settings",&options(&["--file",file,"--revision","7","--content-hash","invalid"])).is_err());
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("patch.json");
+        std::fs::write(&file, r#"{"theme":"light"}"#).unwrap();
+        let file = file.to_str().unwrap();
+        let hash = "a".repeat(64);
+        let request = payload(
+            "settings",
+            &options(&["--file", file, "--revision", "7", "--content-hash", &hash]),
+        )
+        .unwrap();
+        assert_eq!(request["revision"], 7);
+        assert_eq!(request["contentHash"], hash);
+        assert_eq!(request["patch"], json!({"theme":"light"}));
+        assert!(
+            payload("settings", &options(&["--file", file, "--revision", "7"]))
+                .unwrap_err()
+                .message
+                .contains("--content-hash")
+        );
+        assert!(payload(
+            "settings",
+            &options(&[
+                "--file",
+                file,
+                "--revision",
+                "7",
+                "--content-hash",
+                "invalid"
+            ])
+        )
+        .is_err());
     }
     #[test]
     fn native_payloads_preserve_ids_repeated_links_and_validate_input() {

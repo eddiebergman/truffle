@@ -186,11 +186,13 @@ fn session_directory(repo: &Repository, id: &str, requested: &str) -> Result<Str
         return Ok(text(&record, "cwd").to_owned());
     }
     let canonical = Path::new(requested).canonicalize().ok();
-    let same_checkout = |path: &str| !path.is_empty() && canonical.is_some() && Path::new(path).canonicalize().ok() == canonical;
+    let same_checkout = |path: &str| {
+        !path.is_empty() && canonical.is_some() && Path::new(path).canonicalize().ok() == canonical
+    };
     if same_checkout(text(&record, "cwd"))
         || arr(&record["worktrees"])
             .iter()
-            .any(|t| same_checkout(text(t,"path")))
+            .any(|t| same_checkout(text(t, "path")))
     {
         return Ok(requested.to_owned());
     }
@@ -212,32 +214,66 @@ pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value
 }
 pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Value> {
     use std::os::unix::fs::MetadataExt;
-    let cwd=session_directory(repo,id,requested)?;
-    let identity=git(Path::new(&cwd),&["rev-parse","--show-toplevel","HEAD"])?;
-    let root=PathBuf::from(identity.lines().next().ok_or(Error::new("Git root unavailable."))?);
-    let status=git(&root,&["status","--porcelain=v1","--untracked-files=all","-z"])?;
-    let main=git(&root,&["rev-parse","--verify","refs/remotes/origin/main"]).or_else(|_|git(&root,&["rev-parse","--verify","refs/heads/main"]))?;
-    let mut stamp=identity+&main+&status;
-    let mut entries=status.split('\0').filter(|s|!s.is_empty());let mut count=0;
-    while let Some(entry)=entries.next() {
-        count+=1;if count>MAX_FILES{return Err(Error::new("Too many files to verify review freshness."));}
-        let path=entry.get(3..).ok_or(Error::new("Invalid Git status."))?;
-        match fs::symlink_metadata(root.join(valid_path(path)?)) {
-            Ok(meta)=>stamp.push_str(&format!("{}:{}:{}:{}:{}:{}",meta.ino(),meta.len(),meta.mtime(),meta.mtime_nsec(),meta.ctime(),meta.ctime_nsec())),
-            Err(error) if error.kind()==std::io::ErrorKind::NotFound=>stamp.push_str("deleted"),
-            Err(error)=>return Err(error.into()),
+    let cwd = session_directory(repo, id, requested)?;
+    let identity = git(Path::new(&cwd), &["rev-parse", "--show-toplevel", "HEAD"])?;
+    let root = PathBuf::from(
+        identity
+            .lines()
+            .next()
+            .ok_or(Error::new("Git root unavailable."))?,
+    );
+    let status = git(
+        &root,
+        &["status", "--porcelain=v1", "--untracked-files=all", "-z"],
+    )?;
+    let main = git(
+        &root,
+        &["rev-parse", "--verify", "refs/remotes/origin/main"],
+    )
+    .or_else(|_| git(&root, &["rev-parse", "--verify", "refs/heads/main"]))?;
+    let mut stamp = identity + &main + &status;
+    let mut entries = status.split('\0').filter(|s| !s.is_empty());
+    let mut count = 0;
+    while let Some(entry) = entries.next() {
+        count += 1;
+        if count > MAX_FILES {
+            return Err(Error::new("Too many files to verify review freshness."));
         }
-        if entry[..2].contains(['R','C']) { entries.next(); }
+        let path = entry.get(3..).ok_or(Error::new("Invalid Git status."))?;
+        match fs::symlink_metadata(root.join(valid_path(path)?)) {
+            Ok(meta) => stamp.push_str(&format!(
+                "{}:{}:{}:{}:{}:{}",
+                meta.ino(),
+                meta.len(),
+                meta.mtime(),
+                meta.mtime_nsec(),
+                meta.ctime(),
+                meta.ctime_nsec()
+            )),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => stamp.push_str("deleted"),
+            Err(error) => return Err(error.into()),
+        }
+        if entry[..2].contains(['R', 'C']) {
+            entries.next();
+        }
     }
     Ok(json!({"root":root,"version":context_kit::sha256(stamp.as_bytes())}))
 }
 pub fn review_file_stamp(root: &str, path: &str) -> Option<String> {
     use std::os::unix::fs::MetadataExt;
-    let target=Path::new(root).join(valid_path(path).ok()?);
+    let target = Path::new(root).join(valid_path(path).ok()?);
     match fs::symlink_metadata(target) {
-        Ok(m)=>Some(format!("{}:{}:{}:{}:{}:{}",m.ino(),m.len(),m.mtime(),m.mtime_nsec(),m.ctime(),m.ctime_nsec())),
-        Err(e) if e.kind()==std::io::ErrorKind::NotFound=>Some("deleted".into()),
-        Err(_)=>None,
+        Ok(m) => Some(format!(
+            "{}:{}:{}:{}:{}:{}",
+            m.ino(),
+            m.len(),
+            m.mtime(),
+            m.mtime_nsec(),
+            m.ctime(),
+            m.ctime_nsec()
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some("deleted".into()),
+        Err(_) => None,
     }
 }
 pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str) -> Result<Value> {
@@ -281,7 +317,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
     };
     let new = match fs::symlink_metadata(&target) {
         Ok(meta) if meta.is_file() && meta.len() <= limit as u64 => {
-            working_file_bytes(&comparison.root,path,&meta,limit as u64)?
+            working_file_bytes(&comparison.root, path, &meta, limit as u64)?
         }
         Ok(_) => return Err(Error::new("This file cannot be shown inline. Use Zed.")),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => vec![],
@@ -308,11 +344,122 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
         json!({"path":path,"root":comparison.root,"baseCommit":comparison.base,"baseRef":comparison.base_ref,"branch":comparison.branch,"fingerprint":fingerprint,"oldContent":old,"newContent":new}),
     )
 }
-fn command_args<'a>(args:&'a Value,file:bool)->Result<(&'a str,&'a str,&'a str)>{let object=args.as_object().ok_or(Error::new("Chat diff arguments must be an object."))?;let allowed=if file{&["recordId","cwd","path"][..]}else{&["recordId","cwd"][..]};if object.keys().any(|key|!allowed.contains(&key.as_str())){return Err(Error::new("Chat diffs accept only a saved chat ID, linked checkout and optional exact diff path."));}let id=args["recordId"].as_str().filter(|value|!value.is_empty()&&value.len()<=80&&!value.chars().any(char::is_control)).ok_or(Error::new("Supply the exact saved chat ID."))?;let cwd=match args.get("cwd"){None=>"",Some(value)=>value.as_str().filter(|value|value.len()<=4096&&!value.contains('\0')).ok_or(Error::new("Supply a linked checkout path."))?};let path=if file{args["path"].as_str().filter(|value|!value.is_empty()&&value.len()<=4096&&!value.contains('\0')).ok_or(Error::new("Supply an exact listed diff path."))?}else{""};Ok((id,cwd,path))}
-fn command_identity(repo:&Repository,value:&Value,max:usize)->Result<Value>{let value=value.as_str().filter(|value|value.len()<=max&&!value.contains('\0')).ok_or(Error::new("Diff metadata exceeds the command limit."))?;let mut safe=value.to_owned();super::commands::redact_text(repo,&mut safe);if safe!=value{return Err(Error::new("Diff identity cannot be safely projected."));}Ok(json!(value))}
-pub fn command_overview(repo:&Repository,args:&Value)->Result<Value>{let(id,cwd,_)=command_args(args,false)?;command_identity(repo,&json!(id),80)?;let value=for_session(repo,id,cwd)?;let mut result=json!({"recordId":id});for field in ["root","branch","baseRef","baseCommit"]{result[field]=command_identity(repo,&value[field],4096)?;}for field in ["additions","deletions"]{result[field]=value[field].as_u64().map_or(Value::Null,|value|json!(value));}result["truncated"]=json!(value["truncated"]==true);let files=arr(&value["files"]);if files.len()>MAX_FILES{return Err(Error::new("Diff overview exceeds 500 files."));}result["files"]=json!(files.into_iter().map(|row|Ok(json!({"path":command_identity(repo,&row["path"],4096)?,"additions":row["additions"].as_u64(),"deletions":row["deletions"].as_u64(),"untracked":row["untracked"]==true}))).collect::<Result<Vec<Value>>>()?);Ok(result)}
-pub fn command_file(repo:&Repository,args:&Value)->Result<Value>{let(id,cwd,path)=command_args(args,true)?;command_identity(repo,&json!(id),80)?;command_identity(repo,&json!(path),4096)?;let value=file_for_session(repo,id,path,cwd)?;let mut result=json!({"recordId":id});for field in ["root","path","branch","baseRef","baseCommit","fingerprint"]{result[field]=command_identity(repo,&value[field],4096)?;}let mut redacted=false;for field in ["oldContent","newContent"]{let raw=value[field].as_str().ok_or(Error::new("Diff text is unavailable."))?;let mut content=raw.to_owned();super::commands::redact_text(repo,&mut content);redacted|=content!=raw;if content.len()>512*1024{return Err(Error::new("Redacted diff text exceeds 512 KiB."));}result[field]=json!(content);}result["contentRedacted"]=json!(redacted);Ok(result)}
-fn working_file_bytes(root:&Path,path:&str,metadata:&fs::Metadata,limit:u64)->Result<Vec<u8>>{super::local_files::read(root,path,limit,Some(&super::local_files::generation(metadata)))?.ok_or(Error::new("The diff file changed. Refresh its file list."))}
+fn command_args<'a>(args: &'a Value, file: bool) -> Result<(&'a str, &'a str, &'a str)> {
+    let object = args
+        .as_object()
+        .ok_or(Error::new("Chat diff arguments must be an object."))?;
+    let allowed = if file {
+        &["recordId", "cwd", "path"][..]
+    } else {
+        &["recordId", "cwd"][..]
+    };
+    if object.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(Error::new(
+            "Chat diffs accept only a saved chat ID, linked checkout and optional exact diff path.",
+        ));
+    }
+    let id = args["recordId"]
+        .as_str()
+        .filter(|value| {
+            !value.is_empty() && value.len() <= 80 && !value.chars().any(char::is_control)
+        })
+        .ok_or(Error::new("Supply the exact saved chat ID."))?;
+    let cwd = match args.get("cwd") {
+        None => "",
+        Some(value) => value
+            .as_str()
+            .filter(|value| value.len() <= 4096 && !value.contains('\0'))
+            .ok_or(Error::new("Supply a linked checkout path."))?,
+    };
+    let path = if file {
+        args["path"]
+            .as_str()
+            .filter(|value| !value.is_empty() && value.len() <= 4096 && !value.contains('\0'))
+            .ok_or(Error::new("Supply an exact listed diff path."))?
+    } else {
+        ""
+    };
+    Ok((id, cwd, path))
+}
+fn command_identity(repo: &Repository, value: &Value, max: usize) -> Result<Value> {
+    let value = value
+        .as_str()
+        .filter(|value| value.len() <= max && !value.contains('\0'))
+        .ok_or(Error::new("Diff metadata exceeds the command limit."))?;
+    let mut safe = value.to_owned();
+    super::commands::redact_text(repo, &mut safe);
+    if safe != value {
+        return Err(Error::new("Diff identity cannot be safely projected."));
+    }
+    Ok(json!(value))
+}
+pub fn command_overview(repo: &Repository, args: &Value) -> Result<Value> {
+    let (id, cwd, _) = command_args(args, false)?;
+    command_identity(repo, &json!(id), 80)?;
+    let value = for_session(repo, id, cwd)?;
+    let mut result = json!({"recordId":id});
+    for field in ["root", "branch", "baseRef", "baseCommit"] {
+        result[field] = command_identity(repo, &value[field], 4096)?;
+    }
+    for field in ["additions", "deletions"] {
+        result[field] = value[field]
+            .as_u64()
+            .map_or(Value::Null, |value| json!(value));
+    }
+    result["truncated"] = json!(value["truncated"] == true);
+    let files = arr(&value["files"]);
+    if files.len() > MAX_FILES {
+        return Err(Error::new("Diff overview exceeds 500 files."));
+    }
+    result["files"]=json!(files.into_iter().map(|row|Ok(json!({"path":command_identity(repo,&row["path"],4096)?,"additions":row["additions"].as_u64(),"deletions":row["deletions"].as_u64(),"untracked":row["untracked"]==true}))).collect::<Result<Vec<Value>>>()?);
+    Ok(result)
+}
+pub fn command_file(repo: &Repository, args: &Value) -> Result<Value> {
+    let (id, cwd, path) = command_args(args, true)?;
+    command_identity(repo, &json!(id), 80)?;
+    command_identity(repo, &json!(path), 4096)?;
+    let value = file_for_session(repo, id, path, cwd)?;
+    let mut result = json!({"recordId":id});
+    for field in [
+        "root",
+        "path",
+        "branch",
+        "baseRef",
+        "baseCommit",
+        "fingerprint",
+    ] {
+        result[field] = command_identity(repo, &value[field], 4096)?;
+    }
+    let mut redacted = false;
+    for field in ["oldContent", "newContent"] {
+        let raw = value[field]
+            .as_str()
+            .ok_or(Error::new("Diff text is unavailable."))?;
+        let mut content = raw.to_owned();
+        super::commands::redact_text(repo, &mut content);
+        redacted |= content != raw;
+        if content.len() > 512 * 1024 {
+            return Err(Error::new("Redacted diff text exceeds 512 KiB."));
+        }
+        result[field] = json!(content);
+    }
+    result["contentRedacted"] = json!(redacted);
+    Ok(result)
+}
+fn working_file_bytes(
+    root: &Path,
+    path: &str,
+    metadata: &fs::Metadata,
+    limit: u64,
+) -> Result<Vec<u8>> {
+    super::local_files::read(
+        root,
+        path,
+        limit,
+        Some(&super::local_files::generation(metadata)),
+    )?
+    .ok_or(Error::new("The diff file changed. Refresh its file list."))
+}
 fn snapshot_file(root: &Path, relative: &Path, bytes: &[u8]) -> Result<PathBuf> {
     let directory = root
         .join(context_kit::sha256(bytes))
@@ -629,20 +776,164 @@ mod tests {
         assert!(parse_numstat("1\t0\t/absolute\0").is_err());
     }
     #[test]
-    fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview(){let (temp,root)=fixture();let repo=Repository::open(temp.path().join("truffle"),None,true).unwrap();repo.transaction(|s|{s["sessions"]=json!([{"id":"command-agent","cwd":root,"privateNs":"private-diff-canary"}]);Ok(())}).unwrap();let bytes=fs::read(&repo.data).unwrap();let initial=for_session(&repo,"command-agent","").unwrap();let mut cached=initial.clone();cached["privateNs"]=json!("private-diff-canary");cached["files"][0]["privateNs"]=json!("private-diff-canary");repo.git_diff_cache.lock().unwrap().entry=Some((root.to_string_lossy().into_owned(),Instant::now(),cached));let result=super::super::commands::invoke(&repo,&json!({"name":"chats.diff","args":{"recordId":"command-agent"}}),false).unwrap();assert_eq!(result["root"],initial["root"]);assert_eq!(result["files"],initial["files"]);assert!(!result.to_string().contains("private-diff-canary"));let file=super::super::commands::invoke(&repo,&json!({"name":"chats.diff.file","args":{"recordId":"command-agent","path":"a.txt"}}),false).unwrap();assert_eq!(file["oldContent"],"base\nkeep\n");assert_eq!(file["newContent"],"branch\nkeep\nlocal\n");assert_eq!(file["contentRedacted"],false);assert_eq!(command_file(&repo,&json!({"recordId":"command-agent","path":"deleted.txt"})).unwrap()["newContent"],"");for args in [json!({"recordId":"command-agent","cwd":temp.path()}),json!({"recordId":"other-agent"}),json!({"recordId":"command-agent","root":root})]{assert!(command_overview(&repo,&args).is_err());}for path in ["../escape","/absolute","not-listed"]{assert!(command_file(&repo,&json!({"recordId":"command-agent","path":path})).is_err());}assert_eq!(fs::read(&repo.data).unwrap(),bytes);}
+    fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
+        let (temp, root) = fixture();
+        let repo = Repository::open(temp.path().join("truffle"), None, true).unwrap();
+        repo.transaction(|s| {
+            s["sessions"] =
+                json!([{"id":"command-agent","cwd":root,"privateNs":"private-diff-canary"}]);
+            Ok(())
+        })
+        .unwrap();
+        let bytes = fs::read(&repo.data).unwrap();
+        let initial = for_session(&repo, "command-agent", "").unwrap();
+        let mut cached = initial.clone();
+        cached["privateNs"] = json!("private-diff-canary");
+        cached["files"][0]["privateNs"] = json!("private-diff-canary");
+        repo.git_diff_cache.lock().unwrap().entry =
+            Some((root.to_string_lossy().into_owned(), Instant::now(), cached));
+        let result = super::super::commands::invoke(
+            &repo,
+            &json!({"name":"chats.diff","args":{"recordId":"command-agent"}}),
+            false,
+        )
+        .unwrap();
+        assert_eq!(result["root"], initial["root"]);
+        assert_eq!(result["files"], initial["files"]);
+        assert!(!result.to_string().contains("private-diff-canary"));
+        let file = super::super::commands::invoke(
+            &repo,
+            &json!({"name":"chats.diff.file","args":{"recordId":"command-agent","path":"a.txt"}}),
+            false,
+        )
+        .unwrap();
+        assert_eq!(file["oldContent"], "base\nkeep\n");
+        assert_eq!(file["newContent"], "branch\nkeep\nlocal\n");
+        assert_eq!(file["contentRedacted"], false);
+        assert_eq!(
+            command_file(
+                &repo,
+                &json!({"recordId":"command-agent","path":"deleted.txt"})
+            )
+            .unwrap()["newContent"],
+            ""
+        );
+        for args in [
+            json!({"recordId":"command-agent","cwd":temp.path()}),
+            json!({"recordId":"other-agent"}),
+            json!({"recordId":"command-agent","root":root}),
+        ] {
+            assert!(command_overview(&repo, &args).is_err());
+        }
+        for path in ["../escape", "/absolute", "not-listed"] {
+            assert!(command_file(&repo, &json!({"recordId":"command-agent","path":path})).is_err());
+        }
+        assert_eq!(fs::read(&repo.data).unwrap(), bytes);
+    }
     #[test]
-    fn chat_diff_anchored_reader_rejects_swapped_symlink_and_changed_generation(){let temp=tempfile::tempdir().unwrap();let root=temp.path().join("root");fs::create_dir(&root).unwrap();let file=root.join("code.txt");fs::write(&file,"captured source").unwrap();let captured=fs::symlink_metadata(&file).unwrap();let outside=temp.path().join("outside");fs::write(&outside,"private outside source").unwrap();fs::remove_file(&file).unwrap();std::os::unix::fs::symlink(&outside,&file).unwrap();assert!(working_file_bytes(&root,"code.txt",&captured,512*1024).is_err());fs::remove_file(&file).unwrap();fs::write(&file,"replacement source").unwrap();assert!(working_file_bytes(&root,"code.txt",&captured,512*1024).is_err());let current=fs::symlink_metadata(&file).unwrap();assert_eq!(working_file_bytes(&root,"code.txt",&current,512*1024).unwrap(),b"replacement source");}
+    fn chat_diff_anchored_reader_rejects_swapped_symlink_and_changed_generation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root");
+        fs::create_dir(&root).unwrap();
+        let file = root.join("code.txt");
+        fs::write(&file, "captured source").unwrap();
+        let captured = fs::symlink_metadata(&file).unwrap();
+        let outside = temp.path().join("outside");
+        fs::write(&outside, "private outside source").unwrap();
+        fs::remove_file(&file).unwrap();
+        std::os::unix::fs::symlink(&outside, &file).unwrap();
+        assert!(working_file_bytes(&root, "code.txt", &captured, 512 * 1024).is_err());
+        fs::remove_file(&file).unwrap();
+        fs::write(&file, "replacement source").unwrap();
+        assert!(working_file_bytes(&root, "code.txt", &captured, 512 * 1024).is_err());
+        let current = fs::symlink_metadata(&file).unwrap();
+        assert_eq!(
+            working_file_bytes(&root, "code.txt", &current, 512 * 1024).unwrap(),
+            b"replacement source"
+        );
+    }
     #[test]
-    fn chat_diff_command_limits_binary_symlink_size_lines_and_overview_rows(){let (temp,root)=fixture();let repo=Repository::open(temp.path().join("truffle"),None,true).unwrap();repo.transaction(|s|{s["sessions"]=json!([{"id":"bounded-agent","cwd":root}]);Ok(())}).unwrap();fs::write(root.join("large.txt"),vec![b'x';512*1024+1]).unwrap();fs::write(root.join("lines.txt"),"x\n".repeat(10001)).unwrap();std::os::unix::fs::symlink(temp.path(),root.join("symlink-file")).unwrap();for path in ["large.txt","lines.txt","binary.bin","symlink-file"]{assert!(command_file(&repo,&json!({"recordId":"bounded-agent","path":path})).is_err());}for index in 0..501{fs::write(root.join(format!("bounded-{index}.txt")),b"").unwrap();}let result=command_overview(&repo,&json!({"recordId":"bounded-agent"})).unwrap();assert_eq!(arr(&result["files"]).len(),500);assert_eq!(result["truncated"],true);}
+    fn chat_diff_command_limits_binary_symlink_size_lines_and_overview_rows() {
+        let (temp, root) = fixture();
+        let repo = Repository::open(temp.path().join("truffle"), None, true).unwrap();
+        repo.transaction(|s| {
+            s["sessions"] = json!([{"id":"bounded-agent","cwd":root}]);
+            Ok(())
+        })
+        .unwrap();
+        fs::write(root.join("large.txt"), vec![b'x'; 512 * 1024 + 1]).unwrap();
+        fs::write(root.join("lines.txt"), "x\n".repeat(10001)).unwrap();
+        std::os::unix::fs::symlink(temp.path(), root.join("symlink-file")).unwrap();
+        for path in ["large.txt", "lines.txt", "binary.bin", "symlink-file"] {
+            assert!(command_file(&repo, &json!({"recordId":"bounded-agent","path":path})).is_err());
+        }
+        for index in 0..501 {
+            fs::write(root.join(format!("bounded-{index}.txt")), b"").unwrap();
+        }
+        let result = command_overview(&repo, &json!({"recordId":"bounded-agent"})).unwrap();
+        assert_eq!(arr(&result["files"]).len(), 500);
+        assert_eq!(result["truncated"], true);
+    }
     #[test]
-    fn chat_diff_command_redacts_source_but_preserves_original_fingerprint(){let (temp,root)=fixture();let home=temp.path().join("truffle");fs::create_dir(&home).unwrap();let secret="fixture-source-secret";fs::write(home.join(".env"),format!("TRUFFLE_TEST_SECRET={secret}\n")).unwrap();fs::write(root.join("a.txt"),format!("before\n{secret}\nafter\n")).unwrap();let repo=Repository::open(home,None,true).unwrap();repo.transaction(|s|{s["sessions"]=json!([{"id":"redacted-agent","cwd":root}]);Ok(())}).unwrap();let raw=file_for_session(&repo,"redacted-agent","a.txt","").unwrap();let result=super::super::commands::invoke(&repo,&json!({"name":"chats.diff.file","args":{"recordId":"redacted-agent","path":"a.txt"}}),false).unwrap();assert_eq!(result["fingerprint"],raw["fingerprint"]);assert_eq!(result["contentRedacted"],true);assert!(!result.to_string().contains(secret));assert!(text(&result,"newContent").contains("redacted"));}
+    fn chat_diff_command_redacts_source_but_preserves_original_fingerprint() {
+        let (temp, root) = fixture();
+        let home = temp.path().join("truffle");
+        fs::create_dir(&home).unwrap();
+        let secret = "fixture-source-secret";
+        fs::write(home.join(".env"), format!("TRUFFLE_TEST_SECRET={secret}\n")).unwrap();
+        fs::write(root.join("a.txt"), format!("before\n{secret}\nafter\n")).unwrap();
+        let repo = Repository::open(home, None, true).unwrap();
+        repo.transaction(|s| {
+            s["sessions"] = json!([{"id":"redacted-agent","cwd":root}]);
+            Ok(())
+        })
+        .unwrap();
+        let raw = file_for_session(&repo, "redacted-agent", "a.txt", "").unwrap();
+        let result = super::super::commands::invoke(
+            &repo,
+            &json!({"name":"chats.diff.file","args":{"recordId":"redacted-agent","path":"a.txt"}}),
+            false,
+        )
+        .unwrap();
+        assert_eq!(result["fingerprint"], raw["fingerprint"]);
+        assert_eq!(result["contentRedacted"], true);
+        assert!(!result.to_string().contains(secret));
+        assert!(text(&result, "newContent").contains("redacted"));
+    }
 
     #[test]
     fn chat_diff_rejects_an_unlinked_valid_checkout_before_cache_and_accepts_explicit_link() {
-        let(temp,root)=fixture();let(_other,other)=fixture();let repo=Repository::open(temp.path().join("profile"),None,true).unwrap();repo.transaction(|s|{s["sessions"]=json!([{"id":"linked-agent","cwd":root}]);Ok(())}).unwrap();
-        let other_overview=overview(&other).unwrap();repo.git_diff_cache.lock().unwrap().entry=Some((other.to_string_lossy().into_owned(),Instant::now(),other_overview));let bytes=fs::read(&repo.data).unwrap();
-        assert!(command_overview(&repo,&json!({"recordId":"linked-agent","cwd":other})).is_err());assert!(command_file(&repo,&json!({"recordId":"linked-agent","cwd":other,"path":"a.txt"})).is_err());assert_eq!(fs::read(&repo.data).unwrap(),bytes);
-        repo.transaction(|s|{s["sessions"][0]["worktrees"]=json!([{"path":other}]);Ok(())}).unwrap();assert_eq!(command_overview(&repo,&json!({"recordId":"linked-agent","cwd":other})).unwrap()["root"],json!(other));
+        let (temp, root) = fixture();
+        let (_other, other) = fixture();
+        let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+        repo.transaction(|s| {
+            s["sessions"] = json!([{"id":"linked-agent","cwd":root}]);
+            Ok(())
+        })
+        .unwrap();
+        let other_overview = overview(&other).unwrap();
+        repo.git_diff_cache.lock().unwrap().entry = Some((
+            other.to_string_lossy().into_owned(),
+            Instant::now(),
+            other_overview,
+        ));
+        let bytes = fs::read(&repo.data).unwrap();
+        assert!(command_overview(&repo, &json!({"recordId":"linked-agent","cwd":other})).is_err());
+        assert!(command_file(
+            &repo,
+            &json!({"recordId":"linked-agent","cwd":other,"path":"a.txt"})
+        )
+        .is_err());
+        assert_eq!(fs::read(&repo.data).unwrap(), bytes);
+        repo.transaction(|s| {
+            s["sessions"][0]["worktrees"] = json!([{"path":other}]);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            command_overview(&repo, &json!({"recordId":"linked-agent","cwd":other})).unwrap()
+                ["root"],
+            json!(other)
+        );
     }
-
 }

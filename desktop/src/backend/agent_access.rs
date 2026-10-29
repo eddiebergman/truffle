@@ -87,13 +87,21 @@ pub fn snooze_work(repo: &Repository, args: &Value) -> Result<Value> {
         &json!({"action":"snooze","id":args["id"],"mode":args["mode"],"until":args["until"]}),
     )
 }
-pub enum ChatMetadata<'a> { Rename(&'a str), Visibility(bool), Archive(bool) }
+pub enum ChatMetadata<'a> {
+    Rename(&'a str),
+    Visibility(bool),
+    Archive(bool),
+}
 pub fn update_chat(repo: &Repository, id: &str, change: ChatMetadata<'_>) -> Result<Value> {
     let id = sid(id)?;
     let edit = match change {
         ChatMetadata::Rename(title) => json!({"action":"rename-session","id":id,"title":title}),
-        ChatMetadata::Visibility(hidden) => json!({"action":"hide-session","id":id,"hidden":hidden}),
-        ChatMetadata::Archive(archived) => json!({"action":"archive-session","id":id,"restore":!archived}),
+        ChatMetadata::Visibility(hidden) => {
+            json!({"action":"hide-session","id":id,"hidden":hidden})
+        }
+        ChatMetadata::Archive(archived) => {
+            json!({"action":"archive-session","id":id,"restore":!archived})
+        }
     };
     repo.transaction(|state| {
         domain::edit(state, &edit)?;

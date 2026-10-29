@@ -3,14 +3,17 @@ use std::{collections::BTreeSet, io::Write, os::unix::fs::OpenOptionsExt, sync::
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
-enum Approval { Routine, User }
+enum Approval {
+    Routine,
+    User,
+}
 
 // This policy is code-owned. Editable labels and field metadata cannot grant access.
 fn approval(key: &str) -> Approval {
     match key {
         "theme" | "uiScale" | "density" | "terminalFontSize" | "terminalScrollback"
-        | "diffFontSize" | "diffLayout" | "fileDiffLayout" | "previewHeight"
-        | "enterToComment" | "defaultAgent" | "keybindings" => Approval::Routine,
+        | "diffFontSize" | "diffLayout" | "fileDiffLayout" | "previewHeight" | "enterToComment"
+        | "defaultAgent" | "keybindings" => Approval::Routine,
         _ => Approval::User,
     }
 }
@@ -156,7 +159,8 @@ pub fn validate(values: &Value) -> Result<()> {
             "Primary+Shift+Z",
             "Primary+Q",
         ]
-        .iter().any(|reserved| reserved.eq_ignore_ascii_case(chord))
+        .iter()
+        .any(|reserved| reserved.eq_ignore_ascii_case(chord))
         {
             return Err(Error::new(
                 "This shortcut is reserved for editing or quitting.",
@@ -207,14 +211,20 @@ fn normalize_document(document: &mut Value) -> Result<()> {
     if !document.is_object() || document["version"] != 1 || !document["revision"].is_u64() {
         return Err(Error::new("Unsupported settings file version or revision."));
     }
-    let values = document["values"].as_object_mut()
+    let values = document["values"]
+        .as_object_mut()
         .ok_or(Error::new("Settings values must be an object."))?;
-    let bindings = values.get_mut("keybindings").and_then(Value::as_object_mut)
+    let bindings = values
+        .get_mut("keybindings")
+        .and_then(Value::as_object_mut)
         .ok_or(Error::new("Keybindings must be an object."))?;
     for command in commands() {
         let id = text(&command, "id");
         if !bindings.contains_key(id) {
-            let binding = if bindings.values().any(|value| value == &command["defaultBinding"]) {
+            let binding = if bindings
+                .values()
+                .any(|value| value == &command["defaultBinding"])
+            {
                 json!("")
             } else {
                 command["defaultBinding"].clone()
@@ -265,12 +275,22 @@ impl Store {
         let mut external = super::config::read(&self.path)?;
         normalize_document(&mut external)?;
         let mut doc = self.document.lock().map_err(|_| Error::io())?;
-        let revision=doc["revision"].as_u64().unwrap();
-        let values_changed=external["values"] != doc["values"];
-        external["revision"]=json!(external["revision"].as_u64().unwrap().max(if values_changed {
-            revision.checked_add(1).ok_or(Error::new("Settings revision is exhausted."))?
-        } else {revision}));
-        if external != *doc { *doc=external; }
+        let revision = doc["revision"].as_u64().unwrap();
+        let values_changed = external["values"] != doc["values"];
+        external["revision"] =
+            json!(external["revision"]
+                .as_u64()
+                .unwrap()
+                .max(if values_changed {
+                    revision
+                        .checked_add(1)
+                        .ok_or(Error::new("Settings revision is exhausted."))?
+                } else {
+                    revision
+                }));
+        if external != *doc {
+            *doc = external;
+        }
         Ok(())
     }
     pub fn values(&self) -> Value {
@@ -280,10 +300,16 @@ impl Store {
     pub fn view(&self) -> Value {
         let error = self.refresh().err();
         let mut doc = self.document.lock().unwrap().clone();
-        match document_hash(&doc) {Ok(hash)=>doc["contentHash"]=json!(hash),Err(_)=>doc["configError"]=json!("Settings configuration could not load.")}
+        match document_hash(&doc) {
+            Ok(hash) => doc["contentHash"] = json!(hash),
+            Err(_) => doc["configError"] = json!("Settings configuration could not load."),
+        }
         doc["defaults"] = defaults();
         doc["commands"] = json!(commands());
-        doc["approval"] = json!(defaults().as_object().unwrap().keys()
+        doc["approval"] = json!(defaults()
+            .as_object()
+            .unwrap()
+            .keys()
             .map(|key| (key.clone(), approval(key)))
             .collect::<std::collections::BTreeMap<_, _>>());
         let builtin: Value =
@@ -305,7 +331,8 @@ impl Store {
         match context_kit::read_bounded(&self.directory.join("workflows/agent-review.md"), 16000) {
             Ok(bytes) => {
                 if let Ok(template) = String::from_utf8(bytes) {
-                    doc["workflows"] = json!({"agent-review":super::workflows::review_skill_discovery(&template)});
+                    doc["workflows"] =
+                        json!({"agent-review":super::workflows::review_skill_discovery(&template)});
                 }
             }
             Err(_) => doc["configError"] = json!("Cannot read workflows/agent-review.md."),
@@ -321,19 +348,21 @@ impl Store {
         super::config::themes(&self.directory)
     }
     fn proposed_values(&self, doc: &Value, p: &Value, agent: bool) -> Result<Value> {
-        if p["revision"].as_u64().is_none() || p["revision"] != doc["revision"]
-            || p["contentHash"].as_str() != Some(document_hash(doc)?.as_str()) {
-            let mut error=Error::new("Settings changed elsewhere. Reload settings before saving.");error.status=409;return Err(error);
+        if p["revision"].as_u64().is_none()
+            || p["revision"] != doc["revision"]
+            || p["contentHash"].as_str() != Some(document_hash(doc)?.as_str())
+        {
+            let mut error =
+                Error::new("Settings changed elsewhere. Reload settings before saving.");
+            error.status = 409;
+            return Err(error);
         }
         let patch = p["patch"]
             .as_object()
             .ok_or(Error::new("Supply a settings patch."))?;
         let mut values = doc["values"].clone();
         for (key, value) in patch {
-            if agent
-                && approval(key) == Approval::User
-                && values[key] != *value
-            {
+            if agent && approval(key) == Approval::User && values[key] != *value {
                 return Err(Error::new("This changes executable commands or workflows. Ask the user to approve it in Settings."));
             }
             values[key] = value.clone();
@@ -394,15 +423,22 @@ mod tests {
     #[test]
     fn malformed_settings_containers_fail_safely_on_load_and_refresh_without_writes() {
         for (level, malformed) in [
-            ("document", Value::Null), ("document", json!([])), ("document", json!("bad")),
-            ("values", Value::Null), ("values", json!([])), ("values", json!("bad")),
-            ("keybindings", Value::Null), ("keybindings", json!([])), ("keybindings", json!("bad")),
+            ("document", Value::Null),
+            ("document", json!([])),
+            ("document", json!("bad")),
+            ("values", Value::Null),
+            ("values", json!([])),
+            ("values", json!("bad")),
+            ("keybindings", Value::Null),
+            ("keybindings", json!([])),
+            ("keybindings", json!("bad")),
         ] {
             let temp = tempfile::tempdir().unwrap();
             let path = temp.path().join("settings.json");
             let store = Store::load(path.clone()).unwrap();
             let baseline = store.view();
-            let mut invalid: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let mut invalid: Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             match level {
                 "document" => invalid = malformed,
                 "values" => invalid["values"] = malformed,
@@ -411,9 +447,15 @@ mod tests {
             }
             let bytes = serde_json::to_vec(&invalid).unwrap();
             std::fs::write(&path, &bytes).unwrap();
-            assert!(Store::load(path.clone()).is_err(), "startup must reject malformed {level}");
+            assert!(
+                Store::load(path.clone()).is_err(),
+                "startup must reject malformed {level}"
+            );
             let current = store.view();
-            assert!(current["configError"].is_string(), "refresh must report malformed {level}");
+            assert!(
+                current["configError"].is_string(),
+                "refresh must report malformed {level}"
+            );
             assert_eq!(current["values"], baseline["values"]);
             let patch = json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}});
             assert!(store.preview(&patch, false).is_err());
@@ -423,19 +465,42 @@ mod tests {
     }
     #[test]
     fn document_content_hash_rejects_stale_and_missing_baselines_without_persisting_metadata() {
-        let temp=tempfile::tempdir().unwrap();let path=temp.path().join("settings.json");let store=Store::load(path.clone()).unwrap();
-        let baseline=store.view();assert_eq!(baseline["contentHash"],store.view()["contentHash"]);
-        let mut external:Value=serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();external["updatedBy"]=json!("manual-edit-same-revision");
-        std::fs::write(&path,serde_json::to_vec(&external).unwrap()).unwrap();let bytes=std::fs::read(&path).unwrap();
-        let fresh=store.view();assert_eq!(fresh["revision"],baseline["revision"]);assert_ne!(fresh["contentHash"],baseline["contentHash"]);assert_eq!(fresh["contentHash"],store.view()["contentHash"]);
-        for request in [json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}}),json!({"revision":fresh["revision"],"patch":{}}),json!({"contentHash":fresh["contentHash"],"patch":{}})] {
-            assert_eq!(store.preview(&request,false).unwrap_err().status,409);assert_eq!(store.apply(&request,false).unwrap_err().status,409);assert_eq!(std::fs::read(&path).unwrap(),bytes);
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("settings.json");
+        let store = Store::load(path.clone()).unwrap();
+        let baseline = store.view();
+        assert_eq!(baseline["contentHash"], store.view()["contentHash"]);
+        let mut external: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        external["updatedBy"] = json!("manual-edit-same-revision");
+        std::fs::write(&path, serde_json::to_vec(&external).unwrap()).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let fresh = store.view();
+        assert_eq!(fresh["revision"], baseline["revision"]);
+        assert_ne!(fresh["contentHash"], baseline["contentHash"]);
+        assert_eq!(fresh["contentHash"], store.view()["contentHash"]);
+        for request in [
+            json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}}),
+            json!({"revision":fresh["revision"],"patch":{}}),
+            json!({"contentHash":fresh["contentHash"],"patch":{}}),
+        ] {
+            assert_eq!(store.preview(&request, false).unwrap_err().status, 409);
+            assert_eq!(store.apply(&request, false).unwrap_err().status, 409);
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
         }
-        std::fs::write(store.config_directory().join("workflows/agent-review.md"),"metadata-only-workflow-change").unwrap();assert_eq!(store.view()["contentHash"],fresh["contentHash"]);
-        let request=json!({"revision":fresh["revision"],"contentHash":fresh["contentHash"],"patch":{"uiScale":120}});
-        let preview=store.preview(&request,false).unwrap();assert_eq!(preview["contentHash"],fresh["contentHash"]);assert_eq!(std::fs::read(&path).unwrap(),bytes);
-        let applied=store.apply(&request,false).unwrap();assert_ne!(applied["contentHash"],fresh["contentHash"]);
-        let persisted:Value=serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();assert!(persisted.get("contentHash").is_none());
+        std::fs::write(
+            store.config_directory().join("workflows/agent-review.md"),
+            "metadata-only-workflow-change",
+        )
+        .unwrap();
+        assert_eq!(store.view()["contentHash"], fresh["contentHash"]);
+        let request = json!({"revision":fresh["revision"],"contentHash":fresh["contentHash"],"patch":{"uiScale":120}});
+        let preview = store.preview(&request, false).unwrap();
+        assert_eq!(preview["contentHash"], fresh["contentHash"]);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let applied = store.apply(&request, false).unwrap();
+        assert_ne!(applied["contentHash"], fresh["contentHash"]);
+        let persisted: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(persisted.get("contentHash").is_none());
     }
 
     #[test]
@@ -461,17 +526,47 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let store = Store::load(temp.path().join("settings.json")).unwrap();
         let view = store.view();
-        let user = ["quickActions", "editor", "claudeReviewCommand", "codexReviewCommand"];
-        let routine = ["theme", "uiScale", "density", "terminalFontSize", "terminalScrollback", "diffFontSize", "diffLayout", "fileDiffLayout", "previewHeight", "enterToComment", "defaultAgent", "keybindings"];
+        let user = [
+            "quickActions",
+            "editor",
+            "claudeReviewCommand",
+            "codexReviewCommand",
+        ];
+        let routine = [
+            "theme",
+            "uiScale",
+            "density",
+            "terminalFontSize",
+            "terminalScrollback",
+            "diffFontSize",
+            "diffLayout",
+            "fileDiffLayout",
+            "previewHeight",
+            "enterToComment",
+            "defaultAgent",
+            "keybindings",
+        ];
         let known = defaults();
         assert_eq!(known.as_object().unwrap().len(), user.len() + routine.len());
-        for key in user { assert!(known.get(key).is_some()); assert_eq!(view["approval"][key], "user"); }
-        for key in routine { assert!(known.get(key).is_some()); assert_eq!(view["approval"][key], "routine"); }
+        for key in user {
+            assert!(known.get(key).is_some());
+            assert_eq!(view["approval"][key], "user");
+        }
+        for key in routine {
+            assert!(known.get(key).is_some());
+            assert_eq!(view["approval"][key], "routine");
+        }
         assert_eq!(approval("future-setting"), Approval::User);
         assert_eq!(approval(""), Approval::User);
-        let mut metadata = super::super::config::read(&store.config_directory().join("settings-fields.json")).unwrap();
+        let mut metadata =
+            super::super::config::read(&store.config_directory().join("settings-fields.json"))
+                .unwrap();
         metadata["approval"] = json!({"quickActions":"routine","theme":"user"});
-        std::fs::write(store.config_directory().join("settings-fields.json"), serde_json::to_vec(&metadata).unwrap()).unwrap();
+        std::fs::write(
+            store.config_directory().join("settings-fields.json"),
+            serde_json::to_vec(&metadata).unwrap(),
+        )
+        .unwrap();
         assert_eq!(store.view()["approval"], view["approval"]);
     }
 
@@ -481,18 +576,31 @@ mod tests {
         let path = temp.path().join("settings.json");
         let store = Store::load(path.clone()).unwrap();
         let before = std::fs::read(&path).unwrap();
-        for patch in [json!({"quickActions":[{"id":"test","title":"Test","command":"printf test"}]}), json!({"editor":"code"}), json!({"claudeReviewCommand":"/review"}), json!({"codexReviewCommand":"$review"}), json!({"future-setting":true})] {
-            let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
+        for patch in [
+            json!({"quickActions":[{"id":"test","title":"Test","command":"printf test"}]}),
+            json!({"editor":"code"}),
+            json!({"claudeReviewCommand":"/review"}),
+            json!({"codexReviewCommand":"$review"}),
+            json!({"future-setting":true}),
+        ] {
+            let request =
+                json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
             assert!(store.preview(&request, true).is_err());
             assert!(store.apply(&request, true).is_err());
         }
         assert_eq!(std::fs::read(&path).unwrap(), before);
         let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"defaultAgent":"codex","uiScale":120,"keybindings":store.values()["keybindings"]}});
         let preview = store.preview(&request, true).unwrap();
-        assert_eq!(store.apply(&request, true).unwrap()["values"], preview["values"]);
+        assert_eq!(
+            store.apply(&request, true).unwrap()["values"],
+            preview["values"]
+        );
         let request = json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"editor":"code"}});
         assert!(store.preview(&request, false).is_ok());
-        assert_eq!(store.apply(&request, false).unwrap()["values"]["editor"], "code");
+        assert_eq!(
+            store.apply(&request, false).unwrap()["values"]["editor"],
+            "code"
+        );
     }
 
     #[test]
@@ -505,7 +613,12 @@ mod tests {
         assert_eq!(view["values"]["codexReviewCommand"], "");
         assert_eq!(view["reviewSkill"]["available"], true);
         let skill = PathBuf::from(text(&view["reviewSkill"], "path"));
-        assert_eq!(skill, store.config_directory().join("skills/truffle-review/SKILL.md"));
+        assert_eq!(
+            skill,
+            store
+                .config_directory()
+                .join("skills/truffle-review/SKILL.md")
+        );
         let original = std::fs::read_to_string(&skill).unwrap();
         std::fs::write(&skill, format!("{original}\nLocal review preference.\n")).unwrap();
         let expected = std::fs::read(&skill).unwrap();
@@ -522,12 +635,20 @@ mod tests {
         let store = Store::load(path.clone()).unwrap();
         let saved = std::fs::read(&path).unwrap();
         let initial = store.values();
-        for patch in [json!({"uiScale":-1}), json!({"uiScale":null}), json!({"density":"bad"}), json!({"quickActions":[{"id":"","title":"","command":""}]}), json!({"theme":"unknown-theme-fixture"})] {
-            let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
+        for patch in [
+            json!({"uiScale":-1}),
+            json!({"uiScale":null}),
+            json!({"density":"bad"}),
+            json!({"quickActions":[{"id":"","title":"","command":""}]}),
+            json!({"theme":"unknown-theme-fixture"}),
+        ] {
+            let request =
+                json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
             assert!(store.preview(&request, false).is_err());
             assert!(store.apply(&request, false).is_err());
         }
-        let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"uiScale":120}});
+        let request =
+            json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"uiScale":120}});
         let preview = store.preview(&request, false).unwrap();
         assert_eq!(preview["revision"], 0);
         assert_eq!(preview["values"]["uiScale"], 120);

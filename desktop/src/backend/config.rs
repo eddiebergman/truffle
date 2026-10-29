@@ -23,7 +23,8 @@ pub fn install(directory: &Path) -> Result<()> {
                     serde_json::to_vec_pretty(&json!({"version":1,"presets":old}))?
                 } else {
                     super::assets::asset(name)
-                        .ok_or(Error::new("Missing built-in configuration."))?.to_vec()
+                        .ok_or(Error::new("Missing built-in configuration."))?
+                        .to_vec()
                 };
                 std::fs::create_dir_all(target.parent().unwrap())?;
                 super::http::private_write(&target, &bytes)?;
@@ -39,27 +40,74 @@ pub fn install(directory: &Path) -> Result<()> {
 // these hashes was never edited, so it follows the packaged file: replaced, or
 // removed when the theme is no longer packaged.
 const PREVIOUS_THEMES: &[(&str, &str)] = &[
-    ("catppuccin-latte", "6f6a644bdfc2f9f726fbe4500019c115dd6a18ba0116357537bcc44ca782d1a5"),
-    ("catppuccin-mocha", "43298c436f7527ef2deee6c5af9fbea61f5eaf547f5b36295c00654e87a9bd88"),
-    ("dracula", "f026b056d5321f7e8469fd811ced975d98e0222a2515d27879f149f751763573"),
-    ("github-dark", "69b7a9693e9814d478a7d1fdafa52c24cb609b0b0832f50c0a415bf988364d91"),
-    ("github-light", "711147741f72fc0db072b09a28de8bedb8984997d572cee9c52c47fa409f17d8"),
-    ("gruvbox-dark-medium", "8d301867af3eb863e1ae289e8657264e244ffbf2c12f4c40cd13635b102f0046"),
-    ("gruvbox-light-medium", "0fee7e7311f0c1c7b15d01cdb327b9651f7220b1702a3bdfcf9b1ead55752d5b"),
-    ("light", "f635b4f6b82f6d680336fd80480e40f06515fb943d5dbac7f8be6ef40ffcf560"),
-    ("midnight", "c080a63c087c6a6ce5194f256685c7d250a87b7570c4fd3904dad38e0311d1ab"),
-    ("nord", "0ea054997b6bbe5ca17baae04576190ca34ab06e52908d8831a6cca91b49d090"),
-    ("rose-pine-dawn", "9553200699233f23be58851bdd5deac89cdc23a0112bf15910993869c38c15a2"),
-    ("rose-pine", "84e7b0392c6ff3daff10814a5e8dbfd4d1d3649e1ed2d7942ed4986bb0558418"),
-    ("rose-pine", "db12f0f527acd086ca47a31eb7ffacc50ae68c982c3139fab20033c0195880a5"),
-    ("solarized-dark", "ed5257c5f01ecd940f370cd354dda483555e1f3155195777216ff5242d40d566"),
-    ("solarized-light", "9f0e5d45dd69e0c25bfd585c17a1d78e2921668b0e29e615d419aadb16cbbe12"),
+    (
+        "catppuccin-latte",
+        "6f6a644bdfc2f9f726fbe4500019c115dd6a18ba0116357537bcc44ca782d1a5",
+    ),
+    (
+        "catppuccin-mocha",
+        "43298c436f7527ef2deee6c5af9fbea61f5eaf547f5b36295c00654e87a9bd88",
+    ),
+    (
+        "dracula",
+        "f026b056d5321f7e8469fd811ced975d98e0222a2515d27879f149f751763573",
+    ),
+    (
+        "github-dark",
+        "69b7a9693e9814d478a7d1fdafa52c24cb609b0b0832f50c0a415bf988364d91",
+    ),
+    (
+        "github-light",
+        "711147741f72fc0db072b09a28de8bedb8984997d572cee9c52c47fa409f17d8",
+    ),
+    (
+        "gruvbox-dark-medium",
+        "8d301867af3eb863e1ae289e8657264e244ffbf2c12f4c40cd13635b102f0046",
+    ),
+    (
+        "gruvbox-light-medium",
+        "0fee7e7311f0c1c7b15d01cdb327b9651f7220b1702a3bdfcf9b1ead55752d5b",
+    ),
+    (
+        "light",
+        "f635b4f6b82f6d680336fd80480e40f06515fb943d5dbac7f8be6ef40ffcf560",
+    ),
+    (
+        "midnight",
+        "c080a63c087c6a6ce5194f256685c7d250a87b7570c4fd3904dad38e0311d1ab",
+    ),
+    (
+        "nord",
+        "0ea054997b6bbe5ca17baae04576190ca34ab06e52908d8831a6cca91b49d090",
+    ),
+    (
+        "rose-pine-dawn",
+        "9553200699233f23be58851bdd5deac89cdc23a0112bf15910993869c38c15a2",
+    ),
+    (
+        "rose-pine",
+        "84e7b0392c6ff3daff10814a5e8dbfd4d1d3649e1ed2d7942ed4986bb0558418",
+    ),
+    (
+        "rose-pine",
+        "db12f0f527acd086ca47a31eb7ffacc50ae68c982c3139fab20033c0195880a5",
+    ),
+    (
+        "solarized-dark",
+        "ed5257c5f01ecd940f370cd354dda483555e1f3155195777216ff5242d40d566",
+    ),
+    (
+        "solarized-light",
+        "9f0e5d45dd69e0c25bfd585c17a1d78e2921668b0e29e615d419aadb16cbbe12",
+    ),
 ];
 
 fn update_untouched_themes(directory: &Path) -> Result<()> {
     for (id, hash) in PREVIOUS_THEMES {
         let target = directory.join(format!("themes/{id}.json"));
-        let Ok(bytes) = std::fs::read(&target) else { continue };
+        let Ok(bytes) = std::fs::read(&target) else {
+            continue;
+        };
         if format!("{:x}", Sha256::digest(&bytes)) != *hash {
             continue;
         }
@@ -92,7 +140,11 @@ pub fn commands(directory: &Path) -> Result<Vec<Value>> {
         return Err(Error::new("Unsupported command configuration version."));
     }
     let mut commands = arr(&value["commands"]);
-    for builtin in super::settings::commands(){if !commands.iter().any(|c|c["id"]==builtin["id"]){commands.push(builtin);}}
+    for builtin in super::settings::commands() {
+        if !commands.iter().any(|c| c["id"] == builtin["id"]) {
+            commands.push(builtin);
+        }
+    }
     let builtins = super::settings::commands();
     let ids = commands
         .iter()
@@ -187,18 +239,26 @@ mod tests {
             let directory = temp.path().join("config");
             std::fs::create_dir(&directory).unwrap();
             let target = directory.join("skills.json");
-            let custom = b"{\"version\":1,\"presets\":[],\"extension\":\"user-owned-skill-marker\"}\n";
+            let custom =
+                b"{\"version\":1,\"presets\":[],\"extension\":\"user-owned-skill-marker\"}\n";
             std::fs::write(&target, custom).unwrap();
             let legacy = b"[{\"id\":\"legacy-marker\"}]";
             std::fs::write(temp.path().join("newsletters.json"), legacy).unwrap();
             if let Some(receipt) = receipt {
-                std::fs::write(directory.join(".installed-defaults.json"), serde_json::to_vec(&receipt).unwrap()).unwrap();
+                std::fs::write(
+                    directory.join(".installed-defaults.json"),
+                    serde_json::to_vec(&receipt).unwrap(),
+                )
+                .unwrap();
             }
             install(&directory).unwrap();
             assert_eq!(std::fs::read(&target).unwrap(), custom);
             install(&directory).unwrap();
             assert_eq!(std::fs::read(&target).unwrap(), custom);
-            assert_eq!(std::fs::read(temp.path().join("newsletters.json")).unwrap(), legacy);
+            assert_eq!(
+                std::fs::read(temp.path().join("newsletters.json")).unwrap(),
+                legacy
+            );
         }
     }
 
@@ -207,20 +267,41 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let directory = temp.path().join("config");
         std::fs::create_dir_all(directory.join("themes")).unwrap();
-        let receipt = super::super::assets::CONFIG_FILES.iter().filter(|n| !n.ends_with("/tokyo-night.json")).collect::<Vec<_>>();
-        std::fs::write(directory.join(".installed-defaults.json"), serde_json::to_vec(&receipt).unwrap()).unwrap();
+        let receipt = super::super::assets::CONFIG_FILES
+            .iter()
+            .filter(|n| !n.ends_with("/tokyo-night.json"))
+            .collect::<Vec<_>>();
+        std::fs::write(
+            directory.join(".installed-defaults.json"),
+            serde_json::to_vec(&receipt).unwrap(),
+        )
+        .unwrap();
         let themes = directory.join("themes");
-        std::fs::write(themes.join("rose-pine.json"), include_bytes!("fixtures/rose-pine-before-rename.json")).unwrap();
-        std::fs::write(themes.join("midnight.json"), include_bytes!("fixtures/midnight.json")).unwrap();
+        std::fs::write(
+            themes.join("rose-pine.json"),
+            include_bytes!("fixtures/rose-pine-before-rename.json"),
+        )
+        .unwrap();
+        std::fs::write(
+            themes.join("midnight.json"),
+            include_bytes!("fixtures/midnight.json"),
+        )
+        .unwrap();
         let mut edited = include_bytes!("fixtures/midnight.json").to_vec();
         edited.push(b'\n');
         std::fs::write(themes.join("light.json"), &edited).unwrap();
         std::fs::write(themes.join("nord.json"), b"{\"edited\":true}").unwrap();
         install(&directory).unwrap();
-        assert_eq!(std::fs::read(themes.join("rose-pine.json")).unwrap(), super::super::assets::asset("config/themes/rose-pine.json").unwrap());
+        assert_eq!(
+            std::fs::read(themes.join("rose-pine.json")).unwrap(),
+            super::super::assets::asset("config/themes/rose-pine.json").unwrap()
+        );
         assert!(!themes.join("midnight.json").exists());
         assert_eq!(std::fs::read(themes.join("light.json")).unwrap(), edited);
-        assert_eq!(std::fs::read(themes.join("nord.json")).unwrap(), b"{\"edited\":true}");
+        assert_eq!(
+            std::fs::read(themes.join("nord.json")).unwrap(),
+            b"{\"edited\":true}"
+        );
         assert!(themes.join("tokyo-night.json").is_file());
         install(&directory).unwrap();
         assert_eq!(std::fs::read(themes.join("light.json")).unwrap(), edited);
@@ -239,7 +320,10 @@ mod tests {
             let presets = json!([{"id":"repaired-legacy-marker"}]);
             std::fs::write(&legacy, serde_json::to_vec(&presets).unwrap()).unwrap();
             install(&directory).unwrap();
-            assert_eq!(read(&directory.join("skills.json")).unwrap(), json!({"version":1,"presets":presets}));
+            assert_eq!(
+                read(&directory.join("skills.json")).unwrap(),
+                json!({"version":1,"presets":presets})
+            );
         }
     }
     #[test]
@@ -247,8 +331,15 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let directory = temp.path().join("config");
         let presets = json!([{"id":"legacy-marker"}]);
-        std::fs::write(temp.path().join("newsletters.json"), serde_json::to_vec(&presets).unwrap()).unwrap();
+        std::fs::write(
+            temp.path().join("newsletters.json"),
+            serde_json::to_vec(&presets).unwrap(),
+        )
+        .unwrap();
         install(&directory).unwrap();
-        assert_eq!(read(&directory.join("skills.json")).unwrap(), json!({"version":1,"presets":presets}));
+        assert_eq!(
+            read(&directory.join("skills.json")).unwrap(),
+            json!({"version":1,"presets":presets})
+        );
     }
 }

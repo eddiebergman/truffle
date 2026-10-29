@@ -21,37 +21,79 @@ struct NativeState {
     connections: Arc<Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>>,
 }
 
-fn active_profile(service:&LocalHttpService)->Result<PathBuf,String>{
+fn active_profile(service: &LocalHttpService) -> Result<PathBuf, String> {
     service.health()?;
-    let reply = service.request("/api/commands/invoke", Some(serde_json::json!({"name":"diagnostics.storage"})))?;
-    if reply.status != 200 { return Err("Could not identify the active service profile.".into()); }
-    let state_path = reply.data["statePath"].as_str().ok_or("The service did not identify its profile.")?;
-    PathBuf::from(state_path).parent().ok_or("Invalid service profile path.")?.canonicalize().map_err(|_|"The active service profile is unavailable.".into())
+    let reply = service.request(
+        "/api/commands/invoke",
+        Some(serde_json::json!({"name":"diagnostics.storage"})),
+    )?;
+    if reply.status != 200 {
+        return Err("Could not identify the active service profile.".into());
+    }
+    let state_path = reply.data["statePath"]
+        .as_str()
+        .ok_or("The service did not identify its profile.")?;
+    PathBuf::from(state_path)
+        .parent()
+        .ok_or("Invalid service profile path.")?
+        .canonicalize()
+        .map_err(|_| "The active service profile is unavailable.".into())
 }
-fn connection_host(service: &LocalHttpService, cached: &Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>) -> Result<Arc<backend::connections::SetupHost>, String> {
-    let profile=active_profile(service)?;
-    let mut cached = cached.lock().map_err(|_|"Connection setup is unavailable.")?;
-    if let Some((path, host)) = cached.as_ref() { if path == &profile { return Ok(host.clone()); } host.cancel(); }
-    let host = Arc::new(backend::connections::SetupHost::new(profile.clone()).map_err(|error|error.message)?);
-    *cached = Some((profile,host.clone()));
+fn connection_host(
+    service: &LocalHttpService,
+    cached: &Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>,
+) -> Result<Arc<backend::connections::SetupHost>, String> {
+    let profile = active_profile(service)?;
+    let mut cached = cached
+        .lock()
+        .map_err(|_| "Connection setup is unavailable.")?;
+    if let Some((path, host)) = cached.as_ref() {
+        if path == &profile {
+            return Ok(host.clone());
+        }
+        host.cancel();
+    }
+    let host = Arc::new(
+        backend::connections::SetupHost::new(profile.clone()).map_err(|error| error.message)?,
+    );
+    *cached = Some((profile, host.clone()));
     Ok(host)
 }
 #[tauri::command]
-async fn connection_setup_view(state: State<'_,NativeState>) -> Result<Value,String> {
-    let service=state.service.clone();let cached=state.connections.clone();
-    tauri::async_runtime::spawn_blocking(move||connection_host(&service,&cached)?.view().map_err(|error|error.message)).await.map_err(|_|"Connection setup failed.".to_string())?
+async fn connection_setup_view(state: State<'_, NativeState>) -> Result<Value, String> {
+    let service = state.service.clone();
+    let cached = state.connections.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        connection_host(&service, &cached)?
+            .view()
+            .map_err(|error| error.message)
+    })
+    .await
+    .map_err(|_| "Connection setup failed.".to_string())?
 }
 #[tauri::command]
-async fn connection_setup_cancel(state: State<'_,NativeState>) -> Result<Value,String> {
-    let cached=state.connections.clone();
-    tauri::async_runtime::spawn_blocking(move||{
-        let cached=cached.lock().map_err(|_|"Connection setup is unavailable.".to_string())?;
-        Ok(cached.as_ref().map(|(_,host)|host.cancel()).unwrap_or_else(||serde_json::json!({"cancelled":true})))
-    }).await.map_err(|_|"Could not cancel connection setup.".to_string())?
+async fn connection_setup_cancel(state: State<'_, NativeState>) -> Result<Value, String> {
+    let cached = state.connections.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cached = cached
+            .lock()
+            .map_err(|_| "Connection setup is unavailable.".to_string())?;
+        Ok(cached
+            .as_ref()
+            .map(|(_, host)| host.cancel())
+            .unwrap_or_else(|| serde_json::json!({"cancelled":true})))
+    })
+    .await
+    .map_err(|_| "Could not cancel connection setup.".to_string())?
 }
 #[tauri::command]
-async fn connection_setup_preview(app:tauri::AppHandle,state:State<'_,NativeState>,payload:Value)->Result<Value,String>{
-    let service=state.service.clone();let cached=state.connections.clone();
+async fn connection_setup_preview(
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+    payload: Value,
+) -> Result<Value, String> {
+    let service = state.service.clone();
+    let cached = state.connections.clone();
     tauri::async_runtime::spawn_blocking(move||{
         let host=connection_host(&service,&cached)?;
         let ticket=host.begin_preview();
@@ -65,8 +107,13 @@ async fn connection_setup_preview(app:tauri::AppHandle,state:State<'_,NativeStat
     }).await.map_err(|_|"Connection validation failed.".to_string())?
 }
 #[tauri::command]
-async fn connection_setup_commit(app:tauri::AppHandle,state:State<'_,NativeState>,payload:Value)->Result<Value,String>{
-    let service=state.service.clone();let cached=state.connections.clone();
+async fn connection_setup_commit(
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+    payload: Value,
+) -> Result<Value, String> {
+    let service = state.service.clone();
+    let cached = state.connections.clone();
     tauri::async_runtime::spawn_blocking(move||{
         let host=connection_host(&service,&cached)?;
         let confirmation=host.confirmation(&payload).map_err(|error|error.message)?;
@@ -103,7 +150,9 @@ async fn read_artifact(state: State<'_, NativeState>, id: String) -> Result<Stri
     let service = state.service.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let asset = service.artifact(&id)?;
-        if !asset.content_type.starts_with("text/plain") && !asset.content_type.starts_with("text/html") {
+        if !asset.content_type.starts_with("text/plain")
+            && !asset.content_type.starts_with("text/html")
+        {
             return Err("This artifact is not text.".into());
         }
         String::from_utf8(asset.bytes).map_err(|_| "The artifact is not UTF-8 text.".into())
@@ -112,36 +161,73 @@ async fn read_artifact(state: State<'_, NativeState>, id: String) -> Result<Stri
     .map_err(|_| "Artifact read failed.".to_owned())?
 }
 #[tauri::command]
-async fn copy_text(app: tauri::AppHandle, text: String) -> Result<(),String> {
-    if text.len()>32*1024*1024{return Err("Clipboard text exceeds 32 MiB.".into());}
-    tauri::async_runtime::spawn_blocking(move||{
-        let(tx,rx)=std::sync::mpsc::channel();
-        app.run_on_main_thread(move||{let _=tx.send(clipboard::text(&text));}).map_err(|_|"Could not access the clipboard.".to_string())?;
-        rx.recv_timeout(std::time::Duration::from_secs(10)).map_err(|_|"Clipboard write timed out.".to_string())?
-    }).await.map_err(|_|"Could not copy text.".to_string())?
+async fn copy_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    if text.len() > 32 * 1024 * 1024 {
+        return Err("Clipboard text exceeds 32 MiB.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(clipboard::text(&text));
+        })
+        .map_err(|_| "Could not access the clipboard.".to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "Clipboard write timed out.".to_string())?
+    })
+    .await
+    .map_err(|_| "Could not copy text.".to_string())?
 }
 #[tauri::command]
-async fn copy_artifact_image(app:tauri::AppHandle,state: State<'_,NativeState>,id:String)->Result<(),String>{
-    let service=state.service.clone();
-    tauri::async_runtime::spawn_blocking(move||{
-        let asset=service.artifact(&id)?;
-        if !["image/png","image/jpeg","image/webp"].contains(&asset.content_type.split(';').next().unwrap_or("")){return Err("Choose a PNG, JPEG, or WebP artifact.".into());}
-        let(tx,rx)=std::sync::mpsc::channel();
-        app.run_on_main_thread(move||{let _=tx.send(clipboard::image(&asset.bytes));}).map_err(|_|"Could not access the clipboard.".to_string())?;
-        rx.recv_timeout(std::time::Duration::from_secs(10)).map_err(|_|"Image clipboard write timed out.".to_string())?
-    }).await.map_err(|_|"Could not copy the image.".to_string())?
+async fn copy_artifact_image(
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+    id: String,
+) -> Result<(), String> {
+    let service = state.service.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let asset = service.artifact(&id)?;
+        if !["image/png", "image/jpeg", "image/webp"]
+            .contains(&asset.content_type.split(';').next().unwrap_or(""))
+        {
+            return Err("Choose a PNG, JPEG, or WebP artifact.".into());
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(clipboard::image(&asset.bytes));
+        })
+        .map_err(|_| "Could not access the clipboard.".to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "Image clipboard write timed out.".to_string())?
+    })
+    .await
+    .map_err(|_| "Could not copy the image.".to_string())?
 }
 #[tauri::command]
-async fn restart_dashboard_preview(state:State<'_,NativeState>)->Result<Value,String>{
-    let url=state.service.origin();tauri::async_runtime::spawn_blocking(move||restart::preview(&restart::root(),&url)).await.map_err(|_|"Could not inspect restart state.".to_string())?
+async fn restart_dashboard_preview(state: State<'_, NativeState>) -> Result<Value, String> {
+    let url = state.service.origin();
+    tauri::async_runtime::spawn_blocking(move || restart::preview(&restart::root(), &url))
+        .await
+        .map_err(|_| "Could not inspect restart state.".to_string())?
 }
 #[tauri::command]
-async fn restart_dashboard_status()->Result<Value,String>{
-    tauri::async_runtime::spawn_blocking(move||restart::status(&restart::root())).await.map_err(|_|"Could not read restart state.".to_string())?
+async fn restart_dashboard_status() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || restart::status(&restart::root()))
+        .await
+        .map_err(|_| "Could not read restart state.".to_string())?
 }
 #[tauri::command]
-async fn restart_dashboard_start(state:State<'_,NativeState>,mode:String,confirmed:bool,snapshot:String)->Result<Value,String>{
-    let url=state.service.origin();tauri::async_runtime::spawn_blocking(move||restart::start(&restart::root(),&url,&mode,confirmed,&snapshot)).await.map_err(|_|"Could not start restart helper.".to_string())?
+async fn restart_dashboard_start(
+    state: State<'_, NativeState>,
+    mode: String,
+    confirmed: bool,
+    snapshot: String,
+) -> Result<Value, String> {
+    let url = state.service.origin();
+    tauri::async_runtime::spawn_blocking(move || {
+        restart::start(&restart::root(), &url, &mode, confirmed, &snapshot)
+    })
+    .await
+    .map_err(|_| "Could not start restart helper.".to_string())?
 }
 #[tauri::command]
 async fn service_status(state: State<'_, NativeState>) -> Result<Value, String> {
@@ -163,7 +249,8 @@ fn zed_directory(path: &str) -> Result<PathBuf, String> {
     if !directory.is_absolute() {
         return Err("Choose an absolute working directory.".into());
     }
-    let directory = directory.canonicalize()
+    let directory = directory
+        .canonicalize()
         .map_err(|_| "The agent's working directory no longer exists.".to_owned())?;
     if !directory.is_dir() {
         return Err("The agent's working directory is not a folder.".into());
@@ -171,50 +258,121 @@ fn zed_directory(path: &str) -> Result<PathBuf, String> {
     Ok(directory)
 }
 #[tauri::command]
-async fn open_git_diff_in_zed(state:State<'_,NativeState>,path: String) -> Result<(), String> {
-    let service=state.service.clone();
+async fn open_git_diff_in_zed(state: State<'_, NativeState>, path: String) -> Result<(), String> {
+    let service = state.service.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let profile=active_profile(&service)?;
+        let profile = active_profile(&service)?;
         let directory = zed_directory(&path)?;
-        let prefs=backend::settings::Store::load(profile.join("settings.json")).map_err(|e|e.message)?.values();
-        let editor=backend::text(&prefs,"editor");
-        let args=if editor=="zed"{backend::git_diff::zed_arguments(&directory,&profile.join("git-diffs")).map_err(|e|e.message)?}else{vec![directory.to_string_lossy().into_owned()]};
+        let prefs = backend::settings::Store::load(profile.join("settings.json"))
+            .map_err(|e| e.message)?
+            .values();
+        let editor = backend::text(&prefs, "editor");
+        let args = if editor == "zed" {
+            backend::git_diff::zed_arguments(&directory, &profile.join("git-diffs"))
+                .map_err(|e| e.message)?
+        } else {
+            vec![directory.to_string_lossy().into_owned()]
+        };
         backend::terminal::run(&backend::terminal::executable(editor), &args, None, 15)
             .map_err(|error| error.message)?;
         Ok(())
-    }).await.map_err(|_| "Could not open the Git diff in Zed.".to_owned())?
+    })
+    .await
+    .map_err(|_| "Could not open the Git diff in Zed.".to_owned())?
 }
 #[tauri::command]
-async fn open_settings_file(state:State<'_,NativeState>)->Result<(),String>{
-    let service=state.service.clone();
-    tauri::async_runtime::spawn_blocking(move||{
-        let profile=active_profile(&service)?;
-        let path=profile.join("settings.json");
-        let store=backend::settings::Store::load(path.clone()).map_err(|error|error.message)?;
-        let values=store.values();let editor=backend::text(&values,"editor");
-        Command::new(backend::terminal::executable(editor)).arg(path).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map_err(|_|format!("Could not open settings in {editor}. Check that its CLI is installed."))?;
+async fn open_settings_file(state: State<'_, NativeState>) -> Result<(), String> {
+    let service = state.service.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile = active_profile(&service)?;
+        let path = profile.join("settings.json");
+        let store = backend::settings::Store::load(path.clone()).map_err(|error| error.message)?;
+        let values = store.values();
+        let editor = backend::text(&values, "editor");
+        Command::new(backend::terminal::executable(editor))
+            .arg(path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|_| {
+                format!("Could not open settings in {editor}. Check that its CLI is installed.")
+            })?;
         Ok(())
-    }).await.map_err(|_|"Could not open the settings file.".to_string())?
+    })
+    .await
+    .map_err(|_| "Could not open the settings file.".to_string())?
 }
 #[tauri::command]
-fn set_shortcut_recording(app:tauri::AppHandle,recording:bool)->Result<(),String>{
-    if let Some(menu)=app.menu(){for item in menu.items().map_err(|e|e.to_string())?{if let Some(submenu)=item.as_submenu(){submenu.set_enabled(!recording).map_err(|e|e.to_string())?;}}}
+fn set_shortcut_recording(app: tauri::AppHandle, recording: bool) -> Result<(), String> {
+    if let Some(menu) = app.menu() {
+        for item in menu.items().map_err(|e| e.to_string())? {
+            if let Some(submenu) = item.as_submenu() {
+                submenu.set_enabled(!recording).map_err(|e| e.to_string())?;
+            }
+        }
+    }
     Ok(())
 }
 #[tauri::command]
-fn apply_native_settings(app:tauri::AppHandle, values:Value, light:bool)->Result<(),String>{
-    backend::settings::validate(&values).map_err(|e|e.message)?;
-    if let Some(menu)=app.menu(){
-        let ids=["toggle-left","toggle-right","commands","find-work","page-search","settings","agent-new","agent-close","agent-reopen","agent-rename","chat-terminal"];
-        for id in ids{if let Some(item)=menu.get(id){if let Some(item)=item.as_menuitem(){item.set_accelerator(None::<&str>).map_err(|e|e.to_string())?;}}}
-        for id in ids{if let Some(item)=menu.get(id){if let Some(item)=item.as_menuitem(){let chord=values["keybindings"][id].as_str().unwrap_or("").replace("Primary","CmdOrCtrl");if !chord.is_empty(){item.set_accelerator(Some(chord)).map_err(|e|e.to_string())?;}}}}
+fn apply_native_settings(app: tauri::AppHandle, values: Value, light: bool) -> Result<(), String> {
+    backend::settings::validate(&values).map_err(|e| e.message)?;
+    if let Some(menu) = app.menu() {
+        let ids = [
+            "toggle-left",
+            "toggle-right",
+            "commands",
+            "find-work",
+            "page-search",
+            "settings",
+            "agent-new",
+            "agent-close",
+            "agent-reopen",
+            "agent-rename",
+            "chat-terminal",
+        ];
+        for id in ids {
+            if let Some(item) = menu.get(id) {
+                if let Some(item) = item.as_menuitem() {
+                    item.set_accelerator(None::<&str>)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        for id in ids {
+            if let Some(item) = menu.get(id) {
+                if let Some(item) = item.as_menuitem() {
+                    let chord = values["keybindings"][id]
+                        .as_str()
+                        .unwrap_or("")
+                        .replace("Primary", "CmdOrCtrl");
+                    if !chord.is_empty() {
+                        item.set_accelerator(Some(chord))
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
     }
-    if let Some(window)=app.get_webview_window("main"){window.set_zoom(values["uiScale"].as_f64().unwrap_or(100.0)/100.0).map_err(|e|e.to_string())?;window.set_theme(Some(if light{tauri::Theme::Light}else{tauri::Theme::Dark})).map_err(|e|e.to_string())?;}
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .set_zoom(values["uiScale"].as_f64().unwrap_or(100.0) / 100.0)
+            .map_err(|e| e.to_string())?;
+        window
+            .set_theme(Some(if light {
+                tauri::Theme::Light
+            } else {
+                tauri::Theme::Dark
+            }))
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 #[tauri::command]
 fn drag_titlebar(window: tauri::WebviewWindow) -> Result<(), String> {
-    window.start_dragging().map_err(|_| "Could not move the window.".into())
+    window
+        .start_dragging()
+        .map_err(|_| "Could not move the window.".into())
 }
 #[tauri::command]
 fn desktop_info(state: State<'_, NativeState>) -> Value {
@@ -251,34 +409,75 @@ fn show(app: &tauri::AppHandle) {
 fn migrate_bundle_storage() {
     let library = backend::home().join("Library");
     for folder in ["WebKit", "Application Support"] {
-        let (old, new) = (library.join(folder).join("local.mydash.desktop"), library.join(folder).join("local.truffle.desktop"));
+        let (old, new) = (
+            library.join(folder).join("local.mydash.desktop"),
+            library.join(folder).join("local.truffle.desktop"),
+        );
         if old.is_dir() && !new.exists() {
-            let _ = std::process::Command::new("/usr/bin/ditto").arg(&old).arg(&new).status();
+            let _ = std::process::Command::new("/usr/bin/ditto")
+                .arg(&old)
+                .arg(&new)
+                .status();
         }
     }
 }
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
-    if let Some(result)=backend::agent_cli::run(&args){if let Err(error)=result{eprintln!("{}",error.message);std::process::exit(1);}return;}
-    if let Some(index)=args.iter().position(|x|x=="--restart-control") {
-        let value=|key:&str|args.iter().position(|x|x==key).and_then(|i|args.get(i+1));
-        let root=value("--home").map(PathBuf::from).unwrap_or_else(restart::root);
-        let url=value("--url").map(String::as_str).unwrap_or("http://127.0.0.1:8765");
-        let result=match args.get(index+1).map(String::as_str){
-            Some("preview")=>restart::preview(&root,url),
-            Some("status")=>restart::status(&root),
-            Some("start")=>restart::start(&root,url,value("--mode").map(String::as_str).unwrap_or("service"),args.iter().any(|x|x=="--confirm-interruption"),value("--snapshot").map(String::as_str).unwrap_or("")),
-            _=>Err("Use restart-control preview, status, or start.".into()),
-        };
-        match result{Ok(value)=>println!("{value}"),Err(error)=>{eprintln!("{error}");std::process::exit(1);}}return;
+    if let Some(result) = backend::agent_cli::run(&args) {
+        if let Err(error) = result {
+            eprintln!("{}", error.message);
+            std::process::exit(1);
+        }
+        return;
     }
-    if args.iter().any(|x|x=="--restart-dashboard") {
-        let value=|key:&str|args.iter().position(|x|x==key).and_then(|i|args.get(i+1));
-        let result=match(value("--home"),value("--job")){
-            (Some(root),Some(id))=>restart::run(&PathBuf::from(root),id),
-            _=>Err("Restart helper requires --home and --job.".into()),
+    if let Some(index) = args.iter().position(|x| x == "--restart-control") {
+        let value = |key: &str| {
+            args.iter()
+                .position(|x| x == key)
+                .and_then(|i| args.get(i + 1))
         };
-        if let Err(error)=result{eprintln!("{error}");std::process::exit(1);}return;
+        let root = value("--home")
+            .map(PathBuf::from)
+            .unwrap_or_else(restart::root);
+        let url = value("--url")
+            .map(String::as_str)
+            .unwrap_or("http://127.0.0.1:8765");
+        let result = match args.get(index + 1).map(String::as_str) {
+            Some("preview") => restart::preview(&root, url),
+            Some("status") => restart::status(&root),
+            Some("start") => restart::start(
+                &root,
+                url,
+                value("--mode").map(String::as_str).unwrap_or("service"),
+                args.iter().any(|x| x == "--confirm-interruption"),
+                value("--snapshot").map(String::as_str).unwrap_or(""),
+            ),
+            _ => Err("Use restart-control preview, status, or start.".into()),
+        };
+        match result {
+            Ok(value) => println!("{value}"),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+    if args.iter().any(|x| x == "--restart-dashboard") {
+        let value = |key: &str| {
+            args.iter()
+                .position(|x| x == key)
+                .and_then(|i| args.get(i + 1))
+        };
+        let result = match (value("--home"), value("--job")) {
+            (Some(root), Some(id)) => restart::run(&PathBuf::from(root), id),
+            _ => Err("Restart helper requires --home and --job.".into()),
+        };
+        if let Err(error) = result {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
     }
     if let Some(index) = args.iter().position(|x| x == "--check-agent-storage") {
         let agent = args.get(index + 1).map(String::as_str).unwrap_or("claude");
@@ -292,12 +491,26 @@ fn main() {
         return;
     }
     if args.iter().any(|x| x == "--terminal-daemon") {
-        let value = |name: &str| args.iter().position(|x| x == name).and_then(|i| args.get(i+1)).map(PathBuf::from);
-        let result = match (value("--home"), value("--data")) {
-            (Some(root), Some(data)) => backend::terminal_daemon::serve(root, data, args.iter().any(|x|x=="--allow-demo-terminals")),
-            _ => Err(backend::Error::new("Terminal daemon requires --home and --data.")),
+        let value = |name: &str| {
+            args.iter()
+                .position(|x| x == name)
+                .and_then(|i| args.get(i + 1))
+                .map(PathBuf::from)
         };
-        if let Err(error) = result {eprintln!("{}",error.message);std::process::exit(1);}
+        let result = match (value("--home"), value("--data")) {
+            (Some(root), Some(data)) => backend::terminal_daemon::serve(
+                root,
+                data,
+                args.iter().any(|x| x == "--allow-demo-terminals"),
+            ),
+            _ => Err(backend::Error::new(
+                "Terminal daemon requires --home and --data.",
+            )),
+        };
+        if let Err(error) = result {
+            eprintln!("{}", error.message);
+            std::process::exit(1);
+        }
         return;
     }
     if args.iter().any(|x| x == "--serve") {
@@ -494,7 +707,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let folder = root.path().join("worktree with spaces ; $(ignored)");
         std::fs::create_dir(&folder).unwrap();
-        assert_eq!(zed_directory(folder.to_str().unwrap()).unwrap(), folder.canonicalize().unwrap());
+        assert_eq!(
+            zed_directory(folder.to_str().unwrap()).unwrap(),
+            folder.canonicalize().unwrap()
+        );
         assert!(zed_directory("relative/repo").is_err());
         assert!(zed_directory(root.path().join("missing").to_str().unwrap()).is_err());
         let file = root.path().join("file.txt");

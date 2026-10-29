@@ -32,9 +32,9 @@ fn valid_progress(value: &Value) -> bool {
         && value["steps"].as_object().is_some_and(|steps| {
             steps.iter().all(|(step, status)| {
                 STEPS.contains(&step.as_str())
-                    && status.as_str().is_some_and(|status| {
-                        ["complete", "skipped", "pending"].contains(&status)
-                    })
+                    && status
+                        .as_str()
+                        .is_some_and(|status| ["complete", "skipped", "pending"].contains(&status))
             })
         })
 }
@@ -51,17 +51,27 @@ fn progress(value: &Value) -> Value {
     }
 }
 fn public_progress(value: &Value) -> Value {
-    let stored=progress(value);
-    let mut steps=json!({});
+    let stored = progress(value);
+    let mut steps = json!({});
     for step in STEPS {
-        if stored["steps"][*step].as_str().is_some_and(|status|["complete","skipped","pending"].contains(&status)) {
-            steps[*step]=stored["steps"][*step].clone();
+        if stored["steps"][*step]
+            .as_str()
+            .is_some_and(|status| ["complete", "skipped", "pending"].contains(&status))
+        {
+            steps[*step] = stored["steps"][*step].clone();
         }
     }
     json!({"version":stored["version"],"revision":stored["revision"],"step":stored["step"],"completed":stored["completed"],"steps":steps})
 }
 fn public_last_success(value: &Value) -> Value {
-    if value.as_f64().is_some_and(|value|value.is_finite()&&value>=0.0) { value.clone() } else { Value::Null }
+    if value
+        .as_f64()
+        .is_some_and(|value| value.is_finite() && value >= 0.0)
+    {
+        value.clone()
+    } else {
+        Value::Null
+    }
 }
 pub fn view(repo: &Repository) -> Value {
     let state = repo.state.lock().unwrap();
@@ -79,18 +89,28 @@ pub fn view(repo: &Repository) -> Value {
 }
 /// Read setup metadata without retrieving credentials.
 pub fn assistant_context(repo: &Repository) -> Value {
-    let document=view(repo);
-    let mut progress=document["progress"].clone();
+    let document = view(repo);
+    let mut progress = document["progress"].clone();
     progress.as_object_mut().unwrap().remove("version");
-    let assistants=["claude","codex"].iter().map(|id| {
-        let installed=arr(&document["assistants"]).iter().any(|item|item["id"]==*id&&item["installed"]==true);
-        json!({"id":id,"installed":installed})
-    }).collect::<Vec<_>>();
-    let editors=["zed","code","cursor"].iter().map(|id| {
-        let installed=arr(&document["editors"]).iter().any(|item|item["id"]==*id&&item["installed"]==true);
-        json!({"id":id,"installed":installed,"diffSupported":*id=="zed"})
-    }).collect::<Vec<_>>();
-    let metadata=super::connections::status(repo).ok();
+    let assistants = ["claude", "codex"]
+        .iter()
+        .map(|id| {
+            let installed = arr(&document["assistants"])
+                .iter()
+                .any(|item| item["id"] == *id && item["installed"] == true);
+            json!({"id":id,"installed":installed})
+        })
+        .collect::<Vec<_>>();
+    let editors = ["zed", "code", "cursor"]
+        .iter()
+        .map(|id| {
+            let installed = arr(&document["editors"])
+                .iter()
+                .any(|item| item["id"] == *id && item["installed"] == true);
+            json!({"id":id,"installed":installed,"diffSupported":*id=="zed"})
+        })
+        .collect::<Vec<_>>();
+    let metadata = super::connections::status(repo).ok();
     let connections=["linear","github","sentry"].iter().map(|id| {
         let source=arr(&document["connections"]).into_iter().find(|item|item["id"]==*id).unwrap_or(Value::Null);
         let mut result=json!({"id":id,"syncEnabled":source["disabled"]==false,"hasError":source["hasError"]==true});
@@ -165,33 +185,76 @@ mod tests {
     use super::*;
     #[test]
     fn public_setup_timestamp_validation_rejects_non_numeric_and_negative_values() {
-        for value in [Value::Null,json!(true),json!(-1),json!("benign-private-timestamp")] {assert!(public_last_success(&value).is_null());}
-        assert_eq!(public_last_success(&json!(123.5)),json!(123.5));
-        let public=public_progress(&json!({"version":1,"revision":1,"step":"company","completed":false,"steps":{"theme":"complete"},"private":"benign-private-progress"}));
-        assert!(!public.to_string().contains("benign-private"));assert_eq!(public.as_object().unwrap().len(),5);
+        for value in [
+            Value::Null,
+            json!(true),
+            json!(-1),
+            json!("benign-private-timestamp"),
+        ] {
+            assert!(public_last_success(&value).is_null());
+        }
+        assert_eq!(public_last_success(&json!(123.5)), json!(123.5));
+        let public = public_progress(
+            &json!({"version":1,"revision":1,"step":"company","completed":false,"steps":{"theme":"complete"},"private":"benign-private-progress"}),
+        );
+        assert!(!public.to_string().contains("benign-private"));
+        assert_eq!(public.as_object().unwrap().len(), 5);
     }
     #[test]
     fn assistant_setup_uses_only_public_progress_and_metadata_without_credential_reads() {
-        let temp=tempfile::tempdir().unwrap();let repo=Repository::open(temp.path().into(),None,true).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::open(temp.path().into(), None, true).unwrap();
         repo.transaction(|state| {
             state["onboarding"]=json!({"version":1,"revision":4,"step":"company","completed":false,"steps":{"theme":"complete","company":"pending"},"privateExtension":"benign-private-progress-marker"});
             state["sources"]["linear"]=json!({"disabled":false,"lastSuccess":100,"error":"benign-private-source-error"});
             state["sources"]["github"]=json!({"disabled":true,"lastSuccess":"benign-private-timestamp-marker"});
             Ok(())
         }).unwrap();
-        let path=repo.data.parent().unwrap().join("config/connections.json");
+        let path = repo.data.parent().unwrap().join("config/connections.json");
         std::fs::write(&path,serde_json::to_vec(&json!({"version":1,"storage":"macos-login-keychain","revision":1,"providers":{"github":{"credential_ref":uuid(),"identity":"benign-private-account-marker","org":"","base":""}}})).unwrap()).unwrap();
-        let before=repo.state.lock().unwrap().clone();let bytes=std::fs::read(&repo.data).unwrap();let configuration=std::fs::read(&path).unwrap();
-        let public=view(&repo);assert!(public["progress"].get("privateExtension").is_none());assert!(!public.to_string().contains("benign-private"));
-        assert!(arr(&public["connections"]).iter().find(|row|row["id"]=="github").unwrap()["lastSuccess"].is_null());
-        let summary=assistant_context(&repo);assert_eq!(summary["credentialMetadata"],"available");assert_eq!(summary["progress"]["step"],"company");assert_eq!(summary["progress"]["steps"]["company"],"pending");
-        assert!(summary["progress"].get("privateExtension").is_none());assert!(!summary.to_string().contains("benign-private"));
-        let rows=arr(&summary["connections"]);let linear=rows.iter().find(|row|row["id"]=="linear").unwrap();let github=rows.iter().find(|row|row["id"]=="github").unwrap();
-        assert_eq!(linear["savedInApp"],false);assert_eq!(linear["syncEnabled"],true);assert_eq!(linear["hasError"],true);assert_eq!(linear["lastSuccess"],100);
-        assert_eq!(github["savedInApp"],true);assert_eq!(github["syncEnabled"],false);assert!(github.get("lastSuccess").is_none());
-        assert_eq!(*repo.state.lock().unwrap(),before);assert_eq!(std::fs::read(&repo.data).unwrap(),bytes);assert_eq!(std::fs::read(&path).unwrap(),configuration);
-        std::fs::write(&path,"benign-private-metadata-failure").unwrap();let unavailable=assistant_context(&repo);assert_eq!(unavailable["credentialMetadata"],"unavailable");assert!(!unavailable.to_string().contains("benign-private"));assert!(arr(&unavailable["connections"]).iter().all(|row|row.get("savedInApp").is_none()));
-        std::fs::remove_file(path).unwrap();let legacy=assistant_context(&repo);assert_eq!(legacy["credentialMetadata"],"available");assert!(arr(&legacy["connections"]).iter().all(|row|row["savedInApp"]==false));
+        let before = repo.state.lock().unwrap().clone();
+        let bytes = std::fs::read(&repo.data).unwrap();
+        let configuration = std::fs::read(&path).unwrap();
+        let public = view(&repo);
+        assert!(public["progress"].get("privateExtension").is_none());
+        assert!(!public.to_string().contains("benign-private"));
+        assert!(arr(&public["connections"])
+            .iter()
+            .find(|row| row["id"] == "github")
+            .unwrap()["lastSuccess"]
+            .is_null());
+        let summary = assistant_context(&repo);
+        assert_eq!(summary["credentialMetadata"], "available");
+        assert_eq!(summary["progress"]["step"], "company");
+        assert_eq!(summary["progress"]["steps"]["company"], "pending");
+        assert!(summary["progress"].get("privateExtension").is_none());
+        assert!(!summary.to_string().contains("benign-private"));
+        let rows = arr(&summary["connections"]);
+        let linear = rows.iter().find(|row| row["id"] == "linear").unwrap();
+        let github = rows.iter().find(|row| row["id"] == "github").unwrap();
+        assert_eq!(linear["savedInApp"], false);
+        assert_eq!(linear["syncEnabled"], true);
+        assert_eq!(linear["hasError"], true);
+        assert_eq!(linear["lastSuccess"], 100);
+        assert_eq!(github["savedInApp"], true);
+        assert_eq!(github["syncEnabled"], false);
+        assert!(github.get("lastSuccess").is_none());
+        assert_eq!(*repo.state.lock().unwrap(), before);
+        assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
+        assert_eq!(std::fs::read(&path).unwrap(), configuration);
+        std::fs::write(&path, "benign-private-metadata-failure").unwrap();
+        let unavailable = assistant_context(&repo);
+        assert_eq!(unavailable["credentialMetadata"], "unavailable");
+        assert!(!unavailable.to_string().contains("benign-private"));
+        assert!(arr(&unavailable["connections"])
+            .iter()
+            .all(|row| row.get("savedInApp").is_none()));
+        std::fs::remove_file(path).unwrap();
+        let legacy = assistant_context(&repo);
+        assert_eq!(legacy["credentialMetadata"], "available");
+        assert!(arr(&legacy["connections"])
+            .iter()
+            .all(|row| row["savedInApp"] == false));
     }
 
     #[test]
@@ -210,11 +273,19 @@ mod tests {
     fn repairing_invalid_progress_retains_the_original_and_valid_unknown_fields() {
         let original = json!({"version":1,"revision":0,"step":3,"steps":{},"completed":true,"extension":{"keep":true}});
         let mut state = json!({"onboarding":original});
-        apply_update(&mut state, &json!({"revision":0,"step":"assistant","status":"skipped"})).unwrap();
+        apply_update(
+            &mut state,
+            &json!({"revision":0,"step":"assistant","status":"skipped"}),
+        )
+        .unwrap();
         assert_eq!(state["onboardingRecovery"]["original"], original);
         assert_eq!(state["onboarding"]["step"], "assistant");
         state["onboarding"]["extension"] = json!({"keep":true});
-        apply_update(&mut state, &json!({"revision":1,"step":"theme","status":"current"})).unwrap();
+        apply_update(
+            &mut state,
+            &json!({"revision":1,"step":"theme","status":"current"}),
+        )
+        .unwrap();
         assert_eq!(state["onboarding"]["extension"]["keep"], true);
         assert_eq!(state["onboardingRecovery"]["original"], original);
     }

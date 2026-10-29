@@ -184,7 +184,7 @@ pub fn bundles(s: &Value) -> Value {
         })
         .collect::<Vec<_>>();
     for session in arr(&s["sessions"]) {
-        if !["work-review","newsletter"].contains(&text(&session,"workflow")) {
+        if !["work-review", "newsletter"].contains(&text(&session, "workflow")) {
             edges.push(
                 arr(&session["items"])
                     .iter()
@@ -315,11 +315,18 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
     match action {
         "rename-session" => {
             let title = checked(p, "title", 180, true)?;
-            let row = s["sessions"].as_array_mut().unwrap().iter_mut().find(|row| row["id"] == key).ok_or(Error::new("Session unavailable."))?;
+            let row = s["sessions"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|row| row["id"] == key)
+                .ok_or(Error::new("Session unavailable."))?;
             row["title"] = json!(title);
             row["updatedAt"] = json!(now());
         }
-        "save-note" => { super::projects::save_in_state(s,p)?; }
+        "save-note" => {
+            super::projects::save_in_state(s, p)?;
+        }
         "delete-note" | "unlink-session" | "delete-sentry-view" => {
             let collection = match action {
                 "delete-note" => "notes",
@@ -417,10 +424,14 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             }
         }
         "read-changes" => {
-            super::changes::legacy_mark(s,p)?;
+            super::changes::legacy_mark(s, p)?;
         }
         "link-work" | "unlink-work" => {
-            let change = if action == "link-work" { super::work_links::Change::Add } else { super::work_links::Change::Remove };
+            let change = if action == "link-work" {
+                super::work_links::Change::Add
+            } else {
+                super::work_links::Change::Remove
+            };
             super::work_links::legacy_change(s, p, &cat, change)?;
         }
         "checkpoint" => {

@@ -27,8 +27,13 @@ pub fn socket_directory(data: &Path) -> Result<PathBuf> {
         .canonicalize()?;
     let canonical = parent.join(data.file_name().ok_or(Error::new("Invalid state path."))?);
     let hash = context_kit::sha256(canonical.to_string_lossy().as_bytes());
-    let [current, legacy] = ["truffle", "mydash"]
-        .map(|name| PathBuf::from(format!("/tmp/{name}-pty-{}-{}", unsafe { libc::geteuid() }, &hash[..16])));
+    let [current, legacy] = ["truffle", "mydash"].map(|name| {
+        PathBuf::from(format!(
+            "/tmp/{name}-pty-{}-{}",
+            unsafe { libc::geteuid() },
+            &hash[..16]
+        ))
+    });
     // A daemon started before the rename keeps its socket until it is replaced.
     if !current.join("terminal.sock").exists() && legacy.join("terminal.sock").exists() {
         return Ok(legacy);
@@ -102,13 +107,29 @@ pub(crate) fn call(dir: &Path, payload: Value) -> Result<Value> {
 }
 // Legacy open has no durable operation acknowledgement. Once any frame bytes
 // may be transmitted, rejection, malformed replies and disconnects are unknown.
-pub(super) fn open_request(dir:&Path,payload:Value)->Result<super::terminal::OpenOutcome>{
-    let frame=serde_json::to_vec(&json!({"protocol":PROTOCOL,"request":payload}))?;
-    if frame.len()>FRAME_LIMIT{return Err(Error::new("Terminal message exceeds 512 KiB."));}
-    let mut stream=UnixStream::connect(dir.join("terminal.sock")).map_err(|_|Error::new("Terminal daemon is unavailable. Running agents were not closed."))?;
-    stream.set_read_timeout(Some(Duration::from_secs(8)))?;stream.set_write_timeout(Some(Duration::from_secs(3)))?;
-    if stream.write_all(&(frame.len() as u32).to_be_bytes()).and_then(|_|stream.write_all(&frame)).is_err(){return Ok(super::terminal::OpenOutcome::Unknown);}
-    match read_frame(&mut stream){Ok(reply) if reply["protocol"]==PROTOCOL&&reply["ok"]==true=>Ok(super::terminal::OpenOutcome::Accepted),_=>Ok(super::terminal::OpenOutcome::Unknown)}
+pub(super) fn open_request(dir: &Path, payload: Value) -> Result<super::terminal::OpenOutcome> {
+    let frame = serde_json::to_vec(&json!({"protocol":PROTOCOL,"request":payload}))?;
+    if frame.len() > FRAME_LIMIT {
+        return Err(Error::new("Terminal message exceeds 512 KiB."));
+    }
+    let mut stream = UnixStream::connect(dir.join("terminal.sock")).map_err(|_| {
+        Error::new("Terminal daemon is unavailable. Running agents were not closed.")
+    })?;
+    stream.set_read_timeout(Some(Duration::from_secs(8)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(3)))?;
+    if stream
+        .write_all(&(frame.len() as u32).to_be_bytes())
+        .and_then(|_| stream.write_all(&frame))
+        .is_err()
+    {
+        return Ok(super::terminal::OpenOutcome::Unknown);
+    }
+    match read_frame(&mut stream) {
+        Ok(reply) if reply["protocol"] == PROTOCOL && reply["ok"] == true => {
+            Ok(super::terminal::OpenOutcome::Accepted)
+        }
+        _ => Ok(super::terminal::OpenOutcome::Unknown),
+    }
 }
 pub enum Host {
     Local(super::embedded::EmbeddedHost),
@@ -143,33 +164,70 @@ impl Host {
         }
     }
     /// Per-call inventory outcome; does not start or repair a daemon.
-    pub(super) fn inventory_checked(&self)->Result<Vec<Value>>{
-        match self{
-            Self::Local(host)=>Ok(host.inventory()),
-            Self::Remote(remote)=>remote.request(json!({"op":"inventory"}))?.as_array().cloned().ok_or(Error::new("Terminal inventory response is invalid.")),
+    pub(super) fn inventory_checked(&self) -> Result<Vec<Value>> {
+        match self {
+            Self::Local(host) => Ok(host.inventory()),
+            Self::Remote(remote) => remote
+                .request(json!({"op":"inventory"}))?
+                .as_array()
+                .cloned()
+                .ok_or(Error::new("Terminal inventory response is invalid.")),
         }
     }
     pub fn inventory(&self) -> Vec<Value> {
-        if let Self::Remote(remote)=self{if !remote.dir.join("terminal.sock").exists(){return vec![];}}
-        match self.inventory_checked(){
-            Ok(rows)=>{if let Self::Remote(remote)=self{*remote.warning.lock().unwrap()=None;}rows},
-            Err(error)=>{if let Self::Remote(remote)=self{*remote.warning.lock().unwrap()=Some(error.message);}vec![]},
+        if let Self::Remote(remote) = self {
+            if !remote.dir.join("terminal.sock").exists() {
+                return vec![];
+            }
+        }
+        match self.inventory_checked() {
+            Ok(rows) => {
+                if let Self::Remote(remote) = self {
+                    *remote.warning.lock().unwrap() = None;
+                }
+                rows
+            }
+            Err(error) => {
+                if let Self::Remote(remote) = self {
+                    *remote.warning.lock().unwrap() = Some(error.message);
+                }
+                vec![]
+            }
         }
     }
-    pub fn open(&self, record: &Value, packet: &str, new: bool, root: &Path) -> Result<super::terminal::OpenOutcome> {
+    pub fn open(
+        &self,
+        record: &Value,
+        packet: &str,
+        new: bool,
+        root: &Path,
+    ) -> Result<super::terminal::OpenOutcome> {
         match self {
-            Self::Local(h) => h.open(record, packet, new, root).map(|_|super::terminal::OpenOutcome::Accepted),
+            Self::Local(h) => h
+                .open(record, packet, new, root)
+                .map(|_| super::terminal::OpenOutcome::Accepted),
             Self::Remote(r) => {
                 r.ensure()?;
                 let mut launch = json!({});
                 for key in ["id", "sessionId", "agent", "title", "cwd"] {
                     launch[key] = record[key].clone();
                 }
-                open_request(&r.dir,json!({"op":"open","record":launch,"packet":packet,"new":new}))
+                open_request(
+                    &r.dir,
+                    json!({"op":"open","record":launch,"packet":packet,"new":new}),
+                )
             }
         }
     }
-    pub fn open_shell(&self,record:&Value)->Result<Value>{match self{Self::Local(host)=>host.open_shell(record),Self::Remote(remote)=>{remote.ensure()?;remote.request(json!({"op":"shell","record":record}))}}}
+    pub fn open_shell(&self, record: &Value) -> Result<Value> {
+        match self {
+            Self::Local(host) => host.open_shell(record),
+            Self::Remote(remote) => {
+                remote.ensure()?;
+                remote.request(json!({"op":"shell","record":record}))
+            }
+        }
+    }
     pub fn open_demo(&self, record: &Value) -> Result<()> {
         match self {
             Self::Local(h) => h.open_demo(record),
@@ -311,7 +369,10 @@ fn dispatch(
                 root,
             )
         }
-        "shell" => {sid(text(&p["record"],"id"))?;host.open_shell(&p["record"])},
+        "shell" => {
+            sid(text(&p["record"], "id"))?;
+            host.open_shell(&p["record"])
+        }
         "demo" if demo => {
             sid(text(&p["record"], "id"))?;
             host.open_demo(&p["record"])?;
@@ -426,7 +487,11 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let data = root.path().join("state.json");
         let current = socket_directory(&data).unwrap();
-        let legacy = PathBuf::from(current.to_string_lossy().replace("/tmp/truffle-pty-", "/tmp/mydash-pty-"));
+        let legacy = PathBuf::from(
+            current
+                .to_string_lossy()
+                .replace("/tmp/truffle-pty-", "/tmp/mydash-pty-"),
+        );
         std::fs::create_dir_all(&legacy).unwrap();
         std::fs::write(legacy.join("terminal.sock"), "").unwrap();
         assert_eq!(socket_directory(&data).unwrap(), legacy);
@@ -474,23 +539,99 @@ mod tests {
 
 #[cfg(test)]
 mod saved_chat_open_transport_tests {
- use super::*;
- #[test]
- fn saved_chat_open_transport_classifies_all_postsend_reply_failures_as_unknown(){
-  for response in [None,Some(json!({"protocol":PROTOCOL,"ok":false,"error":"private daemon detail"})),Some(json!({"protocol":999,"ok":true})),Some(json!({"protocol":PROTOCOL,"ok":true,"value":{}}))]{
-   let temp=tempfile::tempdir().unwrap();let listener=UnixListener::bind(temp.path().join("terminal.sock")).unwrap();let accepted=response.as_ref().is_some_and(|r|r["protocol"]==PROTOCOL&&r["ok"]==true);
-   let worker=std::thread::spawn(move||{let(mut stream,_)=listener.accept().unwrap();let request=read_frame(&mut stream).unwrap();assert_eq!(request["request"]["op"],"open");if let Some(response)=response{write_frame(&mut stream,&response).unwrap();}});
-   let outcome=open_request(temp.path(),json!({"op":"open"})).unwrap();assert_eq!(outcome,if accepted{super::super::terminal::OpenOutcome::Accepted}else{super::super::terminal::OpenOutcome::Unknown});worker.join().unwrap();
-  }
-  let temp=tempfile::tempdir().unwrap();assert!(open_request(temp.path(),json!({"op":"open"})).is_err());assert!(open_request(temp.path(),json!({"body":"x".repeat(FRAME_LIMIT)})).is_err());
- }
+    use super::*;
+    #[test]
+    fn saved_chat_open_transport_classifies_all_postsend_reply_failures_as_unknown() {
+        for response in [
+            None,
+            Some(json!({"protocol":PROTOCOL,"ok":false,"error":"private daemon detail"})),
+            Some(json!({"protocol":999,"ok":true})),
+            Some(json!({"protocol":PROTOCOL,"ok":true,"value":{}})),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let listener = UnixListener::bind(temp.path().join("terminal.sock")).unwrap();
+            let accepted = response
+                .as_ref()
+                .is_some_and(|r| r["protocol"] == PROTOCOL && r["ok"] == true);
+            let worker = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_frame(&mut stream).unwrap();
+                assert_eq!(request["request"]["op"], "open");
+                if let Some(response) = response {
+                    write_frame(&mut stream, &response).unwrap();
+                }
+            });
+            let outcome = open_request(temp.path(), json!({"op":"open"})).unwrap();
+            assert_eq!(
+                outcome,
+                if accepted {
+                    super::super::terminal::OpenOutcome::Accepted
+                } else {
+                    super::super::terminal::OpenOutcome::Unknown
+                }
+            );
+            worker.join().unwrap();
+        }
+        let temp = tempfile::tempdir().unwrap();
+        assert!(open_request(temp.path(), json!({"op":"open"})).is_err());
+        assert!(open_request(temp.path(), json!({"body":"x".repeat(FRAME_LIMIT)})).is_err());
+    }
 }
 
 #[cfg(test)]
-mod checked_inventory_tests{
- use super::*;
- #[test]
- fn runtime_inventory_failure_is_per_call_even_when_shared_warning_is_clear(){let temp=tempfile::tempdir().unwrap();let remote=Remote{root:temp.path().into(),data:temp.path().join("state.json"),dir:temp.path().into(),opening:Mutex::new(()),warning:Mutex::new(None)};let host=Host::Remote(remote);let failure=host.inventory_checked();assert!(failure.is_err());assert!(host.warning().is_none());assert!(host.inventory().is_empty());assert!(failure.is_err());assert!(!temp.path().join("terminal.sock").exists());}
- #[test]
- fn runtime_inventory_checked_rejects_invalid_reply_and_preserves_exact_generation(){for value in [json!({"bad":"shape"}),json!([{"host":"embedded","recordId":uuid(),"agent":"codex","sessionId":null,"generation":uuid(),"live":true}])]{let temp=tempfile::tempdir().unwrap();let listener=UnixListener::bind(temp.path().join("terminal.sock")).unwrap();let expected=value.clone();let server=std::thread::spawn(move||{let (mut stream,_)=listener.accept().unwrap();let request=read_frame(&mut stream).unwrap();assert_eq!(request["request"]["op"],"inventory");write_frame(&mut stream,&json!({"protocol":PROTOCOL,"ok":true,"value":value})).unwrap();});let host=Host::Remote(Remote{root:temp.path().into(),data:temp.path().join("state.json"),dir:temp.path().into(),opening:Mutex::new(()),warning:Mutex::new(None)});let result=host.inventory_checked();server.join().unwrap();if expected.is_array(){assert_eq!(json!(result.unwrap()),expected);}else{assert!(result.is_err());}}}
+mod checked_inventory_tests {
+    use super::*;
+    #[test]
+    fn runtime_inventory_failure_is_per_call_even_when_shared_warning_is_clear() {
+        let temp = tempfile::tempdir().unwrap();
+        let remote = Remote {
+            root: temp.path().into(),
+            data: temp.path().join("state.json"),
+            dir: temp.path().into(),
+            opening: Mutex::new(()),
+            warning: Mutex::new(None),
+        };
+        let host = Host::Remote(remote);
+        let failure = host.inventory_checked();
+        assert!(failure.is_err());
+        assert!(host.warning().is_none());
+        assert!(host.inventory().is_empty());
+        assert!(failure.is_err());
+        assert!(!temp.path().join("terminal.sock").exists());
+    }
+    #[test]
+    fn runtime_inventory_checked_rejects_invalid_reply_and_preserves_exact_generation() {
+        for value in [
+            json!({"bad":"shape"}),
+            json!([{"host":"embedded","recordId":uuid(),"agent":"codex","sessionId":null,"generation":uuid(),"live":true}]),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let listener = UnixListener::bind(temp.path().join("terminal.sock")).unwrap();
+            let expected = value.clone();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_frame(&mut stream).unwrap();
+                assert_eq!(request["request"]["op"], "inventory");
+                write_frame(
+                    &mut stream,
+                    &json!({"protocol":PROTOCOL,"ok":true,"value":value}),
+                )
+                .unwrap();
+            });
+            let host = Host::Remote(Remote {
+                root: temp.path().into(),
+                data: temp.path().join("state.json"),
+                dir: temp.path().into(),
+                opening: Mutex::new(()),
+                warning: Mutex::new(None),
+            });
+            let result = host.inventory_checked();
+            server.join().unwrap();
+            if expected.is_array() {
+                assert_eq!(json!(result.unwrap()), expected);
+            } else {
+                assert!(result.is_err());
+            }
+        }
+    }
 }

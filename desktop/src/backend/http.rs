@@ -17,10 +17,20 @@ const MAX_BODY: usize = 128 * 1024;
 const CSP:&str="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 /// Replace `path` atomically: readers see the old or the new bytes, never a partial file.
 pub fn private_write(path: &Path, bytes: &[u8]) -> Result<()> {
-    let name = path.file_name().ok_or(Error::new("Write target has no file name."))?;
-    let temp = path.with_file_name(format!(".{}.{}.tmp", name.to_string_lossy(), uuid::Uuid::new_v4()));
+    let name = path
+        .file_name()
+        .ok_or(Error::new("Write target has no file name."))?;
+    let temp = path.with_file_name(format!(
+        ".{}.{}.tmp",
+        name.to_string_lossy(),
+        uuid::Uuid::new_v4()
+    ));
     let written = (|| {
-        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temp)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temp)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         std::fs::rename(&temp, path)
@@ -30,7 +40,7 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     Ok(written?)
 }
-fn claim_sentry_environment(repo:&Repository,environment:&str)->Result<bool>{
+fn claim_sentry_environment(repo: &Repository, environment: &str) -> Result<bool> {
     repo.transaction(|s| {
         if s["sources"]["sentry"]["disabled"] == true {return Err(Error::new("Sentry synchronization is paused. Enable the connection before requesting an environment. Cached results remain available."));}
         let caches = s["sentryEnvironments"].as_object().unwrap();
@@ -131,21 +141,21 @@ fn handle(
                     state["csrf"] = json!(csrf);
                     json_response(200, state)
                 }
-                "/api/app-chat" => json_response(200,repo.app_chat.view(repo)),
-                "/api/app-chat/skill" => json_response(200,super::app_chat::guide()),
-                "/api/themes" => json_response(200,repo.settings.themes()?),
-                "/api/settings" => json_response(200,repo.settings.view()),
-                "/api/config-status" => json_response(200,super::config_status::view(repo)),
-                "/api/quick-actions" => json_response(200,repo.quick_actions.view()),
+                "/api/app-chat" => json_response(200, repo.app_chat.view(repo)),
+                "/api/app-chat/skill" => json_response(200, super::app_chat::guide()),
+                "/api/themes" => json_response(200, repo.settings.themes()?),
+                "/api/settings" => json_response(200, repo.settings.view()),
+                "/api/config-status" => json_response(200, super::config_status::view(repo)),
+                "/api/quick-actions" => json_response(200, repo.quick_actions.view()),
                 "/api/export" => json_response(200, repo.snapshot(true)),
                 "/api/agents" => json_response(200, repo.inventory()),
                 "/api/gcp-auth" => json_response(200, repo.gcp_auth.view()),
-                "/api/views"=>json_response(200,super::views::view(repo)?),
-                "/api/page-settings"=>json_response(200,super::page_settings::view(repo)?),
-                "/api/feedback"=>json_response(200,super::feedback::view(repo)?),
-                "/api/guidance"=>json_response(200,super::guidance::view(repo)?),
-                "/api/onboarding"=>json_response(200,super::onboarding::view(repo)),
-                "/api/commands" => json_response(200,super::commands::catalog()),
+                "/api/views" => json_response(200, super::views::view(repo)?),
+                "/api/page-settings" => json_response(200, super::page_settings::view(repo)?),
+                "/api/feedback" => json_response(200, super::feedback::view(repo)?),
+                "/api/guidance" => json_response(200, super::guidance::view(repo)?),
+                "/api/onboarding" => json_response(200, super::onboarding::view(repo)),
+                "/api/commands" => json_response(200, super::commands::catalog()),
                 "/api/logs" => json_response(200, repo.logs()),
                 "/api/sharing" => json_response(200, super::sharing::view(repo)),
                 "/api/library" => {
@@ -189,10 +199,23 @@ fn handle(
                 }
                 "/favicon.ico" => response(204, vec![], "image/x-icon", false),
                 p => {
-                    if let Some(name)=p.strip_prefix("/vendor/diffs/") {
-                        if !name.ends_with(".js")||!name.chars().all(|c|c.is_ascii_alphanumeric()||"-_.".contains(c)){return Ok(json_response(404,json!({"error":"Not found."})));}
-                        let bytes=super::assets::asset(&format!("vendor/diffs/{name}")).ok_or(Error::new("Asset unavailable."))?.to_vec();
-                        return Ok(response(200,bytes,"text/javascript; charset=utf-8",false));
+                    if let Some(name) = p.strip_prefix("/vendor/diffs/") {
+                        if !name.ends_with(".js")
+                            || !name
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+                        {
+                            return Ok(json_response(404, json!({"error":"Not found."})));
+                        }
+                        let bytes = super::assets::asset(&format!("vendor/diffs/{name}"))
+                            .ok_or(Error::new("Asset unavailable."))?
+                            .to_vec();
+                        return Ok(response(
+                            200,
+                            bytes,
+                            "text/javascript; charset=utf-8",
+                            false,
+                        ));
                     }
                     let file = match p {
                         "/" | "/index.html" => "index.html",
@@ -201,20 +224,20 @@ fn handle(
                         "/configuration.js" => "configuration.js",
                         "/settings-profile.js" => "settings-profile.js",
                         "/settings-profile.css" => "settings-profile.css",
-                        "/product-tools.js"=>"product-tools.js",
-                        "/product-tools.css"=>"product-tools.css",
-                        "/onboarding.js"=>"onboarding.js",
-                        "/guidance.js"=>"guidance.js",
-                        "/page-settings.js"=>"page-settings.js",
-                        "/page-settings.css"=>"page-settings.css",
-                        "/views.js"=>"views.js",
-                        "/views.css"=>"views.css",
-                        "/feedback.js"=>"feedback.js",
-                        "/chat-attachments.js"=>"chat-attachments.js",
-                        "/chat-results.js"=>"chat-results.js",
-                        "/chat-results.css"=>"chat-results.css",
-                        "/guidance.css"=>"guidance.css",
-                        "/onboarding.css"=>"onboarding.css",
+                        "/product-tools.js" => "product-tools.js",
+                        "/product-tools.css" => "product-tools.css",
+                        "/onboarding.js" => "onboarding.js",
+                        "/guidance.js" => "guidance.js",
+                        "/page-settings.js" => "page-settings.js",
+                        "/page-settings.css" => "page-settings.css",
+                        "/views.js" => "views.js",
+                        "/views.css" => "views.css",
+                        "/feedback.js" => "feedback.js",
+                        "/chat-attachments.js" => "chat-attachments.js",
+                        "/chat-results.js" => "chat-results.js",
+                        "/chat-results.css" => "chat-results.css",
+                        "/guidance.css" => "guidance.css",
+                        "/onboarding.css" => "onboarding.css",
                         "/presentation.js" => "presentation.js",
                         "/app-chat.js" => "app-chat.js",
                         "/skill-picker.js" => "skill-picker.js",
@@ -240,9 +263,9 @@ fn handle(
                         "/ux.js" => "ux.js",
                         "/command-palette.js" => "command-palette.js",
                         "/session-dispatch.js" => "session-dispatch.js",
-            "/skills-editor.js" => "skills-editor.js",
-            "/chat-preparation.js" => "chat-preparation.js",
-            "/chat-preparation.css" => "chat-preparation.css",
+                        "/skills-editor.js" => "skills-editor.js",
+                        "/chat-preparation.js" => "chat-preparation.js",
+                        "/chat-preparation.css" => "chat-preparation.css",
                         "/diff-review.js" => "diff-review.js",
                         "/workspace.css" => "workspace.css",
                         "/vendor/xterm.js" => "vendor/xterm.js",
@@ -265,7 +288,9 @@ fn handle(
                     };
                     response(
                         200,
-                        super::assets::asset(file).ok_or(Error::new("Asset unavailable."))?.to_vec(),
+                        super::assets::asset(file)
+                            .ok_or(Error::new("Asset unavailable."))?
+                            .to_vec(),
                         kind,
                         false,
                     )
@@ -288,7 +313,11 @@ fn handle(
                 json!({"error":"Request rejected. Reload this dashboard and try again."}),
             ));
         }
-        let body_limit=if path=="/api/app-chat/send"{2*1024*1024}else{MAX_BODY};
+        let body_limit = if path == "/api/app-chat/send" {
+            2 * 1024 * 1024
+        } else {
+            MAX_BODY
+        };
         if req.body_length().is_some_and(|n| n > body_limit) {
             return Ok(json_response(413, json!({"error":"Request too large."})));
         }
@@ -306,49 +335,154 @@ fn handle(
         if !payload.is_object() {
             return Err(Error::new("Expected a JSON object."));
         }
-        if path=="/api/connections/reload" {return Ok(json_response(200,super::commands::invoke(repo,&json!({"name":"connections.reload","args":payload}),false)?));}
-        if path=="/api/views"{return Ok(json_response(200,super::views::update(repo,&payload)?));}
-        if path=="/api/page-settings"{return Ok(json_response(200,super::page_settings::update(repo,&payload)?));}
-        if path=="/api/feedback"{return Ok(json_response(200,super::feedback::update(repo,&payload)?));}
-        if path=="/api/guidance"{return Ok(json_response(200,super::guidance::update(repo,&payload)?));}
-        if path=="/api/onboarding"{return Ok(json_response(200,super::onboarding::update(repo,&payload)?));}
-        if path.starts_with("/api/shell-terminal/"){return Ok(json_response(200,super::chat_terminal::action(repo,&path,&payload)?));}
-        if path=="/api/commands/invoke"{return Ok(json_response(200,super::commands::invoke(repo,&payload,false)?));}
-        if path=="/api/skills/catalog" {
-            let mut projects=Vec::new();if !text(&payload,"cwd").is_empty(){let p=PathBuf::from(text(&payload,"cwd"));if p.is_absolute()&&p.is_dir(){projects.push(p);}}
-            let state=repo.state.lock().map_err(|_|Error::io())?;for row in arr(&state["sessions"]){let p=PathBuf::from(text(&row,"cwd"));if p.is_absolute()&&p.is_dir()&&!projects.contains(&p){projects.push(p);}for tree in arr(&row["worktrees"]){let p=PathBuf::from(text(&tree,"path"));if p.is_absolute()&&p.is_dir()&&!projects.contains(&p){projects.push(p);}}if projects.len()>=20{break;}}drop(state);
-            return Ok(json_response(200,super::skills_catalog::discover(&home(),&projects,&repo.settings.config_directory().join("skills"))));
+        if path == "/api/connections/reload" {
+            return Ok(json_response(
+                200,
+                super::commands::invoke(
+                    repo,
+                    &json!({"name":"connections.reload","args":payload}),
+                    false,
+                )?,
+            ));
         }
-        if path=="/api/app-chat/send" {return Ok(json_response(200,repo.app_chat.start(repo,&payload)?));}
-        if path=="/api/app-chat/new" {return Ok(json_response(200,repo.app_chat.new_chat(repo)?));}
-        if path=="/api/app-chat/cancel" {return Ok(json_response(200,repo.app_chat.cancel()));}
-        if path=="/api/settings/preview" {return Ok(json_response(200,repo.settings.preview(&payload,false)?));}
-        if path=="/api/settings" {return Ok(json_response(200,repo.settings.apply(&payload,false)?));}
-        if path=="/api/quick-actions/run" {return Ok(json_response(200,repo.quick_actions.start(repo,&payload)?));}
+        if path == "/api/views" {
+            return Ok(json_response(200, super::views::update(repo, &payload)?));
+        }
+        if path == "/api/page-settings" {
+            return Ok(json_response(
+                200,
+                super::page_settings::update(repo, &payload)?,
+            ));
+        }
+        if path == "/api/feedback" {
+            return Ok(json_response(200, super::feedback::update(repo, &payload)?));
+        }
+        if path == "/api/guidance" {
+            return Ok(json_response(200, super::guidance::update(repo, &payload)?));
+        }
+        if path == "/api/onboarding" {
+            return Ok(json_response(
+                200,
+                super::onboarding::update(repo, &payload)?,
+            ));
+        }
+        if path.starts_with("/api/shell-terminal/") {
+            return Ok(json_response(
+                200,
+                super::chat_terminal::action(repo, &path, &payload)?,
+            ));
+        }
+        if path == "/api/commands/invoke" {
+            return Ok(json_response(
+                200,
+                super::commands::invoke(repo, &payload, false)?,
+            ));
+        }
+        if path == "/api/skills/catalog" {
+            let mut projects = Vec::new();
+            if !text(&payload, "cwd").is_empty() {
+                let p = PathBuf::from(text(&payload, "cwd"));
+                if p.is_absolute() && p.is_dir() {
+                    projects.push(p);
+                }
+            }
+            let state = repo.state.lock().map_err(|_| Error::io())?;
+            for row in arr(&state["sessions"]) {
+                let p = PathBuf::from(text(&row, "cwd"));
+                if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
+                    projects.push(p);
+                }
+                for tree in arr(&row["worktrees"]) {
+                    let p = PathBuf::from(text(&tree, "path"));
+                    if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
+                        projects.push(p);
+                    }
+                }
+                if projects.len() >= 20 {
+                    break;
+                }
+            }
+            drop(state);
+            return Ok(json_response(
+                200,
+                super::skills_catalog::discover(
+                    &home(),
+                    &projects,
+                    &repo.settings.config_directory().join("skills"),
+                ),
+            ));
+        }
+        if path == "/api/app-chat/send" {
+            return Ok(json_response(200, repo.app_chat.start(repo, &payload)?));
+        }
+        if path == "/api/app-chat/new" {
+            return Ok(json_response(200, repo.app_chat.new_chat(repo)?));
+        }
+        if path == "/api/app-chat/cancel" {
+            return Ok(json_response(200, repo.app_chat.cancel()));
+        }
+        if path == "/api/settings/preview" {
+            return Ok(json_response(200, repo.settings.preview(&payload, false)?));
+        }
+        if path == "/api/settings" {
+            return Ok(json_response(200, repo.settings.apply(&payload, false)?));
+        }
+        if path == "/api/quick-actions/run" {
+            return Ok(json_response(
+                200,
+                repo.quick_actions.start(repo, &payload)?,
+            ));
+        }
         let mut extra = json!({});
         if path.starts_with("/api/sharing/") {
-            return Ok(json_response(200, super::sharing::action(repo, &path, &payload)?));
+            return Ok(json_response(
+                200,
+                super::sharing::action(repo, &path, &payload)?,
+            ));
         }
         if path == "/api/session/links" {
             if let Some(context) = payload.get("context") {
-                return Ok(json_response(200,super::session_context::replace_receipt(repo,text(&payload,"id"),context)?));
+                return Ok(json_response(
+                    200,
+                    super::session_context::replace_receipt(repo, text(&payload, "id"), context)?,
+                ));
             }
-            return Ok(json_response(200,super::session_context::read(repo,text(&payload,"id"))?));
+            return Ok(json_response(
+                200,
+                super::session_context::read(repo, text(&payload, "id"))?,
+            ));
         }
         if path == "/api/session/review-draft" {
-            return Ok(json_response(200, super::reviews::action(repo,&payload)?));
+            return Ok(json_response(200, super::reviews::action(repo, &payload)?));
         }
         if path == "/api/session/ci-investigation" {
-            return Ok(json_response(200, super::session_ci::investigation(repo,&payload)?));
+            return Ok(json_response(
+                200,
+                super::session_ci::investigation(repo, &payload)?,
+            ));
         }
         if path == "/api/session/ci-refresh" {
-            return Ok(json_response(200, super::session_ci::refresh(repo,text(&payload,"id"))?));
+            return Ok(json_response(
+                200,
+                super::session_ci::refresh(repo, text(&payload, "id"))?,
+            ));
         }
         if path == "/api/session/git-file" {
-            return Ok(json_response(200, super::git_diff::file_for_session(repo,text(&payload,"id"),text(&payload,"path"),text(&payload,"cwd"))?));
+            return Ok(json_response(
+                200,
+                super::git_diff::file_for_session(
+                    repo,
+                    text(&payload, "id"),
+                    text(&payload, "path"),
+                    text(&payload, "cwd"),
+                )?,
+            ));
         }
         if path == "/api/session/git-diff" {
-            return Ok(json_response(200, super::git_diff::for_session(repo, text(&payload, "id"), text(&payload,"cwd"))?));
+            return Ok(json_response(
+                200,
+                super::git_diff::for_session(repo, text(&payload, "id"), text(&payload, "cwd"))?,
+            ));
         }
         if path.starts_with("/api/terminal/") {
             let id = sid(text(&payload, "id"))?;
@@ -389,17 +523,20 @@ fn handle(
         let saved = match path.as_str() {
             "/api/agent/register" => {
                 let record = workflows::register(repo, &payload)?;
-                return Ok(json_response(
-                    200,
-                    workflows::registration_reply(&record),
-                ));
+                return Ok(json_response(200, workflows::registration_reply(&record)));
             }
             "/api/edit" => {
                 repo.edit(&payload)?;
                 None
             }
-            "/api/github/pr" => {super::github::action(repo,&payload)?;None}
-            "/api/github/reviews/seen" => {super::github::seen(repo,&payload)?;None}
+            "/api/github/pr" => {
+                super::github::action(repo, &payload)?;
+                None
+            }
+            "/api/github/reviews/seen" => {
+                super::github::seen(repo, &payload)?;
+                None
+            }
             "/api/session/prepare" => Some(workflows::prepare(repo, &payload)?),
             "/api/session/from-view" => Some(super::view_context::prepare(repo, &payload)?),
             "/api/session/quick" => Some(workflows::quick(repo, &payload, false)?),
@@ -429,14 +566,30 @@ fn handle(
             }
             "/api/session/recover" => Some(workflows::recover(repo, &payload)?),
             "/api/session/open" => {
-                let fields=payload.as_object().ok_or(Error::new("Open arguments must be an object."))?;
-                if fields.keys().any(|key|!["id","target"].contains(&key.as_str())){return Err(Error::new("Open accepts only a saved chat ID and destination intent."));}
-                let mut args=json!({"recordId":payload["id"]});if let Some(target)=payload.get("target"){args["target"]=target.clone();}
-                let receipt=workflows::open_chat(repo,&args)?;
-                extra["message"]=receipt["message"].clone();
-                if receipt["status"]=="accepted"&&receipt["target"]=="embedded"{extra["embedded"]=json!(true);}
-                if receipt["status"]=="preview"{extra["preview"]=json!(true);}
-                extra["openReceipt"]=receipt;
+                let fields = payload
+                    .as_object()
+                    .ok_or(Error::new("Open arguments must be an object."))?;
+                if fields
+                    .keys()
+                    .any(|key| !["id", "target"].contains(&key.as_str()))
+                {
+                    return Err(Error::new(
+                        "Open accepts only a saved chat ID and destination intent.",
+                    ));
+                }
+                let mut args = json!({"recordId":payload["id"]});
+                if let Some(target) = payload.get("target") {
+                    args["target"] = target.clone();
+                }
+                let receipt = workflows::open_chat(repo, &args)?;
+                extra["message"] = receipt["message"].clone();
+                if receipt["status"] == "accepted" && receipt["target"] == "embedded" {
+                    extra["embedded"] = json!(true);
+                }
+                if receipt["status"] == "preview" {
+                    extra["preview"] = json!(true);
+                }
+                extra["openReceipt"] = receipt;
                 None
             }
             "/api/session/context" => {
@@ -445,7 +598,9 @@ fn handle(
                     json!({"context":workflows::context(repo,text(&payload,"id"))?}),
                 ))
             }
-            "/api/gcp-auth/start" => return Ok(json_response(200, repo.gcp_auth.start(repo.demo)?)),
+            "/api/gcp-auth/start" => {
+                return Ok(json_response(200, repo.gcp_auth.start(repo.demo)?))
+            }
             "/api/gcp-auth/cancel" => return Ok(json_response(200, repo.gcp_auth.cancel())),
             "/api/sync" => {
                 let receipt = repo.refresh_sources(payload["force"] == true)?;
@@ -464,7 +619,7 @@ fn handle(
                 if !repo.demo && !repo.providers.sentry_configured() {
                     return Err(Error::new("Configure Sentry first."));
                 }
-                let should_start = claim_sentry_environment(repo,&environment)?;
+                let should_start = claim_sentry_environment(repo, &environment)?;
                 if should_start {
                     let repository = repo.clone();
                     std::thread::spawn(move || {
@@ -554,11 +709,21 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
     for entry in entries.filter_map(|e| e.ok()).take(100) {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.ends_with(".result.json")||name.ends_with(".tmp"){if std::fs::symlink_metadata(&path).ok().and_then(|m|m.modified().ok()).and_then(|t|t.elapsed().ok()).is_some_and(|age|age.as_secs()>300){let _=std::fs::remove_file(&path);}continue;}
+        if name.ends_with(".result.json") || name.ends_with(".tmp") {
+            if std::fs::symlink_metadata(&path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age.as_secs() > 300)
+            {
+                let _ = std::fs::remove_file(&path);
+            }
+            continue;
+        }
         if !name.ends_with(".request.json") {
             continue;
         }
-        let mut reply_needed=true;
+        let mut reply_needed = true;
         let result = (|| -> Result<Value> {
             let info = std::fs::symlink_metadata(&path)?;
             if !info.is_file()
@@ -580,7 +745,7 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
             mac.update(canonical(data).as_bytes());
             mac.verify_slice(&expected)
                 .map_err(|_| Error::new("Invalid registration signature."))?;
-            reply_needed=data["reply"]!=false;
+            reply_needed = data["reply"] != false;
             let record = workflows::register(repo, &data["payload"])?;
             Ok(workflows::registration_reply(&record))
         })();
@@ -589,7 +754,7 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
             Err(e) => json!({"error":e.message}),
         };
         let result_path = inbox.join(name.replace(".request.json", ".result.json"));
-        if reply_needed&&!result_path.exists() {
+        if reply_needed && !result_path.exists() {
             let _ = private_write(&result_path, &serde_json::to_vec(&reply).unwrap());
         }
         let _ = std::fs::remove_file(path);
@@ -702,11 +867,33 @@ pub fn serve(
 }
 
 #[cfg(test)]
-mod environment_admission_tests{
- use super::*;
- #[test]fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_admission(){
-  let temp=tempfile::tempdir().unwrap();let repo=Repository::open(temp.path().into(),None,true).unwrap();repo.transaction(|state|{state["sources"]["sentry"]["disabled"]=json!(true);state["sentryEnvironments"]=json!({"qa":{"lastSuccess":42,"itemIds":["cached"],"extension":"keep"}});Ok(())}).unwrap();let before=repo.state.lock().unwrap().clone();let bytes=std::fs::read(&repo.data).unwrap();let cooldown=repo.cooldown.lock().unwrap().clone();let mut starts=0;let claim=claim_sentry_environment(&repo,"new-environment");if matches!(claim,Ok(true)){starts+=1;}assert!(claim.unwrap_err().message.contains("paused"));assert_eq!(starts,0);assert_eq!(*repo.state.lock().unwrap(),before);assert_eq!(std::fs::read(&repo.data).unwrap(),bytes);assert_eq!(*repo.cooldown.lock().unwrap(),cooldown);
- }
+mod environment_admission_tests {
+    use super::*;
+    #[test]
+    fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_admission() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::open(temp.path().into(), None, true).unwrap();
+        repo.transaction(|state| {
+            state["sources"]["sentry"]["disabled"] = json!(true);
+            state["sentryEnvironments"] =
+                json!({"qa":{"lastSuccess":42,"itemIds":["cached"],"extension":"keep"}});
+            Ok(())
+        })
+        .unwrap();
+        let before = repo.state.lock().unwrap().clone();
+        let bytes = std::fs::read(&repo.data).unwrap();
+        let cooldown = repo.cooldown.lock().unwrap().clone();
+        let mut starts = 0;
+        let claim = claim_sentry_environment(&repo, "new-environment");
+        if matches!(claim, Ok(true)) {
+            starts += 1;
+        }
+        assert!(claim.unwrap_err().message.contains("paused"));
+        assert_eq!(starts, 0);
+        assert_eq!(*repo.state.lock().unwrap(), before);
+        assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
+        assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
+    }
 }
 #[cfg(test)]
 mod private_write_tests {
@@ -720,12 +907,18 @@ mod private_write_tests {
         std::fs::write(&path, b"old and longer").unwrap();
         private_write(&path, b"new").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
-        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         let blocked = temp.path().join("dir");
         std::fs::create_dir(&blocked).unwrap();
         std::fs::write(blocked.join("child"), b"").unwrap();
         assert!(private_write(&blocked, b"x").is_err());
-        let mut names = std::fs::read_dir(temp.path()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect::<Vec<_>>();
+        let mut names = std::fs::read_dir(temp.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect::<Vec<_>>();
         names.sort();
         assert_eq!(names, ["dir", "doc.json"]);
     }

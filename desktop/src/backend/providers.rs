@@ -11,29 +11,43 @@ pub(super) struct StreamRedactor {
 }
 impl StreamRedactor {
     const MAX_PENDING: usize = 64 * 1024;
-    pub(super) fn with_values(mut self, values: impl IntoIterator<Item=String>) -> Self {
+    pub(super) fn with_values(mut self, values: impl IntoIterator<Item = String>) -> Self {
         for value in values {
-            if !value.is_empty() && !self.secrets.contains(&value) { self.secrets.push(value); }
+            if !value.is_empty() && !self.secrets.contains(&value) {
+                self.secrets.push(value);
+            }
         }
-        self.secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        self.secrets
+            .sort_by_key(|value| std::cmp::Reverse(value.len()));
         self
     }
     pub(super) fn push(&mut self, text: &str) -> String {
-        if self.suppressed { return String::new(); }
+        if self.suppressed {
+            return String::new();
+        }
         self.pending.push_str(text);
         let mut output = String::new();
         let mut offset = 0;
         while offset < self.pending.len() {
             let remaining = &self.pending[offset..];
-            if self.secrets.iter().any(|secret| secret.len() > remaining.len() && secret.starts_with(remaining)) {
+            if self
+                .secrets
+                .iter()
+                .any(|secret| secret.len() > remaining.len() && secret.starts_with(remaining))
+            {
                 if remaining.len() >= Self::MAX_PENDING {
-                    output.push_str("[Output omitted: sensitive value exceeds stream safety limit.]");
+                    output
+                        .push_str("[Output omitted: sensitive value exceeds stream safety limit.]");
                     self.suppressed = true;
                     offset = self.pending.len();
                 }
                 break;
             }
-            if let Some(secret) = self.secrets.iter().find(|secret| remaining.starts_with(secret.as_str())) {
+            if let Some(secret) = self
+                .secrets
+                .iter()
+                .find(|secret| remaining.starts_with(secret.as_str()))
+            {
                 output.push_str("[redacted]");
                 offset += secret.len();
             } else {
@@ -46,7 +60,9 @@ impl StreamRedactor {
         output
     }
     pub(super) fn finish(&mut self) -> String {
-        if self.pending.is_empty() { String::new() } else {
+        if self.pending.is_empty() {
+            String::new()
+        } else {
             self.pending.clear();
             "[redacted]".into()
         }
@@ -71,9 +87,9 @@ impl Providers {
             for line in env.lines() {
                 if let Some((key, value)) = line.trim().split_once('=') {
                     if !key.starts_with('#') {
-                        dotenv.entry(key.to_owned()).or_insert_with(|| {
-                            value.trim().trim_matches(['\'', '"']).to_owned()
-                        });
+                        dotenv
+                            .entry(key.to_owned())
+                            .or_insert_with(|| value.trim().trim_matches(['\'', '"']).to_owned());
                     }
                 }
             }
@@ -92,9 +108,10 @@ impl Providers {
         }
         let setting = |env: &str, key: &str, default: &str| {
             std::env::var(env).unwrap_or_else(|_| {
-                dotenv.get(env).cloned().unwrap_or_else(|| {
-                    ini.get(key).cloned().unwrap_or(default.into())
-                })
+                dotenv
+                    .get(env)
+                    .cloned()
+                    .unwrap_or_else(|| ini.get(key).cloned().unwrap_or(default.into()))
             })
         };
         let org = setting("SENTRY_ORG", "defaults.org", "");
@@ -118,13 +135,21 @@ impl Providers {
         let sentry_token = setting("SENTRY_AUTH_TOKEN", "auth.token", "");
         let linear_token = setting("LINEAR_API_KEY", "", "");
         let github_token = setting("GITHUB_TOKEN", "", "");
-        let mut redaction_secrets = dotenv.iter().filter_map(|(key, value)| {
-            let key = key.to_ascii_uppercase();
-            (key.contains("TOKEN") || key.contains("SECRET") || key.contains("PASSWORD")
-                || key.ends_with("API_KEY")).then(|| value.clone())
-        }).collect::<Vec<_>>();
+        let mut redaction_secrets = dotenv
+            .iter()
+            .filter_map(|(key, value)| {
+                let key = key.to_ascii_uppercase();
+                (key.contains("TOKEN")
+                    || key.contains("SECRET")
+                    || key.contains("PASSWORD")
+                    || key.ends_with("API_KEY"))
+                .then(|| value.clone())
+            })
+            .collect::<Vec<_>>();
         redaction_secrets.extend([
-            sentry_token.clone(), linear_token.clone(), github_token.clone(),
+            sentry_token.clone(),
+            linear_token.clone(),
+            github_token.clone(),
             ini.get("auth.token").cloned().unwrap_or_default(),
         ]);
         redaction_secrets.retain(|value| !value.is_empty());
@@ -148,7 +173,13 @@ impl Providers {
             fields: serde_json::from_str(include_str!("../../resources/provider-fields.json"))?,
         })
     }
-    pub(super) fn configure_connection(&mut self, source: &str, token: &str, org: &str, base: &str) -> Result<()> {
+    pub(super) fn configure_connection(
+        &mut self,
+        source: &str,
+        token: &str,
+        org: &str,
+        base: &str,
+    ) -> Result<()> {
         match source {
             "github" => self.github_token = token.into(),
             "linear" => self.linear_token = token.into(),
@@ -161,7 +192,8 @@ impl Providers {
         }
         if !token.is_empty() && !self.redaction_secrets.iter().any(|secret| secret == token) {
             self.redaction_secrets.push(token.into());
-            self.redaction_secrets.sort_by_key(|secret| std::cmp::Reverse(secret.len()));
+            self.redaction_secrets
+                .sort_by_key(|secret| std::cmp::Reverse(secret.len()));
         }
         Ok(())
     }
@@ -171,10 +203,15 @@ impl Providers {
                 self.redaction_secrets.push(secret.clone());
             }
         }
-        self.redaction_secrets.sort_by_key(|secret| std::cmp::Reverse(secret.len()));
+        self.redaction_secrets
+            .sort_by_key(|secret| std::cmp::Reverse(secret.len()));
     }
     pub(super) fn stream_redactor(&self) -> StreamRedactor {
-        StreamRedactor { secrets: self.redaction_secrets.clone(), pending: String::new(), suppressed: false }
+        StreamRedactor {
+            secrets: self.redaction_secrets.clone(),
+            pending: String::new(),
+            suppressed: false,
+        }
     }
     pub fn redact_text(&self, value: &mut String) {
         for secret in &self.redaction_secrets {
@@ -247,34 +284,65 @@ impl Providers {
             "Linear",
         )
     }
-    pub fn github_pr(&self, id: &str) -> Result<(Value,String)> {
-        let query="query{viewer{login} node(id:__ID__){... on PullRequest{__FIELDS__}}}".replace("__ID__",&json!(id).to_string()).replace("__FIELDS__",text(&self.fields,"pr"));
-        let data=self.github(&query)?;
-        if data["node"].is_null() {return Err(Error::new("This pull request is unavailable on GitHub."));}
-        Ok((data["node"].clone(),text(&data["viewer"],"login").into()))
+    pub fn github_pr(&self, id: &str) -> Result<(Value, String)> {
+        let query = "query{viewer{login} node(id:__ID__){... on PullRequest{__FIELDS__}}}"
+            .replace("__ID__", &json!(id).to_string())
+            .replace("__FIELDS__", text(&self.fields, "pr"));
+        let data = self.github(&query)?;
+        if data["node"].is_null() {
+            return Err(Error::new("This pull request is unavailable on GitHub."));
+        }
+        Ok((data["node"].clone(), text(&data["viewer"], "login").into()))
     }
-    pub fn github_pr_action(&self, id: &str, action: &str, login: &str) -> Result<(Value,String)> {
-        let (before,viewer)=self.github_pr(id)?;
-        if action=="refresh" {return Ok((before,viewer));}
-        if before["state"]!="OPEN" {return Err(Error::new("This pull request is no longer open."));}
-        if before["viewerCanUpdate"]!=true {return Err(Error::new("Your GitHub account cannot update this pull request. Check repository permissions and token write access."));}
-        let (mutation,input)=match action {
-            "ready" if before["isDraft"]!=true=>return Ok((before,viewer)),
-            "ready"=>("markPullRequestReadyForReview",json!({"pullRequestId":id})),
-            "request-review"=>{
-                if before["isDraft"]==true {return Err(Error::new("Mark this draft ready before requesting a review."));}
-                if text(&before["author"],"login").eq_ignore_ascii_case(login) {return Err(Error::new("The PR author cannot review their own pull request."));}
-                if arr(&before["reviewRequests"]["nodes"]).iter().any(|r|text(&r["requestedReviewer"],"login").eq_ignore_ascii_case(login)){return Ok((before,viewer));}
-                let user=self.github(&format!("query{{user(login:{}){{id login}}}}",json!(login)))?;
-                if user["user"]["id"].is_null() {return Err(Error::new("GitHub username not found."));}
-                ("requestReviews",json!({"pullRequestId":id,"userIds":[user["user"]["id"]],"union":true}))
+    pub fn github_pr_action(&self, id: &str, action: &str, login: &str) -> Result<(Value, String)> {
+        let (before, viewer) = self.github_pr(id)?;
+        if action == "refresh" {
+            return Ok((before, viewer));
+        }
+        if before["state"] != "OPEN" {
+            return Err(Error::new("This pull request is no longer open."));
+        }
+        if before["viewerCanUpdate"] != true {
+            return Err(Error::new("Your GitHub account cannot update this pull request. Check repository permissions and token write access."));
+        }
+        let (mutation, input) = match action {
+            "ready" if before["isDraft"] != true => return Ok((before, viewer)),
+            "ready" => ("markPullRequestReadyForReview", json!({"pullRequestId":id})),
+            "request-review" => {
+                if before["isDraft"] == true {
+                    return Err(Error::new(
+                        "Mark this draft ready before requesting a review.",
+                    ));
+                }
+                if text(&before["author"], "login").eq_ignore_ascii_case(login) {
+                    return Err(Error::new(
+                        "The PR author cannot review their own pull request.",
+                    ));
+                }
+                if arr(&before["reviewRequests"]["nodes"])
+                    .iter()
+                    .any(|r| text(&r["requestedReviewer"], "login").eq_ignore_ascii_case(login))
+                {
+                    return Ok((before, viewer));
+                }
+                let user = self.github(&format!(
+                    "query{{user(login:{}){{id login}}}}",
+                    json!(login)
+                ))?;
+                if user["user"]["id"].is_null() {
+                    return Err(Error::new("GitHub username not found."));
+                }
+                (
+                    "requestReviews",
+                    json!({"pullRequestId":id,"userIds":[user["user"]["id"]],"union":true}),
+                )
             }
-            _=>return Err(Error::new("Unsupported GitHub action.")),
+            _ => return Err(Error::new("Unsupported GitHub action.")),
         };
         // Build GraphQL input with independently encoded values, never raw UI text.
-        let query=github_mutation(mutation,&input,text(&self.fields,"pr"));
-        let node=github_mutation_result(self.github(&query),mutation)?;
-        Ok((node,viewer))
+        let query = github_mutation(mutation, &input, text(&self.fields, "pr"));
+        let node = github_mutation_result(self.github(&query), mutation)?;
+        Ok((node, viewer))
     }
     pub fn linear_url(&self, id: &str) -> Result<String> {
         let data = self.linear(&format!("query{{issue(id:{}){{url}}}}", json!(id)))?;
@@ -467,8 +535,8 @@ impl Providers {
     }
     pub fn resolve(&self, url: &str) -> Result<Value> {
         let url = safe_url(url)?;
-        let parsed = reqwest::Url::parse(&url)
-            .map_err(|_| Error::new("Use a nonempty HTTPS work URL."))?;
+        let parsed =
+            reqwest::Url::parse(&url).map_err(|_| Error::new("Use a nonempty HTTPS work URL."))?;
         if parsed.scheme() != "https" || parsed.port().is_some_and(|p| p != 443) {
             return Err(Error::new("Use an HTTPS work URL."));
         }
@@ -651,19 +719,27 @@ pub fn ci(n: &Value) -> Value {
 // This stage is reached only after a mutation request is attempted. A transport
 // failure or missing result cannot establish that GitHub left the PR unchanged.
 fn gh_server_error(mut e: Error) -> Error {
-    let status = e.data["stderr"].as_str().and_then(|x| x.strip_prefix("gh: HTTP ")).unwrap_or("");
+    let status = e.data["stderr"]
+        .as_str()
+        .and_then(|x| x.strip_prefix("gh: HTTP "))
+        .unwrap_or("");
     if status.starts_with('5') {
         e.message = format!("GitHub server error (HTTP {status}). Cached data remains available.");
     }
     e
 }
-fn github_mutation_result(result:Result<Value>,mutation:&str)->Result<Value>{
+fn github_mutation_result(result: Result<Value>, mutation: &str) -> Result<Value> {
     let data=result.map_err(|mut error|{
         error.message="GitHub did not confirm this change. Refresh the PR before retrying; check repository permissions and token write access.".into();
         error.data=json!({"githubActionStage":"dispatched"});error
     })?;
-    let node=data[mutation]["pullRequest"].clone();
-    if node.is_null(){let mut error=Error::new("GitHub did not return the updated PR. Refresh it before retrying.");error.data=json!({"githubActionStage":"dispatched"});return Err(error);}
+    let node = data[mutation]["pullRequest"].clone();
+    if node.is_null() {
+        let mut error =
+            Error::new("GitHub did not return the updated PR. Refresh it before retrying.");
+        error.data = json!({"githubActionStage":"dispatched"});
+        return Err(error);
+    }
     Ok(node)
 }
 pub fn github_item(n: &Value) -> Result<Value> {
@@ -703,7 +779,9 @@ pub fn github_item(n: &Value) -> Result<Value> {
         };
     }
     let requested=arr(&n["reviewRequests"]["nodes"]).iter().map(|r|{let user=&r["requestedReviewer"];if !text(user,"login").is_empty(){json!({"login":user["login"],"kind":"user"})}else{json!({"login":format!("{}/{}",text(&user["organization"],"login"),text(user,"slug")),"name":user["name"],"kind":"team"})}}).filter(|r|text(r,"login")!="/").collect::<Vec<_>>();
-    Ok(json!({"id":format!("github:{}",text(n,"id")),"source":"github","title":n["title"],"detail":text(n,"body").chars().take(10000).collect::<String>(),"url":safe_url(text(n,"url"))?,"reference":format!("#{}",n["number"]),"project":n["repository"]["nameWithOwner"],"status":state,"sourceStatus":native,"kind":if pr{"Pull request"}else{"Issue"},"relations":["linked"],"createdAt":n["createdAt"],"updatedAt":n["updatedAt"],"ci":ci,"mergeState":n["mergeStateStatus"],"mergeable":n["mergeable"],"isDraft":n["isDraft"],"githubState":n["state"],"author":n["author"]["login"],"canUpdate":n["viewerCanUpdate"],"baseRefName":n["baseRefName"],"headRefName":n["headRefName"],"headRefOid":n["headRefOid"],"headRepository":n["headRepository"]["nameWithOwner"],"requestedReviewers":if n["reviewRequests"].is_null(){Value::Null}else{json!(requested)},"reviewerCount":n["reviewRequests"]["totalCount"],"latestReviews":arr(&n["latestReviews"]["nodes"])}))
+    Ok(
+        json!({"id":format!("github:{}",text(n,"id")),"source":"github","title":n["title"],"detail":text(n,"body").chars().take(10000).collect::<String>(),"url":safe_url(text(n,"url"))?,"reference":format!("#{}",n["number"]),"project":n["repository"]["nameWithOwner"],"status":state,"sourceStatus":native,"kind":if pr{"Pull request"}else{"Issue"},"relations":["linked"],"createdAt":n["createdAt"],"updatedAt":n["updatedAt"],"ci":ci,"mergeState":n["mergeStateStatus"],"mergeable":n["mergeable"],"isDraft":n["isDraft"],"githubState":n["state"],"author":n["author"]["login"],"canUpdate":n["viewerCanUpdate"],"baseRefName":n["baseRefName"],"headRefName":n["headRefName"],"headRefOid":n["headRefOid"],"headRepository":n["headRepository"]["nameWithOwner"],"requestedReviewers":if n["reviewRequests"].is_null(){Value::Null}else{json!(requested)},"reviewerCount":n["reviewRequests"]["totalCount"],"latestReviews":arr(&n["latestReviews"]["nodes"])}),
+    )
 }
 fn parent(n: &Value, depth: u8) -> Value {
     if n.is_null() || depth > 6 {
@@ -740,9 +818,18 @@ pub fn sentry_item(n: &Value, org: &str) -> Result<Value> {
     )
 }
 
-fn github_mutation(mutation:&str,input:&Value,selection:&str)->String {
-    let fields=input.as_object().unwrap().iter().map(|(k,v)|format!("{k}:{v}")).collect::<Vec<_>>().join(",");
-    "mutation{__MUTATION__(input:{__INPUT__}){pullRequest{__FIELDS__}}}".replace("__MUTATION__",mutation).replace("__INPUT__",&fields).replace("__FIELDS__",selection)
+fn github_mutation(mutation: &str, input: &Value, selection: &str) -> String {
+    let fields = input
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| format!("{k}:{v}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    "mutation{__MUTATION__(input:{__INPUT__}){pullRequest{__FIELDS__}}}"
+        .replace("__MUTATION__", mutation)
+        .replace("__INPUT__", &fields)
+        .replace("__FIELDS__", selection)
 }
 fn linear_query(fields: &str, viewer: &Value, cursor: &Value) -> String {
     r#"query { issues(first:100, after:__CURSOR__, filter:{ or:[
@@ -781,12 +868,27 @@ mod query_tests {
         )).unwrap();
         let providers = Providers::new(root.path()).unwrap();
         for (key, actual, fallback) in [
-            ("SENTRY_AUTH_TOKEN", &providers.sentry_token, "benign-sentry-fixture"),
-            ("LINEAR_API_KEY", &providers.linear_token, "benign-linear-fixture"),
-            ("GITHUB_TOKEN", &providers.github_token, "benign-github-fixture"),
+            (
+                "SENTRY_AUTH_TOKEN",
+                &providers.sentry_token,
+                "benign-sentry-fixture",
+            ),
+            (
+                "LINEAR_API_KEY",
+                &providers.linear_token,
+                "benign-linear-fixture",
+            ),
+            (
+                "GITHUB_TOKEN",
+                &providers.github_token,
+                "benign-github-fixture",
+            ),
         ] {
             let expected = std::env::var(key).unwrap_or_else(|_| fallback.into());
-            assert!(actual == &expected, "Provider credential precedence changed.");
+            assert!(
+                actual == &expected,
+                "Provider credential precedence changed."
+            );
         }
         assert!(std::env::var_os(&sentinel_key).is_none());
         let mut diagnostic = format!("Provider output: {sentinel_value}");
@@ -805,8 +907,16 @@ mod query_tests {
     fn profile_redaction_does_not_share_secrets_between_profiles() {
         let first = tempfile::tempdir().unwrap();
         let second = tempfile::tempdir().unwrap();
-        std::fs::write(first.path().join(".env"), "PROFILE_SECRET=benign-first-profile").unwrap();
-        std::fs::write(second.path().join(".env"), "PROFILE_SECRET=benign-second-profile").unwrap();
+        std::fs::write(
+            first.path().join(".env"),
+            "PROFILE_SECRET=benign-first-profile",
+        )
+        .unwrap();
+        std::fs::write(
+            second.path().join(".env"),
+            "PROFILE_SECRET=benign-second-profile",
+        )
+        .unwrap();
         let first = Providers::new(first.path()).unwrap();
         let second = Providers::new(second.path()).unwrap();
         let mut first_output = "benign-first-profile / benign-second-profile".to_owned();
@@ -818,44 +928,95 @@ mod query_tests {
     }
 
     #[test]
-    fn gh_server_errors_name_the_http_status(){
-        let run=|stderr:&str|gh_server_error(super::super::terminal::run("/bin/sh",&["-c".into(),format!("echo '{stderr}' >&2; echo detail >&2; exit 1")],None,5).unwrap_err());
-        let error=run("gh: HTTP 502");
-        assert_eq!(error.message,"GitHub server error (HTTP 502). Cached data remains available.");assert_eq!(error.data["stderr"],"gh: HTTP 502");
-        assert!(run("gh: HTTP 401").message.starts_with("Local command failed"));
+    fn gh_server_errors_name_the_http_status() {
+        let run = |stderr: &str| {
+            gh_server_error(
+                super::super::terminal::run(
+                    "/bin/sh",
+                    &[
+                        "-c".into(),
+                        format!("echo '{stderr}' >&2; echo detail >&2; exit 1"),
+                    ],
+                    None,
+                    5,
+                )
+                .unwrap_err(),
+            )
+        };
+        let error = run("gh: HTTP 502");
+        assert_eq!(
+            error.message,
+            "GitHub server error (HTTP 502). Cached data remains available."
+        );
+        assert_eq!(error.data["stderr"], "gh: HTTP 502");
+        assert!(run("gh: HTTP 401")
+            .message
+            .starts_with("Local command failed"));
     }
     #[test]
-    fn github_post_dispatch_failures_mark_unknown_confirmation_without_private_error_data(){
-        let mut failure=Error::new("fixture transport failed");failure.data=json!({"private":"private-provider-marker"});failure.retry=15.0;
-        for result in [Err(failure),Ok(json!({"requestReviews":{"pullRequest":null}}))]{
-            let error=github_mutation_result(result,"requestReviews").unwrap_err();
-            assert_eq!(error.data,json!({"githubActionStage":"dispatched"}));assert!(error.message.contains("Refresh"));assert!(!error.data.to_string().contains("private-provider"));
+    fn github_post_dispatch_failures_mark_unknown_confirmation_without_private_error_data() {
+        let mut failure = Error::new("fixture transport failed");
+        failure.data = json!({"private":"private-provider-marker"});
+        failure.retry = 15.0;
+        for result in [
+            Err(failure),
+            Ok(json!({"requestReviews":{"pullRequest":null}})),
+        ] {
+            let error = github_mutation_result(result, "requestReviews").unwrap_err();
+            assert_eq!(error.data, json!({"githubActionStage":"dispatched"}));
+            assert!(error.message.contains("Refresh"));
+            assert!(!error.data.to_string().contains("private-provider"));
         }
-        let node=json!({"id":"PR_test","isDraft":false});assert_eq!(github_mutation_result(Ok(json!({"requestReviews":{"pullRequest":node}})),"requestReviews").unwrap(),node);
+        let node = json!({"id":"PR_test","isDraft":false});
+        assert_eq!(
+            github_mutation_result(
+                Ok(json!({"requestReviews":{"pullRequest":node}})),
+                "requestReviews"
+            )
+            .unwrap(),
+            node
+        );
     }
     #[test]
     fn github_action_queries_encode_inputs_and_keep_other_review_requests() {
-        let fields:Value=serde_json::from_str(include_str!("../../resources/provider-fields.json")).unwrap();
-        for (name,input) in [("markPullRequestReadyForReview",json!({"pullRequestId":"PR_test"})),("requestReviews",json!({"pullRequestId":"PR_test","userIds":["user\"escaped"],"union":true}))] {
-            let query=github_mutation(name,&input,text(&fields,"pr"));
+        let fields: Value =
+            serde_json::from_str(include_str!("../../resources/provider-fields.json")).unwrap();
+        for (name, input) in [
+            (
+                "markPullRequestReadyForReview",
+                json!({"pullRequestId":"PR_test"}),
+            ),
+            (
+                "requestReviews",
+                json!({"pullRequestId":"PR_test","userIds":["user\"escaped"],"union":true}),
+            ),
+        ] {
+            let query = github_mutation(name, &input, text(&fields, "pr"));
             graphql_parser::parse_query::<String>(&query).unwrap();
-            if name=="requestReviews" {assert!(query.contains("union:true"));}
+            if name == "requestReviews" {
+                assert!(query.contains("union:true"));
+            }
         }
     }
     #[test]
     fn pr_branch_metadata_survives_normalization() {
         let item=github_item(&json!({"id":"PR_stack","number":2,"title":"Dependent PR","url":"https://github.com/org/repo/pull/2","state":"OPEN","repository":{"nameWithOwner":"org/repo"},"baseRefName":"parent","headRefName":"child","headRefOid":"fixture-head","headRepository":{"nameWithOwner":"org/repo"}})).unwrap();
-        assert_eq!(item["baseRefName"],"parent");
-        assert_eq!(item["headRefName"],"child");assert_eq!(item["headRefOid"],"fixture-head");
-        assert_eq!(item["headRepository"],"org/repo");
+        assert_eq!(item["baseRefName"], "parent");
+        assert_eq!(item["headRefName"], "child");
+        assert_eq!(item["headRefOid"], "fixture-head");
+        assert_eq!(item["headRepository"], "org/repo");
     }
     #[test]
     fn provider_dates_survive_normalization_and_are_requested() {
-        let fields:Value=serde_json::from_str(include_str!("../../resources/provider-fields.json")).unwrap();
-        for name in ["github", "pr", "linear"] {assert!(text(&fields,name).contains("createdAt updatedAt"));}
-        let node=json!({"id":"dates","url":"https://github.com/example/project/issues/1","createdAt":"2026-10-01T12:00:00Z","updatedAt":"2026-10-27T12:00:00Z"});
-        for item in [github_item(&node).unwrap(),linear_item(&node).unwrap()] {
-            assert_eq!(item["createdAt"],node["createdAt"]);assert_eq!(item["updatedAt"],node["updatedAt"]);
+        let fields: Value =
+            serde_json::from_str(include_str!("../../resources/provider-fields.json")).unwrap();
+        for name in ["github", "pr", "linear"] {
+            assert!(text(&fields, name).contains("createdAt updatedAt"));
+        }
+        let node = json!({"id":"dates","url":"https://github.com/example/project/issues/1","createdAt":"2026-10-01T12:00:00Z","updatedAt":"2026-10-27T12:00:00Z"});
+        for item in [github_item(&node).unwrap(), linear_item(&node).unwrap()] {
+            assert_eq!(item["createdAt"], node["createdAt"]);
+            assert_eq!(item["updatedAt"], node["updatedAt"]);
         }
     }
     #[test]

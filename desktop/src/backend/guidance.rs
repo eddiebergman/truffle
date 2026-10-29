@@ -20,16 +20,29 @@ fn progress(value: &Value) -> Value {
 }
 
 fn public_progress(value: &Value) -> Result<Value> {
-    if value["version"]!=1 || value["revision"].as_u64().is_none_or(|revision|revision>9_007_199_254_740_991)
-        || !value["enabled"].is_boolean() || !value["tips"].is_object() {
+    if value["version"] != 1
+        || value["revision"]
+            .as_u64()
+            .is_none_or(|revision| revision > 9_007_199_254_740_991)
+        || !value["enabled"].is_boolean()
+        || !value["tips"].is_object()
+    {
         return Err(Error::new("Invalid guidance progress."));
     }
-    let mut tips=json!({});
+    let mut tips = json!({});
     for id in IDS {
-        if value["tips"][*id].as_str().is_some_and(|status|["completed","dismissed"].contains(&status)) {tips[*id]=value["tips"][*id].clone();}
+        if value["tips"][*id]
+            .as_str()
+            .is_some_and(|status| ["completed", "dismissed"].contains(&status))
+        {
+            tips[*id] = value["tips"][*id].clone();
+        }
     }
-    let mut result=json!({"version":1,"revision":value["revision"],"enabled":value["enabled"],"tips":tips});
-    if let Some(replayed)=value["replayed"].as_bool(){result["replayed"]=json!(replayed);}
+    let mut result =
+        json!({"version":1,"revision":value["revision"],"enabled":value["enabled"],"tips":tips});
+    if let Some(replayed) = value["replayed"].as_bool() {
+        result["replayed"] = json!(replayed);
+    }
     Ok(result)
 }
 
@@ -71,7 +84,7 @@ pub fn view(repo: &Repository) -> Result<Value> {
             }
         }
     }
-    let definitions=json!({"version":1,"tips":arr(&definitions["tips"]).iter().map(|tip|json!({"id":tip["id"],"title":tip["title"],"text":tip["text"]})).collect::<Vec<_>>()});
+    let definitions = json!({"version":1,"tips":arr(&definitions["tips"]).iter().map(|tip|json!({"id":tip["id"],"title":tip["title"],"text":tip["text"]})).collect::<Vec<_>>()});
     Ok(
         json!({"progress":current,"definitions":definitions,"setupComplete":state["onboarding"]["completed"]==true,"assistantUsed":!arr(&state["appChat"]["messages"]).is_empty()||!arr(&state["appChat"]["history"]).is_empty(),"demo":repo.demo}),
     )
@@ -84,16 +97,22 @@ fn advance(previous: &Value, payload: &Value) -> Result<Value> {
     let mut next = progress(previous);
     public_progress(&next)?;
     if payload["revision"].as_u64().is_none() || payload["revision"] != next["revision"] {
-        let mut error=Error::new("Guidance changed in another window. Try again.");error.status=409;return Err(error);
+        let mut error = Error::new("Guidance changed in another window. Try again.");
+        error.status = 409;
+        return Err(error);
     }
-    let fields: &[&str]=match text(payload,"action") {
-        "dismiss"|"complete"=>&["revision","action","id"],
-        "enabled"=>&["revision","action","enabled"],
-        "replay"=>&["revision","action"],
-        _=>return Err(Error::new("Unknown guidance action.")),
+    let fields: &[&str] = match text(payload, "action") {
+        "dismiss" | "complete" => &["revision", "action", "id"],
+        "enabled" => &["revision", "action", "enabled"],
+        "replay" => &["revision", "action"],
+        _ => return Err(Error::new("Unknown guidance action.")),
     };
-    if payload.as_object().is_none_or(|object|object.len()!=fields.len() || object.keys().any(|key|!fields.contains(&key.as_str()))) {
-        return Err(Error::new("Supply only the fields required by this guidance action."));
+    if payload.as_object().is_none_or(|object| {
+        object.len() != fields.len() || object.keys().any(|key| !fields.contains(&key.as_str()))
+    }) {
+        return Err(Error::new(
+            "Supply only the fields required by this guidance action.",
+        ));
     }
     match text(payload, "action") {
         "dismiss" | "complete" => {
@@ -115,13 +134,20 @@ fn advance(previous: &Value, payload: &Value) -> Result<Value> {
                 .ok_or(Error::new("Choose whether guidance is enabled."))?);
         }
         "replay" => {
-            for id in IDS { next["tips"].as_object_mut().unwrap().remove(*id); }
+            for id in IDS {
+                next["tips"].as_object_mut().unwrap().remove(*id);
+            }
             next["replayed"] = json!(true);
             next["enabled"] = json!(true);
         }
         _ => return Err(Error::new("Unknown guidance action.")),
     }
-    next["revision"] = json!(next["revision"].as_u64().unwrap().checked_add(1).filter(|revision|*revision<=9_007_199_254_740_991).ok_or(Error::new("Guidance revision is exhausted."))?);
+    next["revision"] = json!(next["revision"]
+        .as_u64()
+        .unwrap()
+        .checked_add(1)
+        .filter(|revision| *revision <= 9_007_199_254_740_991)
+        .ok_or(Error::new("Guidance revision is exhausted."))?);
     Ok(next)
 }
 
@@ -150,24 +176,88 @@ mod tests {
     use super::*;
     #[test]
     fn public_guidance_is_bounded_and_extensions_survive_reads_and_preference_changes() {
-        let temp=tempfile::tempdir().unwrap();let repo=Repository::open(temp.path().into(),None,true).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::open(temp.path().into(), None, true).unwrap();
         repo.transaction(|state| {state["guidance"]=json!({"version":1,"revision":7,"enabled":true,"tips":{"chat.shell":"dismissed","future-tip":"benign-private-tip-extension"},"extension":"benign-private-progress-extension"});Ok(())}).unwrap();
-        let path=repo.settings.config_directory().join("guidance.json");let mut definitions=super::super::config::read(&path).unwrap();definitions["extension"]=json!("benign-private-definition-extension");definitions["tips"][0]["extension"]=json!("benign-private-definition-field");std::fs::write(&path,serde_json::to_vec(&definitions).unwrap()).unwrap();
-        let before=repo.state.lock().unwrap().clone();let bytes=std::fs::read(&repo.data).unwrap();let configuration=std::fs::read(&path).unwrap();
-        let public=view(&repo).unwrap();assert!(!public.to_string().contains("benign-private"));assert_eq!(public["definitions"]["tips"].as_array().unwrap().len(),IDS.len());assert!(arr(&public["definitions"]["tips"]).iter().all(|tip|tip.as_object().unwrap().len()==3));
-        assert_eq!(*repo.state.lock().unwrap(),before);assert_eq!(std::fs::read(&repo.data).unwrap(),bytes);
-        let disabled=update(&repo,&json!({"revision":7,"action":"enabled","enabled":false})).unwrap();assert_eq!(disabled["enabled"],false);assert!(!disabled.to_string().contains("benign-private"));
-        let after=repo.state.lock().unwrap().clone();assert_eq!(after["guidance"]["extension"],before["guidance"]["extension"]);assert_eq!(after["guidance"]["tips"]["future-tip"],before["guidance"]["tips"]["future-tip"]);
-        let saved=std::fs::read(&repo.data).unwrap();assert_eq!(update(&repo,&json!({"revision":7,"action":"replay"})).unwrap_err().status,409);assert_eq!(std::fs::read(&repo.data).unwrap(),saved);
-        let replay=update(&repo,&json!({"revision":8,"action":"replay"})).unwrap();assert_eq!(replay["enabled"],true);assert_eq!(replay["tips"],json!({}));assert_eq!(repo.state.lock().unwrap()["guidance"]["tips"]["future-tip"],"benign-private-tip-extension");
-        assert_eq!(std::fs::read(path).unwrap(),configuration);
+        let path = repo.settings.config_directory().join("guidance.json");
+        let mut definitions = super::super::config::read(&path).unwrap();
+        definitions["extension"] = json!("benign-private-definition-extension");
+        definitions["tips"][0]["extension"] = json!("benign-private-definition-field");
+        std::fs::write(&path, serde_json::to_vec(&definitions).unwrap()).unwrap();
+        let before = repo.state.lock().unwrap().clone();
+        let bytes = std::fs::read(&repo.data).unwrap();
+        let configuration = std::fs::read(&path).unwrap();
+        let public = view(&repo).unwrap();
+        assert!(!public.to_string().contains("benign-private"));
+        assert_eq!(
+            public["definitions"]["tips"].as_array().unwrap().len(),
+            IDS.len()
+        );
+        assert!(arr(&public["definitions"]["tips"]).iter().all(|tip| tip
+            .as_object()
+            .unwrap()
+            .len()
+            == 3));
+        assert_eq!(*repo.state.lock().unwrap(), before);
+        assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
+        let disabled = update(
+            &repo,
+            &json!({"revision":7,"action":"enabled","enabled":false}),
+        )
+        .unwrap();
+        assert_eq!(disabled["enabled"], false);
+        assert!(!disabled.to_string().contains("benign-private"));
+        let after = repo.state.lock().unwrap().clone();
+        assert_eq!(
+            after["guidance"]["extension"],
+            before["guidance"]["extension"]
+        );
+        assert_eq!(
+            after["guidance"]["tips"]["future-tip"],
+            before["guidance"]["tips"]["future-tip"]
+        );
+        let saved = std::fs::read(&repo.data).unwrap();
+        assert_eq!(
+            update(&repo, &json!({"revision":7,"action":"replay"}))
+                .unwrap_err()
+                .status,
+            409
+        );
+        assert_eq!(std::fs::read(&repo.data).unwrap(), saved);
+        let replay = update(&repo, &json!({"revision":8,"action":"replay"})).unwrap();
+        assert_eq!(replay["enabled"], true);
+        assert_eq!(replay["tips"], json!({}));
+        assert_eq!(
+            repo.state.lock().unwrap()["guidance"]["tips"]["future-tip"],
+            "benign-private-tip-extension"
+        );
+        assert_eq!(std::fs::read(path).unwrap(), configuration);
     }
     #[test]
     fn guidance_action_fields_are_exact_and_conflicts_do_not_mutate_state() {
-        let previous=json!({"version":1,"revision":0,"enabled":true,"tips":{}});
-        for payload in [json!({"revision":0,"action":"enabled"}),json!({"revision":0,"action":"enabled","enabled":true,"id":"chat.shell"}),json!({"revision":0,"action":"replay","enabled":true}),json!({"revision":0,"action":"dismiss"}),json!({"revision":0,"action":"dismiss","id":"unknown"}),json!({"revision":0,"action":"dismiss","id":"chat.shell","extra":true})] {assert!(advance(&previous,&payload).is_err());}
-        assert_eq!(advance(&previous,&json!({"action":"replay"})).unwrap_err().status,409);
-        assert_eq!(advance(&previous,&json!({"revision":1,"action":"replay"})).unwrap_err().status,409);
+        let previous = json!({"version":1,"revision":0,"enabled":true,"tips":{}});
+        for payload in [
+            json!({"revision":0,"action":"enabled"}),
+            json!({"revision":0,"action":"enabled","enabled":true,"id":"chat.shell"}),
+            json!({"revision":0,"action":"replay","enabled":true}),
+            json!({"revision":0,"action":"dismiss"}),
+            json!({"revision":0,"action":"dismiss","id":"unknown"}),
+            json!({"revision":0,"action":"dismiss","id":"chat.shell","extra":true}),
+        ] {
+            assert!(advance(&previous, &payload).is_err());
+        }
+        assert_eq!(
+            advance(&previous, &json!({"action":"replay"}))
+                .unwrap_err()
+                .status,
+            409
+        );
+        assert_eq!(
+            advance(&previous, &json!({"revision":1,"action":"replay"}))
+                .unwrap_err()
+                .status,
+            409
+        );
     }
 
     #[test]

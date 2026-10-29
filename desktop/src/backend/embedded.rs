@@ -1,6 +1,6 @@
 //! Backend-owned PTYs. Bounded output, exact record identity, no shell-command API.
 use super::*;
-use portable_pty::{native_pty_system, CommandBuilder, ChildKiller, MasterPty, PtySize};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::{
     collections::{BTreeMap, VecDeque},
     io::{Read, Write},
@@ -85,10 +85,14 @@ pub struct EmbeddedHost {
     sessions: Mutex<BTreeMap<String, Arc<Session>>>,
 }
 impl EmbeddedHost {
-    pub fn open_shell(&self,record:&Value)->Result<Value>{
-        let cwd=directory(text(record,"cwd"))?;
-        let mut command=CommandBuilder::new("/bin/zsh");command.arg("-l");command.cwd(cwd);terminal_environment(&mut command);
-        self.spawn(record,command)?;Ok(json!({"id":record["id"]}))
+    pub fn open_shell(&self, record: &Value) -> Result<Value> {
+        let cwd = directory(text(record, "cwd"))?;
+        let mut command = CommandBuilder::new("/bin/zsh");
+        command.arg("-l");
+        command.cwd(cwd);
+        terminal_environment(&mut command);
+        self.spawn(record, command)?;
+        Ok(json!({"id":record["id"]}))
     }
     pub fn open_demo(&self, record: &Value) -> Result<()> {
         let mut command = CommandBuilder::new("/bin/sh");
@@ -154,7 +158,12 @@ impl EmbeddedHost {
             "SubagentStart",
             "SubagentStop",
         ] {
-            let callback=format!("{} hook --record {} --event {}",super::agent_cli::helper(root)?,text(record,"id"),event);
+            let callback = format!(
+                "{} hook --record {} --event {}",
+                super::agent_cli::helper(root)?,
+                text(record, "id"),
+                event
+            );
             hooks[event] = json!([{"hooks":[{"type":"command","command":callback,"timeout":3}]}]);
             if agent == "codex" {
                 command.args([
@@ -180,7 +189,10 @@ impl EmbeddedHost {
             }
         }
         terminal_environment(&mut command);
-        command.env("TRUFFLE_BIN", std::env::current_exe()?.to_string_lossy().as_ref());
+        command.env(
+            "TRUFFLE_BIN",
+            std::env::current_exe()?.to_string_lossy().as_ref(),
+        );
         command.env("TRUFFLE_RECORD_ID", text(record, "id"));
         command.env("TRUFFLE_HOME", root.to_string_lossy().as_ref());
         self.spawn(record, command)?;
@@ -272,16 +284,29 @@ impl EmbeddedHost {
     pub fn close(&self, id: &str, generation: &str) -> Result<()> {
         let session = self.get(id)?;
         if generation != session.generation {
-            return Err(Error::new("This terminal was replaced. Refresh before closing it."));
+            return Err(Error::new(
+                "This terminal was replaced. Refresh before closing it.",
+            ));
         }
         let mut killer = session.killer.lock().unwrap();
-        if session.exited.load(Ordering::Relaxed) { return Ok(()); }
+        if session.exited.load(Ordering::Relaxed) {
+            return Ok(());
+        }
         // Closing a terminal sends HUP so the CLI can save its conversation.
-        killer.kill().map_err(|_| Error::new("Could not close this agent terminal."))?;
+        killer
+            .kill()
+            .map_err(|_| Error::new("Could not close this agent terminal."))?;
         let output = session.output.lock().unwrap();
-        let _wait = session.changed.wait_timeout_while(output, Duration::from_secs(2), |_| !session.exited.load(Ordering::Relaxed)).unwrap();
+        let _wait = session
+            .changed
+            .wait_timeout_while(output, Duration::from_secs(2), |_| {
+                !session.exited.load(Ordering::Relaxed)
+            })
+            .unwrap();
         if !session.exited.load(Ordering::Relaxed) {
-            return Err(Error::new("The agent is still stopping. Try closing its tab again."));
+            return Err(Error::new(
+                "The agent is still stopping. Try closing its tab again.",
+            ));
         }
         session.alive.store(false, Ordering::Relaxed);
         session.changed.notify_all();
@@ -349,7 +374,8 @@ mod tests {
     #[test]
     fn close_stops_only_the_matching_terminal_generation_and_allows_resume() {
         let host = EmbeddedHost::default();
-        let id = uuid(); let record = json!({"id":id});
+        let id = uuid();
+        let record = json!({"id":id});
         host.open_demo(&record).unwrap();
         let first = text(&host.inventory()[0], "generation").to_owned();
         assert!(host.close(&id, "wrong-generation").is_err());
@@ -372,7 +398,8 @@ mod tests {
         repo.transaction(|s| {
             s["chatTerminals"] = json!({"version":1,"byChat":{"fixture":{"id":id}}});
             Ok(())
-        }).unwrap();
+        })
+        .unwrap();
         // No interactive shell, login scripts, model, or persistent daemon.
         let mut command = CommandBuilder::new("/bin/cat");
         command.cwd(root.path());
@@ -382,31 +409,67 @@ mod tests {
         host.spawn(&json!({"id":id}), command).unwrap();
         let generation = text(&repo.shells.inventory()[0], "generation").to_owned();
         let outcome = (|| -> Result<()> {
-            let input = |data: Value| super::super::chat_terminal::action(
-                &repo, "/api/shell-terminal/input", &json!({"id":id,"data":data})
-            );
-            if super::super::chat_terminal::action(&repo, "/api/shell-terminal/input", &json!({"id":id})).is_ok()
+            let input = |data: Value| {
+                super::super::chat_terminal::action(
+                    &repo,
+                    "/api/shell-terminal/input",
+                    &json!({"id":id,"data":data}),
+                )
+            };
+            if super::super::chat_terminal::action(
+                &repo,
+                "/api/shell-terminal/input",
+                &json!({"id":id}),
+            )
+            .is_ok()
                 || input(json!(42)).is_ok()
-                || input(json!("é".repeat(32769))).is_ok() {
-                return Err(Error::new("Missing, numeric, or oversized terminal input was accepted."));
+                || input(json!("é".repeat(32769))).is_ok()
+            {
+                return Err(Error::new(
+                    "Missing, numeric, or oversized terminal input was accepted.",
+                ));
             }
-            for packet in ["BEGIN", " ", "middle", "\t", "tail", "\r", "  pasted text  ", "\r"] {
+            for packet in [
+                "BEGIN",
+                " ",
+                "middle",
+                "\t",
+                "tail",
+                "\r",
+                "  pasted text  ",
+                "\r",
+            ] {
                 input(json!(packet))?;
             }
             let mut bytes = vec![];
             let mut cursor = 0;
-            let expected = [b"BEGIN middle\ttail\r\n".as_slice(), b"  pasted text  \r\n".as_slice()];
+            let expected = [
+                b"BEGIN middle\ttail\r\n".as_slice(),
+                b"  pasted text  \r\n".as_slice(),
+            ];
             let deadline = std::time::Instant::now() + Duration::from_secs(3);
             while std::time::Instant::now() < deadline {
                 let packet = repo.shells.poll(&id, cursor, &generation)?;
                 cursor = packet["cursor"].as_u64().unwrap();
-                bytes.extend(arr(&packet["bytes"]).iter().map(|n| n.as_u64().unwrap() as u8));
+                bytes.extend(
+                    arr(&packet["bytes"])
+                        .iter()
+                        .map(|n| n.as_u64().unwrap() as u8),
+                );
                 // The PTY echoes input too (expanding tabs); cat's returned line
                 // retains the actual tab, distinguishing it from that echo.
-                if expected.iter().all(|line| bytes.windows(line.len()).any(|window| window == *line)) { return Ok(()); }
+                if expected
+                    .iter()
+                    .all(|line| bytes.windows(line.len()).any(|window| window == *line))
+                {
+                    return Ok(());
+                }
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            Err(Error::new(format!("Companion input lost bytes: {:?}", String::from_utf8_lossy(&bytes))))
+            Err(Error::new(format!(
+                "Companion input lost bytes: {:?}",
+                String::from_utf8_lossy(&bytes)
+            )))
         })();
         // Close only this in-memory fixture's exact terminal generation even
         // if a validation or polling assertion below fails.

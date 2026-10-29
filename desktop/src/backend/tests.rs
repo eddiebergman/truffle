@@ -78,7 +78,7 @@ fn concurrent_open_is_rejected_and_failed_open_releases_guard() {
     let (_temp, repo) = fixture();
     let id = uuid();
     repo.opening.lock().unwrap().insert(id.clone());
-    assert_eq!(workflows::open(&repo, &id).unwrap()["status"],"unknown");
+    assert_eq!(workflows::open(&repo, &id).unwrap()["status"], "unknown");
     repo.opening.lock().unwrap().remove(&id);
     assert!(workflows::open(&repo, &id).is_err());
     assert!(!repo.opening.lock().unwrap().contains(&id));
@@ -118,8 +118,14 @@ fn schedule_catches_up_once_or_skips_and_never_replays_backlog() {
 }
 #[test]
 fn tables_written_before_the_rename_remain_valid() {
-    artifacts::validate_table(&json!({"schema":"mydash.table/v1","columns":["metric"],"rows":[[1]]})).unwrap();
-    assert!(artifacts::validate_table(&json!({"schema":"other.table/v1","columns":["metric"],"rows":[[1]]})).is_err());
+    artifacts::validate_table(
+        &json!({"schema":"mydash.table/v1","columns":["metric"],"rows":[[1]]}),
+    )
+    .unwrap();
+    assert!(artifacts::validate_table(
+        &json!({"schema":"other.table/v1","columns":["metric"],"rows":[[1]]})
+    )
+    .is_err());
 }
 #[test]
 fn registered_tables_are_validated_and_snapshotted() {
@@ -188,40 +194,76 @@ fn hook_events_deduplicate_subagents_and_register_real_conversation() {
 }
 #[test]
 fn rename_session_changes_only_its_display_title_and_timestamp() {
-    let mut state=json!({"version":1});domain::initialize(&mut state).unwrap();
-    let record=workflows::save_session(&mut state,&json!({"agent":"claude","title":"Before","cwd":"/tmp","itemIds":[]})).unwrap();
-    domain::edit(&mut state,&json!({"action":"rename-session","id":record["id"],"title":"After"})).unwrap();
-    let mut updated=state["sessions"][0].clone();assert_eq!(updated["title"],"After");
-    updated["title"]=record["title"].clone();updated["updatedAt"]=record["updatedAt"].clone();assert_eq!(updated,record);
-    let before=state.clone();assert!(domain::edit(&mut state,&json!({"action":"rename-session","id":record["id"],"title":""})).is_err());assert_eq!(state,before);
+    let mut state = json!({"version":1});
+    domain::initialize(&mut state).unwrap();
+    let record = workflows::save_session(
+        &mut state,
+        &json!({"agent":"claude","title":"Before","cwd":"/tmp","itemIds":[]}),
+    )
+    .unwrap();
+    domain::edit(
+        &mut state,
+        &json!({"action":"rename-session","id":record["id"],"title":"After"}),
+    )
+    .unwrap();
+    let mut updated = state["sessions"][0].clone();
+    assert_eq!(updated["title"], "After");
+    updated["title"] = record["title"].clone();
+    updated["updatedAt"] = record["updatedAt"].clone();
+    assert_eq!(updated, record);
+    let before = state.clone();
+    assert!(domain::edit(
+        &mut state,
+        &json!({"action":"rename-session","id":record["id"],"title":""})
+    )
+    .is_err());
+    assert_eq!(state, before);
 }
 #[test]
 fn background_snapshots_keep_shells_monitors_and_timers_out_of_attention_state() {
     let (_temp, repo) = fixture();
-    let record = repo.transaction(|s| workflows::save_session(s,&json!({"agent":"claude","title":"Background work","cwd":"/tmp","itemIds":[]}))).unwrap();
-    let event=|name:&str,extra:Value| {
-        let mut p=json!({"id":record["id"],"operation":"runtime-event","event":name});
-        for (k,v) in extra.as_object().unwrap(){p[k]=v.clone();}
-        workflows::register(&repo,&p)
+    let record = repo
+        .transaction(|s| {
+            workflows::save_session(
+                s,
+                &json!({"agent":"claude","title":"Background work","cwd":"/tmp","itemIds":[]}),
+            )
+        })
+        .unwrap();
+    let event = |name: &str, extra: Value| {
+        let mut p = json!({"id":record["id"],"operation":"runtime-event","event":name});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        workflows::register(&repo, &p)
     };
-    repo.transaction(|s|{s["skillRuns"]=json!([{"id":"background-run","sessionId":record["id"],"outcome":"launched"}]);Ok(())}).unwrap();
-    let row=event("Stop",json!({"backgroundCounts":{"shell":2,"monitor":1,"custom task":1},"scheduledWakeups":1})).unwrap();
-    assert_eq!(row["runtime"]["state"],"background");
-    assert_eq!(row["runtime"]["backgroundCounts"]["shell"],2);
-    assert_eq!(repo.snapshot(false)["skillRuns"][0]["outcome"],"launched");
-    let row=event("PermissionRequest",json!({})).unwrap();
-    assert_eq!(row["runtime"]["state"],"needs-input");
-    assert_eq!(row["runtime"]["backgroundCounts"]["monitor"],1);
-    let row=event("UserPromptSubmit",json!({})).unwrap();
-    assert_eq!(row["runtime"]["state"],"working");
-    assert_eq!(row["runtime"]["scheduledWakeups"],1);
-    let before=repo.snapshot(false);
-    assert!(event("Stop",json!({"backgroundCounts":{"shell":-1}})).is_err());
-    assert_eq!(repo.snapshot(false),before);
-    let row=event("Stop",json!({"backgroundCounts":{},"scheduledWakeups":0})).unwrap();
-    assert_eq!(row["runtime"]["state"],"waiting");
-    assert_eq!(repo.snapshot(false)["skillRuns"][0]["outcome"],"completed");
-    let row=event("SessionStart",json!({})).unwrap();
+    repo.transaction(|s| {
+        s["skillRuns"] =
+            json!([{"id":"background-run","sessionId":record["id"],"outcome":"launched"}]);
+        Ok(())
+    })
+    .unwrap();
+    let row = event(
+        "Stop",
+        json!({"backgroundCounts":{"shell":2,"monitor":1,"custom task":1},"scheduledWakeups":1}),
+    )
+    .unwrap();
+    assert_eq!(row["runtime"]["state"], "background");
+    assert_eq!(row["runtime"]["backgroundCounts"]["shell"], 2);
+    assert_eq!(repo.snapshot(false)["skillRuns"][0]["outcome"], "launched");
+    let row = event("PermissionRequest", json!({})).unwrap();
+    assert_eq!(row["runtime"]["state"], "needs-input");
+    assert_eq!(row["runtime"]["backgroundCounts"]["monitor"], 1);
+    let row = event("UserPromptSubmit", json!({})).unwrap();
+    assert_eq!(row["runtime"]["state"], "working");
+    assert_eq!(row["runtime"]["scheduledWakeups"], 1);
+    let before = repo.snapshot(false);
+    assert!(event("Stop", json!({"backgroundCounts":{"shell":-1}})).is_err());
+    assert_eq!(repo.snapshot(false), before);
+    let row = event("Stop", json!({"backgroundCounts":{},"scheduledWakeups":0})).unwrap();
+    assert_eq!(row["runtime"]["state"], "waiting");
+    assert_eq!(repo.snapshot(false)["skillRuns"][0]["outcome"], "completed");
+    let row = event("SessionStart", json!({})).unwrap();
     assert!(row["runtime"]["backgroundCounts"].is_null());
 }
 #[test]
@@ -273,17 +315,37 @@ fn linear_without_project_keeps_hierarchy_and_sentry_link() {
 #[test]
 fn quick_launch_attaches_only_clicked_work_and_newsletters_do_not_merge_work_groups() {
     let _env = ENV.lock().unwrap();
-    let (temp,repo)=fixture();
-    let previous=std::env::var_os("TRUFFLE_WORKDIR");
-    std::env::set_var("TRUFFLE_WORKDIR",temp.path());
-    let folder=temp.path().join("api");std::fs::create_dir(&folder).unwrap();
-    let folder=folder.canonicalize().unwrap();
-    let a=json!({"id":"github:a","source":"github","kind":"Pull request","title":"Database tests","url":"https://github.com/acme/api/pull/1","reference":"#1","project":"acme/api","status":"draft"});
-    let b=json!({"id":"github:b","source":"github","kind":"Pull request","title":"Unrelated GPU change","url":"https://github.com/acme/api/pull/2","reference":"#2","project":"acme/api","status":"draft"});
-    repo.transaction(|s|{s["items"]=json!([a,b]);s["sessions"]=json!([{"id":uuid(),"workflow":"newsletter","items":[a,b]}]);assert!(arr(&domain::bundles(s)).is_empty());s["workLinks"]=json!([[a["id"],b["id"]]]);assert_eq!(arr(&domain::bundles(s)).len(),1);Ok(())}).unwrap();
-    let record=workflows::quick(&repo,&json!({"agent":"claude","itemId":"github:a","folderPath":folder}),false).unwrap();
-    assert_eq!(arr(&record["items"]).len(),1);assert_eq!(record["items"][0]["id"],"github:a");assert_eq!(record["originItemId"],"github:a");
-    if let Some(value)=previous { std::env::set_var("TRUFFLE_WORKDIR",value); } else { std::env::remove_var("TRUFFLE_WORKDIR"); }
+    let (temp, repo) = fixture();
+    let previous = std::env::var_os("TRUFFLE_WORKDIR");
+    std::env::set_var("TRUFFLE_WORKDIR", temp.path());
+    let folder = temp.path().join("api");
+    std::fs::create_dir(&folder).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let a = json!({"id":"github:a","source":"github","kind":"Pull request","title":"Database tests","url":"https://github.com/acme/api/pull/1","reference":"#1","project":"acme/api","status":"draft"});
+    let b = json!({"id":"github:b","source":"github","kind":"Pull request","title":"Unrelated GPU change","url":"https://github.com/acme/api/pull/2","reference":"#2","project":"acme/api","status":"draft"});
+    repo.transaction(|s| {
+        s["items"] = json!([a, b]);
+        s["sessions"] = json!([{"id":uuid(),"workflow":"newsletter","items":[a,b]}]);
+        assert!(arr(&domain::bundles(s)).is_empty());
+        s["workLinks"] = json!([[a["id"], b["id"]]]);
+        assert_eq!(arr(&domain::bundles(s)).len(), 1);
+        Ok(())
+    })
+    .unwrap();
+    let record = workflows::quick(
+        &repo,
+        &json!({"agent":"claude","itemId":"github:a","folderPath":folder}),
+        false,
+    )
+    .unwrap();
+    assert_eq!(arr(&record["items"]).len(), 1);
+    assert_eq!(record["items"][0]["id"], "github:a");
+    assert_eq!(record["originItemId"], "github:a");
+    if let Some(value) = previous {
+        std::env::set_var("TRUFFLE_WORKDIR", value);
+    } else {
+        std::env::remove_var("TRUFFLE_WORKDIR");
+    }
 }
 #[test]
 fn review_launch_reuses_identity_and_actual_worktree() {
@@ -361,7 +423,7 @@ fn artifact_paths_cannot_escape_and_links_are_reversible() {
     assert!(repo
         .transaction(|s| artifacts::save(&repo, s, &json!({"path":symlink})))
         .is_err());
-    let metadata=artifacts::metadata_read(&repo,&json!({"id":entry["id"]})).unwrap();
+    let metadata = artifacts::metadata_read(&repo, &json!({"id":entry["id"]})).unwrap();
     artifacts::metadata_update(&repo,&json!({"id":entry["id"],"patch":{"sessionIds":[]},"expected":{"sessionIds":metadata["expected"]["sessionIds"]}})).unwrap();
     assert!(report.exists());
     assert!(arr(&repo.snapshot(false)["artifacts"][0]["sessionIds"]).is_empty());
@@ -486,36 +548,72 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
     assert!(packet.contains("runtime-docs/truffle.md"));
     assert!(!packet.contains("register.py"));
     assert!(!packet.contains("uv run"));
-    assert!(std::fs::read_to_string(repo.data.parent().unwrap().join("runtime-docs/truffle.md")).unwrap().contains("TRUFFLE_BIN"));
+    assert!(
+        std::fs::read_to_string(repo.data.parent().unwrap().join("runtime-docs/truffle.md"))
+            .unwrap()
+            .contains("TRUFFLE_BIN")
+    );
 }
 
 #[test]
-fn python_artifacts_are_immutable_plain_text_without_running_the_script(){
-    let(temp,repo)=fixture();let folder=temp.path().join("scripts");std::fs::create_dir(&folder).unwrap();
-    let record=repo.transaction(|s|workflows::save_session(s,&json!({"title":"Python artifact","agent":"claude","cwd":folder,"itemIds":[]}))).unwrap();
-    let path=folder.join("experiment.py");let bytes=b"from pathlib import Path\n\ndef main():\n    print('<script>alert(1)</script>')\n    Path('MUST_NOT_RUN').write_text('executed')\n\nmain()\n";
-    std::fs::write(&path,bytes).unwrap();
-    let artifact=repo.transaction(|s|artifacts::save(&repo,s,&json!({"path":path,"sessionIds":[record["id"]]}))).unwrap();
-    assert_eq!(artifact["format"],"py");assert_eq!(artifact["sourcePath"],json!(path.canonicalize().unwrap()));assert_eq!(artifact["snapshot"],true);
-    std::fs::write(&path,b"changed after attachment").unwrap();let read=artifacts::read(&repo,text(&artifact,"id")).unwrap();assert_eq!(read.0,bytes);assert_eq!(read.1,"text/plain; charset=utf-8");assert!(!folder.join("MUST_NOT_RUN").exists());
+fn python_artifacts_are_immutable_plain_text_without_running_the_script() {
+    let (temp, repo) = fixture();
+    let folder = temp.path().join("scripts");
+    std::fs::create_dir(&folder).unwrap();
+    let record = repo
+        .transaction(|s| {
+            workflows::save_session(
+                s,
+                &json!({"title":"Python artifact","agent":"claude","cwd":folder,"itemIds":[]}),
+            )
+        })
+        .unwrap();
+    let path = folder.join("experiment.py");
+    let bytes=b"from pathlib import Path\n\ndef main():\n    print('<script>alert(1)</script>')\n    Path('MUST_NOT_RUN').write_text('executed')\n\nmain()\n";
+    std::fs::write(&path, bytes).unwrap();
+    let artifact = repo
+        .transaction(|s| {
+            artifacts::save(&repo, s, &json!({"path":path,"sessionIds":[record["id"]]}))
+        })
+        .unwrap();
+    assert_eq!(artifact["format"], "py");
+    assert_eq!(artifact["sourcePath"], json!(path.canonicalize().unwrap()));
+    assert_eq!(artifact["snapshot"], true);
+    std::fs::write(&path, b"changed after attachment").unwrap();
+    let read = artifacts::read(&repo, text(&artifact, "id")).unwrap();
+    assert_eq!(read.0, bytes);
+    assert_eq!(read.1, "text/plain; charset=utf-8");
+    assert!(!folder.join("MUST_NOT_RUN").exists());
 }
-
 
 #[test]
 fn skill_reports_do_not_promote_supporting_attachments() {
-    let (temp,repo)=fixture();let folder=temp.path().join("skill");
+    let (temp, repo) = fixture();
+    let folder = temp.path().join("skill");
     std::fs::create_dir_all(folder.join("reports/2026-10-26")).unwrap();
-    std::fs::write(folder.join("SKILL.md"),"Example skill").unwrap();
-    let report=folder.join("reports/2026-10-26/report.html");let ledger=folder.join("reports/ledger.md");
-    std::fs::write(&report,"<h1>Result</h1>").unwrap();std::fs::write(&ledger,"Supporting notes").unwrap();
+    std::fs::write(folder.join("SKILL.md"), "Example skill").unwrap();
+    let report = folder.join("reports/2026-10-26/report.html");
+    let ledger = folder.join("reports/ledger.md");
+    std::fs::write(&report, "<h1>Result</h1>").unwrap();
+    std::fs::write(&ledger, "Supporting notes").unwrap();
     repo.transaction(|s|{s["skillPresets"]=json!([{"id":"example","title":"Example","cwd":folder,"skill":"SKILL.md","reports":"reports","command":"/example","agent":"claude"}]);Ok(())}).unwrap();
-    let report_id=repo.transaction(|s|artifacts::save(&repo,s,&json!({"path":report,"presetId":"example"}))).unwrap()["id"].clone();
-    let ledger_id=repo.transaction(|s|artifacts::save(&repo,s,&json!({"path":ledger}))).unwrap()["id"].clone();
-    let state=repo.state.lock().unwrap();let catalog=artifacts::catalog(&repo,&state).unwrap();let entries=arr(&catalog["artifacts"]);
-    let output=entries.iter().find(|e|e["id"]==report_id).unwrap();let supporting=entries.iter().find(|e|e["id"]==ledger_id).unwrap();
-    assert_eq!(output["presetId"],"example");assert_eq!(output["role"],"skill-output");assert!(supporting["presetId"].is_null());
+    let report_id = repo
+        .transaction(|s| artifacts::save(&repo, s, &json!({"path":report,"presetId":"example"})))
+        .unwrap()["id"]
+        .clone();
+    let ledger_id = repo
+        .transaction(|s| artifacts::save(&repo, s, &json!({"path":ledger})))
+        .unwrap()["id"]
+        .clone();
+    let state = repo.state.lock().unwrap();
+    let catalog = artifacts::catalog(&repo, &state).unwrap();
+    let entries = arr(&catalog["artifacts"]);
+    let output = entries.iter().find(|e| e["id"] == report_id).unwrap();
+    let supporting = entries.iter().find(|e| e["id"] == ledger_id).unwrap();
+    assert_eq!(output["presetId"], "example");
+    assert_eq!(output["role"], "skill-output");
+    assert!(supporting["presetId"].is_null());
 }
-
 
 #[test]
 fn skill_reports_shared_folders_preserve_explicit_ownership_and_attachments() {
@@ -530,30 +628,59 @@ fn skill_reports_shared_folders_preserve_explicit_ownership_and_attachments() {
         {"id":"first","title":"First","cwd":folder,"skill":"SKILL.md","reports":"reports"},
         {"id":"second","title":"Second","cwd":folder,"skill":"SKILL.md","reports":"reports"}
     ]);
-    repo.transaction(|s| { s["skillPresets"] = presets.clone(); Ok(()) }).unwrap();
+    repo.transaction(|s| {
+        s["skillPresets"] = presets.clone();
+        Ok(())
+    })
+    .unwrap();
     let output_path = folder.join("reports/2026-10-25/report.html");
-    let output = repo.transaction(|s| artifacts::save(&repo, s, &json!({"path":output_path,"presetId":"first"}))).unwrap();
-    let attachment = repo.transaction(|s| artifacts::save(&repo, s, &json!({"path":folder.join("reports/2026-10-26/report.html")}))).unwrap();
+    let output = repo
+        .transaction(|s| artifacts::save(&repo, s, &json!({"path":output_path,"presetId":"first"})))
+        .unwrap();
+    let attachment = repo
+        .transaction(|s| {
+            artifacts::save(
+                &repo,
+                s,
+                &json!({"path":folder.join("reports/2026-10-26/report.html")}),
+            )
+        })
+        .unwrap();
     // Linking the exact same snapshot again must not erase its explicit owner.
-    let reattached = repo.transaction(|s| artifacts::save(&repo, s, &json!({"path":output_path}))).unwrap();
+    let reattached = repo
+        .transaction(|s| artifacts::save(&repo, s, &json!({"path":output_path})))
+        .unwrap();
     assert_eq!(reattached["id"], output["id"]);
     assert_eq!(reattached["presetId"], "first");
     assert_eq!(reattached["role"], "skill-output");
     let original = repo.state.lock().unwrap().clone();
     for reversed in [false, true] {
         let mut state = original.clone();
-        if reversed { state["skillPresets"].as_array_mut().unwrap().reverse(); }
+        if reversed {
+            state["skillPresets"].as_array_mut().unwrap().reverse();
+        }
         let catalog = artifacts::catalog(&repo, &state).unwrap();
         let entries = arr(&catalog["artifacts"]);
-        assert_eq!(entries.len(), 2, "ambiguous unregistered report must not be assigned");
+        assert_eq!(
+            entries.len(),
+            2,
+            "ambiguous unregistered report must not be assigned"
+        );
         let registered = entries.iter().find(|e| e["id"] == output["id"]).unwrap();
         assert_eq!(registered["presetId"], "first");
         assert_eq!(registered["role"], "skill-output");
-        let supporting = entries.iter().find(|e| e["id"] == attachment["id"]).unwrap();
+        let supporting = entries
+            .iter()
+            .find(|e| e["id"] == attachment["id"])
+            .unwrap();
         assert!(supporting["presetId"].is_null());
         assert!(supporting["role"].is_null());
     }
-    assert_eq!(*repo.state.lock().unwrap(), original, "catalog must remain read-only");
+    assert_eq!(
+        *repo.state.lock().unwrap(),
+        original,
+        "catalog must remain read-only"
+    );
 }
 
 #[test]
@@ -563,14 +690,29 @@ fn skill_reports_unique_folder_discovers_only_unregistered_outputs() {
     std::fs::create_dir_all(folder.join("reports/2026-10-26")).unwrap();
     std::fs::write(folder.join("SKILL.md"), "Example").unwrap();
     std::fs::write(folder.join("reports/2026-10-26/report.html"), "Attachment").unwrap();
-    std::fs::write(folder.join("reports/2026-10-26/report.md"), "Unregistered legacy output").unwrap();
+    std::fs::write(
+        folder.join("reports/2026-10-26/report.md"),
+        "Unregistered legacy output",
+    )
+    .unwrap();
     repo.transaction(|s| { s["skillPresets"] = json!([{"id":"unique","title":"Unique","cwd":folder,"skill":"SKILL.md","reports":"reports"}]); Ok(()) }).unwrap();
-    let attachment = repo.transaction(|s| artifacts::save(&repo, s, &json!({"path":folder.join("reports/2026-10-26/report.html")}))).unwrap();
+    let attachment = repo
+        .transaction(|s| {
+            artifacts::save(
+                &repo,
+                s,
+                &json!({"path":folder.join("reports/2026-10-26/report.html")}),
+            )
+        })
+        .unwrap();
     let state = repo.state.lock().unwrap();
     let catalog = artifacts::catalog(&repo, &state).unwrap();
     let entries = arr(&catalog["artifacts"]);
     assert_eq!(entries.len(), 2);
-    let registered = entries.iter().find(|e| e["id"] == attachment["id"]).unwrap();
+    let registered = entries
+        .iter()
+        .find(|e| e["id"] == attachment["id"])
+        .unwrap();
     assert!(registered["presetId"].is_null());
     let discovered = entries.iter().find(|e| e["discovered"] == true).unwrap();
     assert_eq!(discovered["presetId"], "unique");
@@ -583,7 +725,11 @@ fn skill_reports_symlink_alias_is_still_a_shared_folder() {
     let folder = temp.path().join("aliased-skills");
     std::fs::create_dir_all(folder.join("reports/2026-10-26")).unwrap();
     std::fs::write(folder.join("SKILL.md"), "Example").unwrap();
-    std::fs::write(folder.join("reports/2026-10-26/report.html"), "Ambiguous output").unwrap();
+    std::fs::write(
+        folder.join("reports/2026-10-26/report.html"),
+        "Ambiguous output",
+    )
+    .unwrap();
     std::os::unix::fs::symlink(folder.join("reports"), folder.join("reports-alias")).unwrap();
     repo.transaction(|s| { s["skillPresets"] = json!([
         {"id":"first","title":"First","cwd":folder,"skill":"SKILL.md","reports":"reports"},

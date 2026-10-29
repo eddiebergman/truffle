@@ -7,9 +7,14 @@ use std::{
 };
 use wait_timeout::ChildExt;
 pub fn run(program: &str, args: &[String], input: Option<&str>, seconds: u64) -> Result<String> {
-    Ok(String::from_utf8_lossy(&run_bytes(program,args,input,seconds)?).into())
+    Ok(String::from_utf8_lossy(&run_bytes(program, args, input, seconds)?).into())
 }
-pub fn run_bytes(program: &str, args: &[String], input: Option<&str>, seconds: u64) -> Result<Vec<u8>> {
+pub fn run_bytes(
+    program: &str,
+    args: &[String],
+    input: Option<&str>,
+    seconds: u64,
+) -> Result<Vec<u8>> {
     let mut child = Command::new(program)
         .args(args)
         // Callers parse stdout; gh colors JSON in a pipe when this is set.
@@ -56,10 +61,15 @@ pub fn run_bytes(program: &str, args: &[String], input: Option<&str>, seconds: u
     let stdout = output.join().unwrap_or_default();
     let stderr = errors.join().unwrap_or_default();
     if !status.unwrap().success() {
-        let mut e = Error::new(
-            "Local command failed. Check account access or the selected command.",
-        );
-        let line = String::from_utf8_lossy(&stderr).lines().next().unwrap_or("").chars().take(200).collect::<String>();
+        let mut e =
+            Error::new("Local command failed. Check account access or the selected command.");
+        let line = String::from_utf8_lossy(&stderr)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(200)
+            .collect::<String>();
         e.data = json!({"kind":"exit","transport":"local-cli","stderr":line});
         return Err(e);
     }
@@ -86,22 +96,65 @@ pub fn executable(name: &str) -> String {
     name.into()
 }
 /// Observations do not launch, focus, or write to a terminal.
-#[derive(Debug,PartialEq,Eq)]
-pub(super) enum RuntimeObservation{Observed(String),Missing,Unavailable}
-pub(super) fn existing_codex_runtime(record:&Value,inventory:&[Value],unavailable:bool)->RuntimeObservation{
-    if unavailable{return RuntimeObservation::Unavailable;}
-    if record["agent"]!="codex"||!record["sessionId"].is_null()&&record["sessionId"]!=""{return RuntimeObservation::Missing;}
-    let matching=inventory.iter().filter(|row|row["recordId"]==record["id"]&&row["live"]==true).collect::<Vec<_>>();
-    if matching.is_empty(){return RuntimeObservation::Missing;}if matching.len()!=1{return RuntimeObservation::Unavailable;}
-    let row=matching[0];let generation=text(row,"generation");
-    if row["host"]!="embedded"||row["agent"]!=record["agent"]||(!row["sessionId"].is_null()&&row["sessionId"]!="")||sid(generation).ok().as_deref()!=Some(generation){return RuntimeObservation::Unavailable;}
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RuntimeObservation {
+    Observed(String),
+    Missing,
+    Unavailable,
+}
+pub(super) fn existing_codex_runtime(
+    record: &Value,
+    inventory: &[Value],
+    unavailable: bool,
+) -> RuntimeObservation {
+    if unavailable {
+        return RuntimeObservation::Unavailable;
+    }
+    if record["agent"] != "codex" || !record["sessionId"].is_null() && record["sessionId"] != "" {
+        return RuntimeObservation::Missing;
+    }
+    let matching = inventory
+        .iter()
+        .filter(|row| row["recordId"] == record["id"] && row["live"] == true)
+        .collect::<Vec<_>>();
+    if matching.is_empty() {
+        return RuntimeObservation::Missing;
+    }
+    if matching.len() != 1 {
+        return RuntimeObservation::Unavailable;
+    }
+    let row = matching[0];
+    let generation = text(row, "generation");
+    if row["host"] != "embedded"
+        || row["agent"] != record["agent"]
+        || (!row["sessionId"].is_null() && row["sessionId"] != "")
+        || sid(generation).ok().as_deref() != Some(generation)
+    {
+        return RuntimeObservation::Unavailable;
+    }
     RuntimeObservation::Observed(generation.to_owned())
 }
-#[derive(Debug,PartialEq,Eq)]
-pub enum OpenOutcome { Accepted, Preview, Unknown }
-fn desktop_command_outcome(mut command:Command,timeout:Duration)->Result<OpenOutcome>{
-    let mut child=command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_|Error::new("The desktop opener could not start."))?;
-    match child.wait_timeout(timeout){Ok(Some(status)) if status.success()=>Ok(OpenOutcome::Accepted),_=>{let _=child.kill();let _=child.wait();Ok(OpenOutcome::Unknown)}}
+#[derive(Debug, PartialEq, Eq)]
+pub enum OpenOutcome {
+    Accepted,
+    Preview,
+    Unknown,
+}
+fn desktop_command_outcome(mut command: Command, timeout: Duration) -> Result<OpenOutcome> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| Error::new("The desktop opener could not start."))?;
+    match child.wait_timeout(timeout) {
+        Ok(Some(status)) if status.success() => Ok(OpenOutcome::Accepted),
+        _ => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Ok(OpenOutcome::Unknown)
+        }
+    }
 }
 pub fn open_desktop(s: &Value, packet: &str) -> Result<OpenOutcome> {
     let id = text(s, "sessionId");
@@ -118,35 +171,110 @@ pub fn open_desktop(s: &Value, packet: &str) -> Result<OpenOutcome> {
             );
             u.to_string()
         };
-        let mut command=Command::new("/usr/bin/open");command.arg(url);
-        return desktop_command_outcome(command,Duration::from_secs(5));
+        let mut command = Command::new("/usr/bin/open");
+        command.arg(url);
+        return desktop_command_outcome(command, Duration::from_secs(5));
     }
     Err(Error::new("Choose the embedded terminal or Codex desktop."))
 }
 
 #[cfg(test)]
-mod open_outcome_tests{
- use super::*;
- #[test]fn saved_chat_desktop_open_classifies_only_prespawn_failures_as_rejected(){assert!(desktop_command_outcome(Command::new("/nonexistent/desktop-opener"),Duration::from_millis(50)).is_err());assert_eq!(desktop_command_outcome(Command::new("/usr/bin/true"),Duration::from_secs(1)).unwrap(),OpenOutcome::Accepted);assert_eq!(desktop_command_outcome(Command::new("/usr/bin/false"),Duration::from_secs(1)).unwrap(),OpenOutcome::Unknown);let mut sleep=Command::new("/bin/sleep");sleep.arg("1");assert_eq!(desktop_command_outcome(sleep,Duration::from_millis(1)).unwrap(),OpenOutcome::Unknown);}
+mod open_outcome_tests {
+    use super::*;
+    #[test]
+    fn saved_chat_desktop_open_classifies_only_prespawn_failures_as_rejected() {
+        assert!(desktop_command_outcome(
+            Command::new("/nonexistent/desktop-opener"),
+            Duration::from_millis(50)
+        )
+        .is_err());
+        assert_eq!(
+            desktop_command_outcome(Command::new("/usr/bin/true"), Duration::from_secs(1)).unwrap(),
+            OpenOutcome::Accepted
+        );
+        assert_eq!(
+            desktop_command_outcome(Command::new("/usr/bin/false"), Duration::from_secs(1))
+                .unwrap(),
+            OpenOutcome::Unknown
+        );
+        let mut sleep = Command::new("/bin/sleep");
+        sleep.arg("1");
+        assert_eq!(
+            desktop_command_outcome(sleep, Duration::from_millis(1)).unwrap(),
+            OpenOutcome::Unknown
+        );
+    }
 }
 
 #[cfg(test)]
-mod run_tests{
- use super::*;
- #[test]
- fn parsed_commands_never_inherit_forced_color(){
-  let previous=std::env::var_os("CLICOLOR_FORCE");std::env::set_var("CLICOLOR_FORCE","1");
-  let output=run("/bin/sh",&["-c".into(),"printf %s \"${CLICOLOR_FORCE-unset}\"".into()],None,5);
-  if let Some(value)=previous{std::env::set_var("CLICOLOR_FORCE",value);}else{std::env::remove_var("CLICOLOR_FORCE");}
-  assert_eq!(output.unwrap(),"unset");
- }
+mod run_tests {
+    use super::*;
+    #[test]
+    fn parsed_commands_never_inherit_forced_color() {
+        let previous = std::env::var_os("CLICOLOR_FORCE");
+        std::env::set_var("CLICOLOR_FORCE", "1");
+        let output = run(
+            "/bin/sh",
+            &["-c".into(), "printf %s \"${CLICOLOR_FORCE-unset}\"".into()],
+            None,
+            5,
+        );
+        if let Some(value) = previous {
+            std::env::set_var("CLICOLOR_FORCE", value);
+        } else {
+            std::env::remove_var("CLICOLOR_FORCE");
+        }
+        assert_eq!(output.unwrap(), "unset");
+    }
 }
 #[cfg(test)]
-mod runtime_observation_tests{
- use super::*;
- #[test]
- fn null_id_runtime_observation_requires_exact_live_identity_and_canonical_generation(){let id=uuid();let generation=uuid();let record=json!({"id":id,"agent":"codex","sessionId":null});let live=json!({"host":"embedded","recordId":id,"agent":"codex","sessionId":null,"live":true,"generation":generation});assert_eq!(existing_codex_runtime(&record,&[live.clone()],false),RuntimeObservation::Observed(generation));assert_eq!(existing_codex_runtime(&record,&[live.clone()],true),RuntimeObservation::Unavailable);
- for (key,value) in [("recordId",json!(uuid())),("live",json!(false))]{let mut row=live.clone();row[key]=value;assert_eq!(existing_codex_runtime(&record,&[row],false),RuntimeObservation::Missing);}
- for (key,value) in [("agent",json!("claude")),("host",json!("other")),("sessionId",json!(uuid())),("generation",json!("stale-not-a-generation"))]{let mut row=live.clone();row[key]=value;assert_eq!(existing_codex_runtime(&record,&[row],false),RuntimeObservation::Unavailable);}
- assert_eq!(existing_codex_runtime(&record,&[live.clone(),live.clone()],false),RuntimeObservation::Unavailable);let next=uuid();let mut replaced=live;replaced["generation"]=json!(next);assert_eq!(existing_codex_runtime(&record,&[replaced],false),RuntimeObservation::Observed(next));}
+mod runtime_observation_tests {
+    use super::*;
+    #[test]
+    fn null_id_runtime_observation_requires_exact_live_identity_and_canonical_generation() {
+        let id = uuid();
+        let generation = uuid();
+        let record = json!({"id":id,"agent":"codex","sessionId":null});
+        let live = json!({"host":"embedded","recordId":id,"agent":"codex","sessionId":null,"live":true,"generation":generation});
+        assert_eq!(
+            existing_codex_runtime(&record, &[live.clone()], false),
+            RuntimeObservation::Observed(generation)
+        );
+        assert_eq!(
+            existing_codex_runtime(&record, &[live.clone()], true),
+            RuntimeObservation::Unavailable
+        );
+        for (key, value) in [("recordId", json!(uuid())), ("live", json!(false))] {
+            let mut row = live.clone();
+            row[key] = value;
+            assert_eq!(
+                existing_codex_runtime(&record, &[row], false),
+                RuntimeObservation::Missing
+            );
+        }
+        for (key, value) in [
+            ("agent", json!("claude")),
+            ("host", json!("other")),
+            ("sessionId", json!(uuid())),
+            ("generation", json!("stale-not-a-generation")),
+        ] {
+            let mut row = live.clone();
+            row[key] = value;
+            assert_eq!(
+                existing_codex_runtime(&record, &[row], false),
+                RuntimeObservation::Unavailable
+            );
+        }
+        assert_eq!(
+            existing_codex_runtime(&record, &[live.clone(), live.clone()], false),
+            RuntimeObservation::Unavailable
+        );
+        let next = uuid();
+        let mut replaced = live;
+        replaced["generation"] = json!(next);
+        assert_eq!(
+            existing_codex_runtime(&record, &[replaced], false),
+            RuntimeObservation::Observed(next)
+        );
+    }
 }

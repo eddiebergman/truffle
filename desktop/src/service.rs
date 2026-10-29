@@ -402,13 +402,18 @@ mod transport_tests {
     }
     #[test]
     fn native_configuration_status_is_read_only_and_uses_the_local_service() {
-        let document=json!({"version":1,"resources":{"settings":{"token":"a".repeat(64)}}});
-        let (address,server)=mock_server(vec![(200,document.clone())]);
-        let service=LocalHttpService::new(&address).unwrap();
-        assert!(service.request("/api/config-status",Some(json!({}))).is_err());
-        let response=service.request("/api/config-status",None).unwrap();
-        assert_eq!(response.status,200);assert_eq!(response.data,document);
-        let requests=server.join().unwrap();assert_eq!(requests.len(),1);assert!(requests[0].starts_with("GET /api/config-status HTTP/1.1"));
+        let document = json!({"version":1,"resources":{"settings":{"token":"a".repeat(64)}}});
+        let (address, server) = mock_server(vec![(200, document.clone())]);
+        let service = LocalHttpService::new(&address).unwrap();
+        assert!(service
+            .request("/api/config-status", Some(json!({})))
+            .is_err());
+        let response = service.request("/api/config-status", None).unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.data, document);
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /api/config-status HTTP/1.1"));
     }
     #[test]
     fn health_checks_identity_and_protocol() {
