@@ -1,5 +1,5 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const {appChatCommand}=require('../static/app-chat.js'),{browserContext,loadScripts,evaluate,rawContext}=require('./helpers/static-script.cjs');
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {appChatCommand}=require('../static/app-chat.js'),{browserContext,loadScripts,evaluate,rawContext}=require('./helpers/static-script.cjs'),{FakeDocument}=require('./helpers/fake-dom.cjs');
 const id='12345678-1234-4123-8123-123456789abc',id2='12345678-1234-4123-8123-123456789abd';
 const saved={type:'saved-view',id:'standup',name:'Standup'},mixed={type:'display-items',title:'Investigation',items:[{type:'work',id:'linear:a',item:{id:'linear:a',title:'A'}}],reason:''};
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -23,6 +23,13 @@ function fixture(handler=async()=>({pending:[],receipts:[]})){
 // the same fixture nodes through document.querySelector.
 function loadMore(f,files,{drop=[]}={}){const raw=rawContext(f.c);for(const name of drop)delete raw[name];return loadScripts(f.c,files);}
 const appFiles=['static/client.js','static/app.js'],appStubs=['$','statusFilter'];
+// Load the whole App chat panel. It paints into tolerant fake elements, since the fixture
+// nodes lack the DOM methods it uses, and its load-time update reads the app.js page globals.
+function loadAppChat(f){
+ const doc=new FakeDocument(),created=[],el=f.c.el;f.c.el=(tag,cls,text)=>{const node=doc.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;created.push(node);return node;};Object.assign(f.c,{module:{exports:{}},scopePrefs:{},sourceNames:{},githubView:''});
+ try{loadMore(f,'static/app-chat.js');}finally{f.c.el=el;}
+ return {panel:f.c.module.exports.appChatPanel,error:created.find(node=>node.className==='app-chat-error')};
+}
 const queued=(command=saved,requestId=id)=>({pending:[{requestId,presentation:command}],receipts:[{requestId,status:'queued'}]});
 test('poll and focus lifecycle are bounded singleflight reads with no automatic navigation or acknowledgement',async()=>{
  const read=deferred(),f=fixture(async()=>read.promise);const a=f.c.refreshPresentations({force:true}),b=f.c.refreshPresentations({force:true});assert.equal(a,b);assert.equal(f.calls.length,1);assert.equal(f.calls[0].name,'ui.presentations.read');
@@ -83,7 +90,7 @@ test('actual unchanged-state refresh polls pending results without rebuilding or
  const f=fixture(async()=>queued());Object.assign(f.c,{state:{revision:'same'},refreshing:false,renderSync(){},handleSessionHash(){}});let renders=0;f.c.render=()=>renders++;const invoke=f.c.api;f.c.api=async(path,payload)=>path==='/api/state'?{revision:'same'}:invoke(path,payload);loadMore(f,appFiles,{drop:appStubs});await f.c.refresh();await f.c.refreshPresentations();assert.equal(renders,0);assert.equal(f.calls.filter(p=>p.name==='ui.presentations.read').length,1);assert.equal(f.c.source,'github');assert.equal(f.entries().length,1);
 });
 test('actual App chat apply delegates both result types and keeps failed paints deferred',async()=>{
- for(const command of [saved,mixed]){const f=fixture();Object.assign(f.c,{deferred:[],renderDeferred(){},showError:message=>{f.c.error=message;},update(){}});const chat=fs.readFileSync('static/app-chat.js','utf8');vm.runInContext(chat.slice(chat.indexOf('  async function apply('),chat.indexOf('  function renderDeferred(')),rawContext(f.c));if(command.type==='saved-view')f.c.loadSavedViews=async()=>{throw Error('Offline view definitions.');};else f.c.showChatResults=()=>{throw Error('Results paint failed.');};await f.c.apply([command]);assert.equal(f.c.deferred[0],command);assert.match(f.c.error,/Offline view definitions|Results paint failed/);assert.equal(f.calls.length,0);}
+ for(const command of [saved,mixed]){const f=fixture();const chat=loadAppChat(f);if(command.type==='saved-view')f.c.loadSavedViews=async()=>{throw Error('Offline view definitions.');};else f.c.showChatResults=()=>{throw Error('Results paint failed.');};await chat.panel.apply([command]);assert.equal(chat.panel.deferred[0],command);assert.match(chat.error.textContent,/Offline view definitions|Results paint failed/);assert.equal(f.calls.length,0);}
 });
 
 
