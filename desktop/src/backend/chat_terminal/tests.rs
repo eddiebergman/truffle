@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::arr;
 use std::path::PathBuf;
 #[test]
 fn shell_identity_and_working_directory_survive_reopen() {

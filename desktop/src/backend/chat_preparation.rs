@@ -1,6 +1,6 @@
 //! Preparation saves context; it never opens a terminal.
 //! Aliases last while their saved record is retained; absence does not prove no effect.
-use super::{arr, json, sid, text, Error, Repository, Result, Value};
+use super::{json, sessions, sid, text, Error, Repository, Result, Value};
 const MAX_ALIASES: usize = 128;
 const RECEIPT: &str = "preparationReceipt";
 pub(super) const KINDS: [&str; 8] = [
@@ -92,8 +92,8 @@ fn aliases(record: &Value) -> Result<Vec<Value>> {
 fn find(state: &Value, id: &str) -> Result<Option<(Value, Value)>> {
     let mut seen = std::collections::BTreeSet::new();
     let mut found = None;
-    for record in arr(&state["sessions"]) {
-        for entry in aliases(&record)? {
+    for record in sessions::all(state) {
+        for entry in aliases(record)? {
             if !seen.insert(text(&entry, "requestId").to_owned()) {
                 return Err(conflict(
                     "Preparation identities must belong to exactly one saved chat.",
@@ -144,11 +144,7 @@ pub(super) fn finish(
     if let Some(existing) = request.lookup(repo, state)? {
         return Ok(existing);
     }
-    let rows = state["sessions"].as_array_mut().ok_or_else(Error::io)?;
-    let saved = rows
-        .iter_mut()
-        .find(|row| row["id"] == record["id"])
-        .ok_or_else(|| Error::new("Prepared chat is unavailable."))?;
+    let saved = sessions::get_mut(state, text(&record, "id"))?;
     let mut entries = aliases(saved)?;
     if entries.len() >= MAX_ALIASES {
         return Err(conflict("This saved chat has reached its preparation identity limit. Existing preparations remain readable; open that saved chat instead of preparing it again."));

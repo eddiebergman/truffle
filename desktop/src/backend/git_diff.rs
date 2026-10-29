@@ -1,4 +1,4 @@
-use super::{arr, json, terminal, text, Error, PathBuf, Repository, Result, Value};
+use super::{arr, json, sessions, terminal, text, Error, PathBuf, Repository, Result, Value};
 use serde::Serialize;
 use std::{
     fs,
@@ -177,10 +177,7 @@ fn overview(cwd: &Path) -> Result<Value> {
     )
 }
 fn session_directory(repo: &Repository, id: &str, requested: &str) -> Result<String> {
-    let record = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"])
-        .into_iter()
-        .find(|s| s["id"] == id)
-        .ok_or_else(|| Error::new("Agent session not found."))?;
+    let record = sessions::get(&*repo.state.lock().map_err(|_| Error::io())?, id)?.clone();
     if requested.is_empty() {
         return Ok(text(&record, "cwd").to_owned());
     }

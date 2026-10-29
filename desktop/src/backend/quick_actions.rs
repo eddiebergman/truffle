@@ -1,4 +1,6 @@
-use super::{arr, home, json, now, text, uuid, Error, PathBuf, Repository, Result, Value};
+use super::{
+    arr, home, json, now, sessions, text, uuid, Error, PathBuf, Repository, Result, Value,
+};
 use std::{
     collections::BTreeMap,
     io::Read,
@@ -312,10 +314,11 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
     if text(p, "recordId").is_empty() {
         return Ok(result);
     }
-    let record = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"])
-        .into_iter()
-        .find(|r| r["id"] == p["recordId"])
-        .ok_or_else(|| Error::new("Selected chat unavailable."))?;
+    let record = sessions::get(
+        &*repo.state.lock().map_err(|_| Error::io())?,
+        text(p, "recordId"),
+    )?
+    .clone();
     for (env, key) in [
         ("CHAT_ID", "id"),
         ("CHAT_TITLE", "title"),

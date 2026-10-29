@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::sessions;
 fn commit(root: &Path) {
     git(root, &["add", "-A"]).unwrap();
     git(
@@ -124,22 +125,20 @@ fn inline_file_preview_is_scoped_to_the_session_diff_and_fingerprints_content() 
     let home = temp.path().join("truffle");
     fs::create_dir(&home).unwrap();
     let repo = Repository::open(home, None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":"review-agent","cwd":root}]);
-        Ok(())
-    })
-    .unwrap();
-    let first = file_for_session(&repo, "review-agent", "a.txt", "").unwrap();
+    let id = repo
+        .transaction(|s| Ok(sessions::fixture(s, &root, |_| {})))
+        .unwrap();
+    let first = file_for_session(&repo, &id, "a.txt", "").unwrap();
     assert_eq!(first["oldContent"], "base\nkeep\n");
     assert_eq!(first["newContent"], "branch\nkeep\nlocal\n");
     fs::write(root.join("a.txt"), b"changed again\n").unwrap();
-    let next = file_for_session(&repo, "review-agent", "a.txt", "").unwrap();
+    let next = file_for_session(&repo, &id, "a.txt", "").unwrap();
     assert_ne!(first["fingerprint"], next["fingerprint"]);
-    assert!(file_for_session(&repo, "review-agent", "../../escape", "").is_err());
-    assert!(file_for_session(&repo, "other-agent", "a.txt", "").is_err());
-    assert!(file_for_session(&repo, "review-agent", "binary.bin", "").is_err());
+    assert!(file_for_session(&repo, &id, "../../escape", "").is_err());
+    assert!(file_for_session(&repo, &crate::backend::uuid(), "a.txt", "").is_err());
+    assert!(file_for_session(&repo, &id, "binary.bin", "").is_err());
     assert_eq!(
-        file_for_session(&repo, "review-agent", "new\tfile.csv", "").unwrap()["oldContent"],
+        file_for_session(&repo, &id, "new\tfile.csv", "").unwrap()["oldContent"],
         ""
     );
 }
@@ -161,20 +160,22 @@ fn session_diff_can_select_only_its_linked_checkouts() {
     .unwrap();
     std::fs::write(tree.join("only-second.rs"), "fn second() {}\n").unwrap();
     let repo = Repository::open(temp.path().join("truffle"), None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":"agent","cwd":root,"worktrees":[{"path":tree}]}]);
-        Ok(())
-    })
-    .unwrap();
-    let overview = for_session(&repo, "agent", tree.to_str().unwrap()).unwrap();
+    let id = repo
+        .transaction(|s| {
+            Ok(sessions::fixture(s, &root, |r| {
+                r["worktrees"] = json!([{"path":tree}]);
+            }))
+        })
+        .unwrap();
+    let overview = for_session(&repo, &id, tree.to_str().unwrap()).unwrap();
     assert_eq!(overview["branch"], "second");
     assert!(arr(&overview["files"])
         .iter()
         .any(|f| f["path"] == "only-second.rs"));
-    let file = file_for_session(&repo, "agent", "only-second.rs", tree.to_str().unwrap()).unwrap();
+    let file = file_for_session(&repo, &id, "only-second.rs", tree.to_str().unwrap()).unwrap();
     assert_eq!(file["newContent"], "fn second() {}\n");
-    assert!(for_session(&repo, "agent", temp.path().to_str().unwrap()).is_err());
-    assert!(file_for_session(&repo, "agent", "only-second.rs", "").is_err());
+    assert!(for_session(&repo, &id, temp.path().to_str().unwrap()).is_err());
+    assert!(file_for_session(&repo, &id, "only-second.rs", "").is_err());
 }
 #[test]
 fn missing_main_and_invalid_paths_report_errors_instead_of_guessing() {
@@ -193,14 +194,15 @@ fn missing_main_and_invalid_paths_report_errors_instead_of_guessing() {
 fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
     let (temp, root) = fixture();
     let repo = Repository::open(temp.path().join("truffle"), None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] =
-            json!([{"id":"command-agent","cwd":root,"privateNs":"private-diff-canary"}]);
-        Ok(())
-    })
-    .unwrap();
+    let id = repo
+        .transaction(|s| {
+            Ok(sessions::fixture(s, &root, |r| {
+                r["privateNs"] = json!("private-diff-canary");
+            }))
+        })
+        .unwrap();
     let bytes = fs::read(&repo.data).unwrap();
-    let initial = for_session(&repo, "command-agent", "").unwrap();
+    let initial = for_session(&repo, &id, "").unwrap();
     let mut cached = initial.clone();
     cached["privateNs"] = json!("private-diff-canary");
     cached["files"][0]["privateNs"] = json!("private-diff-canary");
@@ -208,7 +210,7 @@ fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
         Some((root.to_string_lossy().into_owned(), Instant::now(), cached));
     let result = super::super::commands::invoke(
         &repo,
-        &json!({"name":"chats.diff","args":{"recordId":"command-agent"}}),
+        &json!({"name":"chats.diff","args":{"recordId":id}}),
         false,
     )
     .unwrap();
@@ -217,7 +219,7 @@ fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
     assert!(!result.to_string().contains("private-diff-canary"));
     let file = super::super::commands::invoke(
         &repo,
-        &json!({"name":"chats.diff.file","args":{"recordId":"command-agent","path":"a.txt"}}),
+        &json!({"name":"chats.diff.file","args":{"recordId":id,"path":"a.txt"}}),
         false,
     )
     .unwrap();
@@ -225,22 +227,18 @@ fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
     assert_eq!(file["newContent"], "branch\nkeep\nlocal\n");
     assert_eq!(file["contentRedacted"], false);
     assert_eq!(
-        command_file(
-            &repo,
-            &json!({"recordId":"command-agent","path":"deleted.txt"})
-        )
-        .unwrap()["newContent"],
+        command_file(&repo, &json!({"recordId":id,"path":"deleted.txt"})).unwrap()["newContent"],
         ""
     );
     for args in [
-        json!({"recordId":"command-agent","cwd":temp.path()}),
-        json!({"recordId":"other-agent"}),
-        json!({"recordId":"command-agent","root":root}),
+        json!({"recordId":id,"cwd":temp.path()}),
+        json!({"recordId":crate::backend::uuid()}),
+        json!({"recordId":id,"root":root}),
     ] {
         assert!(command_overview(&repo, &args).is_err());
     }
     for path in ["../escape", "/absolute", "not-listed"] {
-        assert!(command_file(&repo, &json!({"recordId":"command-agent","path":path})).is_err());
+        assert!(command_file(&repo, &json!({"recordId":id,"path":path})).is_err());
     }
     assert_eq!(fs::read(&repo.data).unwrap(), bytes);
 }
@@ -270,21 +268,19 @@ fn chat_diff_anchored_reader_rejects_swapped_symlink_and_changed_generation() {
 fn chat_diff_command_limits_binary_symlink_size_lines_and_overview_rows() {
     let (temp, root) = fixture();
     let repo = Repository::open(temp.path().join("truffle"), None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":"bounded-agent","cwd":root}]);
-        Ok(())
-    })
-    .unwrap();
+    let id = repo
+        .transaction(|s| Ok(sessions::fixture(s, &root, |_| {})))
+        .unwrap();
     fs::write(root.join("large.txt"), vec![b'x'; 512 * 1024 + 1]).unwrap();
     fs::write(root.join("lines.txt"), "x\n".repeat(10001)).unwrap();
     std::os::unix::fs::symlink(temp.path(), root.join("symlink-file")).unwrap();
     for path in ["large.txt", "lines.txt", "binary.bin", "symlink-file"] {
-        assert!(command_file(&repo, &json!({"recordId":"bounded-agent","path":path})).is_err());
+        assert!(command_file(&repo, &json!({"recordId":id,"path":path})).is_err());
     }
     for index in 0..501 {
         fs::write(root.join(format!("bounded-{index}.txt")), b"").unwrap();
     }
-    let result = command_overview(&repo, &json!({"recordId":"bounded-agent"})).unwrap();
+    let result = command_overview(&repo, &json!({"recordId":id})).unwrap();
     assert_eq!(arr(&result["files"]).len(), 500);
     assert_eq!(result["truncated"], true);
 }
@@ -297,15 +293,13 @@ fn chat_diff_command_redacts_source_but_preserves_original_fingerprint() {
     fs::write(home.join(".env"), format!("TRUFFLE_TEST_SECRET={secret}\n")).unwrap();
     fs::write(root.join("a.txt"), format!("before\n{secret}\nafter\n")).unwrap();
     let repo = Repository::open(home, None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":"redacted-agent","cwd":root}]);
-        Ok(())
-    })
-    .unwrap();
-    let raw = file_for_session(&repo, "redacted-agent", "a.txt", "").unwrap();
+    let id = repo
+        .transaction(|s| Ok(sessions::fixture(s, &root, |_| {})))
+        .unwrap();
+    let raw = file_for_session(&repo, &id, "a.txt", "").unwrap();
     let result = super::super::commands::invoke(
         &repo,
-        &json!({"name":"chats.diff.file","args":{"recordId":"redacted-agent","path":"a.txt"}}),
+        &json!({"name":"chats.diff.file","args":{"recordId":id,"path":"a.txt"}}),
         false,
     )
     .unwrap();
@@ -320,11 +314,9 @@ fn chat_diff_rejects_an_unlinked_valid_checkout_before_cache_and_accepts_explici
     let (temp, root) = fixture();
     let (_other, other) = fixture();
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":"linked-agent","cwd":root}]);
-        Ok(())
-    })
-    .unwrap();
+    let id = repo
+        .transaction(|s| Ok(sessions::fixture(s, &root, |_| {})))
+        .unwrap();
     let other_overview = overview(&other).unwrap();
     repo.git_diff_cache.lock().unwrap().entry = Some((
         other.to_string_lossy().into_owned(),
@@ -332,20 +324,16 @@ fn chat_diff_rejects_an_unlinked_valid_checkout_before_cache_and_accepts_explici
         other_overview,
     ));
     let bytes = fs::read(&repo.data).unwrap();
-    assert!(command_overview(&repo, &json!({"recordId":"linked-agent","cwd":other})).is_err());
-    assert!(command_file(
-        &repo,
-        &json!({"recordId":"linked-agent","cwd":other,"path":"a.txt"})
-    )
-    .is_err());
+    assert!(command_overview(&repo, &json!({"recordId":id,"cwd":other})).is_err());
+    assert!(command_file(&repo, &json!({"recordId":id,"cwd":other,"path":"a.txt"})).is_err());
     assert_eq!(fs::read(&repo.data).unwrap(), bytes);
     repo.transaction(|s| {
-        s["sessions"][0]["worktrees"] = json!([{"path":other}]);
+        sessions::get_mut(s, &id)?["worktrees"] = json!([{"path":other}]);
         Ok(())
     })
     .unwrap();
     assert_eq!(
-        command_overview(&repo, &json!({"recordId":"linked-agent","cwd":other})).unwrap()["root"],
+        command_overview(&repo, &json!({"recordId":id,"cwd":other})).unwrap()["root"],
         json!(other)
     );
 }

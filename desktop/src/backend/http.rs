@@ -1,7 +1,7 @@
 //! Loopback API and authenticated agent inbox. No UI-specific persistence.
 use super::{
-    arr, checked, domain, home, json, now, sid, text, uuid, Error, PathBuf, Repository, Result,
-    Value,
+    arr, checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
+    Result, Value,
 };
 use super::{artifacts, workflows};
 use hmac::{Hmac, Mac};
@@ -408,8 +408,8 @@ fn skills_catalog(repo: &Repository, payload: &Value) -> Result<Value> {
             projects.push(p);
         }
     }
-    let sessions = arr(&repo.state.lock().map_err(|_| Error::io())?["sessions"]);
-    for row in sessions {
+    let records = sessions::all(&*repo.state.lock().map_err(|_| Error::io())?).to_vec();
+    for row in records {
         let p = PathBuf::from(text(&row, "cwd"));
         if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
             projects.push(p);
@@ -758,10 +758,7 @@ pub fn serve(
             ));
         }
         for id in id.split(',') {
-            let record = arr(&repo.state.lock().unwrap()["sessions"])
-                .into_iter()
-                .find(|s| s["id"] == id)
-                .ok_or_else(|| Error::new("Preview terminal record unavailable."))?;
+            let record = sessions::get(&repo.state.lock().unwrap(), id)?.clone();
             repo.embedded.open_demo(&record)?;
         }
     }

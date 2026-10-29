@@ -1,6 +1,6 @@
 use super::{
-    arr, checked, commands, expand, json, now, safe_url, sid, text, Error, PathBuf, Repository,
-    Result, Value,
+    arr, checked, commands, expand, json, now, safe_url, sessions, sid, text, Error, PathBuf,
+    Repository, Result, Value,
 };
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
@@ -41,11 +41,10 @@ pub fn presets(repo: &Repository, state: &Value) -> Result<Vec<Value>> {
 }
 pub fn roots(repo: &Repository, state: &Value) -> Result<Vec<PathBuf>> {
     let presets = presets(repo, state)?;
-    let sessions = arr(&state["sessions"]);
     Ok(presets
         .iter()
         .map(|p| expand(text(p, "reports")))
-        .chain(sessions.iter().map(|s| expand(text(s, "cwd"))))
+        .chain(sessions::all(state).iter().map(|s| expand(text(s, "cwd"))))
         .chain([repo.data.parent().unwrap().join("artifacts")])
         .filter_map(|p| p.canonicalize().ok())
         .collect())
@@ -343,9 +342,7 @@ fn metadata_apply(
         for id in arr(ids) {
             metadata_exact(repo, id.as_str().unwrap())?;
             if !arr(&values["sessionIds"]).contains(&id)
-                && !state["sessions"]
-                    .as_array()
-                    .is_some_and(|sessions| sessions.iter().any(|session| session["id"] == id))
+                && sessions::get(state, id.as_str().unwrap()).is_err()
             {
                 return Err(Error::new(
                     "Choose existing sessions; retained older associations may stay unchanged.",
@@ -369,7 +366,7 @@ fn metadata_apply(
     Ok(result)
 }
 fn discovery_basis(state: &Value) -> Value {
-    json!({"skillPresets":state["skillPresets"],"artifacts":state["artifacts"],"sessions":state["sessions"].as_array().map(|rows|rows.iter().map(|row|json!({"id":row["id"],"cwd":row["cwd"]})).collect::<Vec<_>>()).unwrap_or_default()})
+    json!({"skillPresets":state["skillPresets"],"artifacts":state["artifacts"],"sessions":sessions::all(state).iter().map(|row|json!({"id":row["id"],"cwd":row["cwd"]})).collect::<Vec<_>>()})
 }
 fn discovery_config_hash(repo: &Repository) -> Result<String> {
     Ok(super::skill_presets::load(repo)?.hash)
@@ -513,7 +510,7 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
     if ids.len() > 100
         || ids
             .iter()
-            .any(|id| !arr(&s["sessions"]).iter().any(|x| x["id"] == *id))
+            .any(|id| id.as_str().is_none_or(|id| sessions::get(s, id).is_err()))
     {
         return Err(Error::new("Choose existing sessions."));
     }
@@ -620,7 +617,7 @@ pub fn attach_to_chat(repo: &Repository, record_id: &str, input: &Value) -> Resu
         return Err(Error::new("Choose exactly one artifact file or HTTPS URL."));
     }
     repo.transaction(|state|{
-        let record=arr(&state["sessions"]).into_iter().find(|record|record["id"]==record_id).ok_or_else(|| Error::new("Session record no longer exists."))?;
+        let record=sessions::get(state,&record_id)?.clone();
         let mut payload=json!({"path":path,"url":url,"title":title,"sessionIds":[record_id]});
         if input["skillOutput"]==true {
             if text(&record,"newsletterId").is_empty(){return Err(Error::new("This chat has no assigned skill. Attach the artifact without --skill-output."));}

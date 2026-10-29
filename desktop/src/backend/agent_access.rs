@@ -1,4 +1,4 @@
-use super::{arr, domain, json, sid, text, Error, Repository, Result, Value};
+use super::{arr, domain, json, sessions, sid, text, Error, Repository, Result, Value};
 use std::path::{Component, PathBuf};
 
 const MAX_TEXT_BYTES: usize = 64 * 1024;
@@ -106,8 +106,7 @@ pub fn update_chat(repo: &Repository, id: &str, change: ChatMetadata<'_>) -> Res
     };
     repo.transaction(|state| {
         domain::edit(state, &edit)?;
-        let record = arr(&state["sessions"]).into_iter().find(|record| record["id"] == id)
-            .ok_or_else(|| Error::new("Chat unavailable."))?;
+        let record = sessions::get(state, &id)?;
         let timestamp = |key: &str| record[key].as_f64().filter(|value| value.is_finite() && *value >= 0.0);
         Ok(json!({"chat":{"id":record["id"],"title":record["title"].as_str().unwrap_or(""),"hidden":record["hidden"].as_bool().unwrap_or(false),"archivedAt":timestamp("archivedAt"),"updatedAt":timestamp("updatedAt")},"scope":"local"}))
     })

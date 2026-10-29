@@ -1518,20 +1518,23 @@ fn history_is_bounded_and_context_omits_terminal_content() {
     )
     .unwrap();
     assert!(!c.to_string().contains("private input"));
-    {
-        let mut state = repo.state.lock().unwrap();
-        state["sessions"] = json!([{ "id":"remembered-chat","title":"Hidden chat" }]);
-    }
+    let chat = repo
+        .transaction(|s| {
+            Ok(crate::backend::sessions::fixture(s, &repo.root, |r| {
+                r["title"] = json!("Hidden chat");
+            }))
+        })
+        .unwrap();
     let dashboard = context(
         &repo,
-        &json!({"source":"linear","recordId":"remembered-chat","worktree":"/hidden","filters":{}}),
+        &json!({"source":"linear","recordId":chat,"worktree":"/hidden","filters":{}}),
     )
     .unwrap();
     assert!(dashboard["selectedChat"].is_null());
     assert!(dashboard["selectedWorktree"].is_null());
     let chat = context(
         &repo,
-        &json!({"source":"agents","recordId":"remembered-chat","filters":{}}),
+        &json!({"source":"agents","recordId":chat,"filters":{}}),
     )
     .unwrap();
     assert_eq!(chat["selectedChat"]["title"], "Hidden chat");

@@ -1,4 +1,4 @@
-use super::{arr, checked, json, text, Error, Repository, Result, Value};
+use super::{arr, checked, json, sessions, text, Error, Repository, Result, Value};
 
 use super::work_search::normalized;
 fn rank(row: &Value, words: &[String]) -> usize {
@@ -46,12 +46,12 @@ fn rank(row: &Value, words: &[String]) -> usize {
 fn rows(repo: &Repository) -> Vec<Value> {
     let candidates = arr(&repo.inventory()["candidates"]);
     let state = repo.state.lock().unwrap();
-    let mut rows = arr(&state["sessions"]).iter().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"],"archived":r["archivedAt"].as_f64().is_some_and(|t|t>0.0),"live":candidates.iter().any(|c|c["live"]==true&&(c["recordId"]==r["id"]||!text(r,"sessionId").is_empty()&&c["sessionId"]==r["sessionId"]&&c["agent"]==r["agent"]))})).collect::<Vec<_>>();
+    let mut rows = sessions::all(&state).iter().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"],"archived":r["archivedAt"].as_f64().is_some_and(|t|t>0.0),"live":candidates.iter().any(|c|c["live"]==true&&(c["recordId"]==r["id"]||!text(r,"sessionId").is_empty()&&c["sessionId"]==r["sessionId"]&&c["agent"]==r["agent"]))})).collect::<Vec<_>>();
     for c in candidates.iter().filter(|c| c["live"] == true) {
         if rows.iter().any(|r| r["id"] == c["recordId"]) {
             continue;
         }
-        if arr(&state["sessions"]).iter().any(|r| {
+        if sessions::all(&state).iter().any(|r| {
             !text(r, "sessionId").is_empty()
                 && r["sessionId"] == c["sessionId"]
                 && r["agent"] == c["agent"]

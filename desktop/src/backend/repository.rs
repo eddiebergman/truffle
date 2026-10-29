@@ -597,7 +597,7 @@ impl Repository {
                 let state = self.state.lock().unwrap();
                 let catalog = domain::catalog(&state);
                 let mut ids = BTreeSet::new();
-                for session in arr(&state["sessions"]) {
+                for session in sessions::all(&state) {
                     if session["archivedAt"].is_null() {
                         for i in arr(&session["items"]) {
                             if i["source"] == source {
@@ -629,7 +629,7 @@ impl Repository {
             if !refs.is_empty() {
                 items.extend(self.providers.refresh(source, &refs)?);
             }
-            self.transaction(|s|{let mut by_id=items.iter().map(|x|(text(x,"id").to_string(),x.clone())).collect::<std::collections::BTreeMap<_,_>>();for item in arr(&s["items"]){if item["source"]==source&&s["overrides"][text(&item,"id")]["hidden"]==true{by_id.entry(text(&item,"id").into()).or_insert(item);}}items=by_id.into_values().collect();for session in s["sessions"].as_array_mut().unwrap(){for item in session["items"].as_array_mut().unwrap(){if let Some(new)=items.iter().find(|x|x["id"]==item["id"]){*item=domain::item_ref(new);}}}for item in &items{if refs.iter().any(|x|x["id"]==item["id"]){s["itemArchive"][text(item,"id")]=item.clone();}}let mut all=arr(&s["items"]);all.retain(|x|x["source"]!=source);all.extend(items.clone());s["items"]=json!(all);domain::observe(s,source,&items);if source=="github"{super::github::observe(s);}s["sources"][source]=json!({"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0,"disabled":false});Ok(())})?;
+            self.transaction(|s|{let mut by_id=items.iter().map(|x|(text(x,"id").to_string(),x.clone())).collect::<std::collections::BTreeMap<_,_>>();for item in arr(&s["items"]){if item["source"]==source&&s["overrides"][text(&item,"id")]["hidden"]==true{by_id.entry(text(&item,"id").into()).or_insert(item);}}items=by_id.into_values().collect();for session in sessions::all_mut(s){for item in session["items"].as_array_mut().unwrap(){if let Some(new)=items.iter().find(|x|x["id"]==item["id"]){*item=domain::item_ref(new);}}}for item in &items{if refs.iter().any(|x|x["id"]==item["id"]){s["itemArchive"][text(item,"id")]=item.clone();}}let mut all=arr(&s["items"]);all.retain(|x|x["source"]!=source);all.extend(items.clone());s["items"]=json!(all);domain::observe(s,source,&items);if source=="github"{super::github::observe(s);}s["sources"][source]=json!({"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0,"disabled":false});Ok(())})?;
             Ok(items.len())
         })();
         let mut event = json!({"time":iso_time(),"source":source,"operation":"sync","elapsedMs":((now()-start)*1000.0).round()});

@@ -1,4 +1,6 @@
-use super::{arr, checked, directory, home, json, text, Error, PathBuf, Repository, Result, Value};
+use super::{
+    checked, directory, home, json, sessions, text, Error, PathBuf, Repository, Result, Value,
+};
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1433,7 +1435,7 @@ fn chat_command(repo: &Arc<Repository>, id: CommandId, args: &Value) -> Result<O
         CommandId::ChatsOpen => super::workflows::open_chat(repo, args)?,
         CommandId::ChatsList => {
             let s = repo.state.lock().map_err(|_| Error::io())?;
-            json!({"chats":arr(&s["sessions"]).iter().rev().take(100).map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"]})).collect::<Vec<_>>()})
+            json!({"chats":sessions::all(&s).iter().rev().take(100).map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"]})).collect::<Vec<_>>()})
         }
         CommandId::ChatsRename => super::agent_access::update_chat(
             repo,

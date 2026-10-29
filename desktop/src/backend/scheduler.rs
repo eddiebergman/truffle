@@ -1,6 +1,7 @@
 //! Persisted skill schedules. Claim a due occurrence before launching it; never replay a backlog.
 use super::{
-    arr, checked, directory, expand, json, now, text, uuid, Error, Repository, Result, Value,
+    arr, checked, directory, expand, json, now, sessions, text, uuid, Error, Repository, Result,
+    Value,
 };
 use super::{artifacts, workflows};
 use std::time::Duration;
@@ -522,7 +523,7 @@ fn execute_with(
     }
     repo.cooldown(&format!("skill-run:{preset}"), 30.0)?;
     // Do not overlap a previous skill run while its agent terminal remains alive.
-    if let Some(existing) = arr(&state["sessions"]).iter().rev().find(|x| {
+    if let Some(existing) = sessions::latest(&state, |x| {
         x["newsletterId"] == preset
             && x["archivedAt"].is_null()
             && arr(&inventory["candidates"]).iter().any(|c| {

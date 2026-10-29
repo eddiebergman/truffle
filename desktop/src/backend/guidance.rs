@@ -1,4 +1,4 @@
-use super::{arr, json, text, Error, Repository, Result, Value};
+use super::{arr, json, sessions, text, Error, Repository, Result, Value};
 use std::collections::BTreeSet;
 
 pub const IDS: &[&str] = &[
@@ -68,7 +68,7 @@ pub fn view(repo: &Repository) -> Result<Value> {
     let state = repo.state.lock().map_err(|_| Error::io())?;
     let mut current = public_progress(&progress(&state["guidance"]))?;
     if current["replayed"] != true {
-        for session in arr(&state["sessions"]) {
+        for session in sessions::all(&state) {
             let draft = &session["reviewDraft"];
             if !arr(&draft["comments"]).is_empty() {
                 current["tips"]["review.comment-selection"] = json!("completed");

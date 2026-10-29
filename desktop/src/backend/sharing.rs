@@ -1110,10 +1110,7 @@ fn start_prepare(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
     let recent_conversation = p["recentConversation"] != false;
     repo.cooldown("sharing-prepare", 3.0)?;
     let id = sid(text(p, "recordId"))?;
-    let session = arr(&repo.state.lock().unwrap()["sessions"])
-        .into_iter()
-        .find(|s| s["id"] == id)
-        .ok_or_else(|| Error::new("Select a saved agent chat first."))?;
+    let session = sessions::get(&repo.state.lock().unwrap(), &id)?.clone();
     if text(&session, "sessionId").is_empty() {
         return Err(Error::new(
             "The agent has not registered its conversation yet. Try again after its first reply.",
@@ -1962,10 +1959,7 @@ impl BundleParts {
     }
 }
 fn prepare(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
-    let record = arr(&repo.state.lock().unwrap()["sessions"])
-        .into_iter()
-        .find(|r| r["id"] == p["recordId"])
-        .ok_or_else(|| Error::new("Chat unavailable."))?;
+    let record = sessions::get(&repo.state.lock().unwrap(), text(p, "recordId"))?.clone();
     let dir = base(repo).join("drafts").join(id);
     fs::create_dir_all(&dir)?;
     let skill = include_str!("../../resources/handoff-context.md").to_owned();

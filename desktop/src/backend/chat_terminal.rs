@@ -1,8 +1,8 @@
-use super::{arr, directory, json, sid, text, uuid, Error, Repository, Result, Value};
+use super::{directory, json, sessions, sid, text, uuid, Error, Repository, Result, Value};
 pub fn open(repo: &Repository, p: &Value) -> Result<Value> {
     let chat = sid(text(p, "recordId"))?;
     let saved=repo.transaction(|s|{
-  let record=arr(&s["sessions"]).into_iter().find(|r|r["id"]==chat).ok_or_else(|| Error::new("Select an existing chat."))?;
+  let record=sessions::get(s,&chat)?.clone();
   if !s["chatTerminals"].is_object(){s["chatTerminals"]=json!({"version":1,"byChat":{}});}
   if !s["chatTerminals"]["byChat"][&chat].is_object(){s["chatTerminals"]["byChat"][&chat]=json!({"id":uuid(),"chatId":chat,"sessionId":"","agent":"shell","title":"Terminal","cwd":directory(text(&record,"cwd"))?});}
   Ok(s["chatTerminals"]["byChat"][&chat].clone())

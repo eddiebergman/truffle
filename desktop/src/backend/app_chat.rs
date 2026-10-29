@@ -1,7 +1,7 @@
 //! App assistant with a bounded tool surface and no terminal access.
 use super::{
-    arr, checked, commands, domain, json, now, sid, text, uuid, Error, PathBuf, Repository, Result,
-    Value,
+    arr, checked, commands, domain, json, now, sessions, sid, text, uuid, Error, PathBuf,
+    Repository, Result, Value,
 };
 use std::{
     io::{Read, Write},
@@ -440,7 +440,7 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
                 "work" => catalog
                     .get(&id)
                     .map_or(Value::Null, |i| project(&effective(&s, i), 0)),
-                "chat" => arr(&s["sessions"]).iter().find(|r| r["id"] == id).map_or(
+                "chat" => sessions::get(&s, &id).ok().map_or(
                     Value::Null,
                     |r| json!({"id":r["id"],"title":r["title"],"cwd":r["cwd"],"agent":r["agent"]}),
                 ),
@@ -450,9 +450,11 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
         }
         ui["displayedResults"] = json!(displayed);
     }
-    let selected = arr(&s["sessions"])
-        .into_iter()
-        .find(|r| source == "agents" && r["id"] == p["recordId"]);
+    let selected = if source == "agents" {
+        sessions::get(&s, text(p, "recordId")).ok().cloned()
+    } else {
+        None
+    };
     drop(s);
     Ok(
         json!({"page":source,"query":query,"ui":ui,"setup":setup,"chatRecovery":chat_recovery,"selectedChat":selected.as_ref().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"work":arr(&r["items"]).iter().take(20).map(|i|project(i,0)).collect::<Vec<_>>()})),"selectedWorktree":if source=="agents" {selected_worktree(selected.as_ref(),p)?}else{Value::Null},"filters":filters,"visibleItems":visible,"capturedAt":now()}),

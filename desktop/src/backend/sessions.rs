@@ -219,5 +219,17 @@ fn identity(
     Ok((sid_value, launch))
 }
 
+/// Save a Codex chat in `cwd` for tests that only need a record to look up.
+#[cfg(test)]
+pub fn fixture(s: &mut Value, cwd: &std::path::Path, extend: impl FnOnce(&mut Value)) -> String {
+    let record = save_with(
+        s,
+        &json!({"agent":"codex","title":"Fixture","cwd":cwd,"itemIds":[]}),
+        extend,
+    )
+    .unwrap();
+    text(&record, "id").to_owned()
+}
+
 #[cfg(test)]
 mod tests;
