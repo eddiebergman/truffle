@@ -104,7 +104,7 @@ node --test tests/*.cjs
 
 Rust stable, Apple Command Line Tools and Node/npm are build dependencies. Production builds leave `TRUFFLE_SERVICE_URL` unset. Install `desktop/target/release/bundle/macos/truffle.app`, quit the old window and relaunch it. Restarting only the service does not replace bundled frontend assets.
 
-See [desktop/ARCHITECTURE.md](desktop/ARCHITECTURE.md) for module boundaries. Use [the performance skill](.agents/skills/truffle-performance/SKILL.md) for measured diagnostics. In Logs, start UI performance recording, reproduce the interaction and inspect durations; stop recording afterward. Samples are bounded numeric data in memory.
+Use [the performance skill](.agents/skills/truffle-performance/SKILL.md) for measured diagnostics. In Logs, start UI performance recording, reproduce the interaction and inspect durations; stop recording afterward. Samples are bounded numeric data in memory.
 
 Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, truffle checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
 
