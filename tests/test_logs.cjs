@@ -1,10 +1,10 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const {appChatDiagnosticRows}=require('../static/app-chat.js'),source=fs.readFileSync('static/features.js','utf8');
+const test=require('node:test'),assert=require('node:assert/strict');
+const {appChatDiagnosticRows}=require('../static/app-chat.js'),{browserContext,loadScripts}=require('./helpers/static-script.cjs');
 function fixture(entries){
  class Node{constructor(tag,cls='',text=''){this.tag=tag;this.className=cls;this.textContent=text;this.children=[];this.dataset={};this.attrs={};}append(...items){this.children.push(...items);}replaceChildren(...items){this.children=items;}setAttribute(key,value){this.attrs[key]=value;}querySelectorAll(){return [];}}
- const copied=[],c=vm.createContext({el:(...args)=>new Node(...args),Option:function(text,value){this.text=text;this.value=value;},appChatDiagnosticRows,logData:{entries},logLoading:false,logLoadError:'',logFilters:{source:'',outcome:'failure'},openLogEntries:new Set(),sourceNames:{github:'GitHub',linear:'Linear',sentry:'Sentry'},state:{sources:{}},document:{activeElement:null},loadLogs(){},featureButton:(text,onclick)=>Object.assign(new Node('button','',text),{onclick}),navigator:{clipboard:{writeText:async text=>copied.push(text)}},toast(){}});
- vm.runInContext(source.slice(source.indexOf('function logAppChatRows(')),c);return {c,list:new Node('list'),controls:new Node('controls'),copied};
+ const copied=[],c=browserContext({el:(...args)=>new Node(...args),Option:function(text,value){this.text=text;this.value=value;},appChatDiagnosticRows,logData:{entries},logLoading:false,logLoadError:'',state:{sources:{}},document:{activeElement:null},loadLogs(){},featureButton:(text,onclick)=>Object.assign(new Node('button','',text),{onclick}),navigator:{clipboard:{writeText:async text=>copied.push(text)}},toast(){}});
+ loadScripts(c,['static/client.js','static/app.js','static/features.js']);return {c,list:new Node('list'),controls:new Node('controls'),copied};
 }
 function descendants(node){return [node,...node.children.flatMap(descendants)];}
 const entry={time:'2026-10-27T12:00:00Z',source:'app-chat',operation:'app-chat-reply',outcome:'failure',requestId:'request-1',diagnostics:{requestId:'request-1',stage:'cli-envelope',code:'missing_result',exitCode:0,durationMs:1234,stdoutBytes:81,stderrBytes:0,stdoutShape:'object',responseShape:'empty',stderr:'private-error-marker',prompt:'private-prompt-marker'}};
