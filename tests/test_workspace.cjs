@@ -247,9 +247,9 @@ test('removed action control falls back to its own tab, while missing process id
  const f=liveBarFixture();f.menu('one').open=true;f.control('one','manage').focus();f.state.sessions.splice(0,1);f.c.renderLiveBar();assert.equal(f.menu('one'),null);assert.equal(f.document.activeElement,f.control('one','tab'));
  const g=liveBarFixture();delete g.candidates[0].generation;delete g.candidates[0].startedAt;g.c.renderLiveBar();g.menu('one').open=true;g.control('one','manage').focus();g.state.sessions[0].title='Unverified process';g.c.renderLiveBar();assert.equal(g.menu('one').open,false);assert.equal(g.document.activeElement,g.control('two','tab'));
 });
-test('agent tabs show only the title and open their actions on right-click, selecting the tab first',()=>{
+test('agent tabs show the title and shortcut and open their actions on right-click, selecting the tab first',()=>{
  const f=liveBarFixture(),selected=[];f.c.selectAgent=(record,candidate)=>{selected.push(record.id);f.c.selectedAgentKey='embedded:'+candidate.recordId;f.c.renderLiveBar();};
- assert.equal(f.tab('one').querySelectorAll('.live-agent-state,.agent-shortcut').length,0);
+ assert.equal(f.tab('one').querySelectorAll('.live-agent-state').length,0);assert.equal(f.tab('one').querySelector('.agent-shortcut').textContent,'⌘1');
  let prevented=0;f.tab('two').oncontextmenu({preventDefault(){prevented++;}});
  assert.equal(prevented,1);assert.deepEqual(selected,['two']);assert.equal(f.menu('two').open,true);assert.equal(f.document.activeElement,f.control('two','manage'));
  f.menu('two').open=false;f.tab('two').oncontextmenu({preventDefault(){}});assert.deepEqual(selected,['two']);assert.equal(f.menu('two').open,true);
