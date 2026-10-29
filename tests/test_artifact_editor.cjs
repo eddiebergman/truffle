@@ -1,6 +1,5 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),Module=require('node:module');
-// Reuse the existing native-disable/form-owner fixture without registering its tests.
-const reused=new Module(__filename);reused._compile(fs.readFileSync('tests/test_feature_writes.cjs','utf8').split('\ntest(')[0]+'\nmodule.exports={scriptFixture,loadMore,evaluate,deferred,tick};',__filename);const {scriptFixture:base,loadMore,evaluate,deferred,tick}=reused.exports;
+const {test}=require('node:test'),assert=require('node:assert/strict'),{join}=require('node:path');
+const {scriptFixture:base,loadMore,deferred,tick}=require(join(__dirname,'helpers/feature-fixture.cjs')),{evaluate}=require(join(__dirname,'helpers/static-script.cjs'));
 const token='a'.repeat(64);
 function metadata(id='artifact:a',extra={}){return {artifact:{id,title:'Full authoritative title',sessionIds:['chat:a','not-in-picker']},expected:{title:token,sessionIds:'b'.repeat(64)},origin:{type:'registered'},scope:'local',...extra};}
 function fixture({read,write,library,stateRead,realLibrary=false,libraryRead}={}){
