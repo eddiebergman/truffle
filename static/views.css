@@ -265,7 +265,7 @@
   background: var(--overlay);
   border: 1px solid var(--line);
   border-radius: 6px;
-  box-shadow: 0 6px 18px #0003;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 20%, transparent);
 }
 
 .saved-view-add-options button {

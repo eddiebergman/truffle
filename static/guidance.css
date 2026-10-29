@@ -21,7 +21,7 @@
   color: var(--text);
   border: 1px solid var(--muted);
   border-radius: 10px;
-  box-shadow: 0 8px 30px #0003;
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--shadow) 20%, transparent);
   text-align: left;
   font-size: 13px;
   line-height: 1.45;
@@ -66,7 +66,7 @@
 }
 
 .feedback-dialog::backdrop {
-  background: #0006;
+  background: color-mix(in srgb, var(--shadow) 40%, transparent);
 }
 
 .feedback-dialog h2 {

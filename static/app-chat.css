@@ -13,7 +13,7 @@
   border-radius: 50%;
   background: var(--panel);
   color: var(--accent);
-  box-shadow: 0 4px 18px #0004;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--shadow) 25%, transparent);
   cursor: pointer;
 }
 
@@ -41,11 +41,11 @@
   height: min(490px, calc(calc(100vh / var(--ui-scale, 1)) - 90px));
   display: flex;
   flex-direction: column;
-  background: var(--panel, #26233a);
-  border: 1px solid var(--line, #403d52);
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: 0 12px 36px #0005;
-  color: var(--text, #e0def4);
+  box-shadow: 0 12px 36px color-mix(in srgb, var(--shadow) 35%, transparent);
+  color: var(--text);
   font-size: 13px;
   overflow: hidden;
 }
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--line, #403d52);
+  border-bottom: 1px solid var(--line);
 }
 
 .app-chat-heading strong {
@@ -75,18 +75,18 @@
 .app-chat-provider,
 .app-chat-author {
   font-size: 11px;
-  color: var(--muted, #908caa);
+  color: var(--muted);
 }
 
 .app-chat-provider {
-  border: 1px solid var(--line, #403d52);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 1px 6px;
 }
 
 .app-chat-context {
   padding: 7px 14px;
-  color: var(--muted, #908caa);
+  color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
@@ -107,7 +107,7 @@
 }
 
 .app-chat-empty {
-  color: var(--muted, #908caa);
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -115,22 +115,18 @@
   padding: 9px 10px;
   margin: 7px 0;
   border-radius: 8px;
-  background: var(--bg, #191724);
+  background: var(--bg);
 }
 
 .app-chat-message.is-user {
   margin-left: 24px;
-  background: color-mix(
-    in srgb,
-    var(--accent, #c4a7e7) 12%,
-    var(--panel, #26233a)
-  );
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 
 .app-chat-author {
   display: block;
   margin-bottom: 4px;
-  color: var(--accent, #c4a7e7);
+  color: var(--accent);
 }
 
 .app-chat-message-body {
@@ -141,7 +137,7 @@
 
 .app-chat-form {
   padding: 10px 12px;
-  border-top: 1px solid var(--line, #403d52);
+  border-top: 1px solid var(--line);
 }
 
 .app-chat-form textarea {
@@ -150,8 +146,8 @@
   min-height: 58px;
   max-height: 130px;
   resize: vertical;
-  background: var(--bg, #191724);
-  border: 1px solid var(--line, #403d52);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 10px;
   color: inherit;
@@ -167,7 +163,7 @@
 
 .app-chat-footer > span {
   font-size: 10px;
-  color: var(--muted, #908caa);
+  color: var(--muted);
   margin-right: auto;
 }
 
@@ -179,7 +175,7 @@
 .app-chat-error {
   margin: 0;
   padding: 7px 14px;
-  color: var(--gold, #f6c177);
+  color: var(--gold);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -187,7 +183,7 @@
 .app-chat-show-results {
   align-self: flex-start;
   margin: 0 14px 8px;
-  color: var(--accent, #c4a7e7);
+  color: var(--accent);
 }
 
 .app-chat-heading .app-chat-new {

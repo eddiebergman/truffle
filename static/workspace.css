@@ -6,7 +6,7 @@
 .live-bar-label {
   align-items: center;
   gap: 8px;
-  color: #9aae9e;
+  color: color-mix(in srgb, var(--bg) 30%, var(--text));
   font:
     10px ui-monospace,
     monospace;
@@ -16,7 +16,7 @@
 }
 
 .live-bar-label span {
-  color: #c9e8d1;
+  color: var(--foam);
 }
 
 .live-agent-words {
@@ -37,7 +37,7 @@
 
 .live-agent small {
   font-size: 9px;
-  color: #9faea4;
+  color: color-mix(in srgb, var(--bg) 30%, var(--text));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -46,7 +46,7 @@
 .agent-state-dot {
   height: 6px;
   width: 6px;
-  background: #7b8990;
+  background: color-mix(in srgb, var(--bg) 45%, var(--text));
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -168,7 +168,7 @@
 }
 
 .context-work-row {
-  border-bottom: 1px solid #252f29;
+  border-bottom: 1px solid color-mix(in srgb, var(--bg) 90%, var(--text));
   padding: 4px 0;
 }
 
@@ -254,7 +254,7 @@
 }
 
 .skill-run-row time {
-  color: #87998b;
+  color: color-mix(in srgb, var(--bg) 40%, var(--text));
   font-size: 9px;
 }
 
@@ -267,16 +267,16 @@
 }
 
 .run-outcome {
-  color: #9bbca5;
+  color: var(--foam);
   font-size: 9px;
 }
 
 .run-outcome.failed {
-  color: #e6a59f;
+  color: var(--rose);
 }
 
 .run-outcome.skipped {
-  color: #b7aa8d;
+  color: color-mix(in srgb, var(--gold) 50%, var(--muted));
 }
 
 .schedule-enabled {
@@ -339,7 +339,7 @@
 .result-table th,
 .result-table td {
   padding: 7px 12px;
-  border-bottom: 1px solid #303b33;
+  border-bottom: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
 }
 
 @media (max-width: 1050px) {
@@ -453,7 +453,7 @@ textarea {
 }
 
 .context-work-meta a {
-  color: #9eaeab;
+  color: color-mix(in srgb, var(--bg) 30%, var(--text));
   text-decoration: none;
 }
 
@@ -507,7 +507,7 @@ dialog label select,
 }
 
 .brand-icon span {
-  color: #524f67;
+  color: var(--highlight);
 }
 
 .nav-divider,
@@ -755,15 +755,15 @@ dialog label select,
 }
 
 .status-pill.needs-review {
-  background: #2c2540;
+  background: var(--overlay);
   color: var(--iris);
-  border-color: #52436b;
+  border-color: color-mix(in srgb, var(--iris) 25%, var(--overlay));
 }
 
 .status-pill.in-progress {
-  background: #332c32;
+  background: color-mix(in srgb, var(--bg) 90%, var(--text));
   color: var(--gold);
-  border-color: #574635;
+  border-color: color-mix(in srgb, var(--gold) 30%, var(--bg));
 }
 
 .result-table th,
@@ -779,7 +779,7 @@ dialog label select,
   z-index: 30;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #34423a;
+  border-bottom: 1px solid var(--line);
   background: var(--panel);
   border-color: var(--line);
   height: var(--titlebar-height);
@@ -797,7 +797,7 @@ dialog label select,
   flex: 1 0 165px;
   max-width: 310px;
   min-width: 130px;
-  border: 1px solid #334038;
+  border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
@@ -837,7 +837,7 @@ dialog label select,
   position: relative;
   flex-shrink: 0;
   background: none;
-  border: 1px solid #3b4b40;
+  border: 1px solid color-mix(in srgb, var(--bg) 75%, var(--text));
   border-radius: 6px;
   cursor: pointer;
   width: 28px;
@@ -918,10 +918,10 @@ summary::-webkit-details-marker {
   z-index: 60;
   width: 235px;
   background: var(--panel);
-  border: 1px solid #524f67;
+  border: 1px solid var(--highlight);
   border-radius: 6px;
   padding: 12px;
-  box-shadow: 0 12px 32px #0005;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 35%, transparent);
 }
 
 .launch-popover .sr-only {
@@ -1020,7 +1020,7 @@ summary::-webkit-details-marker {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid #34473a;
+  border: 1px solid var(--line);
   border-radius: 7px;
   padding: 22px 16px;
   font-size: 12px;
@@ -1055,10 +1055,10 @@ summary::-webkit-details-marker {
   z-index: 25;
   width: 226px;
   background: var(--panel);
-  border: 1px solid #524f67;
+  border: 1px solid var(--highlight);
   border-radius: 5px;
   padding: 9px;
-  box-shadow: 0 8px 20px #0004;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--shadow) 25%, transparent);
 }
 
 .inline-attach-form input {
@@ -1086,8 +1086,8 @@ summary::-webkit-details-marker {
   padding: 14px;
   max-height: calc(calc(100dvh / var(--ui-scale, 1)) - 65px);
   overflow: auto;
-  border-color: #524f67;
-  box-shadow: 0 12px 40px #0006;
+  border-color: var(--highlight);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--shadow) 40%, transparent);
 }
 
 #folder-reason,
@@ -1166,7 +1166,7 @@ summary::-webkit-details-marker {
 
 .xterm .xterm-viewport {
   overflow-x: hidden;
-  scrollbar-color: #524f67 var(--bg);
+  scrollbar-color: var(--highlight) var(--bg);
 }
 
 .xterm ::-webkit-scrollbar-track,
@@ -1706,7 +1706,7 @@ summary::-webkit-details-marker {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 12px;
-  box-shadow: 0 14px 40px #0005;
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--shadow) 35%, transparent);
   user-select: text;
   position: fixed;
   right: 12px;
@@ -2033,7 +2033,7 @@ summary::-webkit-details-marker {
   border-radius: 6px;
   padding: 12px;
   z-index: 80;
-  box-shadow: 0 10px 30px #0006;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 40%, transparent);
   font-size: 11px;
 }
 
@@ -2273,7 +2273,7 @@ summary::-webkit-details-marker {
   padding: 16px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  box-shadow: 0 24px 90px #0008;
+  box-shadow: 0 24px 90px color-mix(in srgb, var(--shadow) 55%, transparent);
   max-height: calc(calc(100dvh / var(--ui-scale, 1)) - 48px);
   overflow: auto;
 }
@@ -2451,26 +2451,26 @@ button.git-file-row {
 .inline-error,
 .status-pill.blocked,
 .log-outcome.failure {
-  background: #372333;
+  background: color-mix(in srgb, var(--love) 15%, var(--bg));
   color: var(--love);
-  border-color: #68364d;
+  border-color: color-mix(in srgb, var(--love) 40%, var(--bg));
 }
 
 .status-pill.done,
 .status-pill.ready-to-merge,
 .log-outcome.success {
-  background: #21313e;
+  background: color-mix(in srgb, var(--bg) 90%, var(--text));
   color: var(--foam);
-  border-color: #355565;
+  border-color: color-mix(in srgb, var(--foam) 30%, var(--panel));
 }
 
 .github-role.mine {
-  background: #21313e;
+  background: color-mix(in srgb, var(--bg) 90%, var(--text));
   color: var(--foam);
 }
 
 .github-role.review {
-  background: #2c2540;
+  background: var(--overlay);
   color: var(--iris);
 }
 
@@ -2492,7 +2492,7 @@ button.git-file-row {
 .live-agent:hover,
 .live-agent.selected {
   background: var(--overlay);
-  border-color: #524f67;
+  border-color: var(--highlight);
 }
 
 .agent-state-dot.working {
@@ -2527,7 +2527,7 @@ button.git-file-row {
 
 .location-choice:hover,
 .location-choice.selected {
-  background: #403d52;
+  background: var(--line);
 }
 
 /* Tabs share the bar evenly; the selected tab grows to fit its title and the others share the rest. */
@@ -2618,7 +2618,7 @@ button.git-file-row {
 }
 
 #command-results .command-result.selected {
-  border-color: #52436b;
+  border-color: color-mix(in srgb, var(--iris) 25%, var(--overlay));
   background: var(--overlay);
 }
 
@@ -2797,7 +2797,7 @@ button.git-file-row {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  box-shadow: 0 12px 32px #0005;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 35%, transparent);
   z-index: 100;
 }
 
@@ -2937,24 +2937,26 @@ button.git-file-row {
 }
 
 :root {
-  --bg: #191724;
-  --panel: #1f1d2e;
-  --sidebar: #1f1d2e;
-  --line: #393552;
-  --text: #e0def4;
-  --muted: #908caa;
-  --green: #9ccfd8;
-  --accent: #c4a7e7;
-  --review: #c4a7e7;
-  --progress: #f6c177;
-  --blocked: #eb6f92;
-  --overlay: #26233a;
-  --subtle: #908caa;
-  --rose: #ebbcba;
-  --foam: #9ccfd8;
-  --iris: #c4a7e7;
-  --love: #eb6f92;
-  --gold: #f6c177;
+  --bg: rgb(25 23 36);
+  --panel: rgb(31 29 46);
+  --overlay: rgb(38 35 58);
+  --line: rgb(57 53 82);
+  --text: rgb(224 222 244);
+  --muted: rgb(144 140 170);
+  --rose: rgb(235 188 186);
+  --foam: rgb(156 207 216);
+  --iris: rgb(196 167 231);
+  --love: rgb(235 111 146);
+  --gold: rgb(246 193 119);
+  --sidebar: var(--panel);
+  --green: var(--foam);
+  --accent: var(--iris);
+  --review: var(--iris);
+  --progress: var(--gold);
+  --blocked: var(--love);
+  --subtle: var(--muted);
+  --highlight: color-mix(in srgb, var(--text) 10%, var(--line));
+  --shadow: rgb(0 0 0);
   --titlebar-height: 32px;
 }
 
@@ -2974,7 +2976,7 @@ button.git-file-row {
 
 .agent-tab-close:hover,
 .agent-tab-close:focus-visible {
-  background: #524f67;
+  background: var(--highlight);
   color: var(--text);
   opacity: 1;
 }
@@ -3052,7 +3054,7 @@ button.git-file-row {
 
 .agent-tab-snooze:hover,
 .agent-tab-snooze:focus-visible {
-  background: #524f67;
+  background: var(--highlight);
   color: var(--text);
 }
 
@@ -3527,9 +3529,9 @@ button.git-file-row {
   z-index: 70;
   padding: 12px;
   background: var(--line);
-  border: 1px solid #6e6a86;
+  border: 1px solid color-mix(in srgb, var(--highlight) 55%, var(--muted));
   border-radius: 7px;
-  box-shadow: 0 10px 28px #0007;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 45%, transparent);
   color: var(--text);
 }
 
@@ -3549,7 +3551,7 @@ button.git-file-row {
   background: var(--overlay);
   color: var(--text);
   font-size: 12px;
-  border: 1px solid #6e6a86;
+  border: 1px solid color-mix(in srgb, var(--highlight) 55%, var(--muted));
   resize: vertical;
   max-height: 25dvh;
 }
@@ -3584,7 +3586,7 @@ button.git-file-row {
   max-height: none;
   border: 1px solid var(--line);
   border-radius: 7px;
-  box-shadow: 0 12px 40px #0006;
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--shadow) 40%, transparent);
   z-index: 45;
   background: var(--overlay);
   overflow: visible;
@@ -3732,10 +3734,10 @@ button.git-file-row {
   max-height: 55dvh;
   overflow: auto;
   background: var(--overlay);
-  border: 1px solid #524f67;
+  border: 1px solid var(--highlight);
   border-radius: 7px;
   padding: 12px;
-  box-shadow: 0 -8px 28px #0005;
+  box-shadow: 0 -8px 28px color-mix(in srgb, var(--shadow) 35%, transparent);
   z-index: 50;
 }
 
@@ -4304,7 +4306,7 @@ button.git-file-row {
 .review-inline-comment + .review-inline-comment {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid #403d52;
+  border-top: 1px solid var(--line);
 }
 
 .review-author-pill {
@@ -4312,9 +4314,9 @@ button.git-file-row {
   align-items: center;
   max-width: 100%;
   padding: 2px 7px;
-  border: 1px solid #52436b;
+  border: 1px solid color-mix(in srgb, var(--iris) 25%, var(--overlay));
   border-radius: 10px;
-  background: #332b46;
+  background: color-mix(in srgb, var(--iris) 5%, var(--overlay));
   color: var(--iris);
   font:
     600 10px/1.4 -apple-system,
@@ -4403,12 +4405,12 @@ button.git-file-row {
 
 .review-file-count.agent,
 .review-author-pill.agent {
-  color: #9ab8ec;
+  color: color-mix(in srgb, var(--foam) 55%, var(--muted));
 }
 
 .review-author-pill.agent {
-  background: #293047;
-  border-color: #465578;
+  background: color-mix(in srgb, var(--foam) 5%, var(--overlay));
+  border-color: var(--highlight);
 }
 
 .git-file-row,
@@ -4574,7 +4576,7 @@ button.git-file-row {
   padding: 10px;
   overflow: auto;
   background: var(--panel);
-  border: 1px solid #403d52;
+  border: 1px solid var(--line);
   border-radius: 4px;
   white-space: pre;
   max-width: 100%;
