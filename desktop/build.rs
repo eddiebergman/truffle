@@ -25,8 +25,13 @@ fn main() {
         .unwrap();
     let mut paths = Vec::new();
     files(&root, &mut paths);
-    paths.sort();
-    let mut source = String::from("pub fn asset(path:&str)->Option<&'static [u8]>{match path{\n");
+    paths.sort_by_key(|p| {
+        p.strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    });
+    let mut source = String::from("const ASSETS:&[(&str,&[u8])]=&[\n");
     let config_names = paths
         .iter()
         .map(|p| {
@@ -41,13 +46,13 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.display());
         writeln!(
             source,
-            "{:?}=>Some(include_bytes!({:?})),",
+            "({:?},include_bytes!({:?})),",
             path.strip_prefix(&root).unwrap().to_string_lossy(),
             path.to_string_lossy()
         )
         .unwrap();
     }
-    source.push_str("_=>None}}\n");
+    source.push_str("];\npub fn asset(path:&str)->Option<&'static [u8]>{ASSETS.binary_search_by(|(name,_)|name.cmp(&path)).ok().map(|index|ASSETS[index].1)}\n");
     writeln!(source, "pub const CONFIG_FILES:&[&str]=&{config_names:?};").unwrap();
     std::fs::write(
         std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("assets.rs"),

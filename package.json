@@ -2,8 +2,10 @@
   "name": "truffle-static",
   "private": true,
   "scripts": {
+    "lint": "npm run lint:css && npm run lint:rust",
     "lint:css": "stylelint \"static/*.css\" && prettier --check \"static/*.css\"",
-    "format:css": "prettier --write \"static/*.css\" && stylelint --fix \"static/*.css\""
+    "format:css": "prettier --write \"static/*.css\" && stylelint --fix \"static/*.css\"",
+    "lint:rust": "cd desktop && cargo fmt --check && cargo clippy --all-targets"
   },
   "devDependencies": {
     "prettier": "3.9.10",
