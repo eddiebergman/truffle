@@ -32,10 +32,6 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-button {
-  cursor: pointer;
-}
-
 button:disabled {
   cursor: wait;
   opacity: 0.5;
@@ -61,6 +57,7 @@ a {
 }
 
 button {
+  cursor: pointer;
   color: inherit;
 }
 
@@ -96,6 +93,7 @@ button:active {
   padding: 30px 18px 18px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .brand {
@@ -270,16 +268,6 @@ main {
   color: #464b55;
 }
 
-.content {
-  margin: auto;
-}
-
-.page-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .eyebrow {
   font-size: 9px;
   letter-spacing: 1.7px;
@@ -337,11 +325,8 @@ h1 {
 .metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.metric {
-  text-align: left;
-  background: #15171a;
+  gap: 7px;
+  margin: 16px 0;
 }
 
 .metric.selected {
@@ -353,16 +338,17 @@ h1 {
   color: #a7acb4;
   display: flex;
   align-items: center;
-}
-
-.metric strong {
-  font-weight: 500;
-  line-height: 1.2;
+  font-size: 10px;
+  flex: 1;
+  white-space: nowrap;
+  gap: 5px;
 }
 
 .metric small {
   font-size: 10px;
   color: #6c747f;
+  line-height: 1.4;
+  display: none;
 }
 
 .dot {
@@ -389,6 +375,10 @@ h1 {
   display: flex;
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .search {
@@ -400,6 +390,7 @@ h1 {
   background: #181a1e;
   border: 1px solid var(--line);
   border-radius: 7px;
+  padding: 4px 9px;
 }
 
 .search > span {
@@ -446,15 +437,6 @@ select {
   background: #181a1e;
 }
 
-.group-header {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 11px;
-  color: #bbc0c8;
-  font-weight: 500;
-}
-
 .group-count {
   font-size: 10px;
   color: #69727f;
@@ -472,22 +454,8 @@ select {
   margin-left: 4px;
 }
 
-.row {
-  align-items: center;
-  transition: border-color 0.15s;
-}
-
 .row:hover {
   border-color: #4a515b;
-}
-
-.source-icon {
-  display: grid;
-  place-items: center;
-  border: 1px solid #333841;
-  background: #1c1f24;
-  color: #b9c1ce;
-  flex-shrink: 0;
 }
 
 .source-icon.linear {
@@ -500,15 +468,6 @@ select {
   background: #232820;
   color: #b8c8a7;
   border-color: #373e31;
-}
-
-.row-main {
-  flex: 1;
-}
-
-.row-title {
-  font-weight: 500;
-  display: block;
 }
 
 .row-title:hover {
@@ -526,11 +485,14 @@ button.row-title {
   display: flex;
   align-items: center;
   color: #737d8a;
-}
-
-.row-meta .ref {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  color: #929ba8;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  gap: 5px;
+  margin: 0;
+  font-size: 10px;
+  max-width: 230px;
 }
 
 .meta-sep {
@@ -544,6 +506,7 @@ button.row-title {
   border-radius: 5px;
   font-size: 9px;
   white-space: nowrap;
+  padding: 2px 6px;
 }
 
 .status-pill.needs-review {
@@ -576,11 +539,6 @@ button.row-title {
   color: #a2d4b5;
 }
 
-.row-actions {
-  display: flex;
-  align-items: center;
-}
-
 .pin-button,
 .icon-button {
   border: 0;
@@ -593,12 +551,6 @@ button.row-title {
 
 .pin-button.pinned {
   color: var(--green);
-}
-
-.row-open {
-  color: #707b88;
-  font-size: 15px;
-  padding: 4px;
 }
 
 .row-open:hover {
@@ -1024,6 +976,7 @@ dialog .optional {
   border: 0;
   border-radius: 5px;
   color: #75808c;
+  padding: 2px 3px;
 }
 
 .ci-pill.passed {
@@ -1132,10 +1085,6 @@ a.ci-check-name:hover {
   color: #697788;
 }
 
-.metric small {
-  line-height: 1.4;
-}
-
 @media (max-width: 760px) {
   .ci-pill {
     font-size: 9px;
@@ -1174,10 +1123,6 @@ a.ci-check-name:hover {
   color: #acd9c4;
 }
 
-.item-agent-links {
-  display: flex;
-}
-
 .agent-link {
   font-size: 9px;
   color: #a4b9ac;
@@ -1195,20 +1140,6 @@ a.ci-check-name:hover {
   background: #29211e;
   border-color: #44352e;
   color: #c6a596;
-}
-
-.session-card {
-  border: 1px solid #30373f;
-  background: #171b1f;
-}
-
-.session-card-title {
-  border: 0;
-  background: none;
-  font-weight: 500;
-  text-align: left;
-  padding: 0;
-  color: #dce4e4;
 }
 
 .session-card-title:hover {
@@ -1479,6 +1410,9 @@ a.ci-check-name:hover {
 }
 
 .row-open {
+  color: #707b88;
+  font-size: 15px;
+  padding: 4px;
   display: block !important;
 }
 
@@ -1538,11 +1472,15 @@ a.ci-check-name:hover {
 
 /* Compact board: one line per work item or agent session. */
 .content {
+  margin: auto;
   max-width: 1450px;
   padding: 24px 30px;
 }
 
 .page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 18px;
   gap: 15px;
 }
@@ -1583,12 +1521,9 @@ a.ci-check-name:hover {
   margin-right: 8px;
 }
 
-.metrics {
-  gap: 7px;
-  margin: 16px 0;
-}
-
 .metric {
+  text-align: left;
+  background: #15171a;
   min-height: 0;
   display: flex;
   flex-direction: row;
@@ -1598,30 +1533,12 @@ a.ci-check-name:hover {
   border-radius: 5px;
 }
 
-.metric > span {
-  font-size: 10px;
-  flex: 1;
-  white-space: nowrap;
-  gap: 5px;
-}
-
 .metric strong {
+  font-weight: 500;
+  line-height: 1.2;
   font-size: 16px;
   margin: 0;
   letter-spacing: 0;
-}
-
-.metric small {
-  display: none;
-}
-
-.toolbar {
-  padding-bottom: 12px;
-  gap: 8px;
-}
-
-.search {
-  padding: 4px 9px;
 }
 
 .view-controls select {
@@ -1633,10 +1550,22 @@ a.ci-check-name:hover {
 }
 
 .group-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  color: #bbc0c8;
+  font-weight: 500;
   margin: 9px 0 5px;
 }
 
 .source-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid #333841;
+  background: #1c1f24;
+  color: #b9c1ce;
+  flex-shrink: 0;
   height: 21px;
   width: 21px;
   border-radius: 4px;
@@ -1644,6 +1573,7 @@ a.ci-check-name:hover {
 }
 
 .row-main {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1651,6 +1581,8 @@ a.ci-check-name:hover {
 }
 
 .row-title {
+  font-weight: 500;
+  display: block;
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -1660,32 +1592,21 @@ a.ci-check-name:hover {
   overflow-wrap: normal;
 }
 
-.row-meta {
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  overflow: hidden;
-  gap: 5px;
-  margin: 0;
-  font-size: 10px;
-}
-
 .row-meta > :not(.ref) {
   display: none;
 }
 
 .row-actions {
+  display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
   max-width: none;
   flex-shrink: 0;
 }
 
-.status-pill {
-  padding: 2px 6px;
-}
-
 .item-agent-links {
+  display: flex;
   margin: 0;
   flex-wrap: nowrap;
   gap: 3px;
@@ -1706,10 +1627,7 @@ a.ci-check-name:hover {
 .row-actions .row-open {
   font-size: 16px;
   padding: 2px 3px;
-}
-
-.ci-pill {
-  padding: 2px 3px;
+  width: 22px;
 }
 
 #active-sessions {
@@ -1717,6 +1635,8 @@ a.ci-check-name:hover {
 }
 
 .session-card {
+  border: 1px solid #30373f;
+  background: #171b1f;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1735,6 +1655,12 @@ a.ci-check-name:hover {
 }
 
 .session-card-title {
+  border: 0;
+  background: none;
+  font-weight: 500;
+  text-align: left;
+  padding: 0;
+  color: #dce4e4;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1961,10 +1887,6 @@ a.ci-check-name:hover {
   margin: 5px 0 10px;
 }
 
-.row-meta {
-  max-width: 230px;
-}
-
 @media (max-width: 1050px) {
   .row-meta {
     max-width: 165px;
@@ -1972,10 +1894,6 @@ a.ci-check-name:hover {
 }
 
 /* Repository/project chips stay on one horizontally scrollable line after search. */
-.toolbar {
-  align-items: center;
-  flex-wrap: nowrap;
-}
 
 .toolbar .search {
   flex: 0 1 230px;
@@ -2075,6 +1993,8 @@ a.ci-check-name:hover {
 
 /* Fixed source/role gutter; workflow status retains its full label. */
 .row {
+  align-items: center;
+  transition: border-color 0.15s;
   display: grid;
   grid-template-columns: 21px minmax(0, 1fr);
   gap: 0;
@@ -2138,6 +2058,8 @@ a.ci-check-name:hover {
 }
 
 .row-meta .ref {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: #929ba8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2166,11 +2088,6 @@ a.ci-check-name:hover {
   justify-content: center;
   width: 34px;
   min-height: 23px;
-}
-
-.row-actions .pin-button,
-.row-actions .row-open {
-  width: 22px;
 }
 
 .row-actions .status-pill {
@@ -2456,14 +2373,6 @@ a.ci-check-name:hover {
   color: #b5e5c7;
 }
 
-.sidebar {
-  overflow-y: auto;
-}
-
-.sidebar-bottom {
-  padding-top: 12px;
-}
-
 .sidebar-bottom .local-note {
   display: none;
 }
@@ -2565,10 +2474,6 @@ a.ci-check-name:hover {
   margin: 4px 0 12px;
 }
 
-.change-row {
-  border-bottom: 1px solid var(--line);
-}
-
 .change-row time {
   margin-left: auto;
 }
@@ -2583,18 +2488,6 @@ a.ci-check-name:hover {
 .briefing-card h2 {
   margin: 0 0 8px;
   font-size: 17px;
-}
-
-.briefing-body {
-  overflow-wrap: anywhere;
-  font:
-    12px/1.8 -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-}
-
-.briefing-body a {
-  white-space: normal;
 }
 
 #command-dialog {
@@ -2677,10 +2570,6 @@ a.ci-check-name:hover {
   margin-bottom: 10px;
 }
 
-.sidebar-bottom {
-  margin-top: auto;
-}
-
 #sentry-controls {
   font-size: 11px;
 }
@@ -2747,6 +2636,11 @@ a.ci-check-name:hover {
 
 /* Briefings use semantic Markdown; content stays contained on narrow screens. */
 .briefing-body {
+  overflow-wrap: anywhere;
+  font:
+    12px/1.8 -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   white-space: normal;
   font-size: 13px;
   line-height: 1.75;
@@ -2814,6 +2708,7 @@ a.ci-check-name:hover {
 }
 
 .briefing-body a {
+  white-space: normal;
   color: #a5bfe3;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -2909,6 +2804,7 @@ a.ci-check-name:hover {
 
 /* Changes: time, state transition, then the source-linked title. */
 .change-row {
+  border-bottom: 1px solid var(--line);
   display: grid;
   grid-template-columns: 70px max-content minmax(0, 1fr) 24px;
   gap: 14px;
@@ -2940,16 +2836,8 @@ a.ci-check-name:hover {
   flex-wrap: wrap;
   gap: 6px;
   max-width: 340px;
-}
-
-.change-transitions .status-pill,
-.change-transitions .ci-pill {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.5;
-  font-size: 9px;
-  padding: 2px 7px;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .change-arrow {
@@ -2957,29 +2845,10 @@ a.ci-check-name:hover {
   color: #626e7b;
 }
 
-.change-title {
-  min-width: 0;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12px;
-  color: #dce0e7;
-  border: 0;
-  padding: 0;
-  background: none;
-  text-decoration: none;
-}
-
 .change-title:hover {
   color: var(--green);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.change-ref {
-  color: #8f9ba9;
-  font-size: 10px;
 }
 
 .change-title.maintenance-title {
@@ -3057,11 +2926,6 @@ a.ci-check-name:hover {
   }
 }
 
-.change-transitions {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
 .change-transition-group {
   display: flex;
   align-items: center;
@@ -3070,6 +2934,12 @@ a.ci-check-name:hover {
 
 .change-transitions .status-pill,
 .change-transitions .ci-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+  font-size: 9px;
+  padding: 2px 7px;
   width: 100px;
   max-width: 100px;
   text-align: center;
@@ -3077,6 +2947,17 @@ a.ci-check-name:hover {
 }
 
 .change-title {
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #dce0e7;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-decoration: none;
   display: grid;
   grid-template-columns: 145px minmax(0, 1fr);
   gap: 10px;
@@ -3084,6 +2965,8 @@ a.ci-check-name:hover {
 }
 
 .change-ref {
+  color: #8f9ba9;
+  font-size: 10px;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3499,6 +3382,8 @@ a.ci-check-name:hover {
 }
 
 .sidebar-bottom {
+  padding-top: 12px;
+  margin-top: auto;
   flex-shrink: 0;
 }
 
