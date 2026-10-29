@@ -7,7 +7,7 @@ fn position(state: &Value, id: &str) -> Result<usize> {
     arr(&state["sessions"])
         .iter()
         .position(|r| r["id"] == id)
-        .ok_or(Error::new("Session unavailable."))
+        .ok_or_else(|| Error::new("Session unavailable."))
 }
 pub(super) fn draft(record: &Value) -> Value {
     if record["reviewDraft"].is_object() {
@@ -95,7 +95,7 @@ fn summary_identity(repo: &Repository, value: &Value, max: usize) -> Result<Valu
         .filter(|value| {
             !value.is_empty() && value.len() <= max && !value.chars().any(char::is_control)
         })
-        .ok_or(Error::new("Review identity is unavailable."))?;
+        .ok_or_else(|| Error::new("Review identity is unavailable."))?;
     let mut safe = text.to_owned();
     super::commands::redact_text(repo, &mut safe);
     if safe != text {
@@ -119,13 +119,13 @@ fn summary_freshness(value: &Value) -> Result<Value> {
 pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
     let object = args
         .as_object()
-        .ok_or(Error::new("Review check arguments must be an object."))?;
+        .ok_or_else(|| Error::new("Review check arguments must be an object."))?;
     if object.len() != 1 || !object.contains_key("id") {
         return Err(Error::new("Review check accepts only a saved chat ID."));
     }
     let id = sid(args["id"]
         .as_str()
-        .ok_or(Error::new("Supply the saved chat ID."))?)?;
+        .ok_or_else(|| Error::new("Supply the saved chat ID."))?)?;
     summary_identity(repo, &json!(id), 80)?;
     {
         let state = repo.state.lock().map_err(|_| Error::io())?;
@@ -141,7 +141,7 @@ pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
     let revision = review["revision"]
         .as_u64()
         .filter(|value| *value <= 9_007_199_254_740_991)
-        .ok_or(Error::new("Review revision is unavailable."))?;
+        .ok_or_else(|| Error::new("Review revision is unavailable."))?;
     let mut comments = vec![];
     let mut assessments = vec![];
     for (field, result) in [
@@ -169,7 +169,7 @@ pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
             .filter(|value| {
                 ["requested", "reviewing", "complete", "failed", "cancelled"].contains(value)
             })
-            .ok_or(Error::new("Review run state is unavailable."))?;
+            .ok_or_else(|| Error::new("Review run state is unavailable."))?;
         json!({"id":summary_identity(repo,&raw["id"],80)?,"state":state,"scope":raw["scope"].as_str().filter(|value|*value=="conversation"),"startedAt":summary_time(&raw["startedAt"]),"updatedAt":summary_time(&raw["updatedAt"]),"completedAt":summary_time(&raw["completedAt"])})
     } else {
         Value::Null
@@ -455,7 +455,7 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
             }
             "remove" | "ack" => {remove_or_ack(&mut review,&mut saved,p,operation);}
             "note" => {
-                let note = p["note"].as_str().ok_or(Error::new("Expected review note."))?;
+                let note = p["note"].as_str().ok_or_else(|| Error::new("Expected review note."))?;
                 if note.len() > 8000 { return Err(Error::new("Review note exceeds 8000 bytes.")); }
                 if p["previousNote"] != review["note"] { return Err(Error::new("The review note changed. Reload it before editing.")); }
                 review["note"] = json!(note);

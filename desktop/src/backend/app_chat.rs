@@ -168,7 +168,7 @@ impl Host {
             }
         }
         let assistant=choose_assistant(text(&repo.settings.view()["values"],"defaultAgent"),installed)
-            .ok_or(Error::new("App chat needs an installed Claude or Codex CLI. Install one and sign in, then try again."))?;
+            .ok_or_else(|| Error::new("App chat needs an installed Claude or Codex CLI. Install one and sign in, then try again."))?;
         let job = json!({"id":request,"state":"running","startedAt":now(),"commands":[],"assistant":assistant.metadata()});
         append(
             repo,
@@ -291,7 +291,7 @@ fn recovery_uuid(repo: &Repository, value: &Value) -> Result<String> {
     let raw = value
         .as_str()
         .filter(|value| value.len() == 36)
-        .ok_or(Error::new("Invalid chat recovery UUID."))?;
+        .ok_or_else(|| Error::new("Invalid chat recovery UUID."))?;
     let id = sid(raw)?;
     if !id.eq_ignore_ascii_case(raw) {
         return Err(Error::new("Invalid chat recovery UUID."));
@@ -312,7 +312,7 @@ fn chat_recovery_context(repo: &Repository, p: &Value) -> Result<Value> {
     };
     let object = value
         .as_object()
-        .ok_or(Error::new("Invalid chat recovery context."))?;
+        .ok_or_else(|| Error::new("Invalid chat recovery context."))?;
     if value["availability"] == "unavailable" && object.len() == 1 {
         return Ok(json!({"availability":"unavailable"}));
     }
@@ -327,17 +327,17 @@ fn chat_recovery_context(repo: &Repository, p: &Value) -> Result<Value> {
     let entries = value["entries"]
         .as_array()
         .filter(|entries| entries.len() <= 8)
-        .ok_or(Error::new("Chat recovery context exceeds eight requests."))?;
+        .ok_or_else(|| Error::new("Chat recovery context exceeds eight requests."))?;
     let total = value["total"]
         .as_u64()
         .filter(|total| *total <= 64 && *total >= entries.len() as u64)
-        .ok_or(Error::new("Invalid chat recovery request count."))?;
+        .ok_or_else(|| Error::new("Invalid chat recovery request count."))?;
     let mut clients = vec![];
     let mut ids = std::collections::HashSet::new();
     for entry in entries {
         let object = entry
             .as_object()
-            .ok_or(Error::new("Invalid chat recovery request."))?;
+            .ok_or_else(|| Error::new("Invalid chat recovery request."))?;
         if object.len() < 4
             || object.len() > 5
             || object.keys().any(|key| {
@@ -487,7 +487,7 @@ fn context(repo: &Repository, p: &Value) -> Result<Value> {
 fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
     let fields = value
         .as_object()
-        .ok_or(Error::new("Invalid Settings filter context."))?;
+        .ok_or_else(|| Error::new("Invalid Settings filter context."))?;
     if fields.len() != 4
         || fields.keys().any(|key| {
             ![
@@ -504,7 +504,7 @@ fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
     let query = value["query"]
         .as_str()
         .filter(|query| query.chars().count() <= 200 && !query.contains('\0'))
-        .ok_or(Error::new("Invalid Settings search context."))?;
+        .ok_or_else(|| Error::new("Invalid Settings search context."))?;
     let mut redactor = commands::stream_redactor(repo);
     let mut query = redactor.push(query);
     query.push_str(&redactor.finish());
@@ -512,7 +512,7 @@ fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
     for key in ["queryTruncated", "modifiedOnly", "preferencesDirty"] {
         result[key] = json!(value[key]
             .as_bool()
-            .ok_or(Error::new("Invalid Settings filter context."))?);
+            .ok_or_else(|| Error::new("Invalid Settings filter context."))?);
     }
     Ok(result)
 }
@@ -523,7 +523,7 @@ fn selected_worktree(record: &Option<Value>, p: &Value) -> Result<Value> {
     }
     let record = record
         .as_ref()
-        .ok_or(Error::new("Selected chat unavailable."))?;
+        .ok_or_else(|| Error::new("Selected chat unavailable."))?;
     if record["cwd"] != path && !arr(&record["worktrees"]).iter().any(|t| t["path"] == path) {
         return Err(Error::new("Selected worktree is not linked to this chat."));
     }
@@ -631,7 +631,7 @@ fn tool(
             if let Some(category) = args.get("category") {
                 let category = category
                     .as_str()
-                    .ok_or(Error::new("Choose a known Settings category."))?;
+                    .ok_or_else(|| Error::new("Choose a known Settings category."))?;
                 if destination != "settings"
                     || ![
                         "appearance",
@@ -709,7 +709,7 @@ fn tool(
             let results = if query.is_empty() {
                 Value::Null
             } else {
-                Some(super::chat_search::search(repo,&json!({"query":query}))?).filter(|r|arr(&r["chats"]).iter().any(|c|c["id"]==id)).map(|r|json!({"type":"chat-results","query":query,"chats":r["chats"],"total":r["total"],"recommendedId":id,"reason":""})).ok_or(Error::new("The target is not in these search results."))?
+                Some(super::chat_search::search(repo,&json!({"query":query}))?).filter(|r|arr(&r["chats"]).iter().any(|c|c["id"]==id)).map(|r|json!({"type":"chat-results","query":query,"chats":r["chats"],"total":r["total"],"recommendedId":id,"reason":""})).ok_or_else(|| Error::new("The target is not in these search results."))?
             };
             let command = json!({"type":"open-chat","id":id,"results":results});
             commands.push(command.clone());
@@ -723,7 +723,7 @@ fn tool(
             domain::catalog(&s)
                 .get(&id)
                 .map(|item| project(&effective(&s, item), 4000))
-                .ok_or(Error::new("That item is not cached."))
+                .ok_or_else(|| Error::new("That item is not cached."))
         }
         "show" => {
             if commands.len() >= 4 {
@@ -1245,12 +1245,12 @@ fn image_reply(output: &str) -> Result<String> {
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
         .filter(|v| v["type"] == "result")
-        .last()
+        .next_back()
         .filter(|v| v["is_error"] != true)
         .and_then(|v| v["result"].as_str().map(str::to_owned))
-        .ok_or(Error::new(
-            "Claude did not return an image response. Check its version and sign-in.",
-        ))
+        .ok_or_else(|| {
+            Error::new("Claude did not return an image response. Check its version and sign-in.")
+        })
 }
 fn image_blocks(value: &Value) -> Result<Vec<Value>> {
     use base64::Engine;
@@ -1260,18 +1260,18 @@ fn image_blocks(value: &Value) -> Result<Vec<Value>> {
     let rows = value
         .as_array()
         .filter(|r| r.len() <= 2)
-        .ok_or(Error::new("Attach at most two screenshots."))?;
+        .ok_or_else(|| Error::new("Attach at most two screenshots."))?;
     rows.iter()
         .map(|row| {
             let kind = text(row, "mediaType");
             let data = text(row, "data");
-            if !["image/png", "image/jpeg"].contains(&kind) || data.len() > 800000 {
+            if !["image/png", "image/jpeg"].contains(&kind) || data.len() > 800_000 {
                 return Err(Error::new("Use a PNG or JPEG screenshot under 600 KiB."));
             }
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(data)
                 .map_err(|_| Error::new("Invalid screenshot data."))?;
-            if bytes.len() > 600000
+            if bytes.len() > 600_000
                 || !(kind == "image/png" && bytes.starts_with(b"\x89PNG\r\n\x1a\n")
                     || kind == "image/jpeg" && bytes.starts_with(&[0xff, 0xd8, 0xff]))
             {

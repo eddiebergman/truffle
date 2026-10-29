@@ -41,7 +41,7 @@ fn artifact_metadata_full_read_is_pure_registered_metadata_and_preserves_more_th
     assert!(!result.to_string().contains("example.invalid"));
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn artifact_metadata_field_cas_commutes_and_preserves_immutable_data_and_extensions() {

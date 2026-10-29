@@ -177,7 +177,7 @@ impl LocalHttpService {
     fn capture_token(&self, body: &mut Value) {
         if let Some(token) = body.get("csrf").and_then(Value::as_str) {
             if let Ok(mut current) = self.csrf.lock() {
-                *current = token.to_owned();
+                token.clone_into(&mut current);
             }
         }
         // The web UI never receives the native client's service credential.

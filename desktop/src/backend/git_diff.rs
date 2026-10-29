@@ -61,7 +61,7 @@ fn parse_numstat(output: &str) -> Result<Vec<FileChange>> {
             let deleted = parts.next().unwrap_or("");
             let path = parts
                 .next()
-                .ok_or(Error::new("Invalid Git diff statistics."))?;
+                .ok_or_else(|| Error::new("Invalid Git diff statistics."))?;
             valid_path(path)?;
             let number = |s: &str| {
                 if s == "-" {
@@ -114,9 +114,9 @@ fn compare(cwd: &Path) -> Result<Comparison> {
             )
             .is_ok()
         })
-        .ok_or(Error::new(
-            "No main branch is available locally. Fetch main, then retry.",
-        ))?;
+        .ok_or_else(|| {
+            Error::new("No main branch is available locally. Fetch main, then retry.")
+        })?;
     let base = git(&root, &["merge-base", base_ref, "HEAD"])
         .map_err(|_| Error::new("This branch has no shared ancestor with main."))?
         .trim()
@@ -181,7 +181,7 @@ fn session_directory(repo: &Repository, id: &str, requested: &str) -> Result<Str
     let record = arr(&state["sessions"])
         .into_iter()
         .find(|s| s["id"] == id)
-        .ok_or(Error::new("Agent session not found."))?;
+        .ok_or_else(|| Error::new("Agent session not found."))?;
     if requested.is_empty() {
         return Ok(text(&record, "cwd").to_owned());
     }
@@ -220,7 +220,7 @@ pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Va
         identity
             .lines()
             .next()
-            .ok_or(Error::new("Git root unavailable."))?,
+            .ok_or_else(|| Error::new("Git root unavailable."))?,
     );
     let status = git(
         &root,
@@ -239,7 +239,9 @@ pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Va
         if count > MAX_FILES {
             return Err(Error::new("Too many files to verify review freshness."));
         }
-        let path = entry.get(3..).ok_or(Error::new("Invalid Git status."))?;
+        let path = entry
+            .get(3..)
+            .ok_or_else(|| Error::new("Invalid Git status."))?;
         match fs::symlink_metadata(root.join(valid_path(path)?)) {
             Ok(meta) => stamp.push_str(&format!(
                 "{}:{}:{}:{}:{}:{}",
@@ -283,9 +285,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
         .files
         .iter()
         .find(|f| f.path == path)
-        .ok_or(Error::new(
-            "This file is no longer in the diff. Refresh the file list.",
-        ))?;
+        .ok_or_else(|| Error::new("This file is no longer in the diff. Refresh the file list."))?;
     let relative = valid_path(path)?;
     let target = comparison.root.join(&relative);
     let spec = format!("{}:{}", comparison.base, path);
@@ -347,7 +347,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
 fn command_args(args: &Value, file: bool) -> Result<(&str, &str, &str)> {
     let object = args
         .as_object()
-        .ok_or(Error::new("Chat diff arguments must be an object."))?;
+        .ok_or_else(|| Error::new("Chat diff arguments must be an object."))?;
     let allowed = if file {
         &["recordId", "cwd", "path"][..]
     } else {
@@ -363,19 +363,19 @@ fn command_args(args: &Value, file: bool) -> Result<(&str, &str, &str)> {
         .filter(|value| {
             !value.is_empty() && value.len() <= 80 && !value.chars().any(char::is_control)
         })
-        .ok_or(Error::new("Supply the exact saved chat ID."))?;
+        .ok_or_else(|| Error::new("Supply the exact saved chat ID."))?;
     let cwd = match args.get("cwd") {
         None => "",
         Some(value) => value
             .as_str()
             .filter(|value| value.len() <= 4096 && !value.contains('\0'))
-            .ok_or(Error::new("Supply a linked checkout path."))?,
+            .ok_or_else(|| Error::new("Supply a linked checkout path."))?,
     };
     let path = if file {
         args["path"]
             .as_str()
             .filter(|value| !value.is_empty() && value.len() <= 4096 && !value.contains('\0'))
-            .ok_or(Error::new("Supply an exact listed diff path."))?
+            .ok_or_else(|| Error::new("Supply an exact listed diff path."))?
     } else {
         ""
     };
@@ -385,7 +385,7 @@ fn command_identity(repo: &Repository, value: &Value, max: usize) -> Result<Valu
     let value = value
         .as_str()
         .filter(|value| value.len() <= max && !value.contains('\0'))
-        .ok_or(Error::new("Diff metadata exceeds the command limit."))?;
+        .ok_or_else(|| Error::new("Diff metadata exceeds the command limit."))?;
     let mut safe = value.to_owned();
     super::commands::redact_text(repo, &mut safe);
     if safe != value {
@@ -434,7 +434,7 @@ pub fn command_file(repo: &Repository, args: &Value) -> Result<Value> {
     for field in ["oldContent", "newContent"] {
         let raw = value[field]
             .as_str()
-            .ok_or(Error::new("Diff text is unavailable."))?;
+            .ok_or_else(|| Error::new("Diff text is unavailable."))?;
         let mut content = raw.to_owned();
         super::commands::redact_text(repo, &mut content);
         redacted |= content != raw;
@@ -458,7 +458,7 @@ fn working_file_bytes(
         limit,
         Some(&super::local_files::generation(metadata)),
     )?
-    .ok_or(Error::new("The diff file changed. Refresh its file list."))
+    .ok_or_else(|| Error::new("The diff file changed. Refresh its file list."))
 }
 fn snapshot_file(root: &Path, relative: &Path, bytes: &[u8]) -> Result<PathBuf> {
     let directory = root
@@ -471,7 +471,7 @@ fn snapshot_file(root: &Path, relative: &Path, bytes: &[u8]) -> Result<PathBuf> 
     let path = directory.join(
         relative
             .file_name()
-            .ok_or(Error::new("Invalid diff file name."))?,
+            .ok_or_else(|| Error::new("Invalid diff file name."))?,
     );
     use std::io::Write;
     match fs::OpenOptions::new()

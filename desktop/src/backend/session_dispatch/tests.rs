@@ -254,7 +254,10 @@ fn dispatch_identity_revision_capacity_and_private_extensions_are_guarded() {
     assert!(feedback_send(&repo, &bad, &generation, |_, _| panic!("missing revision")).is_err());
     bad["revision"] = json!(2);
     assert!(feedback_send(&repo, &bad, &generation, |_, _| panic!("stale revision")).is_err());
-    assert!(entries(&repo.state.lock().unwrap()).unwrap().is_empty());
+    assert_eq!(
+        entries(&repo.state.lock().unwrap()).unwrap(),
+        [] as [serde_json::Value; 0]
+    );
     feedback_send(&repo, &args, &generation, |_, _| Err(Error::new("Unknown"))).unwrap();
     let mut collision = args.clone();
     collision["itemId"] = json!("github:pr");
@@ -305,7 +308,7 @@ fn dispatch_identity_revision_capacity_and_private_extensions_are_guarded() {
     })
     .unwrap();
     let before = repo.state.lock().unwrap().clone();
-    let mut next = args.clone();
+    let mut next = args;
     next["operationId"] = json!(uuid());
     assert!(feedback_send(&repo, &next, &generation, |_, _| panic!("journal full")).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -361,7 +364,7 @@ fn dispatch_request_and_ci_queue_are_atomic_and_resolution_cancels_only_matching
     let (_temp, repo, args, generation) = fixture();
     let settings = repo.settings.view();
     let command = text(&settings["reviewSkill"]["commands"], "codex");
-    assert!(!command.is_empty());
+    assert_ne!(command, "");
     repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":command}}),false).unwrap();
     let result = dispatch_with(
         &repo,
@@ -939,7 +942,7 @@ fn dispatch_v2_ticket_metadata_overflow_and_unknown_identity_fail_closed() {
             match mutation {
                 "floor" => s[JOURNAL]["retiredThrough"] = s[JOURNAL]["nextTicket"].clone(),
                 "ticket-next" => {
-                    s[JOURNAL]["entries"][0]["ticket"] = s[JOURNAL]["nextTicket"].clone()
+                    s[JOURNAL]["entries"][0]["ticket"] = s[JOURNAL]["nextTicket"].clone();
                 }
                 "ticket-number" => s[JOURNAL]["entries"][0]["ticket"] = json!(9),
                 _ => {
@@ -1295,7 +1298,7 @@ fn dispatch_v2_stale_recovery_temporary_artifacts_do_not_block_restart_migration
         let prefix = path.file_stem().unwrap().to_string_lossy().to_string() + ".tmp-";
         let attempts = std::fs::read_dir(path.parent().unwrap())
             .unwrap()
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().starts_with(&prefix))
             .count();
         assert_eq!(attempts, 1, "only the unrelated stale attempt may remain");

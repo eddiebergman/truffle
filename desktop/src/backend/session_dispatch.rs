@@ -43,7 +43,7 @@ fn entries(state: &Value) -> Result<Vec<Value>> {
     let entries = journal["entries"]
         .as_array()
         .filter(|entries| entries.len() <= limit)
-        .ok_or(Error::new("Invalid dispatch journal."))?;
+        .ok_or_else(|| Error::new("Invalid dispatch journal."))?;
     if serde_json::to_vec(journal)?.len() > byte_limit {
         return Err(Error::new(
             "Dispatch journal exceeds its safe capacity. Existing terminals were kept.",
@@ -113,7 +113,7 @@ fn entries(state: &Value) -> Result<Vec<Value>> {
 fn decimal(value: &Value) -> Result<u64> {
     let text = value
         .as_str()
-        .ok_or(Error::new("Invalid dispatch ticket metadata."))?;
+        .ok_or_else(|| Error::new("Invalid dispatch ticket metadata."))?;
     if text.is_empty()
         || text.len() > 20
         || !text.bytes().all(|byte| byte.is_ascii_digit())
@@ -179,7 +179,7 @@ fn store_entries(state: &mut Value, mut all: Vec<Value>, compact: bool) -> Resul
             Ok((
                 entry["finalizedAt"]
                     .as_f64()
-                    .or(entry["resolvedAt"].as_f64())
+                    .or_else(|| entry["resolvedAt"].as_f64())
                     .filter(|at| at.is_finite())
                     .unwrap_or(0.0),
                 decimal(&entry["ticket"])?,
@@ -212,7 +212,7 @@ fn record(state: &Value, id: &str) -> Result<Value> {
     arr(&state["sessions"])
         .into_iter()
         .find(|record| record["id"] == id)
-        .ok_or(Error::new("Session unavailable."))
+        .ok_or_else(|| Error::new("Session unavailable."))
 }
 fn public(entry: &Value) -> Value {
     let status = match text(entry, "status") {
@@ -295,7 +295,7 @@ fn locate(repo: &Repository, id: &str, operation: &str) -> Result<Value> {
     entries(&state)?
         .into_iter()
         .find(|entry| entry["recordId"] == id && entry["operationId"] == operation)
-        .ok_or(Error::new("Dispatch receipt not found."))
+        .ok_or_else(|| Error::new("Dispatch receipt not found."))
 }
 fn mutate(
     repo: &Repository,
@@ -309,7 +309,7 @@ fn mutate(
         let entry = all
             .iter_mut()
             .find(|entry| entry["recordId"] == id && entry["operationId"] == operation)
-            .ok_or(Error::new("Dispatch receipt not found."))?;
+            .ok_or_else(|| Error::new("Dispatch receipt not found."))?;
         update(entry)?;
         let result = entry.clone();
         store(state, all)?;
@@ -334,7 +334,7 @@ fn finalize_entry(repo: &Repository, id: &str, operation: &str) -> Result<Value>
         let index = all
             .iter()
             .position(|entry| entry["recordId"] == id && entry["operationId"] == operation)
-            .ok_or(Error::new("Dispatch receipt not found."))?;
+            .ok_or_else(|| Error::new("Dispatch receipt not found."))?;
         if (all[index]["status"] != "written"
             && all[index]["resolution"] != "user-confirmed-submitted")
             || all[index]["finalized"] == true
@@ -367,7 +367,7 @@ pub fn resolve(repo: &Repository, args: &Value) -> Result<Value> {
         let index = all
             .iter()
             .position(|entry| entry["recordId"] == id && entry["operationId"] == operation)
-            .ok_or(Error::new("Dispatch receipt not found."))?;
+            .ok_or_else(|| Error::new("Dispatch receipt not found."))?;
         if all[index]["finalized"] == true
             || all[index]["resolved"] == true
             || all[index]["status"] == "written"
@@ -423,7 +423,7 @@ fn review_pending(draft: &Value, entry: &Value) -> bool {
             && entry["createdAt"].as_f64().is_some_and(|at| {
                 at <= draft["run"]["completedAt"]
                     .as_f64()
-                    .or(draft["run"]["updatedAt"].as_f64())
+                    .or_else(|| draft["run"]["updatedAt"].as_f64())
                     .unwrap_or(0.0)
             }))
 }
@@ -494,7 +494,7 @@ fn feedback(record: &Value, draft: &Value, checked: &Value) -> Result<(String, V
         ));
     }
     for (n, entry) in comments.iter().enumerate() {
-        lines.push(format!("\n{}. {} · {} lines {}–{}\nWorktree: {}\nBase: {} · diff fingerprint: {}\nCode excerpt:\n{}\nAuthor: {}\nComment: {}",n+1,safe(text(entry,"path")),if entry["side"]=="deletions"{"old"}else{"new"},entry["start"],entry["end"],safe(entry["root"].as_str().unwrap_or(text(record,"cwd"))),safe(text(entry,"baseCommit")),safe(text(entry,"fingerprint")),safe(text(entry,"excerpt")),safe(entry["author"].as_str().unwrap_or("You")),safe(text(entry,"text"))));
+        lines.push(format!("\n{}. {} · {} lines {}–{}\nWorktree: {}\nBase: {} · diff fingerprint: {}\nCode excerpt:\n{}\nAuthor: {}\nComment: {}",n+1,safe(text(entry,"path")),if entry["side"]=="deletions"{"old"}else{"new"},entry["start"],entry["end"],safe(entry["root"].as_str().unwrap_or_else(|| text(record,"cwd"))),safe(text(entry,"baseCommit")),safe(text(entry,"fingerprint")),safe(text(entry,"excerpt")),safe(entry["author"].as_str().unwrap_or("You")),safe(text(entry,"text"))));
     }
     let ack = json!({"commentIds":comments.iter().map(|entry|entry["id"].clone()).collect::<Vec<_>>(),"assessmentIds":assessments.iter().map(|entry|entry["id"].clone()).collect::<Vec<_>>(),"comments":comments,"assessments":assessments,"note":note,"historyId":record["reviewHistory"]["entries"][0]["id"]});
     Ok((lines.join("\n"), ack))
@@ -635,7 +635,7 @@ fn prepare_with(
         Some(
             args["revision"]
                 .as_u64()
-                .ok_or(Error::new("Supply the captured review revision."))?,
+                .ok_or_else(|| Error::new("Supply the captured review revision."))?,
         )
     };
     let previous = {
@@ -651,9 +651,7 @@ fn prepare_with(
         .into_iter()
         .find(|entry| entry["recordId"] == id && entry["live"] == true)
         .and_then(|entry| entry["generation"].as_str().map(str::to_owned))
-        .ok_or(Error::new(
-            "Resume this chat in Truffle before submitting this request.",
-        ))?;
+        .ok_or_else(|| Error::new("Resume this chat in Truffle before submitting this request."))?;
     sid(&generation)?;
     let settings = if kind == Kind::ReviewRequest {
         repo.settings.view()
@@ -673,13 +671,13 @@ fn prepare_with(
     let entry=repo.transaction(|state|{
             let migrated=state[JOURNAL]["version"]!=2;migrate_owned(repo,state)?;let mut all=entries(state)?;if let Some(entry)=scope(&all,&id,kind,&item){return Ok(entry);}
             if all.iter().filter(|entry|!closed(entry)).count()>=MAX_UNRESOLVED{return Err(Error::new("Too many unresolved dispatch requests. Resolve an earlier request; no input was sent."));}
-            let ticket=decimal(&state[JOURNAL]["nextTicket"])?;let next=ticket.checked_add(1).ok_or(Error::new("Dispatch ticket capacity is exhausted. Existing requests remain recoverable."))?;let operation=allocate();sid(&operation)?;if all.iter().any(|entry|entry["operationId"]==operation){return Err(Error::new("Dispatch identity allocation collided. No input was sent."));}
+            let ticket=decimal(&state[JOURNAL]["nextTicket"])?;let next=ticket.checked_add(1).ok_or_else(|| Error::new("Dispatch ticket capacity is exhausted. Existing requests remain recoverable."))?;let operation=allocate();sid(&operation)?;if all.iter().any(|entry|entry["operationId"]==operation){return Err(Error::new("Dispatch identity allocation collided. No input was sent."));}
             let record=record(state,&id)?;let draft=super::reviews::draft(&record);
             if kind!=Kind::CiInvestigation&&expected_revision!=draft["revision"].as_u64(){return Err(Error::new("The review changed. Reload it before submitting."));}
             let (prompt,ack)=match kind{
                 Kind::ReviewRequest=>{let review=super::reviews::reserve_request(state,&id,&operation,expected_revision.unwrap(),&baseline)?;(request_prompt(repo,&record,&review["run"],&settings)?,Value::Null)},
                 Kind::ReviewFeedback=>feedback(&record,&draft,&checked)?,
-                Kind::CiInvestigation=>{let work=domain::catalog(state).remove(&item).filter(|item|item["source"]=="github"&&item["kind"]=="Pull request").ok_or(Error::new("Choose a linked GitHub pull request."))?;super::session_ci::investigation_in_state(state,&json!({"id":id,"itemId":item,"requestId":operation,"state":"queued"}))?;(ci_prompt(repo,&record,&work,&operation),Value::Null)},
+                Kind::CiInvestigation=>{let work=domain::catalog(state).remove(&item).filter(|item|item["source"]=="github"&&item["kind"]=="Pull request").ok_or_else(|| Error::new("Choose a linked GitHub pull request."))?;super::session_ci::investigation_in_state(state,&json!({"id":id,"itemId":item,"requestId":operation,"state":"queued"}))?;(ci_prompt(repo,&record,&work,&operation),Value::Null)},
             };
             let payload=format!("\u{1b}[200~{prompt}\u{1b}[201~\r");if payload.len()>65536{return Err(Error::new("This request exceeds 64 KiB. Shorten it before submitting."));}
             let entry=json!({"operationId":operation,"ticket":ticket.to_string(),"recordId":id,"kind":kind.name(),"itemId":item,"generation":generation,"payloadHash":context_kit::sha256(payload.as_bytes()),"payload":payload,"ack":ack,"sourceRevision":expected_revision,"status":"prepared","finalized":false,"createdAt":now()});all.push(entry.clone());state[JOURNAL]["nextTicket"]=json!(next.to_string());store_entries(state,all,!migrated)?;Ok(entry)

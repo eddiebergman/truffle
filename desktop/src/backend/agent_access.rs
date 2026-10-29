@@ -7,7 +7,7 @@ const OUTPUT_CHARS: usize = 2000;
 
 fn page(args: &Value) -> (usize, usize) {
     (
-        args["offset"].as_u64().unwrap_or(0).min(100000) as usize,
+        args["offset"].as_u64().unwrap_or(0).min(100_000) as usize,
         args["limit"].as_u64().unwrap_or(20).clamp(1, 40) as usize,
     )
 }
@@ -46,7 +46,7 @@ fn paged(rows: Vec<Value>, args: &Value, key: &str) -> Value {
 fn item(repo: &Repository, state: &Value, id: &str) -> Result<Value> {
     let item = domain::catalog(state)
         .remove(id)
-        .ok_or(Error::new("Work item unavailable."))?;
+        .ok_or_else(|| Error::new("Work item unavailable."))?;
     let mut item = super::work_search::effective(state, &item);
     super::commands::redact(repo, &mut item);
     Ok(super::work_search::project(&item, 2000))
@@ -106,7 +106,7 @@ pub fn update_chat(repo: &Repository, id: &str, change: ChatMetadata<'_>) -> Res
     repo.transaction(|state| {
         domain::edit(state, &edit)?;
         let record = arr(&state["sessions"]).into_iter().find(|record| record["id"] == id)
-            .ok_or(Error::new("Chat unavailable."))?;
+            .ok_or_else(|| Error::new("Chat unavailable."))?;
         let timestamp = |key: &str| record[key].as_f64().filter(|value| value.is_finite() && *value >= 0.0);
         Ok(json!({"chat":{"id":record["id"],"title":record["title"].as_str().unwrap_or(""),"hidden":record["hidden"].as_bool().unwrap_or(false),"archivedAt":timestamp("archivedAt"),"updatedAt":timestamp("updatedAt")},"scope":"local"}))
     })
@@ -170,7 +170,7 @@ impl ArtifactFile {
             MAX_ARTIFACT_BYTES,
             Some(&self.generation),
         )?
-        .ok_or(Error::new("Artifact file unavailable."))?;
+        .ok_or_else(|| Error::new("Artifact file unavailable."))?;
         let content =
             String::from_utf8(bytes).map_err(|_| Error::new("Artifact text must be UTF-8."))?;
         let content = redacted(repo, &content);
@@ -188,7 +188,7 @@ fn artifact_file(repo: &Repository, id: &str) -> Result<ArtifactFile> {
     let entry = arr(&super::artifacts::catalog(repo, &state)?["artifacts"])
         .into_iter()
         .find(|entry| entry["id"] == id)
-        .ok_or(Error::new("Artifact unavailable."))?;
+        .ok_or_else(|| Error::new("Artifact unavailable."))?;
     if text(&entry, "path").is_empty() {
         return Err(Error::new(
             "Only local artifact files can be read. Remote URLs are not fetched.",
@@ -214,12 +214,12 @@ fn artifact_file(repo: &Repository, id: &str) -> Result<ArtifactFile> {
     }
     let root = roots.into_iter().find(|root| path.strip_prefix(root).is_ok_and(|relative| {
         relative.components().all(|part| matches!(part, Component::Normal(name) if !name.to_string_lossy().starts_with('.')))
-    })).ok_or(Error::new("Artifact is outside its registered roots."))?;
+    })).ok_or_else(|| Error::new("Artifact is outside its registered roots."))?;
     let key = path
         .strip_prefix(&root)
         .map_err(|_| Error::new("Invalid artifact path."))?
         .to_str()
-        .ok_or(Error::new("Artifact path must be UTF-8."))?
+        .ok_or_else(|| Error::new("Artifact path must be UTF-8."))?
         .to_owned();
     Ok(ArtifactFile {
         title: prefix(repo, text(&entry, "title"), 300),

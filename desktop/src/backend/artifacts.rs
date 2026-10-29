@@ -186,7 +186,7 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
 fn metadata_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let fields = value
         .as_object()
-        .ok_or(Error::new("Artifact metadata must be an object."))?;
+        .ok_or_else(|| Error::new("Artifact metadata must be an object."))?;
     if fields.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(Error::new("Unknown artifact metadata field."));
     }
@@ -196,7 +196,7 @@ fn metadata_id(value: &Value) -> Result<&str> {
     value
         .as_str()
         .filter(|id| id.len() == 24 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .ok_or(Error::new("Supply the exact artifact ID."))
+        .ok_or_else(|| Error::new("Supply the exact artifact ID."))
 }
 fn metadata_conflict() -> Error {
     let mut error = Error::new(
@@ -219,14 +219,14 @@ fn metadata_links(value: &Value) -> Result<Vec<String>> {
     let values = value
         .as_array()
         .filter(|values| values.len() <= 100)
-        .ok_or(Error::new(
-            "Artifact metadata supports at most 100 complete session links.",
-        ))?;
+        .ok_or_else(|| {
+            Error::new("Artifact metadata supports at most 100 complete session links.")
+        })?;
     let mut ids = vec![];
     for value in values {
         let id = value
             .as_str()
-            .ok_or(Error::new("Invalid artifact session ID."))?;
+            .ok_or_else(|| Error::new("Invalid artifact session ID."))?;
         sid(id)?;
         ids.push(id.to_owned());
     }
@@ -293,9 +293,9 @@ fn metadata_patch(args: &Value) -> Result<Value> {
     metadata_id(&args["id"])?;
     metadata_keys(&args["patch"], &["title", "sessionIds"])?;
     let patch = args["patch"].as_object().unwrap();
-    let expected = args["expected"].as_object().ok_or(Error::new(
-        "Supply captured tokens for exactly the changed artifact fields.",
-    ))?;
+    let expected = args["expected"].as_object().ok_or_else(|| {
+        Error::new("Supply captured tokens for exactly the changed artifact fields.")
+    })?;
     if patch.is_empty()
         || patch.len() != expected.len()
         || patch.keys().any(|key| !expected.contains_key(key))
@@ -450,7 +450,7 @@ pub fn register_discovered(repo: &Repository, args: &Value) -> Result<Value> {
         }
         state["artifacts"]
             .as_array_mut()
-            .ok_or(Error::new("Artifact storage is unavailable."))?
+            .ok_or_else(|| Error::new("Artifact storage is unavailable."))?
             .push(stored);
         let index = state["artifacts"].as_array().unwrap().len() - 1;
         let mut result = metadata_apply(
@@ -525,7 +525,7 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
     let old = arr(&s["artifacts"])
         .into_iter()
         .find(|x| x["id"] == entry["id"])
-        .unwrap_or(json!({}));
+        .unwrap_or_else(|| json!({}));
     let existing = old.is_object() && !old.as_object().unwrap().is_empty();
     if existing {
         metadata_exact(repo, text(&old, "id"))?;
@@ -543,7 +543,7 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
     let title = if text(p, "title").trim().is_empty() {
         old["title"]
             .as_str()
-            .or(entry["title"].as_str())
+            .or_else(|| entry["title"].as_str())
             .unwrap_or_else(|| {
                 if text(&entry, "path").is_empty() {
                     "Artifact"
@@ -616,7 +616,7 @@ pub fn attach_to_chat(repo: &Repository, record_id: &str, input: &Value) -> Resu
         return Err(Error::new("Choose exactly one artifact file or HTTPS URL."));
     }
     repo.transaction(|state|{
-        let record=arr(&state["sessions"]).into_iter().find(|record|record["id"]==record_id).ok_or(Error::new("Session record no longer exists."))?;
+        let record=arr(&state["sessions"]).into_iter().find(|record|record["id"]==record_id).ok_or_else(|| Error::new("Session record no longer exists."))?;
         let mut payload=json!({"path":path,"url":url,"title":title,"sessionIds":[record_id]});
         if input["skillOutput"]==true {
             if text(&record,"newsletterId").is_empty(){return Err(Error::new("This chat has no assigned skill. Attach the artifact without --skill-output."));}
@@ -636,7 +636,7 @@ pub fn read(repo: &Repository, id: &str) -> Result<(Vec<u8>, String)> {
     let entry = arr(&catalog(repo, &s)?["artifacts"])
         .into_iter()
         .find(|x| x["id"] == id)
-        .ok_or(Error::new("Artifact unavailable."))?;
+        .ok_or_else(|| Error::new("Artifact unavailable."))?;
     let path = file(text(&entry, "path"), &roots(repo, &s)?)?;
     let kind = kind(&path).unwrap().into();
     let bytes = std::fs::read(path)?;

@@ -194,7 +194,7 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     invalid["pass"] = json!("correctness");
     invalid["report"]["overall"]["text"] = json!("x".repeat(8001));
     assert!(workflows::register(&repo, &invalid).is_err());
-    let mut second = report.clone();
+    let mut second = report;
     second["pass"] = json!("performance");
     second["report"]["overall"]["author"] = json!("Agent B");
     workflows::register(&repo, &second).unwrap();

@@ -147,11 +147,11 @@ pub(super) fn finish(
     if let Some(existing) = request.lookup(repo, state)? {
         return Ok(existing);
     }
-    let rows = state["sessions"].as_array_mut().ok_or(Error::io())?;
+    let rows = state["sessions"].as_array_mut().ok_or_else(Error::io)?;
     let saved = rows
         .iter_mut()
         .find(|row| row["id"] == record["id"])
-        .ok_or(Error::new("Prepared chat is unavailable."))?;
+        .ok_or_else(|| Error::new("Prepared chat is unavailable."))?;
     let mut entries = aliases(saved)?;
     if entries.len() >= MAX_ALIASES {
         return Err(conflict("This saved chat has reached its preparation identity limit. Existing preparations remain readable; open that saved chat instead of preparing it again."));
@@ -242,10 +242,10 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     let object = args
         .as_object()
         .filter(|args| args.len() == 1 && args.contains_key("requestId"))
-        .ok_or(Error::new("Preparation lookup accepts only requestId."))?;
+        .ok_or_else(|| Error::new("Preparation lookup accepts only requestId."))?;
     let id = sid(object["requestId"]
         .as_str()
-        .ok_or(Error::new("Supply the preparation UUID."))?)?;
+        .ok_or_else(|| Error::new("Supply the preparation UUID."))?)?;
     projection(repo, &id)?;
     let state = repo.state.lock().map_err(|_| Error::io())?;
     match find(&state, &id)? {

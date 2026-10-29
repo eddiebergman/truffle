@@ -17,7 +17,7 @@ fn preparation_new_identity_survives_lost_response_metadata_changes_and_restart(
     assert_eq!(receipt.as_object().unwrap().len(), 5);
     assert_eq!(receipt["status"], "prepared");
     assert_eq!(receipt["reused"], false);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
     let id = text(&receipt, "recordId");
     repo.transaction(|state| {
         let row = &mut state["sessions"][0];
@@ -43,7 +43,7 @@ fn preparation_new_identity_survives_lost_response_metadata_changes_and_restart(
     let reopened = Repository::open(temp.path().into(), None, true).unwrap();
     assert_eq!(prepare(&reopened, "new", &args).unwrap(), receipt);
     assert_eq!(arr(&reopened.state.lock().unwrap()["sessions"]).len(), 1);
-    assert!(reopened.embedded.inventory().is_empty());
+    assert_eq!(reopened.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_concurrent_same_request_commits_one_record_and_one_alias() {
@@ -67,7 +67,7 @@ fn preparation_concurrent_same_request_commits_one_record_and_one_alias() {
     let state = repo.state.lock().unwrap();
     assert_eq!(arr(&state["sessions"]).len(), 1);
     assert_eq!(aliases(&state["sessions"][0]).unwrap().len(), 1);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_reused_requests_keep_all_original_aliases_and_latest_attached_metadata() {
@@ -114,7 +114,7 @@ fn preparation_changed_intent_and_malformed_state_fail_without_effects() {
     let mut changed = args.clone();
     changed["title"] = json!("Different intent");
     assert_eq!(prepare(&repo, "new", &changed).unwrap_err().status, 409);
-    let mut extra = args.clone();
+    let mut extra = args;
     extra["id"] = json!(uuid());
     assert!(prepare(&repo, "new", &extra).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -131,7 +131,7 @@ fn preparation_changed_intent_and_malformed_state_fail_without_effects() {
     );
     assert!(read(&repo, &json!({"requestId":uuid()})).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_full_alias_capacity_allows_duplicates_but_rejects_new_reuse_before_effects() {
@@ -183,7 +183,7 @@ fn preparation_failed_commit_has_no_alias_and_exact_retry_creates_once() {
     std::fs::remove_dir(temporary).unwrap();
     let receipt = prepare(&repo, "new", &args).unwrap();
     assert_eq!(prepare(&repo, "new", &args).unwrap(), receipt);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_read_is_state_only_and_duplicate_skill_bypasses_removed_configuration() {
@@ -203,7 +203,7 @@ fn preparation_read_is_state_only_and_duplicate_skill_bypasses_removed_configura
     );
     assert_eq!(prepare(&repo, "skill", &args).unwrap(), first);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_view_failed_validation_and_persistence_do_not_consume_admission() {
@@ -227,7 +227,7 @@ fn preparation_view_failed_validation_and_persistence_do_not_consume_admission()
     let receipt = prepare(&repo, "view", &args).unwrap();
     assert_eq!(prepare(&repo, "view", &args).unwrap(), receipt);
     assert_eq!(arr(&repo.state.lock().unwrap()["sessions"]).len(), 1);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_unverifiable_legacy_view_collision_is_rejected_without_writes_or_admission() {
@@ -256,7 +256,7 @@ fn preparation_unverifiable_legacy_view_collision_is_rejected_without_writes_or_
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert!(!repo.data.parent().unwrap().join("views").exists());
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
 fn preparation_malformed_alias_record_identity_never_becomes_actionable() {
@@ -272,7 +272,7 @@ fn preparation_malformed_alias_record_identity_never_becomes_actionable() {
     assert!(read(&repo, &json!({"requestId":first["requestId"]})).is_err());
     assert!(prepare(&repo, "new", &args).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.embedded.inventory().is_empty());
+    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 
 #[test]

@@ -113,7 +113,10 @@ fn schedule_catches_up_once_or_skips_and_never_replays_backlog() {
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].0, "daily");
     assert_eq!(arr(&s["skillRuns"]).len(), 2);
-    assert!(super::scheduler::claim(&mut s, 10001.0).unwrap().is_empty());
+    assert_eq!(
+        super::scheduler::claim(&mut s, 10001.0).unwrap(),
+        [] as [(std::string::String, std::string::String); 0]
+    );
     assert_eq!(s["skillSchedules"]["daily"]["nextRun"], 13600.0);
 }
 #[test]
@@ -273,7 +276,7 @@ fn change_detection_and_snooze_follow_source_changes() {
     let mut item = json!({"id":"github:1","source":"github","kind":"Pull request","title":"PR","status":"needs-review","sourceStatus":"Awaiting review","relations":["authored"],"ci":{"state":"pending"}});
     s["items"] = json!([item]);
     domain::observe(&mut s, "github", &[item.clone()]);
-    assert!(arr(&s["changes"]).is_empty());
+    assert_eq!(arr(&s["changes"]), [] as [serde_json::Value; 0]);
     domain::edit(
         &mut s,
         &json!({"action":"snooze","id":"github:1","mode":"change"}),
@@ -326,7 +329,7 @@ fn quick_launch_attaches_only_clicked_work_and_newsletters_do_not_merge_work_gro
     repo.transaction(|s| {
         s["items"] = json!([a, b]);
         s["sessions"] = json!([{"id":uuid(),"workflow":"newsletter","items":[a,b]}]);
-        assert!(arr(&domain::bundles(s)).is_empty());
+        assert_eq!(arr(&domain::bundles(s)), [] as [serde_json::Value; 0]);
         s["workLinks"] = json!([[a["id"], b["id"]]]);
         assert_eq!(arr(&domain::bundles(s)).len(), 1);
         Ok(())
@@ -383,9 +386,9 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     let packet = workflows::context(&repo, record["id"].as_str().unwrap()).unwrap();
     assert!(packet.contains("/eddie-review https://github.com/acme/api/pull/42"));
     if let Some(value) = previous {
-        std::env::set_var("TRUFFLE_WORKDIR", value)
+        std::env::set_var("TRUFFLE_WORKDIR", value);
     } else {
-        std::env::remove_var("TRUFFLE_WORKDIR")
+        std::env::remove_var("TRUFFLE_WORKDIR");
     }
 }
 #[test]
@@ -426,7 +429,10 @@ fn artifact_paths_cannot_escape_and_links_are_reversible() {
     let metadata = artifacts::metadata_read(&repo, &json!({"id":entry["id"]})).unwrap();
     artifacts::metadata_update(&repo,&json!({"id":entry["id"],"patch":{"sessionIds":[]},"expected":{"sessionIds":metadata["expected"]["sessionIds"]}})).unwrap();
     assert!(report.exists());
-    assert!(arr(&repo.snapshot(false)["artifacts"][0]["sessionIds"]).is_empty());
+    assert_eq!(
+        arr(&repo.snapshot(false)["artifacts"][0]["sessionIds"]),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders() {
@@ -736,5 +742,8 @@ fn skill_reports_symlink_alias_is_still_a_shared_folder() {
         {"id":"second","title":"Second","cwd":folder,"skill":"SKILL.md","reports":"reports-alias"}
     ]); Ok(()) }).unwrap();
     let state = repo.state.lock().unwrap();
-    assert!(arr(&artifacts::catalog(&repo, &state).unwrap()["artifacts"]).is_empty());
+    assert_eq!(
+        arr(&artifacts::catalog(&repo, &state).unwrap()["artifacts"]),
+        [] as [serde_json::Value; 0]
+    );
 }

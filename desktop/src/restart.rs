@@ -76,7 +76,7 @@ fn port(url: &str) -> Result<u16> {
     reqwest::Url::parse(url)
         .map_err(|_| "Invalid local service URL.")?
         .port_or_known_default()
-        .ok_or("Missing service port.".into())
+        .ok_or_else(|| "Missing service port.".into())
 }
 fn runtime(root: &Path, url: &str) -> Result<Value> {
     let v = read(&root.join("data/runtime.json"))?;
@@ -459,7 +459,7 @@ fn start_service(root: &Path, url: &str) -> Result<()> {
 }
 fn resume(root: &Path, url: &str, records: &[Value]) -> Vec<String> {
     let mut failures = vec![];
-    let current = read_state(root).unwrap_or(json!({}));
+    let current = read_state(root).unwrap_or_else(|_| json!({}));
     let sessions = arr(&current["sessions"]);
     for record in records {
         if !sessions.iter().any(|s| {

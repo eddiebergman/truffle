@@ -50,7 +50,7 @@ fn assistant_selection_prefers_installed_default_and_missing_cli_leaves_no_messa
     ] {
         assert_eq!(
             choose_assistant(preferred, |agent| installed
-                [if agent == Assistant::Claude { 0 } else { 1 }]),
+                [usize::from(agent != Assistant::Claude)]),
             expected
         );
     }
@@ -454,7 +454,7 @@ fn manual_work_links_tool_loop_discovers_reads_and_changes_only_the_exact_pair()
             Ok(answer.to_string())
         }).unwrap();
     assert_eq!(calls, 5);
-    assert!(queued.is_empty());
+    assert_eq!(queued, [] as [serde_json::Value; 0]);
     assert!(reply.contains("manual link"));
     assert_eq!(
         repo.state.lock().unwrap()["workLinks"],
@@ -494,7 +494,7 @@ fn page_visibility_choice_workflow_preserves_unmatched_saved_scopes() {
             }.to_string())
         }).unwrap();
     assert_eq!(calls, 4);
-    assert!(queued.is_empty());
+    assert_eq!(queued, [] as [serde_json::Value; 0]);
     assert!(reply.contains("Target project"));
     let saved = super::super::page_settings::view(&repo).unwrap();
     assert_eq!(
@@ -661,7 +661,7 @@ fn settings_proposal_rejects_bad_schema_stale_requests_and_queue_overflow() {
     ] {
         let mut commands = vec![];
         assert!(tool(&repo, "settings-propose", &args, &mut commands).is_err());
-        assert!(commands.is_empty());
+        assert_eq!(commands, [] as [serde_json::Value; 0]);
     }
     let mut commands = vec![json!({}); 4];
     assert!(tool(&repo,"settings-propose",&json!({"revision":revision,"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}}),&mut commands).is_err());
@@ -693,7 +693,7 @@ fn both_settings_read_tools_omit_custom_workflow_content() {
     .unwrap();
     assert!(!alias.to_string().contains(marker));
     assert!(!generic.to_string().contains(marker));
-    assert!(commands.is_empty());
+    assert_eq!(commands, [] as [serde_json::Value; 0]);
 }
 
 #[test]
@@ -1097,7 +1097,7 @@ fn chat_recovery_navigation_queues_only_a_local_view_without_replaying_requests(
     ] {
         assert!(tool(&repo, "navigate", &args, &mut queued).is_err());
     }
-    assert!(queued.is_empty());
+    assert_eq!(queued, [] as [serde_json::Value; 0]);
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(repo.settings.view(), settings);
@@ -1176,7 +1176,7 @@ fn settings_filter_context_reaches_the_model_without_drafts_or_writes() {
             }.to_string())
         }).unwrap();
     assert_eq!(calls, 2);
-    assert!(commands.is_empty());
+    assert_eq!(commands, [] as [serde_json::Value; 0]);
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(repo.settings.view(), preferences);
@@ -1194,7 +1194,7 @@ fn settings_filter_context_reaches_the_model_without_drafts_or_writes() {
         .unwrap()["ui"]["settingsFilter"]["query"],
         "🙂".repeat(200)
     );
-    let prefix = format!("scale {}", long_secret)
+    let prefix = format!("scale {long_secret}")
         .chars()
         .take(200)
         .collect::<String>();
@@ -1316,7 +1316,7 @@ fn query_guide_exposes_view_id_and_preserves_saved_query_defaults() {
         .unwrap()["total"],
         2
     );
-    assert!(commands.is_empty());
+    assert_eq!(commands, [] as [serde_json::Value; 0]);
 }
 #[test]
 fn typed_tools_find_work_navigate_and_gate_settings() {
@@ -1405,7 +1405,7 @@ fn recovery_context_verifies_receipts_and_reaches_the_model_without_replay() {
             }.to_string())
         }).unwrap();
     assert_eq!(calls, 2);
-    assert!(result.1.is_empty());
+    assert_eq!(result.1, [] as [serde_json::Value; 0]);
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
 }
@@ -1541,7 +1541,10 @@ fn new_chat_preserves_previous_messages_and_rejects_running_reply() {
     assert!(host.new_chat(&repo).is_err());
     *host.job.lock().unwrap() = None;
     host.new_chat(&repo).unwrap();
-    assert!(arr(&host.view(&repo)["messages"]).is_empty());
+    assert_eq!(
+        arr(&host.view(&repo)["messages"]),
+        [] as [serde_json::Value; 0]
+    );
     let state = repo.state.lock().unwrap();
     assert_eq!(
         state["appChat"]["history"][0]["messages"][0]["text"],
@@ -1602,6 +1605,6 @@ fn tool_errors_are_returned_to_the_model_without_mutating_settings() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let mut call = 0;
     let result=run(&repo,&json!({}),|prompt|{call+=1;if call==1{Ok(json!({"tool":"settings-apply","args":{"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"no","title":"No","command":"echo no"}]}}}).to_string())}else{assert!(prompt.contains("Ask the user to approve it in Settings"));Ok(json!({"reply":"Approve executable actions in Settings."}).to_string())}}).unwrap();
-    assert!(result.1.is_empty());
+    assert_eq!(result.1, [] as [serde_json::Value; 0]);
     assert_eq!(repo.settings.view()["revision"], 0);
 }

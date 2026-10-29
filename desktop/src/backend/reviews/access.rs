@@ -7,13 +7,13 @@ fn revision(review: &Value) -> Result<u64> {
     review["revision"]
         .as_u64()
         .filter(|value| *value <= 9_007_199_254_740_991)
-        .ok_or(Error::new("Review revision is unavailable."))
+        .ok_or_else(|| Error::new("Review revision is unavailable."))
 }
 
 fn display(repo: &Repository, value: &Value, limit: usize, flags: &mut Value) -> Result<Value> {
     let original = value
         .as_str()
-        .ok_or(Error::new("Invalid saved review text."))?;
+        .ok_or_else(|| Error::new("Invalid saved review text."))?;
     let mut text = original.to_owned();
     commands::redact_text(repo, &mut text);
     if text != original {
@@ -40,7 +40,7 @@ fn public_run(repo: &Repository, run: &Value) -> Result<Value> {
         .filter(|state| {
             ["requested", "reviewing", "complete", "failed", "cancelled"].contains(state)
         })
-        .ok_or(Error::new("Review run state is unavailable."))?;
+        .ok_or_else(|| Error::new("Review run state is unavailable."))?;
     summary_identity(repo, &json!(state), 20)?;
     Ok(
         json!({"id":summary_identity(repo,&run["id"],80)?,"state":state,
@@ -88,14 +88,14 @@ fn public_rows(
             let side = row["side"]
                 .as_str()
                 .filter(|side| ["additions", "deletions"].contains(side))
-                .ok_or(Error::new("Invalid saved review side."))?;
+                .ok_or_else(|| Error::new("Invalid saved review side."))?;
             summary_identity(repo, &json!(side), 20)?;
             entry["side"] = json!(side);
             for key in ["start", "end"] {
                 entry[key] = json!(row[key]
                     .as_u64()
                     .filter(|value| *value > 0 && *value <= 9_007_199_254_740_991)
-                    .ok_or(Error::new("Invalid saved review line."))?);
+                    .ok_or_else(|| Error::new("Invalid saved review line."))?);
             }
         } else {
             entry["sentAt"] = summary_time(&row["sentAt"]);
@@ -194,11 +194,11 @@ pub fn update_note(repo: &Repository, args: &Value) -> Result<Value> {
     let note = args["note"]
         .as_str()
         .filter(|note| note.len() <= 8000)
-        .ok_or(Error::new("Supply a review note of at most 8000 bytes."))?;
+        .ok_or_else(|| Error::new("Supply a review note of at most 8000 bytes."))?;
     let expected = args["revision"]
         .as_u64()
         .filter(|revision| *revision < 9_007_199_254_740_991)
-        .ok_or(Error::new("Supply the current review revision."))?;
+        .ok_or_else(|| Error::new("Supply the current review revision."))?;
     summary_identity(repo, &json!(id), 80)?;
     repo.transaction(|state| {
         let index = position(state, id)?;

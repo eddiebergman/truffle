@@ -111,7 +111,7 @@ fn attachment_urls_do_not_fetch_and_owner_rejects_invalid_files_targets_and_prov
         (first.clone(), json!({"path":outside})),
         (first.clone(), json!({"path":hidden})),
         (first.clone(), json!({"path":oversized})),
-        (first.clone(), json!({"path":file,"skillOutput":"true"})),
+        (first, json!({"path":file,"skillOutput":"true"})),
         (plain, json!({"path":file,"skillOutput":true})),
         (uuid(), json!({"path":file})),
     ] {
