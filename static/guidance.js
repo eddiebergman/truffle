@@ -91,4 +91,5 @@ if(typeof document!=='undefined')(()=>{
  $('#app-chat-toggle')?.addEventListener('click',()=>window.truffleGuidance.complete('assistant.after-setup'));
  window.addEventListener('resize',position);document.addEventListener('scroll',position,true);
  setInterval(tick,500);setInterval(()=>{if(!document.hidden)void load();},15000);void load();
+ if(typeof module!=='undefined')module.exports.guidanceTip={remove,position,show,tick,visible,candidate,get active(){return active;}};
 })();
