@@ -1,5 +1,5 @@
 use super::*;
-use crate::backend::uuid;
+use crate::backend::sessions;
 fn invoke(repo: &std::sync::Arc<Repository>, name: &str, args: Value) -> Result<Value> {
     let mut request = json!({"name":name});
     request["args"] = args;
@@ -17,12 +17,9 @@ fn artifact_pages_use_the_redacted_stream_at_every_cursor() {
     let project = temp.path().join("project");
     std::fs::create_dir(&project).unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let record = uuid();
-    repo.transaction(|state| {
-        state["sessions"] = json!([{"id":record,"cwd":project,"items":[]}]);
-        Ok(())
-    })
-    .unwrap();
+    let record = repo
+        .transaction(|state| Ok(sessions::fixture(state, &project, |_| {})))
+        .unwrap();
     let path = project.join("secret.md");
     let raw = format!("abc{sentinel}é end");
     std::fs::write(&path, &raw).unwrap();
@@ -159,12 +156,9 @@ fn validated_artifact_rejects_replacement_symlinks_and_inodes() {
     let project = temp.path().join("project");
     std::fs::create_dir(&project).unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let record = uuid();
-    repo.transaction(|state| {
-        state["sessions"] = json!([{"id":record,"cwd":project,"items":[]}]);
-        Ok(())
-    })
-    .unwrap();
+    let record = repo
+        .transaction(|state| Ok(sessions::fixture(state, &project, |_| {})))
+        .unwrap();
     let path = project.join("report.md");
     std::fs::write(&path, "Registered fixture").unwrap();
     repo.edit(&json!({"action":"save-artifact","path":path,"sessionIds":[record]}))
@@ -274,12 +268,9 @@ fn artifact_reads_use_registered_snapshots_bounds_and_utf8_cursors() {
     let project = temp.path().join("project");
     std::fs::create_dir(&project).unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let record = uuid();
-    repo.transaction(|state| {
-        state["sessions"] = json!([{"id":record,"cwd":project,"items":[]}]);
-        Ok(())
-    })
-    .unwrap();
+    let record = repo
+        .transaction(|state| Ok(sessions::fixture(state, &project, |_| {})))
+        .unwrap();
     let path = project.join("report.md");
     std::fs::write(&path, format!("abcé\n{}", "x".repeat(70000))).unwrap();
     repo.edit(&json!({"action":"save-artifact","title":"Fixture report","path":path,"sessionIds":[record]})).unwrap();

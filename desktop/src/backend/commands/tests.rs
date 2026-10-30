@@ -1,5 +1,6 @@
 use super::*;
 use crate::backend::arr;
+use crate::backend::sessions;
 use crate::backend::{now, uuid};
 
 #[test]
@@ -472,12 +473,9 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
     let temp = tempfile::tempdir().unwrap();
     let (root, marker) = checkout_with_clean_filter(temp.path());
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
-    let id = uuid();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{"id":id,"cwd":root}]);
-        Ok(())
-    })
-    .unwrap();
+    let id = repo
+        .transaction(|s| Ok(sessions::fixture(s, &root, |_| {})))
+        .unwrap();
     let bytes = std::fs::read(&repo.data).unwrap();
     let before = repo.state.lock().unwrap().clone();
     for (name, args) in [
@@ -1096,15 +1094,12 @@ fn link_work_commands_have_strict_schemas_and_deny_url_resolution_before_owner()
 #[test]
 fn artifact_attachment_commands_are_strict_and_policy_denial_precedes_file_snapshots() {
     let temp = tempfile::tempdir().unwrap();
-    let record = uuid();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let path = temp.path().join("output.md");
     std::fs::write(&path, "fixture output").unwrap();
-    repo.transaction(|state| {
-        state["sessions"] = json!([{"id":record,"cwd":temp.path(),"items":[]}]);
-        Ok(())
-    })
-    .unwrap();
+    let record = repo
+        .transaction(|state| Ok(sessions::fixture(state, temp.path(), |_| {})))
+        .unwrap();
     let before = repo.state.lock().unwrap().clone();
     let disk = std::fs::read(&repo.data).unwrap();
     for (name, args) in [

@@ -523,7 +523,7 @@ fn selected_worktree(record: Option<&Value>, p: &Value) -> Result<Value> {
     if path.is_empty() {
         return Ok(Value::Null);
     }
-    let record = record.ok_or_else(|| Error::new("Selected chat unavailable."))?;
+    let record = record.ok_or_else(|| Error::new("Chat unavailable."))?;
     if record["cwd"] != path && !arr(&record["worktrees"]).iter().any(|t| t["path"] == path) {
         return Err(Error::new("Selected worktree is not linked to this chat."));
     }

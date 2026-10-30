@@ -12,6 +12,10 @@ fn lookup_rejects_malformed_and_unknown_ids_with_one_message() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = json!({"sessions":[]});
     let saved = chat(&mut s, &dir, "Known");
+    s["sessions"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"not-a-uuid"}));
     for id in ["not-a-uuid", "", &uuid()] {
         assert_eq!(get(&s, id).unwrap_err().message, "Chat unavailable.");
         assert_eq!(

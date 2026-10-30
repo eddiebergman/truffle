@@ -1,16 +1,14 @@
 use super::*;
 use crate::backend::arr;
+use crate::backend::sessions;
 use std::path::PathBuf;
 #[test]
 fn shell_identity_and_working_directory_survive_reopen() {
     let root = tempfile::tempdir().unwrap();
     let repo = Repository::open(root.path().into(), None, true).unwrap();
-    let chat = uuid();
-    repo.transaction(|s| {
-        s["sessions"] = json!([{ "id":chat,"cwd":root.path(),"title":"Chat"}]);
-        Ok(())
-    })
-    .unwrap();
+    let chat = repo
+        .transaction(|s| Ok(sessions::fixture(s, root.path(), |_| {})))
+        .unwrap();
     let first = open(&repo, &json!({"recordId":chat})).unwrap();
     repo.shells.input(text(&first,"id"),"export TRUFFLE_SHELL_TEST=retained\nprintf 'shell-check:%s\\n' \"$TRUFFLE_SHELL_TEST\"\n").unwrap();
     let second = open(&repo, &json!({"recordId":chat})).unwrap();
