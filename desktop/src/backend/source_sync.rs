@@ -16,6 +16,7 @@ const INTERVAL: f64 = 300.0;
 /// delays recovery. A longer Retry-After still wins.
 const MAX_BACKOFF: f64 = 3600.0;
 const FORCE_COOLDOWN: f64 = 15.0;
+const ENVIRONMENT_COOLDOWN: f64 = 15.0;
 
 /// Supplies work items from GitHub, Linear and Sentry.
 pub trait ProviderSource: Send + Sync {
@@ -369,6 +370,66 @@ fn merge(
     }
     state["sources"][source] = json!({"lastSuccess":now(),"nextAttempt":now()+INTERVAL,"error":null,"failures":0,"disabled":false});
     items.len()
+}
+
+/// Start a fetch of one Sentry environment's members, unless a fetch is
+/// running or waiting. Cached results stay available either way.
+pub fn environment(repo: &Arc<Repository>, name: &str) -> Result<()> {
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+    {
+        return Err(Error::new("Use a single environment name."));
+    }
+    if !repo.demo && !repo.providers.sentry_configured() {
+        return Err(Error::new("Configure Sentry first."));
+    }
+    if claim_environment(repo, name)? {
+        let repo = repo.clone();
+        let name = name.to_owned();
+        std::thread::spawn(move || fetch_environment(&repo, &name));
+    }
+    Ok(())
+}
+fn claim_environment(repo: &Repository, environment: &str) -> Result<bool> {
+    repo.transaction(|s| {
+        if s["sources"]["sentry"]["disabled"] == true {return Err(Error::new("Sentry synchronization is paused. Enable the connection before requesting an environment. Cached results remain available."));}
+        let caches = s["sentryEnvironments"].as_object().unwrap();
+        if !caches.contains_key(environment) && caches.len() >= 20 {
+            return Err(Error::new("Up to 20 environment caches are supported."));
+        }
+        let source = &s["sources"]["sentry"];
+        if source["failures"].as_u64().unwrap_or(0) > 0
+            && source["nextAttempt"].as_f64().unwrap_or(0.0) > now() {
+            return Err(Error::new("Sentry is waiting for its connection retry window. Cached results remain available."));
+        }
+        if repo.demo || caches.values().any(|v| v["running"] == true)
+            || s["sentryEnvNextAttempt"].as_f64().unwrap_or(0.0) > now()
+            || s["sentryEnvironments"][environment]["nextAttempt"].as_f64().unwrap_or(0.0) > now() {
+            return Ok(false);
+        }
+        if s["sentryEnvironments"][environment].is_null() {
+            s["sentryEnvironments"][environment] = json!({});
+        }
+        s["sentryEnvironments"][environment]["running"] = json!(true);
+        s["sentryEnvironments"][environment]["nextAttempt"] = json!(now()+INTERVAL);
+        s["sentryEnvNextAttempt"] = json!(now()+ENVIRONMENT_COOLDOWN);
+        Ok(true)
+    })
+}
+fn fetch_environment(repo: &Repository, environment: &str) {
+    let result = repo.sync.provider.fetch("sentry", Some(environment));
+    let _ = repo.transaction(|s| {
+        let cache = &mut s["sentryEnvironments"][environment];
+        match &result {
+            Ok(items) => *cache = json!({"running":false,"itemIds":items.iter().map(|x|x["id"].clone()).collect::<Vec<_>>(),"lastSuccess":now(),"nextAttempt":now()+INTERVAL,"error":null,"failures":0}),
+            Err(error) => {
+                cache["running"] = json!(false);
+                record_failure(cache, error);
+            }
+        }
+        Ok(())
+    });
 }
 
 /// Bounded sync metadata. Never expose provider configuration or arbitrary source fields.

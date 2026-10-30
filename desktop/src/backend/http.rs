@@ -4,7 +4,7 @@ use super::{
     arr, checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
     Result, Value,
 };
-use super::{artifacts, source_sync::ProviderSource, workflows};
+use super::{artifacts, workflows};
 use crate::backend::operations::Caller;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -45,32 +45,6 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<()> {
         let _ = std::fs::remove_file(&temp);
     }
     Ok(written?)
-}
-fn claim_sentry_environment(repo: &Repository, environment: &str) -> Result<bool> {
-    repo.transaction(|s| {
-        if s["sources"]["sentry"]["disabled"] == true {return Err(Error::new("Sentry synchronization is paused. Enable the connection before requesting an environment. Cached results remain available."));}
-        let caches = s["sentryEnvironments"].as_object().unwrap();
-        if !caches.contains_key(environment) && caches.len() >= 20 {
-            return Err(Error::new("Up to 20 environment caches are supported."));
-        }
-        let source = &s["sources"]["sentry"];
-        if source["failures"].as_u64().unwrap_or(0) > 0
-            && source["nextAttempt"].as_f64().unwrap_or(0.0) > now() {
-            return Err(Error::new("Sentry is waiting for its connection retry window. Cached results remain available."));
-        }
-        if repo.demo || caches.values().any(|v| v["running"] == true)
-            || s["sentryEnvNextAttempt"].as_f64().unwrap_or(0.0) > now()
-            || s["sentryEnvironments"][environment]["nextAttempt"].as_f64().unwrap_or(0.0) > now() {
-            return Ok(false);
-        }
-        if s["sentryEnvironments"][environment].is_null() {
-            s["sentryEnvironments"][environment] = json!({});
-        }
-        s["sentryEnvironments"][environment]["running"] = json!(true);
-        s["sentryEnvironments"][environment]["nextAttempt"] = json!(now()+300.0);
-        s["sentryEnvNextAttempt"] = json!(now()+15.0);
-        Ok(true)
-    })
 }
 type Reply = tiny_http::Response<std::io::Cursor<Vec<u8>>>;
 fn json_response(status: u16, value: &Value) -> Reply {
@@ -586,7 +560,7 @@ fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Rep
             None
         }
         "/api/sentry/environment" => {
-            start_sentry_environment(repo, payload)?;
+            super::source_sync::environment(repo, &checked(payload, "environment", 100, true)?)?;
             None
         }
         _ => return Ok(json_response(404, &json!({"error":"Not found."}))),
@@ -625,40 +599,6 @@ fn open_session(repo: &Arc<Repository>, payload: &Value, extra: &mut Value) -> R
         extra["preview"] = json!(true);
     }
     extra["openReceipt"] = receipt;
-    Ok(())
-}
-fn start_sentry_environment(repo: &Arc<Repository>, payload: &Value) -> Result<()> {
-    let environment = checked(payload, "environment", 100, true)?;
-    if !environment
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
-    {
-        return Err(Error::new("Use a single environment name."));
-    }
-    if !repo.demo && !repo.providers.sentry_configured() {
-        return Err(Error::new("Configure Sentry first."));
-    }
-    let should_start = claim_sentry_environment(repo, &environment)?;
-    if should_start {
-        let repository = repo.clone();
-        std::thread::spawn(move || {
-            let result = repository.providers.fetch("sentry", Some(&environment));
-            let _ = repository.transaction(|s| {
-                let cache = &mut s["sentryEnvironments"][&environment];
-                match result {
-                    Ok(items) => *cache = json!({"running":false,"itemIds":items.iter().map(|x|x["id"].clone()).collect::<Vec<_>>(),"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0}),
-                    Err(e) => {
-                        let failures = cache["failures"].as_u64().unwrap_or(0)+1;
-                        cache["running"] = json!(false);
-                        cache["error"] = json!(e.message);
-                        cache["failures"] = json!(failures);
-                        cache["nextAttempt"] = json!(now()+(300.0*2.0f64.powi((failures-1).min(4) as i32)).min(3600.0).max(e.retry));
-                    }
-                }
-                Ok(())
-            });
-        });
-    }
     Ok(())
 }
 /// Same as `name.ends_with(".{extension}")`, including for a bare `.{extension}` name.
@@ -863,35 +803,6 @@ pub fn serve(
     Ok(())
 }
 
-#[cfg(test)]
-mod environment_admission_tests {
-    use super::*;
-    #[test]
-    fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_admission() {
-        let temp = tempfile::tempdir().unwrap();
-        let repo = Repository::open(temp.path().into(), None, true).unwrap();
-        repo.transaction(|state| {
-            state["sources"]["sentry"]["disabled"] = json!(true);
-            state["sentryEnvironments"] =
-                json!({"qa":{"lastSuccess":42,"itemIds":["cached"],"extension":"keep"}});
-            Ok(())
-        })
-        .unwrap();
-        let before = repo.state.lock().unwrap().clone();
-        let bytes = std::fs::read(&repo.data).unwrap();
-        let cooldown = repo.cooldown.lock().unwrap().clone();
-        let mut starts = 0;
-        let claim = claim_sentry_environment(&repo, "new-environment");
-        if matches!(claim, Ok(true)) {
-            starts += 1;
-        }
-        assert!(claim.unwrap_err().message.contains("paused"));
-        assert_eq!(starts, 0);
-        assert_eq!(*repo.state.lock().unwrap(), before);
-        assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-        assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
-    }
-}
 #[cfg(test)]
 mod private_write_tests {
     use super::*;

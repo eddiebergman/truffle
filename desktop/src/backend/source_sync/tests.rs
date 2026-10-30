@@ -145,3 +145,28 @@ fn sources_status_is_bounded_and_redacts_full_error_before_truncation() {
         assert!(!encoded.contains(private));
     }
 }
+#[test]
+fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_admission() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = Repository::open(temp.path().into(), None, true).unwrap();
+    repo.transaction(|state| {
+        state["sources"]["sentry"]["disabled"] = json!(true);
+        state["sentryEnvironments"] =
+            json!({"qa":{"lastSuccess":42,"itemIds":["cached"],"extension":"keep"}});
+        Ok(())
+    })
+    .unwrap();
+    let before = repo.state.lock().unwrap().clone();
+    let bytes = std::fs::read(&repo.data).unwrap();
+    let cooldown = repo.cooldown.lock().unwrap().clone();
+    let mut starts = 0;
+    let claim = claim_environment(&repo, "new-environment");
+    if matches!(claim, Ok(true)) {
+        starts += 1;
+    }
+    assert!(claim.unwrap_err().message.contains("paused"));
+    assert_eq!(starts, 0);
+    assert_eq!(*repo.state.lock().unwrap(), before);
+    assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
+    assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
+}
