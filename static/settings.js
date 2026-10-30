@@ -2064,8 +2064,3 @@ window.addEventListener(
   "truffle-service-restarted",
   () => void loadAppSettings(),
 );
-setInterval(() => {
-  if (!settingsDirty && !document.hidden) {
-    void loadAppSettings();
-  }
-}, 10000);
