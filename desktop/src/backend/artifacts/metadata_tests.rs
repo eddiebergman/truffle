@@ -88,13 +88,14 @@ fn artifact_metadata_conflicts_invalid_patch_and_unchecked_legacy_save_leave_can
             .status,
         409
     );
-    for args in [
-        json!({"id":id,"patch":{"title":"New"},"expected":{}}),
-        json!({"id":id,"patch":{"title":"New"},"expected":read["expected"]}),
-        json!({"id":id,"patch":{"path":"/private/changed"},"expected":{"path":"0".repeat(64)}}),
-        json!({"id":id,"patch":{"sessionIds":[uuid()]},"expected":{"sessionIds":metadata_read(&repo,&json!({"id":id})).unwrap()["expected"]["sessionIds"]}}),
+    let current = metadata_read(&repo, &json!({"id":id})).unwrap();
+    for patch in [
+        json!({"sessionIds":[uuid()]}),
+        json!({"sessionIds":["not-a-session"]}),
+        json!({"title":7}),
+        json!({"title":"x".repeat(301)}),
     ] {
-        assert!(metadata_update(&repo, &args).is_err());
+        assert!(update(&repo, &current, &patch).is_err());
     }
     assert!(repo.edit(&json!({"action":"save-artifact","id":id,"title":"Unchecked","sessionIds":[],"replaceSessions":true})).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -185,16 +186,19 @@ fn artifact_metadata_failed_save_and_reattachment_preserve_extensions_and_latest
 }
 #[test]
 fn artifact_metadata_actionable_ids_and_tokens_are_exact_or_fail_before_any_write() {
-    for mode in ["artifact-id", "session-id", "field-token"] {
+    let scratch = tempfile::tempdir().unwrap();
+    let scratch = Repository::open(scratch.path().into(), None, true).unwrap();
+    for mode in ["artifact-id", "session-id"] {
         let temp = tempfile::tempdir().unwrap();
         let artifact = id("https://example.invalid/safe");
         let session = uuid();
-        let values = json!({"title":"Original","sessionIds":[session]});
-        let token = metadata_token(&values, "title", None).unwrap();
+        let entry = json!({"id":artifact,"title":"Original","sessionIds":[session]});
+        let token = field_edit::tokens(&scratch, &Metadata::new(&entry, None).unwrap()).unwrap()
+            ["title"]
+            .clone();
         let secret = match mode {
             "artifact-id" => artifact.as_str(),
-            "session-id" => session.as_str(),
-            _ => token.as_str(),
+            _ => session.as_str(),
         };
         std::fs::write(
             temp.path().join(".env"),

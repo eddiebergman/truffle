@@ -1,3 +1,4 @@
+use super::field_edit::{self, Edit, Record};
 use super::{
     arr, checked, expand, json, now, redaction, safe_url, sessions, sid, text, Error, PathBuf,
     Repository, Result, Value,
@@ -177,6 +178,8 @@ pub fn catalog(repo: &Repository, s: &Value) -> Result<Value> {
 }
 // Metadata edits are separate from file/URL registration and preserve the
 // canonical immutable identity and provenance fields without opening the file.
+const METADATA_CHANGED: &str =
+    "Artifact metadata changed. Read it again and reapply only the intended changes.";
 fn metadata_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let fields = value
         .as_object()
@@ -191,23 +194,6 @@ fn metadata_id(value: &Value) -> Result<&str> {
         .as_str()
         .filter(|id| id.len() == 24 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .ok_or_else(|| Error::new("Supply the exact artifact ID."))
-}
-fn metadata_conflict() -> Error {
-    let mut error = Error::new(
-        "Artifact metadata changed. Read it again and reapply only the intended changes.",
-    );
-    error.status = 409;
-    error
-}
-fn metadata_exact(repo: &Repository, value: &str) -> Result<()> {
-    let mut redacted = value.to_owned();
-    redaction::redact_text(repo, &mut redacted);
-    if redacted != value {
-        return Err(Error::new(
-            "Artifact identity or revision cannot be safely projected.",
-        ));
-    }
-    Ok(())
 }
 fn metadata_links(value: &Value) -> Result<Vec<String>> {
     let values = value
@@ -228,92 +214,93 @@ fn metadata_links(value: &Value) -> Result<Vec<String>> {
     ids.dedup();
     Ok(ids)
 }
-fn metadata_values(entry: &Value) -> Result<Value> {
-    let title = entry["title"].as_str().unwrap_or("Artifact");
-    if title.chars().count() > 300 {
-        return Err(Error::new(
-            "Stored artifact title exceeds its editable limit.",
-        ));
-    }
-    let links = if entry.get("sessionIds").is_some() {
-        metadata_links(&entry["sessionIds"])?
-    } else {
-        vec![]
-    };
-    Ok(json!({"title":title,"sessionIds":links}))
+/// The editable metadata of a registered or discovered artifact.
+struct Metadata<'a> {
+    id: String,
+    values: Value,
+    /// The fingerprint of a discovered artifact, so its tokens expire when discovery changes.
+    discovery: Option<&'a str>,
 }
-fn metadata_token(values: &Value, field: &str, discovery: Option<&str>) -> Result<String> {
-    Ok(context_kit::sha256(&serde_json::to_vec(
-        &json!({"value":values[field],"discovery":discovery}),
-    )?))
+impl<'a> Metadata<'a> {
+    fn new(entry: &Value, discovery: Option<&'a str>) -> Result<Self> {
+        let title = entry["title"].as_str().unwrap_or("Artifact");
+        if title.chars().count() > 300 {
+            return Err(Error::new(
+                "Stored artifact title exceeds its editable limit.",
+            ));
+        }
+        let links = if entry.get("sessionIds").is_some() {
+            metadata_links(&entry["sessionIds"])?
+        } else {
+            vec![]
+        };
+        Ok(Self {
+            id: metadata_id(&entry["id"])?.to_owned(),
+            values: json!({"title":title,"sessionIds":links}),
+            discovery,
+        })
+    }
+}
+impl Record for Metadata<'_> {
+    const NAME: &'static str = "artifact";
+    const FIELDS: &'static [&'static str] = &["title", "sessionIds"];
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn projection(&self, field: &str) -> Result<Value> {
+        Ok(json!({"value":self.values[field],"discovery":self.discovery}))
+    }
+    fn normalize(repo: &Repository, field: &str, value: &Value) -> Result<Value> {
+        if field == "title" {
+            if !value.is_string() {
+                return Err(Error::new("Artifact title must be text."));
+            }
+            return Ok(json!(checked(
+                &json!({"title":value}),
+                "title",
+                300,
+                false
+            )?));
+        }
+        let ids = metadata_links(value)?;
+        for id in &ids {
+            field_edit::exact(repo, id)?;
+        }
+        Ok(json!(ids))
+    }
 }
 fn metadata_view(repo: &Repository, entry: &Value, discovery: Option<&str>) -> Result<Value> {
-    let id = metadata_id(&entry["id"])?;
-    metadata_exact(repo, id)?;
-    let values = metadata_values(entry)?;
-    let mut title = text(&values, "title").to_owned();
+    let metadata = Metadata::new(entry, discovery)?;
+    let mut title = text(&metadata.values, "title").to_owned();
     redaction::redact_text(repo, &mut title);
     if title.chars().count() > 300 {
         return Err(Error::new(
             "Artifact title cannot be safely projected within its limit.",
         ));
     }
-    for id in arr(&values["sessionIds"]) {
-        metadata_exact(repo, id.as_str().unwrap())?;
+    for id in arr(&metadata.values["sessionIds"]) {
+        field_edit::exact(repo, id.as_str().unwrap())?;
     }
     let kind = if discovery.is_some() {
         "discovered"
     } else {
         "registered"
     };
-    metadata_exact(repo, kind)?;
+    field_edit::exact(repo, kind)?;
     let mut origin = json!({"type":kind});
     if let Some(fingerprint) = discovery {
-        metadata_exact(repo, fingerprint)?;
+        field_edit::exact(repo, fingerprint)?;
         origin["fingerprint"] = json!(fingerprint);
     }
-    let mut expected = json!({});
-    for field in ["title", "sessionIds"] {
-        let token = metadata_token(&values, field, discovery)?;
-        metadata_exact(repo, &token)?;
-        expected[field] = json!(token);
-    }
+    let expected = field_edit::tokens(repo, &metadata)?;
     Ok(
-        json!({"artifact":{"id":id,"title":title,"sessionIds":values["sessionIds"]},"expected":expected,"origin":origin,"scope":"local"}),
+        json!({"artifact":{"id":metadata.id,"title":title,"sessionIds":metadata.values["sessionIds"]},"expected":expected,"origin":origin,"scope":"local"}),
     )
 }
-fn metadata_patch(args: &Value) -> Result<Value> {
+fn metadata_patch<'a>(repo: &Repository, args: &Value) -> Result<Edit<Metadata<'a>>> {
     metadata_keys(args, &["id", "patch", "expected"])?;
     metadata_id(&args["id"])?;
-    metadata_keys(&args["patch"], &["title", "sessionIds"])?;
-    let patch = args["patch"].as_object().unwrap();
-    let expected = args["expected"].as_object().ok_or_else(|| {
-        Error::new("Supply captured tokens for exactly the changed artifact fields.")
-    })?;
-    if patch.is_empty()
-        || patch.len() != expected.len()
-        || patch.keys().any(|key| !expected.contains_key(key))
-        || expected.values().any(|value| {
-            !value.as_str().is_some_and(|value| {
-                value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-            })
-        })
-    {
-        return Err(Error::new(
-            "Supply captured tokens for exactly the changed artifact fields.",
-        ));
-    }
-    let mut normalized = json!({});
-    if let Some(title) = patch.get("title") {
-        if !title.is_string() {
-            return Err(Error::new("Artifact title must be text."));
-        }
-        normalized["title"] = json!(checked(&args["patch"], "title", 300, false)?);
-    }
-    if let Some(links) = patch.get("sessionIds") {
-        normalized["sessionIds"] = json!(metadata_links(links)?);
-    }
-    Ok(normalized)
+    Edit::new(repo, &args["patch"], &args["expected"])
 }
 fn metadata_position(state: &Value, id: &str) -> Option<usize> {
     state["artifacts"]
@@ -325,41 +312,33 @@ fn metadata_apply(
     repo: &Repository,
     state: &mut Value,
     index: usize,
-    patch: &Value,
-    expected: &Value,
+    edit: &Edit<Metadata>,
     discovery: Option<&str>,
 ) -> Result<Value> {
-    let entry = &state["artifacts"][index];
-    let values = metadata_values(entry)?;
-    let _ = metadata_view(repo, entry, discovery)?;
-    for field in patch.as_object().unwrap().keys() {
-        if expected[field] != metadata_token(&values, field, discovery)? {
-            return Err(metadata_conflict());
-        }
-        metadata_exact(repo, expected[field].as_str().unwrap())?;
-    }
-    if let Some(ids) = patch.get("sessionIds") {
-        for id in arr(ids) {
-            metadata_exact(repo, id.as_str().unwrap())?;
-            if !arr(&values["sessionIds"]).contains(&id)
-                && sessions::get(state, id.as_str().unwrap()).is_err()
-            {
-                return Err(Error::new(
-                    "Choose existing sessions; retained older associations may stay unchanged.",
-                ));
+    metadata_view(repo, &state["artifacts"][index], discovery)?;
+    let current = Metadata::new(&state["artifacts"][index], discovery)?;
+    let changed = edit.apply(&current, |field, value| {
+        match field {
+            "title" if value == "" => return Ok(false),
+            "sessionIds" => {
+                for id in arr(value) {
+                    if !arr(&current.values["sessionIds"]).contains(&id)
+                        && sessions::get(state, id.as_str().unwrap()).is_err()
+                    {
+                        return Err(Error::new(
+                            "Choose existing sessions; retained older associations may stay unchanged.",
+                        ));
+                    }
+                }
             }
+            _ => {}
         }
-    }
-    let mut changed = vec![];
-    for (field, value) in patch.as_object().unwrap() {
-        if field == "title" && value == "" {
-            continue;
+        if current.values[field] == *value {
+            return Ok(false);
         }
-        if values[field] != *value {
-            state["artifacts"][index][field] = value.clone();
-            changed.push(field.clone());
-        }
-    }
+        state["artifacts"][index][field] = value.clone();
+        Ok(true)
+    })?;
     let mut result = metadata_view(repo, &state["artifacts"][index], None)?;
     result["saved"] = json!(true);
     result["changedFields"] = json!(changed);
@@ -376,9 +355,9 @@ fn discovered_entry(repo: &Repository, basis: &Value, id: &str) -> Result<(Value
     let entry = arr(&catalog(repo, basis)?["artifacts"])
         .into_iter()
         .find(|entry| entry["id"] == id && entry["discovered"] == true)
-        .ok_or_else(metadata_conflict)?;
+        .ok_or_else(|| field_edit::conflict(METADATA_CHANGED))?;
     if discovery_config_hash(repo)? != config {
-        return Err(metadata_conflict());
+        return Err(field_edit::conflict(METADATA_CHANGED));
     }
     let fingerprint = context_kit::sha256(&serde_json::to_vec(
         &json!({"entry":entry,"configRevision":config}),
@@ -388,7 +367,7 @@ fn discovered_entry(repo: &Repository, basis: &Value, id: &str) -> Result<(Value
 pub fn metadata_read(repo: &Repository, args: &Value) -> Result<Value> {
     metadata_keys(args, &["id"])?;
     let id = metadata_id(&args["id"])?;
-    metadata_exact(repo, id)?;
+    field_edit::exact(repo, id)?;
     let registered = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
         metadata_position(&state, id)
@@ -404,22 +383,23 @@ pub fn metadata_read(repo: &Repository, args: &Value) -> Result<Value> {
     }
 }
 pub fn metadata_update(repo: &Repository, args: &Value) -> Result<Value> {
-    let patch = metadata_patch(args)?;
+    let edit = metadata_patch(repo, args)?;
     let id = metadata_id(&args["id"])?;
-    metadata_exact(repo, id)?;
+    field_edit::exact(repo, id)?;
     repo.transaction_if_changed(|state| {
-        let index = metadata_position(state, id).ok_or_else(metadata_conflict)?;
-        metadata_apply(repo, state, index, &patch, &args["expected"], None)
+        let index =
+            metadata_position(state, id).ok_or_else(|| field_edit::conflict(METADATA_CHANGED))?;
+        metadata_apply(repo, state, index, &edit, None)
     })
 }
 pub fn register_discovered(repo: &Repository, args: &Value) -> Result<Value> {
-    let patch = metadata_patch(args)?;
+    let edit = metadata_patch(repo, args)?;
     let id = metadata_id(&args["id"])?;
-    metadata_exact(repo, id)?;
+    field_edit::exact(repo, id)?;
     let basis = {
         let state = repo.state.lock().map_err(|_| Error::io())?;
         if metadata_position(&state, id).is_some() {
-            return Err(metadata_conflict());
+            return Err(field_edit::conflict(METADATA_CHANGED));
         }
         discovery_basis(&state)
     };
@@ -427,7 +407,7 @@ pub fn register_discovered(repo: &Repository, args: &Value) -> Result<Value> {
     metadata_view(repo, &entry, Some(&fingerprint))?;
     repo.transaction(|state| {
         if discovery_basis(state) != basis || metadata_position(state, id).is_some() {
-            return Err(metadata_conflict());
+            return Err(field_edit::conflict(METADATA_CHANGED));
         }
         let mut stored = json!({});
         for field in [
@@ -449,14 +429,7 @@ pub fn register_discovered(repo: &Repository, args: &Value) -> Result<Value> {
             .ok_or_else(|| Error::new("Artifact storage is unavailable."))?
             .push(stored);
         let index = state["artifacts"].as_array().unwrap().len() - 1;
-        let mut result = metadata_apply(
-            repo,
-            state,
-            index,
-            &patch,
-            &args["expected"],
-            Some(&fingerprint),
-        )?;
+        let mut result = metadata_apply(repo, state, index, &edit, Some(&fingerprint))?;
         result["materialized"] = json!(true);
         Ok(result)
     })
@@ -469,10 +442,11 @@ pub(super) fn legacy_metadata_update(
     metadata_keys(args, &["action", "id", "patch", "expected"])?;
     let mut args = args.clone();
     args.as_object_mut().unwrap().remove("action");
-    let patch = metadata_patch(&args)?;
+    let edit = metadata_patch(repo, &args)?;
     let id = metadata_id(&args["id"])?;
-    let index = metadata_position(state, id).ok_or_else(metadata_conflict)?;
-    metadata_apply(repo, state, index, &patch, &args["expected"], None)
+    let index =
+        metadata_position(state, id).ok_or_else(|| field_edit::conflict(METADATA_CHANGED))?;
+    metadata_apply(repo, state, index, &edit, None)
 }
 fn snapshot_entry(repo: &Repository, s: &Value, p: &Value) -> Result<Value> {
     use std::os::unix::fs::PermissionsExt;
@@ -529,13 +503,12 @@ pub fn save(repo: &Repository, s: &mut Value, p: &Value) -> Result<Value> {
         .unwrap_or_else(|| json!({}));
     let existing = old.is_object() && !old.as_object().unwrap().is_empty();
     if existing {
-        metadata_exact(repo, text(&old, "id"))?;
+        field_edit::exact(repo, text(&old, "id"))?;
         let supplied_title = checked(p, "title", 300, false)?;
         if (!supplied_title.is_empty() && supplied_title != text(&old, "title"))
             || (!text(p, "presetId").is_empty() && p["presetId"] != old["presetId"])
         {
-            let mut error = metadata_conflict();
-            error.message="This artifact already exists. Open its metadata editor to change the title or session links. Existing provenance cannot be reassigned.".into();
+            let mut error = field_edit::conflict("This artifact already exists. Open its metadata editor to change the title or session links. Existing provenance cannot be reassigned.");
             error.data = json!({"artifactId":old["id"]});
             return Err(error);
         }
