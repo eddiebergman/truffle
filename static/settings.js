@@ -9,6 +9,24 @@ let appSettings = null,
   quickActionTimer = null,
   shortcutRecording = null,
   shortcutRecordingSync = Promise.resolve();
+// The theme catalog arrives with each settings read, keyed by its document.
+const settingsReadThemes = new WeakMap();
+const settingsDocument = documentStore({
+  get: () => appSettings,
+  set: (next) => {
+    appSettings = next;
+  },
+  async read() {
+    const next = await api("/api/settings");
+    try {
+      settingsReadThemes.set(next, (await api("/api/themes")).themes);
+    } catch (error) {
+      next.configError = error.message;
+    }
+    return next;
+  },
+  write: (body) => api("/api/settings", body),
+});
 function setting(key, fallback) {
   return appSettings?.values?.[key] ?? fallback;
 }
@@ -275,21 +293,16 @@ async function loadAppSettings({ canApply = () => true } = {}) {
     catalog = window.truffleThemeCatalog,
     current = () => appSettings === identity && canApply();
   try {
-    const next = await api("/api/settings");
-    let themes;
-    try {
-      themes = (await api("/api/themes")).themes;
-    } catch (error) {
-      next.configError = error.message;
-    }
-    if (!current()) {
+    const next = await settingsDocument.load({ canApply: current });
+    if (!next) {
       return null;
     }
-    const changed =
-      JSON.stringify(next) !== JSON.stringify(appSettings) ||
-      (themes &&
-        JSON.stringify(themes) !== JSON.stringify(window.truffleThemeCatalog));
-    appSettings = next;
+    const themes = settingsReadThemes.get(next),
+      changed =
+        JSON.stringify(next) !== JSON.stringify(identity) ||
+        (themes &&
+          JSON.stringify(themes) !==
+            JSON.stringify(window.truffleThemeCatalog));
     if (themes) {
       window.truffleThemeCatalog = themes;
     }
@@ -318,6 +331,24 @@ async function loadAppSettings({ canApply = () => true } = {}) {
       $("#settings-error").textContent = error.message;
     }
   }
+}
+// Save a settings patch and present the accepted document. As in
+// loadAppSettings, a failed paint restores the previous document, so the next
+// load paints the saved one again.
+async function saveAppSettings(baseline, patch) {
+  const previous = appSettings,
+    result = await settingsDocument.save(baseline, patch);
+  if (result.kind === "accepted") {
+    try {
+      applyAppSettings();
+    } catch (error) {
+      if (appSettings === result.document) {
+        appSettings = previous;
+      }
+      return { ...result, error: error.message };
+    }
+  }
+  return result;
 }
 function focusPageSearch() {
   const dialog = [...document.querySelectorAll("dialog[open]")].at(-1);
@@ -1467,23 +1498,25 @@ async function savePreferences() {
         "Settings were reloaded while saving. Review them and try again.",
       );
     }
-    appSettings = await api("/api/settings", {
-      revision: baseline.revision,
-      contentHash: baseline.contentHash,
-      patch: submitted,
-    });
+    const result = await saveAppSettings(baseline, { patch: submitted });
+    if (result.kind !== "accepted") {
+      throw new Error(result.error);
+    }
+    const saved = result.document;
     if (settingsDraft === current && JSON.stringify(settingsDraft) === stamp) {
-      resetSettingsDraft(appSettings);
-      applyAppSettings();
+      resetSettingsDraft(saved);
+      if (result.error !== undefined) {
+        throw new Error(result.error);
+      }
       paintSettingsBody();
     } else {
       settingsBaseline = {
-        revision: appSettings.revision,
-        contentHash: appSettings.contentHash,
-        values: structuredClone(appSettings.values),
+        revision: saved.revision,
+        contentHash: saved.contentHash,
+        values: structuredClone(saved.values),
       };
-      applyAppSettings();
       $("#settings-error").textContent =
+        result.error ??
         "Earlier settings were saved. Your newer draft is still unsaved.";
     }
   } catch (error) {
@@ -1623,16 +1656,13 @@ function renderQuickActions() {
     $(".utility-nav").before(root);
   }
   root.replaceChildren();
+  const identity = settingsDocument.baseline();
   for (const action of setting("quickActions", [])) {
-    const identity = {
-        revision: appSettings.revision,
-        contentHash: appSettings.contentHash,
-      },
-      button = settingsButton(
-        action.title,
-        () => chooseQuickAction(action, identity),
-        "nav-item quick-action-button",
-      );
+    const button = settingsButton(
+      action.title,
+      () => chooseQuickAction(action, identity),
+      "nav-item quick-action-button",
+    );
     button.title = action.command;
     const icon = el("span", "sidebar-icon");
     icon.append(sidebarGlyph("commands"));

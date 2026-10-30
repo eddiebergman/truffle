@@ -273,12 +273,20 @@ function profileFixture({
       if (!payload) {
         return structuredClone(current);
       }
+      if (
+        payload.revision !== current.revision ||
+        payload.contentHash !== current.contentHash
+      ) {
+        throw Object.assign(new Error("Settings changed."), { status: 409 });
+      }
       current.values = { ...current.values, ...structuredClone(payload.patch) };
       current.revision++;
       current.contentHash = "b".repeat(64);
       return structuredClone(current);
     },
-    loadAppSettings: async () => {},
+    // The settings owner reads through the same service stub.
+    loadAppSettings: () => c.api("/api/settings"),
+    applyAppSettings() {},
   });
   loadScripts(c, [
     "static/client.js",
@@ -402,10 +410,7 @@ test("changed settings disable company Apply until repreview resets approvals", 
   await f.button("Apply selected changes").onclick();
   assert.equal(f.button("Apply selected changes").disabled, true);
   assert.match(f.status.textContent, /Refresh the preview/);
-  assert.equal(
-    f.calls.filter((c) => c.path === "/api/settings" && c.payload).length,
-    0,
-  );
+  assert.equal(f.current.values.editor, "zed");
   await f.button("Refresh preview").onclick();
   assert.equal(
     f.nodes().find((n) => n.attrs["aria-label"] === "Approve changing Editor")
@@ -638,10 +643,7 @@ test("same-revision file changes invalidate proposal previews and approvals", as
   f.current.contentHash = "d".repeat(64);
   await f.button("Apply selected changes").onclick();
   assert.match(f.status.textContent, /changed elsewhere/);
-  assert.equal(
-    f.calls.some((c) => c.path === "/api/settings" && c.payload),
-    false,
-  );
+  assert.equal(f.current.values.editor, "zed");
   assert.equal(f.button("Apply selected changes").disabled, true);
 });
 
@@ -842,6 +844,16 @@ test("entering a direct skill path initializes the chosen default assistant afte
 });
 
 // The keymap step waits on its shortcut preview; each preview read stays pending until the test settles it.
+// Opening setup loads settings too; only an open setup step reads them here.
+function readSettingsInSetup(f) {
+  f.c.loadAppSettings = async ({ canApply }) => {
+    if (!f.c.window.onboardingIsOpen()) {
+      return;
+    }
+    const next = await f.c.api("/api/settings");
+    return canApply() ? next : null;
+  };
+}
 function keymapFixture() {
   const f = onboardingHostFixture({ step: "keymap" });
   withSetup(f, {
@@ -864,6 +876,7 @@ function keymapFixture() {
     path === "/api/settings" && !payload
       ? new Promise((resolve, reject) => f.previews.push({ resolve, reject }))
       : original(path, payload);
+  readSettingsInSetup(f);
   f.waitForPreview = async (count) => {
     for (let spin = 0; f.previews.length < count && spin < 20; spin++) {
       await f.tick();
@@ -1342,6 +1355,7 @@ test("one onboarding shell moves between connected inline section and standalone
 test("closing pending inline loads or shortcut previews prevents stale rendering and superseded hosts", async () => {
   const f = onboardingHostFixture({ step: "keymap" }),
     original = f.c.api;
+  readSettingsInSetup(f);
   let release;
   f.c.api = async (path, payload) =>
     path === "/api/settings"

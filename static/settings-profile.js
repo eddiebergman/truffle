@@ -171,9 +171,12 @@ function renderSettingsProfilePreview(
       if (new TextEncoder().encode(JSON.stringify(candidate)).length > 65536) {
         throw new Error("Profile exceeds 64 KiB.");
       }
-      const current = await api("/api/settings");
+      const current = await loadAppSettings();
       if (disposed || ticket !== generation) {
         return;
+      }
+      if (!current) {
+        throw new Error("Settings could not load. Refresh the preview.");
       }
       if (
         revision !== undefined &&
@@ -295,32 +298,26 @@ function renderSettingsProfilePreview(
     status.textContent = "Checking current settings…";
     update();
     try {
-      const current = await api("/api/settings");
-      if (disposed || ticket !== generation) {
-        return;
-      }
-      if (
-        current.revision !== expected.revision ||
-        current.contentHash !== expected.contentHash
-      ) {
-        expected.stale = true;
-        throw new Error(
-          "Settings changed elsewhere. Refresh the preview and choose changes again.",
-        );
-      }
-      const patch = settingsProfilePatch(expected.baseline, selected);
-      await api("/api/settings", {
-        revision: expected.revision,
-        contentHash: expected.contentHash,
-        patch,
+      const result = await saveAppSettings(expected, {
+        patch: settingsProfilePatch(expected.baseline, selected),
       });
       if (disposed || ticket !== generation) {
         return;
       }
+      switch (result.kind) {
+        case "accepted":
+          break;
+        case "conflict":
+          expected.stale = true;
+          throw new Error(
+            "Settings changed elsewhere. Refresh the preview and choose changes again.",
+          );
+        default:
+          throw new Error(result.error);
+      }
       clear();
       profile = null;
       status.textContent = "Selected settings applied.";
-      await loadAppSettings();
     } catch (error) {
       if (!disposed && ticket === generation) {
         if (review) {

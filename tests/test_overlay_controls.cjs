@@ -726,17 +726,15 @@ test("theme uncertain response alone invalidates a pre-write settings GET withou
   };
   const read = f.c.loadAppSettings();
   await f.choices()[1].onclick();
-  assert.notEqual(f.c.appSettings, initial);
-  assert.equal(f.c.appSettings.values, initial.values);
+  assert.equal(f.c.appSettings, initial);
   old.resolve({ revision: 0, values: { theme: "old", other: "stale" } });
   assert.equal(await read, null);
   assert.equal(f.c.appSettings.values.other, "latest");
   assert.equal(f.posts().length, 1);
 });
-test("theme accepted POST document is never installed when both authoritative GET attempts fail", async () => {
+test("theme accepted POST document is presented while both confirming GET attempts fail", async () => {
   const f = themeFixture();
   await f.c.openThemeChooser();
-  const latest = f.c.appSettings;
   f.c.api = async (path, payload) => {
     if (payload) {
       f.calls.push({ path, payload });
@@ -748,8 +746,7 @@ test("theme accepted POST document is never installed when both authoritative GE
     throw Error("Read failed");
   };
   await f.choices()[1].onclick();
-  assert.equal(f.c.appSettings.values, latest.values);
-  assert.equal(f.c.appSettings.values.other, "latest");
+  assert.equal(f.c.appSettings.values.theme, "stale response");
   assert.equal(f.dialog.open, true);
   assert.match(f.form.children[3].textContent, /Theme saved/);
   assert.equal(f.posts().length, 1);
@@ -799,7 +796,8 @@ test("theme accepted paint failures remain read-only until a GET actually paints
     f.choices()[1].focus();
     await f.choices()[1].onclick();
     assert.equal(f.posts().length, 1);
-    assert.equal(paints, 2);
+    // One paint for the save response, then one for each confirming GET.
+    assert.equal(paints, failCount === 1 ? 2 : 3);
     if (failCount === 1) {
       assert.equal(f.dialog.open, false);
       assert.equal(f.c.appSettings.values.theme, "light");

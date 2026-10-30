@@ -510,24 +510,16 @@ async function openThemeChooser() {
     freezeFeatureForm(current, true);
     close.disabled = refresh.disabled = reload.disabled = true;
     message.textContent = "Saving theme…";
+    current.result = { kind: "unknown" };
     try {
-      await api("/api/settings", {
-        revision: baseline.revision,
-        contentHash: baseline.contentHash,
+      const saved = await saveAppSettings(baseline, {
         patch: { theme: theme.id },
       });
-      current.result = { kind: "accepted" };
-    } catch (error) {
       current.result = {
-        kind: writeFailureKind(error) === "unknown" ? "unknown" : "rejected",
-        conflict: error.status === 409,
-        error: error.message,
+        kind: saved.kind === "conflict" ? "rejected" : saved.kind,
+        conflict: saved.kind === "conflict",
+        error: saved.error,
       };
-    }
-    if (current.result.kind !== "rejected") {
-      appSettings = { ...appSettings };
-    }
-    try {
       if (current.result.kind === "accepted" && current.isCurrent()) {
         const next = await readCurrent();
         if (next && current.isCurrent() && unobscured()) {

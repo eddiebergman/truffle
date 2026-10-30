@@ -1,5 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+// app-chat.js is a classic script that uses the globals of documents.js.
+Object.assign(globalThis, require("../static/documents.js"));
 const {
   appChatCommand,
   appChatAssistant,
@@ -161,7 +163,9 @@ function loadAppChat(globals = {}, { files = [], loading = {} } = {}) {
     structuredClone,
     ...loading,
   });
-  loadScripts(c, [...files, "static/app-chat.js"], { keepHost: ["window"] });
+  loadScripts(c, ["static/documents.js", ...files, "static/app-chat.js"], {
+    keepHost: ["window"],
+  });
   Object.assign(c, globals);
   const find = (cls) => created.find((node) => node.className === cls),
     footer = find("app-chat-footer");

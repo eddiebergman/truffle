@@ -5,10 +5,7 @@ function appChatCommand(value) {
       Object.keys(value).some(
         (key) => !["type", "revision", "contentHash", "patch"].includes(key),
       ) ||
-      !Number.isSafeInteger(value.revision) ||
-      value.revision < 0 ||
-      typeof value.contentHash !== "string" ||
-      !/^[a-f0-9]{64}$/.test(value.contentHash) ||
+      !validDocumentIdentity(value) ||
       !value.patch ||
       typeof value.patch !== "object" ||
       Array.isArray(value.patch) ||

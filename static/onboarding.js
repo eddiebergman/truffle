@@ -779,9 +779,12 @@ function onboardingCompanyMessage(instructions) {
         paragraph(
           "Keep your current shortcuts, or use VS Code / Cursor basics for three common actions. This changes only shortcuts in truffle.",
         );
-        const current = await api("/api/settings");
+        const current = await loadAppSettings({ canApply: isCurrent });
         if (!isCurrent()) {
           return;
+        }
+        if (!current) {
+          throw new Error("Settings could not load. Go Back and try again.");
         }
         const preview = onboardingKeymapPreset(current.values.keybindings),
           label = (id) =>
@@ -817,24 +820,19 @@ function onboardingCompanyMessage(instructions) {
           button(
             "Apply these shortcuts",
             async () => {
-              const latest = await api("/api/settings");
-              if (!isCurrent()) {
-                return;
-              }
-              if (
-                latest.revision !== current.revision ||
-                latest.contentHash !== current.contentHash
-              ) {
-                throw new Error(
-                  "Shortcuts changed in another window. Go Back and return to review the updated preview.",
-                );
-              }
-              await api("/api/settings", {
-                revision: current.revision,
-                contentHash: current.contentHash,
+              const result = await saveAppSettings(current, {
                 patch: { keybindings: preview.bindings },
               });
-              await loadAppSettings();
+              switch (result.kind) {
+                case "accepted":
+                  break;
+                case "conflict":
+                  throw new Error(
+                    "Shortcuts changed in another window. Go Back and return to review the updated preview.",
+                  );
+                default:
+                  throw new Error(result.error);
+              }
               if (isCurrent()) {
                 await next();
               }
