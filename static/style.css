@@ -990,7 +990,7 @@ a.ci-check-name:hover {
 }
 
 #note-dialog #delete-note {
-  display: none !important;
+  display: none;
 }
 
 @media (max-width: 760px) {

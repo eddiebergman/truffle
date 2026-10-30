@@ -4473,7 +4473,7 @@ button.git-file-row {
 }
 
 .embedded-terminal .xterm-viewport {
-  scrollbar-width: none !important;
+  scrollbar-width: none;
 }
 
 .embedded-terminal .xterm-viewport::-webkit-scrollbar {

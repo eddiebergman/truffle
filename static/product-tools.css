@@ -186,10 +186,8 @@
   padding: 0 16px;
 }
 
-.row,
-.row.mixed-source,
-.row.no-role-column {
-  grid-template-columns: minmax(0, 1fr) !important;
+.row {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .row-main {
