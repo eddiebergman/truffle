@@ -167,13 +167,6 @@ h1 {
   line-height: 16px;
 }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
-  margin: 16px 0;
-}
-
 .metric.selected {
   background: var(--bg);
   border-color: var(--line);
@@ -214,16 +207,6 @@ h1 {
 
 .dot.blocked {
   background: var(--blocked);
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 12px;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: nowrap;
 }
 
 .search > span {
@@ -538,14 +521,6 @@ dialog .optional {
   overflow-wrap: anywhere;
 }
 
-.settings-section > code {
-  display: block;
-  background: var(--bg);
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  border-radius: 5px;
-  padding: 10px;
-}
-
 #connections {
   display: grid;
   gap: 8px;
@@ -644,14 +619,6 @@ dialog .optional {
 
   .eyebrow {
     font-size: 8px;
-  }
-
-  .metrics {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .view-controls {
-    width: 100%;
   }
 
   .view-controls select {
@@ -1155,23 +1122,7 @@ a.ci-check-name:hover {
   }
 }
 
-/* Compact board: one line per work item or agent session. */
-.content {
-  margin: auto;
-  max-width: 1450px;
-  padding: 24px 30px;
-}
-
-.page-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-  gap: 15px;
-}
-
 .page-heading h1 {
-  font-size: 28px;
   margin: 5px 0;
 }
 
@@ -1195,18 +1146,6 @@ a.ci-check-name:hover {
 
 .launcher #project-only {
   margin-right: 8px;
-}
-
-.metric {
-  text-align: left;
-  background: var(--bg);
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 11px;
-  border-radius: 5px;
 }
 
 .metric strong {
@@ -1393,14 +1332,6 @@ a.ci-check-name:hover {
 }
 
 @media (max-width: 1050px) {
-  .content {
-    padding: 22px;
-  }
-
-  .metric {
-    padding: 7px 8px;
-  }
-
   .metric > span {
     font-size: 9px;
   }
@@ -1411,20 +1342,6 @@ a.ci-check-name:hover {
 }
 
 @media (max-width: 760px) {
-  .content {
-    padding: 18px 12px;
-  }
-
-  .page-heading {
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-
-  .page-heading h1 {
-    font-size: 24px;
-  }
-
   .launcher {
     gap: 5px;
   }
@@ -1439,19 +1356,6 @@ a.ci-check-name:hover {
     padding: 0;
   }
 
-  .metrics {
-    display: flex;
-    overflow: auto;
-    gap: 5px;
-    margin: 12px 0;
-  }
-
-  .metric {
-    flex: 0 0 auto;
-    padding: 5px 8px;
-    gap: 7px;
-  }
-
   .metric strong {
     font-size: 14px;
   }
@@ -1460,11 +1364,8 @@ a.ci-check-name:hover {
     font-size: 9px;
   }
 
-  .toolbar {
-    padding-bottom: 9px;
-  }
-
   .view-controls {
+    width: 100%;
     gap: 5px;
   }
 
@@ -1602,10 +1503,6 @@ a.ci-check-name:hover {
 }
 
 @media (max-width: 760px) {
-  .toolbar {
-    flex-wrap: wrap;
-  }
-
   .toolbar .search {
     flex: 1 1 100%;
     max-width: none;
@@ -1956,10 +1853,6 @@ a.ci-check-name:hover {
   .launcher #launch-folder {
     max-width: 150px;
     min-width: 110px;
-  }
-
-  .page-heading {
-    align-items: flex-start;
   }
 
   .family-child {
@@ -2326,17 +2219,6 @@ a.ci-check-name:hover {
 #item-sentry-links a {
   display: block;
   margin-block: 6px;
-}
-
-.briefing-body code {
-  font:
-    11.5px/1.6 ui-monospace,
-    SFMono-Regular,
-    monospace;
-  background: var(--panel);
-  color: var(--text);
-  border-radius: 4px;
-  padding: 2px 5px;
 }
 
 .briefing-body pre {
