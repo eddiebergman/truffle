@@ -143,6 +143,8 @@ pub(super) fn open_request(dir: &Path, payload: &Value) -> Result<super::termina
 pub enum Host {
     Local(super::embedded::EmbeddedHost),
     Remote(Remote),
+    #[cfg(test)]
+    Fake(Arc<super::terminals::fake::Fake>),
 }
 pub struct Remote {
     root: PathBuf,
@@ -175,6 +177,8 @@ impl Host {
                 .as_array()
                 .cloned()
                 .ok_or_else(|| Error::new("Terminal inventory response is invalid.")),
+            #[cfg(test)]
+            Self::Fake(fake) => fake.inventory(),
         }
     }
     pub fn open(
@@ -199,6 +203,8 @@ impl Host {
                     &json!({"op":"open","record":launch,"packet":packet,"new":new}),
                 )
             }
+            #[cfg(test)]
+            Self::Fake(_) => Err(Error::new("The fake terminal host cannot open agents.")),
         }
     }
     pub fn open_shell(&self, record: &Value) -> Result<Value> {
@@ -208,12 +214,16 @@ impl Host {
                 remote.ensure()?;
                 remote.request(&json!({"op":"shell","record":record}))
             }
+            #[cfg(test)]
+            Self::Fake(_) => Err(Error::new("The fake terminal host cannot open shells.")),
         }
     }
     pub fn open_demo(&self, record: &Value) -> Result<()> {
         match self {
             Self::Local(h) => h.open_demo(record),
             Self::Remote(_) => Err(Error::new("Demo shells require an isolated demo service.")),
+            #[cfg(test)]
+            Self::Fake(_) => Err(Error::new("The fake terminal host cannot open shells.")),
         }
     }
     pub fn poll(&self, id: &str, cursor: u64, generation: &str) -> Result<Value> {
@@ -222,6 +232,8 @@ impl Host {
             Self::Remote(r) => {
                 r.request(&json!({"op":"poll","id":id,"cursor":cursor,"generation":generation}))
             }
+            #[cfg(test)]
+            Self::Fake(_) => Err(Error::new("The fake terminal host has no output.")),
         }
     }
     pub fn input(&self, id: &str, data: &str) -> Result<()> {
@@ -230,6 +242,8 @@ impl Host {
             Self::Remote(r) => r
                 .request(&json!({"op":"input","id":id,"data":data}))
                 .map(|_| ()),
+            #[cfg(test)]
+            Self::Fake(fake) => fake.input(id, data),
         }
     }
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<()> {
@@ -238,6 +252,8 @@ impl Host {
             Self::Remote(r) => r
                 .request(&json!({"op":"resize","id":id,"cols":cols,"rows":rows}))
                 .map(|_| ()),
+            #[cfg(test)]
+            Self::Fake(_) => Ok(()),
         }
     }
     pub fn close(&self, id: &str, generation: &str) -> Result<()> {
@@ -246,6 +262,8 @@ impl Host {
             Self::Remote(r) => r
                 .request(&json!({"op":"close","id":id,"generation":generation}))
                 .map(|_| ()),
+            #[cfg(test)]
+            Self::Fake(_) => Ok(()),
         }
     }
 }

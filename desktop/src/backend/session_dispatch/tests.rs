@@ -1,46 +1,113 @@
+use super::super::terminals::fake::Fake;
 use super::*;
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
-fn fixture() -> (tempfile::TempDir, Arc<Repository>, Value, String) {
+use std::sync::Arc;
+fn fixture() -> (tempfile::TempDir, Arc<Repository>, Arc<Fake>, Value, String) {
     let temp = tempfile::tempdir().unwrap();
-    let repo = Repository::open(temp.path().into(), None, true).unwrap();
+    let (repo, fake) = reopen(&temp);
     let id = uuid();
     let generation = uuid();
     repo.transaction(|state|{state["sessions"]=json!([{"id":id,"agent":"codex","title":"Review fixture","cwd":temp.path(),"items":[{"id":"github:pr"}],"futureNs":{"preserve":true},"reviewDraft":{"revision":3,"note":"Captured private note","comments":[{"id":"captured","text":"Captured private comment","author":"Reviewer","path":"file.rs","root":temp.path(),"side":"additions","start":1,"end":1,"excerpt":"Captured private excerpt","createdAt":1}],"assessments":[{"id":"assessment","pass":"correctness","author":"Reviewer","text":"Captured assessment","createdAt":1}]}}]);state["items"]=json!([{"id":"github:pr","source":"github","kind":"Pull request","title":"Broken checks","url":"https://github.com/example/project/pull/1","ci":{"state":"failed","checks":[{"name":"unit","state":"failed","result":"FAIL","url":"https://example.invalid/log"}]}}]);Ok(())}).unwrap();
     let args = json!({"recordId":id,"operationId":uuid(),"revision":3});
-    (temp, repo, args, generation)
+    fake.live(&args["recordId"], &generation);
+    (temp, repo, fake, args, generation)
 }
-fn inventory(args: &Value, generation: &str) -> Vec<Value> {
-    vec![json!({"recordId":args["recordId"],"generation":generation,"live":true})]
+/// Opens the repository in `temp` with fake agent terminals.
+fn reopen(temp: &tempfile::TempDir) -> (Arc<Repository>, Arc<Fake>) {
+    let mut repo = Repository::open(temp.path().into(), None, true).unwrap();
+    let fake = Fake::install(&mut repo);
+    (repo, fake)
 }
-fn feedback_send(
+/// Runs `call` and checks that it wrote no terminal input.
+fn unsent<T>(fake: &Fake, call: impl FnOnce() -> T) -> T {
+    let sent = fake.sent().len();
+    let result = call();
+    assert_eq!(fake.sent().len(), sent, "unexpected terminal input");
+    result
+}
+/// Runs `call` and checks that it neither read the terminal inventory nor wrote input.
+fn untouched<T>(fake: &Fake, call: impl FnOnce() -> T) -> T {
+    let reads = fake.reads();
+    let result = unsent(fake, call);
+    assert_eq!(fake.reads(), reads, "unexpected inventory read");
+    result
+}
+fn matching(
+    entries: &[Value],
+    id: &str,
+    operation: &str,
+    kind: Kind,
+    item: &str,
+) -> Result<Option<Value>> {
+    if let Some(entry) = entries
+        .iter()
+        .find(|entry| entry["operationId"] == operation)
+    {
+        if entry["recordId"] != id || entry["kind"] != kind.name() || text(entry, "itemId") != item
+        {
+            return Err(Error::new(
+                "This dispatch operation ID belongs to a different feature or target.",
+            ));
+        }
+        return Ok(Some(entry.clone()));
+    }
+    Ok(entries
+        .iter()
+        .rev()
+        .find(|entry| {
+            entry["recordId"] == id
+                && entry["kind"] == kind.name()
+                && text(entry, "itemId") == item
+                && entry["finalized"] != true
+                && entry["resolution"] != "user-abandoned"
+        })
+        .cloned())
+}
+/// Prepares or reuses the operation in `args`, then submits it.
+fn dispatch_after(
     repo: &Repository,
+    kind: Kind,
     args: &Value,
-    generation: &str,
-    input: impl Fn(&str, &str) -> Result<()>,
+    after_written: impl FnOnce() -> Result<()>,
 ) -> Result<Value> {
-    dispatch_with(
+    let previous = {
+        let state = repo.state.lock().unwrap();
+        matching(
+            &entries(&state)?,
+            text(args, "recordId"),
+            text(args, "operationId"),
+            kind,
+            text(args, "itemId"),
+        )?
+    };
+    let receipt = if let Some(entry) = previous {
+        public(&entry)
+    } else {
+        prepare_with(repo, kind, args, || text(args, "operationId").to_owned())?
+    };
+    submit_with(
         repo,
-        Kind::ReviewFeedback,
-        args,
-        || Ok(inventory(args, generation)),
-        input,
-        || Ok(()),
+        &json!({"recordId":args["recordId"],"operationId":receipt["operationId"]}),
+        after_written,
     )
+}
+fn dispatch(repo: &Repository, kind: Kind, args: &Value) -> Result<Value> {
+    dispatch_after(repo, kind, args, || Ok(()))
+}
+fn feedback_send(repo: &Repository, args: &Value) -> Result<Value> {
+    dispatch(repo, Kind::ReviewFeedback, args)
 }
 #[test]
 fn dispatch_once_preserves_later_feedback_and_reused_comment_ids() {
-    let (_temp, repo, args, generation) = fixture();
-    let writes = AtomicUsize::new(0);
-    let receipt=feedback_send(&repo,&args,&generation,|_,payload|{writes.fetch_add(1,Ordering::SeqCst);assert!(payload.starts_with("\u{1b}[200~"));assert!(payload.ends_with("\u{1b}[201~\r"));assert_eq!(repo.state.lock().unwrap()[JOURNAL]["entries"][0]["status"],"sending");
-            repo.transaction(|s|{let draft=&mut s["sessions"][0]["reviewDraft"];draft["comments"]=json!([{"id":"captured","text":"Reused ID with newer content"},{"id":"later","text":"Later feedback"}]);draft["assessments"].as_array_mut().unwrap().push(json!({"id":"later-assessment","text":"Later assessment"}));draft["note"]=json!("Later note");draft["revision"]=json!(4);Ok(())})?;Ok(())}).unwrap();
+    let (_temp, repo, fake, args, _generation) = fixture();
+    let during = repo.clone();
+    fake.on_send(move |payload|{assert!(payload.starts_with("\u{1b}[200~"));assert!(payload.ends_with("\u{1b}[201~\r"));assert_eq!(during.state.lock().unwrap()[JOURNAL]["entries"][0]["status"],"sending");
+            during.transaction(|s|{let draft=&mut s["sessions"][0]["reviewDraft"];draft["comments"]=json!([{"id":"captured","text":"Reused ID with newer content"},{"id":"later","text":"Later feedback"}]);draft["assessments"].as_array_mut().unwrap().push(json!({"id":"later-assessment","text":"Later assessment"}));draft["note"]=json!("Later note");draft["revision"]=json!(4);Ok(())})?;Ok(())});
+    let receipt = feedback_send(&repo, &args).unwrap();
     assert_eq!(receipt["status"], "written");
     assert_eq!(receipt["finalized"], true);
     assert_eq!(receipt["transport"], "legacy-unfenced");
-    assert_eq!(writes.load(Ordering::SeqCst), 1);
+    assert_eq!(fake.sent().len(), 1);
     let state = repo.state.lock().unwrap().clone();
     let draft = &state["sessions"][0]["reviewDraft"];
     assert_eq!(arr(&draft["comments"]).len(), 2);
@@ -51,10 +118,7 @@ fn dispatch_once_preserves_later_feedback_and_reused_comment_ids() {
     assert!(state[JOURNAL]["entries"][0].get("payload").is_none());
     let mut retry = args.clone();
     retry["revision"] = json!(999);
-    let again = feedback_send(&repo, &retry, &generation, |_, _| {
-        panic!("written operation must never resend")
-    })
-    .unwrap();
+    let again = unsent(&fake, || feedback_send(&repo, &retry)).unwrap();
     assert_eq!(again["operationId"], receipt["operationId"]);
     assert_eq!(again["finalized"], true);
     assert!(repo.snapshot(false).get(JOURNAL).is_none());
@@ -66,30 +130,29 @@ fn dispatch_once_preserves_later_feedback_and_reused_comment_ids() {
 #[test]
 fn dispatch_uncertainty_and_failed_written_marker_survive_restart_without_replay() {
     for marker_failure in [false, true] {
-        let (temp, repo, args, generation) = fixture();
+        let (temp, repo, fake, args, generation) = fixture();
         let path = repo.data.clone();
-        let receipt = feedback_send(&repo, &args, &generation, |_, _| {
+        let marker = path.clone();
+        fake.on_send(move |_| {
             if marker_failure {
-                std::fs::create_dir(path.with_extension("tmp"))?;
+                std::fs::create_dir(marker.with_extension("tmp"))?;
                 Ok(())
             } else {
                 Err(Error::new("Partial write or lost daemon acknowledgement"))
             }
-        })
-        .unwrap();
+        });
+        let receipt = feedback_send(&repo, &args).unwrap();
         assert_eq!(receipt["status"], "uncertain");
         assert_eq!(receipt["finalized"], false);
         if marker_failure {
             std::fs::remove_dir(path.with_extension("tmp")).unwrap();
         }
         drop(repo);
-        let repo = Repository::open(temp.path().into(), None, true).unwrap();
+        let (repo, fake) = reopen(&temp);
+        fake.live(&args["recordId"], &generation);
         let mut retry = args.clone();
         retry["operationId"] = json!(uuid());
-        let receipt = feedback_send(&repo, &retry, &generation, |_, _| {
-            panic!("uncertain scope must not resend")
-        })
-        .unwrap();
+        let receipt = unsent(&fake, || feedback_send(&repo, &retry)).unwrap();
         assert_eq!(receipt["operationId"], args["operationId"]);
         assert_eq!(receipt["status"], "uncertain");
         assert_eq!(finalize(&repo, &args).unwrap()["status"], "uncertain");
@@ -101,19 +164,12 @@ fn dispatch_uncertainty_and_failed_written_marker_survive_restart_without_replay
 }
 #[test]
 fn dispatch_written_marker_allows_only_ack_recovery_after_failed_save_and_restart() {
-    let (temp, repo, args, generation) = fixture();
+    let (temp, repo, _fake, args, generation) = fixture();
     let path = repo.data.clone();
-    let receipt = dispatch_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        |_, _| Ok(()),
-        || {
-            std::fs::create_dir(path.with_extension("tmp"))?;
-            Ok(())
-        },
-    )
+    let receipt = dispatch_after(&repo, Kind::ReviewFeedback, &args, || {
+        std::fs::create_dir(path.with_extension("tmp"))?;
+        Ok(())
+    })
     .unwrap();
     assert_eq!(receipt["status"], "written");
     assert_eq!(receipt["finalized"], false);
@@ -123,11 +179,9 @@ fn dispatch_written_marker_allows_only_ack_recovery_after_failed_save_and_restar
     );
     std::fs::remove_dir(path.with_extension("tmp")).unwrap();
     drop(repo);
-    let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let receipt = feedback_send(&repo, &args, &generation, |_, _| {
-        panic!("ACK recovery must not send")
-    })
-    .unwrap();
+    let (repo, fake) = reopen(&temp);
+    fake.live(&args["recordId"], &generation);
+    let receipt = unsent(&fake, || feedback_send(&repo, &args)).unwrap();
     assert_eq!(receipt["finalized"], true);
     assert_eq!(
         repo.state.lock().unwrap()["sessions"][0]["reviewDraft"]["note"],
@@ -139,24 +193,53 @@ fn dispatch_written_marker_allows_only_ack_recovery_after_failed_save_and_restar
     );
 }
 #[test]
-fn dispatch_prepared_retry_uses_frozen_payload_and_reservation_failure_never_queues() {
-    let (_temp, repo, args, generation) = fixture();
-    let inventories = AtomicUsize::new(0);
-    let path = repo.data.clone();
-    let first = dispatch_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || {
-            if inventories.fetch_add(1, Ordering::SeqCst) == 1 {
-                std::fs::create_dir(path.with_extension("tmp"))?;
-            }
-            Ok(inventory(&args, &generation))
-        },
-        |_, _| panic!("failed sending marker must prevent I/O"),
-        || Ok(()),
-    )
+fn dispatch_reports_the_daemon_error_when_terminal_state_is_unknown() {
+    let (_temp, repo, fake, args, generation) = fixture();
+    let daemon = "Terminal daemon did not respond. Retry; do not start a duplicate agent.";
+    fake.fail(daemon);
+    let error = prepare(&repo, Kind::ReviewFeedback, &args).unwrap_err();
+    assert_eq!(error.message, daemon);
+    fake.rows(vec![]);
+    let error = prepare(&repo, Kind::ReviewFeedback, &args).unwrap_err();
+    assert!(error.message.contains("Resume this chat"));
+    fake.live(&args["recordId"], &generation);
+    let prepared = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
+    fake.fail(daemon);
+    let error = unsent(&fake, || submit(&repo, &prepared)).unwrap_err();
+    assert_eq!(error.message, daemon);
+    assert_eq!(
+        locate(
+            &repo,
+            text(&args, "recordId"),
+            text(&prepared, "operationId")
+        )
+        .unwrap()["status"],
+        "prepared"
+    );
+}
+#[test]
+fn dispatch_writes_to_the_terminal_that_runs_the_chat_conversation() {
+    let (_temp, repo, fake, args, generation) = fixture();
+    let (conversation, terminal) = (uuid(), uuid());
+    repo.transaction(|s| {
+        s["sessions"][0]["sessionId"] = json!(conversation);
+        Ok(())
+    })
     .unwrap();
+    fake.rows(vec![
+        json!({"recordId":terminal,"sessionId":conversation,"agent":"codex","generation":generation,"live":true}),
+    ]);
+    assert_eq!(feedback_send(&repo, &args).unwrap()["finalized"], true);
+    assert_eq!(fake.sent()[0].0, terminal);
+}
+#[test]
+fn dispatch_prepared_retry_uses_frozen_payload_and_reservation_failure_never_queues() {
+    let (_temp, repo, fake, args, _generation) = fixture();
+    let path = repo.data.clone();
+    let marker = path.clone();
+    fake.before_read(|| {});
+    fake.before_read(move || std::fs::create_dir(marker.with_extension("tmp")).unwrap());
+    let first = unsent(&fake, || feedback_send(&repo, &args)).unwrap();
     assert_eq!(first["status"], "prepared");
     std::fs::remove_dir(path.with_extension("tmp")).unwrap();
     repo.transaction(|s| {
@@ -166,54 +249,41 @@ fn dispatch_prepared_retry_uses_frozen_payload_and_reservation_failure_never_que
         Ok(())
     })
     .unwrap();
-    let receipt = feedback_send(&repo, &args, &generation, |_, payload| {
+    fake.on_send(|payload| {
         assert!(payload.contains("Captured private note"));
         assert!(!payload.contains("New note"));
         Ok(())
-    })
-    .unwrap();
+    });
+    let receipt = feedback_send(&repo, &args).unwrap();
     assert_eq!(receipt["payloadHash"], first["payloadHash"]);
     assert_eq!(
         repo.state.lock().unwrap()["sessions"][0]["reviewDraft"]["note"],
         "New note"
     );
-    let (_temp, repo, mut args, generation) = fixture();
+    let (_temp, repo, fake, mut args, _generation) = fixture();
     args["itemId"] = json!("github:pr");
     std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
     let before = repo.state.lock().unwrap().clone();
-    assert!(dispatch_with(
-        &repo,
-        Kind::CiInvestigation,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        |_, _| panic!("reservation failed"),
-        || Ok(())
-    )
-    .is_err());
+    assert!(unsent(&fake, || dispatch(&repo, Kind::CiInvestigation, &args)).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert!(repo.state.lock().unwrap()["sessions"][0]["ciInvestigations"].is_null());
 }
 #[test]
 fn dispatch_concurrent_same_operation_has_only_one_terminal_write() {
-    let (_temp, repo, args, generation) = fixture();
+    let (_temp, repo, fake, args, _generation) = fixture();
     let (started, ready) = std::sync::mpsc::channel();
     let (release, wait) = std::sync::mpsc::channel();
     let wait = std::sync::Mutex::new(wait);
     let worker_repo = repo.clone();
     let worker_args = args.clone();
-    let worker_generation = generation.clone();
-    let worker = std::thread::spawn(move || {
-        feedback_send(&worker_repo, &worker_args, &worker_generation, |_, _| {
-            started.send(()).unwrap();
-            wait.lock().unwrap().recv().unwrap();
-            Ok(())
-        })
+    fake.on_send(move |_| {
+        started.send(()).unwrap();
+        wait.lock().unwrap().recv().unwrap();
+        Ok(())
     });
+    let worker = std::thread::spawn(move || feedback_send(&worker_repo, &worker_args));
     ready.recv().unwrap();
-    let receipt = feedback_send(&repo, &args, &generation, |_, _| {
-        panic!("concurrent operation duplicated input")
-    })
-    .unwrap();
+    let receipt = unsent(&fake, || feedback_send(&repo, &args)).unwrap();
     assert_eq!(receipt["status"], "uncertain");
     release.send(()).unwrap();
     assert_eq!(worker.join().unwrap().unwrap()["finalized"], true);
@@ -221,55 +291,43 @@ fn dispatch_concurrent_same_operation_has_only_one_terminal_write() {
 #[test]
 fn dispatch_resolution_is_explicit_retains_uncertainty_and_never_replays_old_ids() {
     for decision in ["submitted", "abandon"] {
-        let (_temp, repo, args, generation) = fixture();
-        let receipt = feedback_send(&repo, &args, &generation, |_, _| {
-            Err(Error::new("Unknown delivery"))
-        })
-        .unwrap();
+        let (_temp, repo, fake, args, _generation) = fixture();
+        fake.on_send(|_| Err(Error::new("Unknown delivery")));
+        let receipt = feedback_send(&repo, &args).unwrap();
         assert_eq!(receipt["status"], "uncertain");
         let result=resolve(&repo,&json!({"recordId":args["recordId"],"operationId":args["operationId"],"decision":decision})).unwrap();
         assert_eq!(result["status"], "uncertain");
         assert_eq!(result["resolved"], true);
         assert_eq!(result["finalized"], decision == "submitted");
         assert_eq!(
-            feedback_send(&repo, &args, &generation, |_, _| panic!(
-                "resolved ID must not replay"
-            ))
-            .unwrap()["resolved"],
+            unsent(&fake, || feedback_send(&repo, &args)).unwrap()["resolved"],
             true
         );
         if decision == "abandon" {
             let mut next = args.clone();
             next["operationId"] = json!(uuid());
-            let receipt = feedback_send(&repo, &next, &generation, |_, _| Ok(())).unwrap();
+            let receipt = feedback_send(&repo, &next).unwrap();
             assert_eq!(receipt["status"], "written");
         }
     }
 }
 #[test]
 fn dispatch_identity_revision_capacity_and_private_extensions_are_guarded() {
-    let (_temp, repo, args, generation) = fixture();
+    let (_temp, repo, fake, args, _generation) = fixture();
     let mut bad = args.clone();
     bad.as_object_mut().unwrap().remove("revision");
-    assert!(feedback_send(&repo, &bad, &generation, |_, _| panic!("missing revision")).is_err());
+    assert!(unsent(&fake, || feedback_send(&repo, &bad)).is_err());
     bad["revision"] = json!(2);
-    assert!(feedback_send(&repo, &bad, &generation, |_, _| panic!("stale revision")).is_err());
+    assert!(unsent(&fake, || feedback_send(&repo, &bad)).is_err());
     assert_eq!(
         entries(&repo.state.lock().unwrap()).unwrap(),
         [] as [serde_json::Value; 0]
     );
-    feedback_send(&repo, &args, &generation, |_, _| Err(Error::new("Unknown"))).unwrap();
+    fake.on_send(|_| Err(Error::new("Unknown")));
+    feedback_send(&repo, &args).unwrap();
     let mut collision = args.clone();
     collision["itemId"] = json!("github:pr");
-    assert!(dispatch_with(
-        &repo,
-        Kind::CiInvestigation,
-        &collision,
-        || panic!("identity collision before inventory"),
-        |_, _| panic!("identity collision"),
-        || Ok(())
-    )
-    .is_err());
+    assert!(untouched(&fake, || dispatch(&repo, Kind::CiInvestigation, &collision)).is_err());
     repo.transaction(|s| {
         s[JOURNAL]["privateNs"] = json!({"secret":"private-journal-extension"});
         s[JOURNAL]["entries"][0]["futureNs"] = json!({"keep":true});
@@ -310,7 +368,7 @@ fn dispatch_identity_revision_capacity_and_private_extensions_are_guarded() {
     let before = repo.state.lock().unwrap().clone();
     let mut next = args;
     next["operationId"] = json!(uuid());
-    assert!(feedback_send(&repo, &next, &generation, |_, _| panic!("journal full")).is_err());
+    assert!(unsent(&fake, || feedback_send(&repo, &next)).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
 }
 #[test]
@@ -361,55 +419,43 @@ fn dispatch_prompts_preserve_anchors_freshness_and_strip_terminal_controls() {
 }
 #[test]
 fn dispatch_request_and_ci_queue_are_atomic_and_resolution_cancels_only_matching_progress() {
-    let (_temp, repo, args, generation) = fixture();
+    let (_temp, repo, fake, args, _generation) = fixture();
     let settings = repo.settings.view();
     let command = text(&settings["reviewSkill"]["commands"], "codex");
     assert_ne!(command, "");
     repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":command}}),false).unwrap();
-    let result = dispatch_with(
-        &repo,
-        Kind::ReviewRequest,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        |_, payload| {
-            assert!(payload.contains("truffle-review"));
-            assert!(payload.contains(text(&args, "operationId")));
-            let state = repo.state.lock().unwrap();
-            assert_eq!(
-                state["sessions"][0]["reviewDraft"]["run"]["state"],
-                "requested"
-            );
-            assert_eq!(state[JOURNAL]["entries"][0]["status"], "sending");
-            Err(Error::new("Lost acknowledgement"))
-        },
-        || Ok(()),
-    )
-    .unwrap();
+    let (during, operation) = (repo.clone(), text(&args, "operationId").to_owned());
+    fake.on_send(move |payload| {
+        assert!(payload.contains("truffle-review"));
+        assert!(payload.contains(&operation));
+        let state = during.state.lock().unwrap();
+        assert_eq!(
+            state["sessions"][0]["reviewDraft"]["run"]["state"],
+            "requested"
+        );
+        assert_eq!(state[JOURNAL]["entries"][0]["status"], "sending");
+        Err(Error::new("Lost acknowledgement"))
+    });
+    let result = dispatch(&repo, Kind::ReviewRequest, &args).unwrap();
     assert_eq!(result["status"], "uncertain");
     resolve(&repo,&json!({"recordId":args["recordId"],"operationId":args["operationId"],"decision":"abandon"})).unwrap();
     assert_eq!(
         repo.state.lock().unwrap()["sessions"][0]["reviewDraft"]["run"]["state"],
         "cancelled"
     );
-    let (_temp, repo, mut args, generation) = fixture();
+    let (_temp, repo, fake, mut args, _generation) = fixture();
     args["itemId"] = json!("github:pr");
-    let result = dispatch_with(
-        &repo,
-        Kind::CiInvestigation,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        |_, payload| {
-            assert!(payload.contains("--request "));
-            assert!(payload.contains("Investigate only"));
-            assert_eq!(
-                repo.state.lock().unwrap()["sessions"][0]["ciInvestigations"]["github:pr"]["state"],
-                "queued"
-            );
-            Err(Error::new("Unknown delivery"))
-        },
-        || Ok(()),
-    )
-    .unwrap();
+    let during = repo.clone();
+    fake.on_send(move |payload| {
+        assert!(payload.contains("--request "));
+        assert!(payload.contains("Investigate only"));
+        assert_eq!(
+            during.state.lock().unwrap()["sessions"][0]["ciInvestigations"]["github:pr"]["state"],
+            "queued"
+        );
+        Err(Error::new("Unknown delivery"))
+    });
+    let result = dispatch(&repo, Kind::CiInvestigation, &args).unwrap();
     assert_eq!(result["status"], "uncertain");
     resolve(&repo,&json!({"recordId":args["recordId"],"operationId":args["operationId"],"decision":"abandon"})).unwrap();
     assert_eq!(
@@ -419,71 +465,38 @@ fn dispatch_request_and_ci_queue_are_atomic_and_resolution_cancels_only_matching
     let mut next = args.clone();
     next["operationId"] = json!(uuid());
     assert_eq!(
-        dispatch_with(
-            &repo,
-            Kind::CiInvestigation,
-            &next,
-            || Ok(inventory(&args, &generation)),
-            |_, _| Ok(()),
-            || Ok(())
-        )
-        .unwrap()["status"],
+        dispatch(&repo, Kind::CiInvestigation, &next).unwrap()["status"],
         "written"
     );
     assert_eq!(
-        dispatch_with(
-            &repo,
-            Kind::CiInvestigation,
-            &args,
-            || panic!("abandoned operation must not need inventory"),
-            |_, _| panic!("abandoned operation must not send"),
-            || Ok(())
-        )
-        .unwrap()["resolution"],
+        untouched(&fake, || dispatch(&repo, Kind::CiInvestigation, &args)).unwrap()["resolution"],
         "user-abandoned"
     );
 }
 #[test]
 fn dispatch_abandoned_prepared_generation_change_and_new_review_round_never_replay_or_ack_new_data()
 {
-    let (_temp, repo, args, generation) = fixture();
-    let count = AtomicUsize::new(0);
-    assert!(dispatch_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || {
-            let generation = if count.fetch_add(1, Ordering::SeqCst) == 0 {
-                generation.clone()
-            } else {
-                uuid()
-            };
-            Ok(inventory(&args, &generation))
-        },
-        |_, _| panic!("generation preflight must prevent input"),
-        || Ok(())
-    )
-    .is_err());
+    let (_temp, repo, fake, args, _generation) = fixture();
+    replace_generation_after_prepare(&fake, &args, &uuid());
+    assert!(unsent(&fake, || feedback_send(&repo, &args)).is_err());
     let resolved=resolve(&repo,&json!({"recordId":args["recordId"],"operationId":args["operationId"],"decision":"abandon"})).unwrap();
     assert_eq!(resolved["status"], "prepared");
     assert_eq!(resolved["resolution"], "user-abandoned");
     assert!(!text(&resolved, "message").contains("Retry this same"));
     assert_eq!(
-        feedback_send(&repo, &args, &generation, |_, _| panic!(
-            "abandoned prepared ID must not send"
-        ))
-        .unwrap()["resolved"],
+        unsent(&fake, || feedback_send(&repo, &args)).unwrap()["resolved"],
         true
     );
-    let (_temp, repo, args, generation) = fixture();
-    let result = feedback_send(&repo, &args, &generation, |_, _| {
-        repo.transaction(|s| {
+    let (_temp, repo, fake, args, _generation) = fixture();
+    let during = repo.clone();
+    fake.on_send(move |_| {
+        during.transaction(|s| {
             s["sessions"][0]["reviewHistory"] = json!({"version":1,"entries":[{"id":uuid()}]});
             Ok(())
         })?;
         Ok(())
-    })
-    .unwrap();
+    });
+    let result = feedback_send(&repo, &args).unwrap();
     assert_eq!(result["finalized"], true);
     assert_eq!(
         repo.state.lock().unwrap()["sessions"][0]["reviewDraft"]["note"],
@@ -536,35 +549,18 @@ fn dispatch_pending_filters_and_both_agent_skill_paths_preserve_protocol_context
 }
 #[test]
 fn dispatch_hash_target_and_malformed_journal_cannot_admit_terminal_input() {
-    let (_temp, repo, args, generation) = fixture();
-    let count = AtomicUsize::new(0);
-    assert!(dispatch_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(
-            &args,
-            if count.fetch_add(1, Ordering::SeqCst) == 0 {
-                &generation
-            } else {
-                "00000000-0000-0000-0000-000000000000"
-            }
-        )),
-        |_, _| panic!("changed generation"),
-        || Ok(())
-    )
-    .is_err());
+    let (_temp, repo, fake, args, _generation) = fixture();
+    replace_generation_after_prepare(&fake, &args, "00000000-0000-0000-0000-000000000000");
+    assert!(unsent(&fake, || feedback_send(&repo, &args)).is_err());
     repo.transaction(|s| {
         s[JOURNAL]["entries"][0]["payload"] = json!("tampered bytes");
         Ok(())
     })
     .unwrap();
-    assert!(
-        feedback_send(&repo, &args, &generation, |_, _| panic!("hash mismatch"))
-            .unwrap_err()
-            .message
-            .contains("integrity")
-    );
+    assert!(unsent(&fake, || feedback_send(&repo, &args))
+        .unwrap_err()
+        .message
+        .contains("integrity"));
     let other = uuid();
     repo.transaction(|s| {
         s["sessions"]
@@ -576,53 +572,32 @@ fn dispatch_hash_target_and_malformed_journal_cannot_admit_terminal_input() {
     .unwrap();
     let mut collision = args.clone();
     collision["recordId"] = json!(other);
-    assert!(feedback_send(&repo, &collision, &generation, |_, _| panic!(
-        "cross-record ID collision"
-    ))
-    .is_err());
+    assert!(unsent(&fake, || feedback_send(&repo, &collision)).is_err());
     repo.transaction(|s| {
         s[JOURNAL]["entries"][0]["resolved"] = json!({"private":"not a boolean"});
         Ok(())
     })
     .unwrap();
     assert!(read(&repo, &args).is_err());
-    assert!(feedback_send(&repo, &args, &generation, |_, _| panic!(
-        "malformed journal"
-    ))
-    .is_err());
+    assert!(unsent(&fake, || feedback_send(&repo, &args)).is_err());
 }
 #[test]
 fn dispatch_concurrent_prepare_and_lost_response_reserve_one_server_identity_without_input() {
-    let (_temp, repo, args, generation) = fixture();
+    let (_temp, repo, fake, args, _generation) = fixture();
     let (started, ready) = std::sync::mpsc::channel();
     let (release, wait) = std::sync::mpsc::channel();
     let wait = std::sync::Mutex::new(wait);
     let worker_repo = repo.clone();
     let worker_args = args.clone();
-    let worker_generation = generation.clone();
-    let worker = std::thread::spawn(move || {
-        prepare_with(
-            &worker_repo,
-            Kind::ReviewFeedback,
-            &worker_args,
-            || {
-                started.send(()).unwrap();
-                wait.lock().unwrap().recv().unwrap();
-                Ok(inventory(&worker_args, &worker_generation))
-            },
-            uuid,
-        )
+    fake.before_read(move || {
+        started.send(()).unwrap();
+        wait.lock().unwrap().recv().unwrap();
     });
+    let worker =
+        std::thread::spawn(move || prepare(&worker_repo, Kind::ReviewFeedback, &worker_args));
     ready.recv().unwrap();
     assert_eq!(read(&repo, &args).unwrap()["operations"], json!([]));
-    let result = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let result = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     assert_ne!(result["operationId"], args["operationId"]);
     release.send(()).unwrap();
     let recovered = worker.join().unwrap().unwrap();
@@ -630,28 +605,14 @@ fn dispatch_concurrent_prepare_and_lost_response_reserve_one_server_identity_wit
     assert_eq!(result["status"], "prepared");
     assert_eq!(result["ticket"], "1");
     assert_eq!(repo.state.lock().unwrap()[JOURNAL]["nextTicket"], "2");
-    let again = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || panic!("lost prepare must use durable reservation"),
-        uuid,
-    )
-    .unwrap();
+    let again = untouched(&fake, || prepare(&repo, Kind::ReviewFeedback, &args)).unwrap();
     assert_eq!(again, result);
 }
 
 #[test]
 fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
-    let (temp, repo, args, generation) = fixture();
-    let unresolved = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let (temp, repo, fake, args, generation) = fixture();
+    let unresolved = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     let other = uuid();
     repo.transaction(|state| {
         let mut record = state["sessions"][0].clone();
@@ -661,39 +622,28 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
     })
     .unwrap();
     let prepare_args = json!({"recordId":other,"itemId":"github:pr"});
-    let writes = AtomicUsize::new(0);
-    let first = prepare_with(
-        &repo,
-        Kind::CiInvestigation,
-        &prepare_args,
-        || Ok(inventory(&prepare_args, &generation)),
-        uuid,
-    )
-    .unwrap();
-    let completed = complete_counted(&repo, &first, &prepare_args, &generation, &writes);
+    fake.rows(vec![
+        json!({"recordId":args["recordId"],"generation":generation,"live":true}),
+        json!({"recordId":other,"generation":uuid(),"live":true}),
+    ]);
+    let first = prepare(&repo, Kind::CiInvestigation, &prepare_args).unwrap();
+    let completed = complete(&repo, &first, &prepare_args);
     assert_eq!(completed["ticket"], "2");
     let seeded_completed = 1030u32;
     seed_completed_history(&repo, &first, seeded_completed);
     for cycle in 0..3 {
-        let prepared = prepare_with(
-            &repo,
-            Kind::CiInvestigation,
-            &prepare_args,
-            || Ok(inventory(&prepare_args, &generation)),
-            uuid,
-        )
-        .unwrap();
+        let prepared = prepare(&repo, Kind::CiInvestigation, &prepare_args).unwrap();
         assert_eq!(
             prepared["ticket"],
             (seeded_completed + 2 + cycle).to_string()
         );
-        complete_counted(&repo, &prepared, &prepare_args, &generation, &writes);
+        complete(&repo, &prepared, &prepare_args);
         assert_eq!(
             locate(&repo, &other, text(&prepared, "operationId")).unwrap()["finalized"],
             true
         );
     }
-    assert_eq!(writes.load(Ordering::SeqCst), 4);
+    assert_eq!(fake.sent().len(), 4);
     let state = repo.state.lock().unwrap().clone();
     assert_eq!(entries(&state).unwrap().len(), RECENT_COMPLETED + 1);
     assert_eq!(
@@ -714,23 +664,27 @@ fn dispatch_v2_compacts_seeded_history_and_continues_durable_cycles() {
         "1"
     );
     drop(repo);
-    let repo = Repository::open(temp.path().into(), None, true).unwrap();
+    let (repo, fake) = reopen(&temp);
+    fake.live(&args["recordId"], &generation);
     assert_eq!(repo.state.lock().unwrap()[JOURNAL], state[JOURNAL]);
     let bytes = std::fs::read(&repo.data).unwrap();
-    let retired = submit_with(
-        &repo,
-        &first,
-        || panic!("retired operation must not inspect terminal"),
-        |_, _| panic!("retired operation must not write"),
-        || Ok(()),
-    )
-    .unwrap();
+    let retired = untouched(&fake, || submit(&repo, &first)).unwrap();
     assert_eq!(retired["type"], "unavailable");
     assert!(retired.get("status").is_none());
     assert!(text(&retired, "message").contains("Prior delivery may have occurred"));
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    assert_unresolved_becomes_uncertain(&repo, &unresolved, &args, &generation, &writes);
-    assert_eq!(writes.load(Ordering::SeqCst), 5);
+    assert_unresolved_becomes_uncertain(&repo, &fake, &unresolved);
+    assert_eq!(fake.sent().len(), 1);
+}
+/// Lets the next inventory read pass, then replaces the terminal generation.
+fn replace_generation_after_prepare(fake: &Arc<Fake>, args: &Value, generation: &str) {
+    let (replaced, record, generation) = (
+        fake.clone(),
+        args["recordId"].clone(),
+        generation.to_owned(),
+    );
+    fake.before_read(|| {});
+    fake.before_read(move || replaced.live(&record, &generation));
 }
 fn seed_completed_history(repo: &Repository, first: &Value, seeded_completed: u32) {
     repo.transaction(|state| {
@@ -756,71 +710,33 @@ fn seed_completed_history(repo: &Repository, first: &Value, seeded_completed: u3
     })
     .unwrap();
 }
-fn assert_unresolved_becomes_uncertain(
-    repo: &Repository,
-    unresolved: &Value,
-    args: &Value,
-    generation: &str,
-    writes: &AtomicUsize,
-) {
-    let still_live = submit_with(
-        repo,
-        unresolved,
-        || Ok(inventory(args, generation)),
-        |_, _| {
-            writes.fetch_add(1, Ordering::SeqCst);
-            Err(Error::new("Unknown acknowledgement"))
-        },
-        || Ok(()),
-    )
-    .unwrap();
+fn assert_unresolved_becomes_uncertain(repo: &Repository, fake: &Fake, unresolved: &Value) {
+    fake.on_send(|_| Err(Error::new("Unknown acknowledgement")));
+    let still_live = submit(repo, unresolved).unwrap();
     assert_eq!(still_live["status"], "uncertain");
     assert_eq!(still_live["operationId"], unresolved["operationId"]);
     assert_eq!(
-        submit_with(
-            repo,
-            unresolved,
-            || panic!("uncertain operation must not inspect terminal"),
-            |_, _| panic!("uncertain operation must not replay"),
-            || Ok(())
-        )
-        .unwrap(),
+        untouched(fake, || submit(repo, unresolved)).unwrap(),
         still_live
     );
 }
-/// Submits a prepared CI investigation, counting the write, and marks the investigation complete.
-fn complete_counted(
-    repo: &Repository,
-    prepared: &Value,
-    args: &Value,
-    generation: &str,
-    writes: &AtomicUsize,
-) -> Value {
-    let done = submit_with(
-        repo,
-        prepared,
-        || Ok(inventory(args, generation)),
-        |_, _| {
-            writes.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        },
-        || Ok(()),
-    )
-    .unwrap();
+/// Submits a prepared CI investigation and marks the investigation complete.
+fn complete(repo: &Repository, prepared: &Value, args: &Value) -> Value {
+    let done = submit(repo, prepared).unwrap();
     assert_eq!(done["finalized"], true);
     super::super::session_ci::investigation(repo,&json!({"id":args["recordId"],"itemId":"github:pr","requestId":prepared["operationId"],"state":"complete"})).unwrap();
     done
 }
-fn legacy_fixture() -> (tempfile::TempDir, Arc<Repository>, Value, String, Value) {
-    let (temp, repo, args, generation) = fixture();
-    let prepared = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+fn legacy_fixture() -> (
+    tempfile::TempDir,
+    Arc<Repository>,
+    Arc<Fake>,
+    Value,
+    String,
+    Value,
+) {
+    let (temp, repo, fake, args, generation) = fixture();
+    let prepared = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     repo.transaction(|s| {
         s[JOURNAL]["version"] = json!(1);
         for key in ["nextTicket", "retiredThrough"] {
@@ -834,11 +750,11 @@ fn legacy_fixture() -> (tempfile::TempDir, Arc<Repository>, Value, String, Value
         Ok(())
     })
     .unwrap();
-    (temp, repo, args, generation, prepared)
+    (temp, repo, fake, args, generation, prepared)
 }
 #[test]
 fn dispatch_v2_migration_is_atomic_preserves_legacy_fields_and_recovers_existing_uuid() {
-    let (_temp, repo, args, generation, prepared) = legacy_fixture();
+    let (_temp, repo, fake, args, _generation, prepared) = legacy_fixture();
     let original = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let public_before = read(&repo, &args).unwrap();
@@ -848,14 +764,7 @@ fn dispatch_v2_migration_is_atomic_preserves_legacy_fields_and_recovers_existing
     );
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
-    assert!(submit_with(
-        &repo,
-        &prepared,
-        || panic!("migration must precede input"),
-        |_, _| panic!("migration failed"),
-        || Ok(())
-    )
-    .is_err());
+    assert!(untouched(&fake, || submit(&repo, &prepared)).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.state.lock().unwrap(), original);
     std::fs::remove_dir(repo.data.with_extension("tmp")).unwrap();
@@ -867,17 +776,11 @@ fn dispatch_v2_migration_is_atomic_preserves_legacy_fields_and_recovers_existing
     assert_eq!(migrated[JOURNAL]["rootNs"], original[JOURNAL]["rootNs"]);
     assert_eq!(migrated[JOURNAL]["version"], 2);
     assert_eq!(migrated[JOURNAL]["nextTicket"], "2");
-    let done = submit_with(
-        &repo,
-        &prepared,
-        || Ok(inventory(&args, &generation)),
-        |_, payload| {
-            assert!(payload.contains("Captured private note"));
-            Ok(())
-        },
-        || Ok(()),
-    )
-    .unwrap();
+    fake.on_send(|payload| {
+        assert!(payload.contains("Captured private note"));
+        Ok(())
+    });
+    let done = submit(&repo, &prepared).unwrap();
     assert_eq!(done["finalized"], true);
     assert_eq!(
         repo.state.lock().unwrap()[JOURNAL]["entries"][0]["unknownNs"]["keep"],
@@ -886,15 +789,8 @@ fn dispatch_v2_migration_is_atomic_preserves_legacy_fields_and_recovers_existing
 }
 #[test]
 fn dispatch_v2_ticket_metadata_overflow_and_unknown_identity_fail_closed() {
-    let (_temp, repo, args, generation) = fixture();
-    let unknown = submit_with(
-        &repo,
-        &args,
-        || panic!("unknown ID needs no inventory"),
-        |_, _| panic!("unknown ID cannot create"),
-        || Ok(()),
-    )
-    .unwrap();
+    let (_temp, repo, fake, args, _generation) = fixture();
+    let unknown = untouched(&fake, || submit(&repo, &args)).unwrap();
     assert_eq!(unknown["type"], "unavailable");
     let clean = repo.state.lock().unwrap()[JOURNAL].clone();
     for next in [
@@ -911,14 +807,7 @@ fn dispatch_v2_ticket_metadata_overflow_and_unknown_identity_fail_closed() {
         })
         .unwrap();
         let before = repo.state.lock().unwrap().clone();
-        assert!(prepare_with(
-            &repo,
-            Kind::ReviewFeedback,
-            &args,
-            || Ok(inventory(&args, &generation)),
-            uuid
-        )
-        .is_err());
+        assert!(prepare(&repo, Kind::ReviewFeedback, &args).is_err());
         assert_eq!(*repo.state.lock().unwrap(), before);
     }
     repo.transaction(|s| {
@@ -927,14 +816,7 @@ fn dispatch_v2_ticket_metadata_overflow_and_unknown_identity_fail_closed() {
         Ok(())
     })
     .unwrap();
-    let operation = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let operation = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     assert_eq!(operation["ticket"], "9007199254740993");
     assert_eq!(
         repo.state.lock().unwrap()[JOURNAL]["nextTicket"],
@@ -974,15 +856,8 @@ fn dispatch_v2_ticket_metadata_overflow_and_unknown_identity_fail_closed() {
 }
 #[test]
 fn dispatch_v2_abandon_releases_owned_bytes_and_preserves_unknown_extensions() {
-    let (_temp, repo, args, generation) = fixture();
-    let prepared = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let (_temp, repo, fake, args, _generation) = fixture();
+    let prepared = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     repo.transaction(|s| {
         s[JOURNAL]["entries"][0]["extension"] = json!({"keep":"unknown"});
         Ok(())
@@ -995,14 +870,7 @@ fn dispatch_v2_abandon_releases_owned_bytes_and_preserves_unknown_extensions() {
     assert!(entry.get("ack").is_none());
     assert_eq!(entry["extension"]["keep"], "unknown");
     assert_eq!(
-        submit_with(
-            &repo,
-            &prepared,
-            || panic!("abandoned"),
-            |_, _| panic!("abandoned"),
-            || Ok(())
-        )
-        .unwrap()["resolution"],
+        untouched(&fake, || submit(&repo, &prepared)).unwrap()["resolution"],
         "user-abandoned"
     );
 }
@@ -1011,19 +879,17 @@ fn dispatch_v2_abandon_releases_owned_bytes_and_preserves_unknown_extensions() {
 fn dispatch_v2_legacy_prepare_migrates_without_reallocation_and_extension_collisions_preserve_bytes(
 ) {
     for status in ["prepared", "uncertain"] {
-        let (_temp, repo, args, _generation, old) = legacy_fixture();
+        let (_temp, repo, fake, args, _generation, old) = legacy_fixture();
         repo.transaction(|s| {
             s[JOURNAL]["entries"][0]["status"] = json!(status);
             Ok(())
         })
         .unwrap();
-        let prepared = prepare_with(
-            &repo,
-            Kind::ReviewFeedback,
-            &args,
-            || panic!("existing legacy operation needs no inventory"),
-            || panic!("existing legacy operation must not reallocate"),
-        )
+        let prepared = untouched(&fake, || {
+            prepare_with(&repo, Kind::ReviewFeedback, &args, || {
+                panic!("existing legacy operation must not reallocate")
+            })
+        })
         .unwrap();
         assert_eq!(prepared["type"], "operation");
         assert_eq!(prepared["ticket"], "1");
@@ -1032,7 +898,7 @@ fn dispatch_v2_legacy_prepare_migrates_without_reallocation_and_extension_collis
         assert_eq!(repo.state.lock().unwrap()[JOURNAL]["nextTicket"], "2");
     }
     for key in ["nextTicket", "retiredThrough", "entry-ticket"] {
-        let (_temp, repo, _args, _generation, _old) = legacy_fixture();
+        let (_temp, repo, _fake, _args, _generation, _old) = legacy_fixture();
         repo.transaction(|s| {
             if key == "entry-ticket" {
                 s[JOURNAL]["entries"][0]["ticket"] = json!({"legacy":"keep"});
@@ -1052,15 +918,8 @@ fn dispatch_v2_legacy_prepare_migrates_without_reallocation_and_extension_collis
 
 #[test]
 fn dispatch_v2_small_compaction_keeps_old_live_and_newly_completed_receipts() {
-    let (_temp, repo, args, generation) = fixture();
-    let live = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let (_temp, repo, _fake, args, _generation) = fixture();
+    let live = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     repo.transaction(|s| {
         let template = s[JOURNAL]["entries"][0].clone();
         let mut all = vec![template.clone()];
@@ -1084,14 +943,7 @@ fn dispatch_v2_small_compaction_keeps_old_live_and_newly_completed_receipts() {
         locate(&repo, text(&args, "recordId"), text(&live, "operationId")).unwrap()["status"],
         "prepared"
     );
-    let done = submit_with(
-        &repo,
-        &live,
-        || Ok(inventory(&args, &generation)),
-        |_, _| Ok(()),
-        || Ok(()),
-    )
-    .unwrap();
+    let done = submit(&repo, &live).unwrap();
     assert_eq!(done["finalized"], true);
     assert_eq!(
         entries(&repo.state.lock().unwrap()).unwrap().len(),
@@ -1104,7 +956,7 @@ fn dispatch_v2_small_compaction_keeps_old_live_and_newly_completed_receipts() {
 }
 #[test]
 fn dispatch_v2_initial_migration_preserves_all_legacy_receipts_before_later_compaction() {
-    let (_temp, repo, args, generation, _old) = legacy_fixture();
+    let (_temp, repo, _fake, args, _generation, _old) = legacy_fixture();
     let original = repo
         .transaction(|s| {
             let template = s[JOURNAL]["entries"][0].clone();
@@ -1120,14 +972,7 @@ fn dispatch_v2_initial_migration_preserves_all_legacy_receipts_before_later_comp
             Ok(s[JOURNAL]["entries"].clone())
         })
         .unwrap();
-    let prepared = prepare_with(
-        &repo,
-        Kind::ReviewFeedback,
-        &args,
-        || Ok(inventory(&args, &generation)),
-        uuid,
-    )
-    .unwrap();
+    let prepared = prepare(&repo, Kind::ReviewFeedback, &args).unwrap();
     let state = repo.state.lock().unwrap().clone();
     assert_eq!(entries(&state).unwrap().len(), RECENT_COMPLETED + 3);
     for (index, old) in arr(&original).iter().enumerate() {
@@ -1135,14 +980,7 @@ fn dispatch_v2_initial_migration_preserves_all_legacy_receipts_before_later_comp
         expected["ticket"] = json!((index + 1).to_string());
         assert_eq!(state[JOURNAL]["entries"][index], expected);
     }
-    let done = submit_with(
-        &repo,
-        &prepared,
-        || Ok(inventory(&args, &generation)),
-        |_, _| Ok(()),
-        || Ok(()),
-    )
-    .unwrap();
+    let done = submit(&repo, &prepared).unwrap();
     assert_eq!(done["finalized"], true);
     assert_eq!(
         entries(&repo.state.lock().unwrap()).unwrap().len(),
@@ -1151,7 +989,7 @@ fn dispatch_v2_initial_migration_preserves_all_legacy_receipts_before_later_comp
 }
 #[test]
 fn dispatch_v2_legacy_bounds_are_not_relaxed_by_the_migration_allowance() {
-    let (_temp, repo, _args, _generation, _old) = legacy_fixture();
+    let (_temp, repo, _fake, _args, _generation, _old) = legacy_fixture();
     let original = repo.state.lock().unwrap().clone();
     let mut excessive = original.clone();
     excessive[JOURNAL]["largeNs"] = json!("x".repeat(4 * 1024 * 1024));
@@ -1173,7 +1011,7 @@ fn backup_path(repo: &Repository) -> PathBuf {
 #[test]
 fn dispatch_v2_recovery_backup_is_exact_private_and_retry_safe_after_canonical_failure() {
     use std::os::unix::fs::PermissionsExt;
-    let (temp, repo, _args, _generation, _old) = legacy_fixture();
+    let (temp, repo, _fake, _args, _generation, _old) = legacy_fixture();
     let original = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let path = backup_path(&repo);
@@ -1208,7 +1046,7 @@ fn dispatch_v2_recovery_backup_is_exact_private_and_retry_safe_after_canonical_f
 fn dispatch_v2_recovery_backup_failures_preserve_both_canonical_and_existing_artifact() {
     use std::os::unix::fs::{symlink, PermissionsExt};
     for failure in ["conflict", "symlink", "directory", "non-private"] {
-        let (_temp, repo, _args, _generation, _old) = legacy_fixture();
+        let (_temp, repo, _fake, _args, _generation, _old) = legacy_fixture();
         let path = backup_path(&repo);
         let target = path.with_extension("symlink-target");
         match failure {
@@ -1250,7 +1088,7 @@ fn dispatch_v2_recovery_backup_failures_preserve_both_canonical_and_existing_art
 }
 #[test]
 fn dispatch_v2_recovery_backup_includes_explicit_empty_legacy_extensions_but_skips_absent_and_v2() {
-    let (_temp, repo, _args, _generation) = fixture();
+    let (_temp, repo, _fake, _args, _generation) = fixture();
     ensure_migrated(&repo).unwrap();
     let path = backup_path(&repo);
     assert!(!path.exists());
@@ -1273,7 +1111,7 @@ fn dispatch_v2_recovery_backup_includes_explicit_empty_legacy_extensions_but_ski
 #[test]
 fn dispatch_v2_stale_recovery_temporary_artifacts_do_not_block_restart_migration() {
     for directory in [false, true] {
-        let (temp, repo, _args, _generation, _old) = legacy_fixture();
+        let (temp, repo, _fake, _args, _generation, _old) = legacy_fixture();
         let expected = repo.state.lock().unwrap()[JOURNAL].clone();
         let path = backup_path(&repo);
         let stale = path.with_extension("tmp");

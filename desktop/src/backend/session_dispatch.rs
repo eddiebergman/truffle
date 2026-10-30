@@ -1,4 +1,5 @@
 //! Conservative tracked submission over the existing, generation-unfenced PTY transport.
+use super::terminals::Presence;
 use super::{
     arr, checked, domain, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value,
 };
@@ -240,38 +241,6 @@ fn public(entry: &Value) -> Value {
         result["resolution"] = entry["resolution"].clone();
     }
     result
-}
-#[cfg(test)]
-fn matching(
-    entries: &[Value],
-    id: &str,
-    operation: &str,
-    kind: Kind,
-    item: &str,
-) -> Result<Option<Value>> {
-    if let Some(entry) = entries
-        .iter()
-        .find(|entry| entry["operationId"] == operation)
-    {
-        if entry["recordId"] != id || entry["kind"] != kind.name() || text(entry, "itemId") != item
-        {
-            return Err(Error::new(
-                "This dispatch operation ID belongs to a different feature or target.",
-            ));
-        }
-        return Ok(Some(entry.clone()));
-    }
-    Ok(entries
-        .iter()
-        .rev()
-        .find(|entry| {
-            entry["recordId"] == id
-                && entry["kind"] == kind.name()
-                && text(entry, "itemId") == item
-                && entry["finalized"] != true
-                && entry["resolution"] != "user-abandoned"
-        })
-        .cloned())
 }
 pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     let id = sid(text(args, "recordId"))?;
@@ -612,20 +581,13 @@ fn scope(all: &[Value], id: &str, kind: Kind, item: &str) -> Option<Value> {
         })
         .cloned()
 }
-fn lossy_inventory(repo: &Repository) -> Vec<Value> {
-    repo.terminals
-        .inventory()
-        .map(|inventory| inventory.rows().to_vec())
-        .unwrap_or_default()
-}
 pub fn prepare(repo: &Repository, kind: Kind, args: &Value) -> Result<Value> {
-    prepare_with(repo, kind, args, || Ok(lossy_inventory(repo)), uuid)
+    prepare_with(repo, kind, args, uuid)
 }
 fn prepare_with(
     repo: &Repository,
     kind: Kind,
     args: &Value,
-    inventory: impl Fn() -> Result<Vec<Value>>,
     allocate: impl Fn() -> String,
 ) -> Result<Value> {
     let id = sid(text(args, "recordId"))?;
@@ -643,21 +605,23 @@ fn prepare_with(
                 .ok_or_else(|| Error::new("Supply the captured review revision."))?,
         )
     };
-    let previous = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        sessions::get(&state, &id)?;
-        scope(&entries(&state)?, &id, kind, &item)
-    };
+    let state = repo.state.lock().map_err(|_| Error::io())?;
+    let chat = sessions::get(&state, &id)?.clone();
+    let previous = scope(&entries(&state)?, &id, kind, &item);
+    drop(state);
     if let Some(entry) = previous {
         ensure_migrated(repo)?;
         return Ok(public(&locate(repo, &id, text(&entry, "operationId"))?));
     }
-    let generation = inventory()?
-        .into_iter()
-        .find(|entry| entry["recordId"] == id && entry["live"] == true)
-        .and_then(|entry| entry["generation"].as_str().map(str::to_owned))
-        .ok_or_else(|| Error::new("Resume this chat in Truffle before submitting this request."))?;
-    sid(&generation)?;
+    let generation = match repo.terminals.live(&chat) {
+        Presence::Live(terminal) => terminal.generation,
+        Presence::Absent => {
+            return Err(Error::new(
+                "Resume this chat in Truffle before submitting this request.",
+            ))
+        }
+        Presence::Unknown(error) => return Err(error),
+    };
     let settings = if kind == Kind::ReviewRequest {
         repo.settings.view()
     } else {
@@ -693,29 +657,20 @@ fn expired(id: &str, operation: &str) -> Value {
     json!({"type":"unavailable","operationId":operation,"recordId":id,"reason":"possibly-expired","transport":"legacy-unfenced","message":"This operation is unavailable or its receipt expired. Prior delivery may have occurred. No input was sent by this submission. Inspect the chat before preparing any separate new request."})
 }
 pub fn submit(repo: &Repository, args: &Value) -> Result<Value> {
-    submit_with(
-        repo,
-        args,
-        || Ok(lossy_inventory(repo)),
-        |id, data| repo.terminals.send(id, data),
-        || Ok(()),
-    )
+    submit_with(repo, args, || Ok(()))
 }
 fn submit_with(
     repo: &Repository,
     args: &Value,
-    inventory: impl Fn() -> Result<Vec<Value>>,
-    input: impl Fn(&str, &str) -> Result<()>,
     after_written: impl FnOnce() -> Result<()>,
 ) -> Result<Value> {
     let id = sid(text(args, "recordId"))?;
     let operation = sid(text(args, "operationId"))?;
     ensure_migrated(repo)?;
-    let all = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        sessions::get(&state, &id)?;
-        entries(&state)?
-    };
+    let state = repo.state.lock().map_err(|_| Error::io())?;
+    let chat = sessions::get(&state, &id)?.clone();
+    let all = entries(&state)?;
+    drop(state);
     let Some(prepared) = all
         .into_iter()
         .find(|entry| entry["operationId"] == operation)
@@ -743,15 +698,17 @@ fn submit_with(
         ));
     }
     // This is only a best-effort preflight; the legacy daemon does not fence the write by generation.
-    if !inventory()?.iter().any(|entry| {
-        entry["recordId"] == id
-            && entry["live"] == true
-            && entry["generation"] == prepared["generation"]
-    }) {
-        return Err(Error::new(
-            "The terminal generation changed. The prepared request was not sent.",
-        ));
-    }
+    let terminal = match repo.terminals.live(&chat) {
+        Presence::Live(terminal) if terminal.generation == text(&prepared, "generation") => {
+            terminal
+        }
+        Presence::Live(_) | Presence::Absent => {
+            return Err(Error::new(
+                "The terminal generation changed. The prepared request was not sent.",
+            ))
+        }
+        Presence::Unknown(error) => return Err(error),
+    };
     let sending = mutate(repo, &id, &operation, |entry| {
         if entry["status"] != "prepared" || entry["resolved"] == true {
             return Err(Error::new("Dispatch is already reserved."));
@@ -762,7 +719,7 @@ fn submit_with(
     if sending.is_err() {
         return Ok(public(&locate(repo, &id, &operation).unwrap_or(prepared)));
     }
-    if input(&id, payload).is_err() {
+    if repo.terminals.send(&terminal.id, payload).is_err() {
         let entry = mutate(repo, &id, &operation, |entry| {
             entry["status"] = json!("uncertain");
             Ok(())
@@ -786,41 +743,6 @@ fn submit_with(
         return Ok(public(&written));
     }
     finalize_entry(repo, &id, &operation)
-}
-
-#[cfg(test)]
-fn dispatch_with(
-    repo: &Repository,
-    kind: Kind,
-    args: &Value,
-    inventory: impl Fn() -> Result<Vec<Value>>,
-    input: impl Fn(&str, &str) -> Result<()>,
-    after_written: impl FnOnce() -> Result<()>,
-) -> Result<Value> {
-    let previous = {
-        let state = repo.state.lock().unwrap();
-        matching(
-            &entries(&state)?,
-            text(args, "recordId"),
-            text(args, "operationId"),
-            kind,
-            text(args, "itemId"),
-        )?
-    };
-    let receipt = if let Some(entry) = previous {
-        public(&entry)
-    } else {
-        prepare_with(repo, kind, args, &inventory, || {
-            text(args, "operationId").to_owned()
-        })?
-    };
-    submit_with(
-        repo,
-        &json!({"recordId":args["recordId"],"operationId":receipt["operationId"]}),
-        inventory,
-        input,
-        after_written,
-    )
 }
 
 #[cfg(test)]

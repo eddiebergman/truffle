@@ -13,6 +13,21 @@ pub struct Terminals {
     host: Host,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Live {
+    /// The terminal key. It is another chat's ID when the match is by conversation.
+    pub id: String,
+    pub generation: String,
+}
+
+#[derive(Debug)]
+pub enum Presence {
+    Live(Live),
+    Absent,
+    /// The daemon or its inventory failed. A live terminal can still exist.
+    Unknown(Error),
+}
+
 /// One validated inventory read. Every query on it sees the same rows.
 pub struct Inventory {
     rows: Vec<Value>,
@@ -34,6 +49,24 @@ impl Inventory {
     pub fn rows(&self) -> &[Value] {
         &self.rows
     }
+    /// The terminal keyed by the chat ID, else one that runs the chat's conversation.
+    pub fn live(&self, chat: &Value) -> Option<Live> {
+        let live = || self.rows.iter().filter(|row| row["live"] == true);
+        live()
+            .find(|row| row["recordId"] == chat["id"])
+            .or_else(|| live().find(|row| same_conversation(row, chat)))
+            .map(|row| Live {
+                id: text(row, "recordId").to_owned(),
+                generation: text(row, "generation").to_owned(),
+            })
+    }
+}
+
+/// A terminal opened under another chat record can run the same agent conversation.
+fn same_conversation(row: &Value, chat: &Value) -> bool {
+    !text(chat, "sessionId").is_empty()
+        && row["sessionId"] == chat["sessionId"]
+        && row["agent"] == chat["agent"]
 }
 
 impl Terminals {
@@ -42,6 +75,14 @@ impl Terminals {
     }
     pub fn inventory(&self) -> Result<Inventory> {
         Inventory::new(self.host.inventory()?)
+    }
+    pub fn live(&self, chat: &Value) -> Presence {
+        match self.inventory() {
+            Ok(inventory) => inventory
+                .live(chat)
+                .map_or(Presence::Absent, Presence::Live),
+            Err(error) => Presence::Unknown(error),
+        }
     }
     pub fn open(
         &self,
@@ -88,5 +129,7 @@ impl Terminals {
     }
 }
 
+#[cfg(test)]
+pub mod fake;
 #[cfg(test)]
 mod tests;
