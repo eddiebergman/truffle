@@ -354,34 +354,39 @@
   overflow: auto;
 }
 
-.settings-proposal-dialog {
-  width: min(740px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  padding: 0;
+.app-chat-approvals:empty {
+  display: none;
+}
+
+.app-chat-approval {
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--text);
+  border-radius: 10px;
+  background: var(--overlay);
 }
 
-.settings-proposal-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
+.app-chat-approval-change {
+  display: grid;
+  gap: 4px;
 }
 
-.settings-proposal-heading h2 {
-  font-size: 17px;
+.app-chat-approval-command {
   margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--panel);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.settings-proposal-content {
-  padding: 12px 20px;
-  max-height: calc(100dvh - 120px);
-  overflow: auto;
+.app-chat-approval-note,
+.app-chat-approval .form-hint {
+  margin: 0;
 }
 
 .app-chat-panel.has-setup {

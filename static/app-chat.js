@@ -190,51 +190,137 @@ function appChatCommand(value) {
     status: value.status,
   };
 }
-function appChatOpenSettingsProposal(value) {
+function appChatApprovalLabel(change, fields) {
+  return change.key === "quickActions"
+    ? `Quick action · ${change.title}`
+    : fields.find((field) => field.key === change.key)?.label || change.key;
+}
+// The card shows the server's comparison of saved settings with the patch, not the
+// assistant's description of it. Approve saves at the proposal's revision only.
+function appChatApprovalCard(value) {
   const command = appChatCommand(value);
   if (command.type !== "settings-proposal") {
     throw new Error("The assistant returned an unsupported settings proposal.");
   }
-  if (typeof settingsDirty !== "undefined" && settingsDirty) {
-    throw new Error(
-      "Save or discard your Settings changes before reviewing this proposal.",
-    );
-  }
-  if (document.querySelector("dialog[open]")) {
-    throw new Error("Close the open dialog before reviewing this proposal.");
-  }
-  const dialog = el("dialog", "settings-proposal-dialog");
-  dialog.setAttribute("aria-label", "Review settings proposal");
-  const heading = el("header", "settings-proposal-heading"),
-    close = el("button", "ui-control", "Close");
-  close.type = "button";
-  close.dataset.variant = "secondary";
-  close.setAttribute("aria-label", "Close settings proposal");
-  close.onclick = () => dialog.close();
-  heading.append(el("h2", "", "Review settings changes"), close);
-  const content = el("div", "settings-proposal-content");
-  dialog.append(heading, content);
-  document.body.append(dialog);
-  const preview = renderSettingsProfilePreview(content, {
-    initialProfile: {
-      format: "truffle-settings",
-      version: 1,
-      values: command.patch,
+  const identity = {
+      revision: command.revision,
+      contentHash: command.contentHash,
+      patch: command.patch,
     },
-    expectedRevision: command.revision,
-    expectedContentHash: command.contentHash,
-  });
-  dialog.addEventListener(
-    "close",
-    () => {
-      preview.disposeProfileImport();
-      dialog.remove();
-    },
-    { once: true },
+    root = el("section", "app-chat-approval"),
+    changes = el("div", "app-chat-approval-changes"),
+    status = el("p", "form-hint", "Checking the proposed commands…"),
+    actions = el("div", "ui-actiongroup app-chat-approval-actions"),
+    approve = el("button", "ui-control", "Approve"),
+    dismiss = el("button", "ui-control", "Dismiss");
+  root.setAttribute("aria-label", "Approve command change");
+  status.setAttribute("role", "status");
+  approve.type = "button";
+  approve.disabled = true;
+  dismiss.type = "button";
+  dismiss.dataset.variant = "secondary";
+  actions.append(approve, dismiss);
+  root.append(
+    el("strong", "", "Approve command change"),
+    changes,
+    status,
+    actions,
   );
-  dialog.showModal();
-  close.focus();
-  return dialog;
+  dismiss.onclick = () => root.remove();
+  approve.onclick = async () => {
+    if (typeof settingsDirty !== "undefined" && settingsDirty) {
+      status.textContent =
+        "Save or discard your Settings changes before approving.";
+      return;
+    }
+    approve.disabled = true;
+    dismiss.disabled = true;
+    status.textContent = "Saving…";
+    try {
+      await api("/api/settings", identity);
+      actions.remove();
+      status.textContent = "Saved.";
+      await loadAppSettings();
+    } catch (problem) {
+      status.textContent = problem.message;
+      dismiss.disabled = false;
+    }
+  };
+  const ready = Promise.all([
+    api("/api/settings"),
+    api("/api/settings/preview", identity),
+  ]).then(([current, preview]) => {
+    if (
+      current.revision !== command.revision ||
+      current.contentHash !== command.contentHash
+    ) {
+      throw new Error(
+        "Settings changed since this proposal. Ask App chat again.",
+      );
+    }
+    const fields = current.fields || [],
+      rows = preview.executableChanges || [];
+    for (const change of rows) {
+      const row = el("div", "app-chat-approval-change"),
+        code = el("pre", "app-chat-approval-command");
+      code.textContent = change.command;
+      row.append(el("span", "", appChatApprovalLabel(change, fields)), code);
+      if (change.previous !== null && change.previous !== "") {
+        const previous = el("pre", "app-chat-approval-command");
+        previous.textContent = change.previous;
+        row.append(el("small", "", "Replaces"), previous);
+      }
+      changes.append(row);
+    }
+    const kept = new Set(
+        (command.patch.quickActions || []).map((action) => action.id),
+      ),
+      removed = Object.hasOwn(command.patch, "quickActions")
+        ? (current.values.quickActions || []).filter(
+            (action) => !kept.has(action.id),
+          )
+        : [],
+      other = Object.keys(command.patch).filter(
+        (key) =>
+          key !== "quickActions" &&
+          !rows.some((change) => change.key === key) &&
+          JSON.stringify(current.values[key]) !==
+            JSON.stringify(preview.values[key]),
+      );
+    for (const action of removed) {
+      changes.append(
+        el(
+          "p",
+          "app-chat-approval-note",
+          `Removes quick action · ${action.title}`,
+        ),
+      );
+    }
+    if (other.length) {
+      changes.append(
+        el(
+          "p",
+          "app-chat-approval-note",
+          `Also changes: ${other
+            .map(
+              (key) => fields.find((field) => field.key === key)?.label || key,
+            )
+            .join(", ")}`,
+        ),
+      );
+    }
+    if (!rows.length) {
+      throw new Error("This proposal changes no commands.");
+    }
+    status.textContent = "Nothing is saved until you approve.";
+    approve.disabled = false;
+  });
+  return {
+    root,
+    ready: ready.catch((problem) => {
+      status.textContent = problem.message;
+    }),
+  };
 }
 async function appChatRefreshSavedViews() {
   await loadSavedViews();
@@ -519,7 +605,7 @@ if (typeof module !== "undefined") {
     appChatDiagnosticRows,
     appChatFailureActions,
     appChatOpenFailureLogs,
-    appChatOpenSettingsProposal,
+    appChatApprovalCard,
     appChatRefreshSavedViews,
   };
 }
@@ -561,7 +647,8 @@ if (typeof document !== "undefined") {
     setup.id = "app-chat-setup";
     setup.hidden = true;
     setup.setAttribute("aria-label", "Set up Truffle");
-    conversation.append(messages, setup);
+    const approvals = el("div", "app-chat-approvals");
+    conversation.append(messages, approvals, setup);
     const error = el("p", "app-chat-error");
     error.setAttribute("role", "status");
     error.hidden = true;
@@ -816,21 +903,6 @@ if (typeof document !== "undefined") {
         renderDeferred();
         return;
       }
-      if (command.type === "settings-proposal") {
-        try {
-          appChatOpenSettingsProposal(command);
-          open = false;
-          showError("");
-          update();
-          deferred = [];
-          renderDeferred();
-        } catch (problem) {
-          deferred = commands;
-          showError(problem.message);
-          renderDeferred();
-        }
-        return;
-      }
       if (command.type === "navigate") {
         try {
           await appChatNavigate(command);
@@ -970,13 +1042,21 @@ if (typeof document !== "undefined") {
             showError(appChatFailureMessage(job), job);
           } else {
             const commands = (job.commands || []).map(appChatCommand),
-              applyNow = request?.id === job.id && request.stamp === stamp();
-            deferred = commands;
+              applyNow = request?.id === job.id && request.stamp === stamp(),
+              proposal = commands.find(
+                (command) => command.type === "settings-proposal",
+              );
+            deferred = proposal ? [] : commands;
             renderDeferred();
+            if (proposal) {
+              const card = appChatApprovalCard(proposal);
+              approvals.replaceChildren(card.root);
+              void card.ready;
+            }
             if (commands.at(-1)?.type !== "saved-view" || !applyNow) {
               await appChatRefreshSavedViews();
             }
-            if (commands.length && applyNow) {
+            if (deferred.length && applyNow) {
               await apply(commands);
             }
           }
@@ -1026,6 +1106,7 @@ if (typeof document !== "undefined") {
         request = null;
         deferred = [];
         renderDeferred();
+        approvals.replaceChildren();
         showError("");
         input.value = "";
         lastMessages = "";

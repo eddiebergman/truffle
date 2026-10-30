@@ -751,7 +751,7 @@ test("failed polling retains the saved-message explanation and diagnostics while
     persist: () => applied++,
     appChatNavigate: async () => applied++,
     applyResultPresentation: async () => applied++,
-    appChatOpenSettingsProposal: () => applied++,
+    appChatApprovalCard: () => applied++,
     loadAppSettings: async () => {
       throw new Error("Must preserve draft");
     },
@@ -801,100 +801,143 @@ test("settings proposals require a bounded patch and an exact revision, and copy
     );
   }
 });
-function proposalFixture() {
-  class Node {
-    constructor(tag, cls = "", text = "") {
-      Object.assign(this, {
-        tag,
-        className: cls,
-        textContent: text,
-        children: [],
-        dataset: {},
-        listeners: {},
-        attrs: {},
-      });
-    }
-    append(...nodes) {
-      this.children.push(...nodes);
-    }
-    setAttribute(k, v) {
-      this.attrs[k] = v;
-    }
-    addEventListener(k, fn) {
-      this.listeners[k] = fn;
-    }
-    showModal() {
-      this.open = true;
-    }
-    focus() {
-      this.focused = true;
-    }
-    close() {
-      this.open = false;
-      this.listeners.close();
-    }
-    remove() {
-      this.removed = true;
-    }
-  }
-  let disposed = 0;
-  const calls = [],
-    body = new Node("body");
-  const { c } = loadAppChat({
-    TextEncoder,
-    structuredClone,
-    settingsDirty: false,
-    document: { body, querySelector: () => null },
-    el: (...args) => new Node(...args),
-    renderSettingsProfilePreview: (container, options) => {
-      calls.push({ container, options });
-      return {
-        disposeProfileImport() {
-          disposed++;
-        },
-      };
+const proposal = {
+  type: "settings-proposal",
+  revision: 7,
+  contentHash: "a".repeat(64),
+  patch: {
+    quickActions: [
+      { id: "log", title: "Git log", command: "git log" },
+      { id: "deploy", title: "Deploy", command: "make deploy" },
+    ],
+    editor: "code",
+    uiScale: 120,
+  },
+};
+function approvalFixture({ current = {}, preview = {}, dirty = false } = {}) {
+  const calls = [];
+  const { c, chat, ui } = loadAppChat({
+    settingsDirty: dirty,
+    loadAppSettings: async () => calls.push(["reload"]),
+    api: async (path, body) => {
+      calls.push([path, body]);
+      if (path === "/api/settings" && !body) {
+        return {
+          revision: 7,
+          contentHash: "a".repeat(64),
+          fields: [{ key: "editor", label: "Editor" }],
+          values: {
+            quickActions: [
+              { id: "status", title: "Git status", command: "git status" },
+              { id: "log", title: "Git log", command: "git log" },
+            ],
+            editor: "zed",
+            uiScale: 100,
+          },
+          ...current,
+        };
+      }
+      if (path === "/api/settings/preview") {
+        return {
+          values: { uiScale: 120 },
+          executableChanges: [
+            {
+              key: "quickActions",
+              id: "deploy",
+              title: "Deploy",
+              command: "make deploy",
+              previous: null,
+            },
+            { key: "editor", command: "code", previous: "zed" },
+          ],
+          ...preview,
+        };
+      }
+      return { messages: [], job: null };
     },
   });
-  return { c, calls, body, disposed: () => disposed };
+  return { c, chat, ui, calls };
 }
-test("settings proposal opens the shared local approval preview without applying settings", () => {
-  const f = proposalFixture(),
-    dialog = f.c.appChatOpenSettingsProposal({
-      type: "settings-proposal",
-      revision: 7,
-      contentHash: "a".repeat(64),
-      patch: { editor: "zed" },
-    });
-  assert.equal(dialog.open, true);
-  assert.equal(f.body.children[0], dialog);
-  assert.equal(f.calls.length, 1);
-  assert.equal(f.calls[0].options.expectedRevision, 7);
-  assert.equal(f.calls[0].options.expectedContentHash, "a".repeat(64));
-  assert.equal(f.calls[0].options.initialProfile.format, "truffle-settings");
-  assert.equal(f.calls[0].options.initialProfile.values.editor, "zed");
-  assert.equal(dialog.children[0].children[1].focused, true);
-  dialog.children[0].children[1].onclick();
-  assert.equal(f.disposed(), 1);
-  assert.equal(dialog.removed, true);
-});
-test("settings proposals preserve dirty drafts and existing dialogs", () => {
-  for (const dirty of [false, true]) {
-    const f = proposalFixture();
-    f.c.settingsDirty = dirty;
-    f.c.document.querySelector = () => (dirty ? null : {});
-    assert.throws(
-      () =>
-        f.c.appChatOpenSettingsProposal({
-          type: "settings-proposal",
-          revision: 0,
-          contentHash: "a".repeat(64),
-          patch: { editor: "zed" },
-        }),
-      dirty ? /Save or discard/ : /Close the open dialog/,
-    );
-    assert.equal(f.calls.length, 0);
-    assert.equal(f.body.children.length, 0);
+const texts = (node) =>
+  [node.textContent, ...node.children.flatMap(texts)].filter(Boolean);
+const cardButton = (root, label) => {
+  const find = (node) =>
+    node.textContent === label && node.tagName === "BUTTON"
+      ? node
+      : node.children.map(find).find(Boolean);
+  return find(root);
+};
+test("the approval card shows the server's command changes and saves the exact proposal", async () => {
+  const f = approvalFixture(),
+    card = f.c.appChatApprovalCard(proposal);
+  assert.equal(cardButton(card.root, "Approve").disabled, true);
+  await card.ready;
+  const shown = texts(card.root);
+  for (const expected of [
+    "Quick action · Deploy",
+    "make deploy",
+    "Editor",
+    "code",
+    "Replaces",
+    "zed",
+    "Removes quick action · Git status",
+    "Also changes: uiScale",
+    "Nothing is saved until you approve.",
+  ]) {
+    assert.ok(shown.includes(expected), expected);
   }
+  assert.ok(!shown.some((line) => line.includes("Git log")));
+  assert.equal(cardButton(card.root, "Approve").disabled, false);
+  await cardButton(card.root, "Approve").onclick();
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.slice(2))), [
+    [
+      "/api/settings",
+      {
+        revision: 7,
+        contentHash: "a".repeat(64),
+        patch: proposal.patch,
+      },
+    ],
+    ["reload"],
+  ]);
+  assert.ok(texts(card.root).includes("Saved."));
+  assert.equal(cardButton(card.root, "Approve"), undefined);
+});
+test("the approval card refuses stale or command-free proposals and dirty Settings", async () => {
+  for (const [options, message] of [
+    [{ current: { revision: 8 } }, /Settings changed since this proposal/],
+    [{ current: { contentHash: "b".repeat(64) } }, /Settings changed/],
+    [{ preview: { executableChanges: [] } }, /changes no commands/],
+  ]) {
+    const f = approvalFixture(options),
+      card = f.c.appChatApprovalCard(proposal);
+    await card.ready;
+    assert.match(texts(card.root).join("\n"), message);
+    assert.equal(cardButton(card.root, "Approve").disabled, true);
+    assert.equal(f.calls.length, 2);
+  }
+  const f = approvalFixture({ dirty: true }),
+    card = f.c.appChatApprovalCard(proposal);
+  await card.ready;
+  await cardButton(card.root, "Approve").onclick();
+  assert.match(texts(card.root).join("\n"), /Save or discard/);
+  assert.equal(f.calls.length, 2);
+  cardButton(card.root, "Dismiss").onclick();
+});
+test("a reply with a settings proposal shows the card in App chat instead of deferring it", async () => {
+  const job = { id: "proposal", state: "succeeded", commands: [proposal] };
+  const f = approvalFixture();
+  f.c.api = async (path, body) =>
+    path === "/api/app-chat"
+      ? { messages: [], job }
+      : f.calls.push([path, body]) && {};
+  f.c.appChatRefreshSavedViews = async () => {};
+  await f.chat.poll();
+  const slot = f.ui.conversation.children[1];
+  assert.equal(slot.className, "app-chat-approvals");
+  assert.equal(slot.children[0].className, "app-chat-approval");
+  assert.equal(f.chat.deferred.length, 0);
+  assert.ok(!f.calls.some(([path, body]) => path === "/api/settings" && body));
 });
 
 test("successful replies refresh saved views and guidance even when no navigation was requested", async () => {
