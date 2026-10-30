@@ -31,7 +31,6 @@ if (typeof document !== "undefined") {
       mode = "service",
       job = null,
       pending = false,
-      timer = null,
       finished = "";
     const demo = () => Boolean(state?.demo);
     function paint() {
@@ -84,24 +83,24 @@ if (typeof document !== "undefined") {
       toast(job.message);
     }
     async function poll() {
-      clearTimeout(timer);
       if (!serviceClient.isDesktop) {
-        return;
+        return null;
       }
       try {
         job = await serviceClient.restartStatus();
         paint();
         if (job.status === "working") {
-          timer = setTimeout(poll, 750);
-        } else {
-          await finish();
+          return 750;
         }
+        await finish();
+        return null;
       } catch (error) {
         result.hidden = false;
         result.textContent = error.message;
-        timer = setTimeout(poll, 2000);
+        return 2000;
       }
     }
+    const watch = watchJob(poll);
     async function inspect() {
       pending = true;
       check.checked = false;
@@ -119,7 +118,7 @@ if (typeof document !== "undefined") {
         job = review.job || null;
         if (review.job?.status === "working") {
           job = review.job;
-          void poll();
+          void watch.start();
         }
       } catch (error) {
         review = null;
@@ -168,7 +167,7 @@ if (typeof document !== "undefined") {
               snapshot: review.snapshot,
             });
         if (!demo()) {
-          void poll();
+          void watch.start();
         }
       } catch (error) {
         job = { status: "failed", message: String(error.message || error) };
@@ -195,7 +194,7 @@ if (typeof document !== "undefined") {
       toggle.disabled = true;
       toggle.title = "Restart controls are available in the desktop app.";
     } else if (serviceClient.isDesktop) {
-      void poll();
+      void watch.start();
     }
   })();
 }
