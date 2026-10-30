@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 //   the desktop app still supports macOS 12.
 // - Colors come from custom properties, so named colors are errors. Biome
 //   reports hex colors.
-// The input must be Prettier-formatted plain CSS without nesting.
+// The input must be Biome-formatted plain CSS without nesting.
 
 const NAMED_COLORS = new Set(
   `aliceblue antiquewhite aqua aquamarine azure beige bisque black

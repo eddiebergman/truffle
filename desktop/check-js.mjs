@@ -6,7 +6,8 @@ import vm from "node:vm";
 // Script checks that Biome cannot make alone:
 // - static/*.js are classic scripts that share one global scope, but Biome
 //   checks each file on its own. For them biome.json reports undeclared names,
-//   unused names and `let`s that could be `const` as info. This check keeps
+//   unused names and `let`s that could be `const` as info, with no automatic
+//   fix, because another script may assign that `let`. This check keeps
 //   such a report unless another loaded script declares the name, or another
 //   script or a test uses or assigns the top-level name.
 // - Two loaded scripts must not declare the same top-level name. The browser

@@ -12,7 +12,14 @@
     ]
   },
   "formatter": {
-    "enabled": false
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "trailingCommas": "all"
+    }
   },
   "assist": {
     "enabled": false
@@ -134,7 +141,10 @@
             "noUnusedVariables": "info"
           },
           "style": {
-            "useConst": "info"
+            "useConst": {
+              "level": "info",
+              "fix": "none"
+            }
           }
         }
       }
