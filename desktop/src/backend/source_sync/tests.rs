@@ -170,3 +170,301 @@ fn sentry_environment_paused_claim_rejects_without_cache_cooldown_or_provider_ad
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
 }
+
+fn with_fixture(
+    fixture: Fixture,
+    state: impl FnOnce(&mut Value),
+) -> (tempfile::TempDir, Arc<Repository>) {
+    let (temp, mut repo) = sources_fixture();
+    Arc::get_mut(&mut repo).unwrap().sync = SourceSync::new(Arc::new(fixture));
+    repo.transaction(|s| {
+        // Opening marks Sentry disabled because no credentials are configured.
+        s["sources"]["sentry"]["disabled"] = json!(false);
+        state(s);
+        Ok(())
+    })
+    .unwrap();
+    (temp, repo)
+}
+fn listings(
+    github: Result<Vec<Value>>,
+    linear: Result<Vec<Value>>,
+    sentry: Result<Vec<Value>>,
+) -> BTreeMap<&'static str, Result<Vec<Value>>> {
+    BTreeMap::from([("github", github), ("linear", linear), ("sentry", sentry)])
+}
+/// Run every admitted source on this thread through the real admission path.
+fn sync_all(repo: &Arc<Repository>) -> Value {
+    json!(request_with(repo, false, |repo, source| run(&repo, source)).unwrap())
+}
+fn chat(id: &str, items: Value, archived: bool) -> Value {
+    json!({"id":id,"agent":"codex","title":"Sync fixture","cwd":"/tmp","items":items,
+        "archivedAt":if archived {json!(1)} else {Value::Null}})
+}
+fn cached(state: &Value, id: &str) -> Value {
+    arr(&state["items"])
+        .into_iter()
+        .find(|item| item["id"] == id)
+        .unwrap_or(Value::Null)
+}
+fn ids(state: &Value, source: &str) -> Vec<String> {
+    arr(&state["items"])
+        .iter()
+        .filter(|item| item["source"] == source)
+        .map(|item| text(item, "id").to_owned())
+        .collect()
+}
+
+#[test]
+fn sync_adds_new_items_and_updates_cached_items_and_chat_references() {
+    let (_temp, repo) = with_fixture(
+        Fixture {
+            listings: listings(
+                Ok(vec![
+                    json!({"id":"github:1","source":"github","title":"New title","status":"in-progress"}),
+                    json!({"id":"github:2","source":"github","title":"Brand new","status":"todo"}),
+                ]),
+                Ok(vec![]),
+                Ok(vec![]),
+            ),
+            refreshed: vec![],
+        },
+        |s| {
+            s["items"] = json!([
+                {"id":"github:1","source":"github","title":"Old title","status":"todo"},
+                {"id":"local:1","source":"local","title":"Untouched"}
+            ]);
+            s["sessions"] = json!([chat(
+                "chat-1",
+                json!([{"id":"github:1","source":"github","title":"Old title"}]),
+                false
+            )]);
+        },
+    );
+    let receipt = sync_all(&repo);
+    assert_eq!(receipt["status"], "started");
+    let state = repo.state.lock().unwrap().clone();
+    assert_eq!(ids(&state, "github"), ["github:1", "github:2"]);
+    assert_eq!(cached(&state, "github:1")["title"], "New title");
+    assert_eq!(cached(&state, "github:2")["title"], "Brand new");
+    assert_eq!(cached(&state, "local:1")["title"], "Untouched");
+    let reference = &state["sessions"][0]["items"][0];
+    assert_eq!(reference["title"], "New title");
+    assert_eq!(reference["status"], "in-progress");
+    assert!(state["itemArchive"].as_object().unwrap().is_empty());
+    assert!(state["changeBaselines"]["github:2"].is_object());
+    for source in SOURCES {
+        assert_eq!(state["sources"][source]["failures"], 0);
+        assert!(state["sources"][source]["lastSuccess"].is_number());
+    }
+    assert!(repo.sync.running.lock().unwrap().is_empty());
+}
+
+#[test]
+fn sync_removes_unlisted_items_and_archives_tracked_items_it_refreshes() {
+    let (_temp, repo) = with_fixture(
+        Fixture {
+            listings: listings(Ok(vec![]), Ok(vec![]), Ok(vec![])),
+            refreshed: vec![
+                json!({"id":"linear:open","source":"linear","title":"Now closed","status":"done"}),
+                json!({"id":"sentry:chat","source":"sentry","title":"Fresh error","status":"todo"}),
+            ],
+        },
+        |s| {
+            s["items"] = json!([
+                {"id":"linear:done","source":"linear","title":"Finished","status":"done"},
+                {"id":"linear:open","source":"linear","title":"Open","status":"todo"},
+                {"id":"linear:gone","source":"linear","title":"Deleted upstream","status":"todo"},
+                {"id":"sentry:old","source":"sentry","title":"Resolved","status":"todo"}
+            ]);
+            s["sessions"] = json!([
+                chat(
+                    "active",
+                    json!([{"id":"sentry:chat","source":"sentry","title":"Stale error"}]),
+                    false
+                ),
+                chat(
+                    "archived",
+                    json!([{"id":"sentry:archived","source":"sentry","title":"Old chat"}]),
+                    true
+                )
+            ]);
+        },
+    );
+    sync_all(&repo);
+    let state = repo.state.lock().unwrap().clone();
+    assert_eq!(ids(&state, "linear"), ["linear:gone", "linear:open"]);
+    assert_eq!(ids(&state, "sentry"), ["sentry:chat"]);
+    assert_eq!(cached(&state, "linear:open")["status"], "done");
+    assert_eq!(cached(&state, "linear:gone")["sourceUnavailable"], true);
+    let archive = state["itemArchive"].as_object().unwrap();
+    assert_eq!(
+        archive.keys().collect::<Vec<_>>(),
+        ["linear:gone", "linear:open", "sentry:chat"]
+    );
+    assert_eq!(archive["linear:open"]["title"], "Now closed");
+    assert_eq!(archive["linear:gone"]["sourceUnavailable"], true);
+    assert_eq!(state["sessions"][0]["items"][0]["title"], "Fresh error");
+    assert_eq!(state["sessions"][1]["items"][0]["title"], "Old chat");
+}
+
+#[test]
+fn hidden_items_stay_cached_when_the_provider_omits_them() {
+    let (_temp, repo) = with_fixture(
+        Fixture {
+            listings: listings(
+                Ok(vec![
+                    json!({"id":"github:listed","source":"github","title":"Listed again","status":"todo"}),
+                ]),
+                Ok(vec![]),
+                Ok(vec![]),
+            ),
+            refreshed: vec![
+                json!({"id":"github:hidden","source":"github","title":"Hidden, refreshed","status":"done"}),
+            ],
+        },
+        |s| {
+            s["items"] = json!([
+                {"id":"github:hidden","source":"github","title":"Hidden","status":"done"},
+                {"id":"github:listed","source":"github","title":"Listed","status":"done"},
+                {"id":"github:dropped","source":"github","title":"Dropped","status":"done"}
+            ]);
+            s["overrides"] =
+                json!({"github:hidden":{"hidden":true},"github:listed":{"hidden":true}});
+        },
+    );
+    sync_all(&repo);
+    let state = repo.state.lock().unwrap().clone();
+    assert_eq!(ids(&state, "github"), ["github:hidden", "github:listed"]);
+    assert_eq!(
+        cached(&state, "github:hidden")["title"],
+        "Hidden, refreshed"
+    );
+    assert_eq!(cached(&state, "github:listed")["title"], "Listed again");
+    assert_eq!(state["overrides"]["github:hidden"]["hidden"], true);
+
+    // Without a refresh, the merge itself keeps the cached hidden copy.
+    let mut state = state;
+    assert_eq!(merge(&mut state, "github", vec![], &BTreeSet::new()), 2);
+    assert_eq!(ids(&state, "github"), ["github:hidden", "github:listed"]);
+    assert_eq!(
+        cached(&state, "github:hidden")["title"],
+        "Hidden, refreshed"
+    );
+}
+
+#[test]
+fn one_failing_provider_keeps_its_cache_and_shows_the_failure_while_others_merge() {
+    let mut failure = Error::new("Linear returned HTTP 502. Cached data remains available.");
+    failure.data = json!({"kind":"http","httpStatus":502});
+    let (temp, repo) = with_fixture(
+        Fixture {
+            listings: listings(
+                Ok(vec![
+                    json!({"id":"github:new","source":"github","title":"New PR","status":"todo"}),
+                ]),
+                Err(failure),
+                Ok(vec![
+                    json!({"id":"sentry:new","source":"sentry","title":"New error","status":"todo"}),
+                ]),
+            ),
+            refreshed: vec![],
+        },
+        |s| {
+            s["items"] =
+                json!([{"id":"linear:cached","source":"linear","title":"Cached","status":"done"}]);
+            s["sources"]["linear"]["extension"] = json!("keep");
+        },
+    );
+    let start = now();
+    sync_all(&repo);
+    let state = repo.state.lock().unwrap().clone();
+    assert_eq!(ids(&state, "github"), ["github:new"]);
+    assert_eq!(ids(&state, "sentry"), ["sentry:new"]);
+    assert_eq!(ids(&state, "linear"), ["linear:cached"]);
+    let linear = &state["sources"]["linear"];
+    assert_eq!(linear["failures"], 1);
+    assert_eq!(linear["extension"], "keep");
+    assert!(linear["lastSuccess"].is_null());
+    let next = linear["nextAttempt"].as_f64().unwrap();
+    assert!(next >= start + 300.0 && next <= now() + 300.0);
+
+    let rows = arr(&status(&repo)["sources"]);
+    assert_eq!(rows[0]["hasError"], false);
+    assert_eq!(rows[1]["hasError"], true);
+    assert!(text(&rows[1], "error").contains("HTTP 502"));
+    assert_eq!(rows[1]["cachedItemCount"], 1);
+    assert_eq!(rows[2]["hasError"], false);
+
+    let log = std::fs::read_to_string(temp.path().join("data/logs/sync.jsonl")).unwrap();
+    let events = log
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let linear = events.iter().find(|e| e["source"] == "linear").unwrap();
+    assert_eq!(linear["outcome"], "failure");
+    assert_eq!(linear["retrySeconds"], 300.0);
+    assert_eq!(linear["httpStatus"], 502);
+    for source in ["github", "sentry"] {
+        let event = events.iter().find(|e| e["source"] == source).unwrap();
+        assert_eq!(event["outcome"], "success");
+        assert_eq!(event["itemCount"], 1);
+    }
+
+    run(&repo, "linear");
+    assert_eq!(
+        repo.state.lock().unwrap()["sources"]["linear"]["failures"],
+        2
+    );
+    let receipt = sync_all(&repo);
+    assert_eq!(receipt["results"][1]["reason"], "backoff");
+}
+
+#[test]
+fn backoff_doubles_from_the_interval_to_the_hour_cap_and_honours_retry_after() {
+    let delays = [1, 2, 3, 4, 5, 6, 100].map(|failures| backoff(failures, 0.0));
+    assert_eq!(
+        delays,
+        [300.0, 600.0, 1200.0, 2400.0, 3600.0, 3600.0, 3600.0]
+    );
+    assert_eq!(backoff(1, 7200.0), 7200.0);
+    assert_eq!(backoff(5, 7200.0), 7200.0);
+}
+
+#[test]
+fn environment_fetch_records_members_and_backs_off_on_failure() {
+    let members = vec![json!({"id":"sentry:1"}), json!({"id":"sentry:2"})];
+    let (_temp, repo) = with_fixture(
+        Fixture {
+            listings: BTreeMap::from([("sentry", Ok(members))]),
+            refreshed: vec![],
+        },
+        |_| {},
+    );
+    assert!(claim_environment(&repo, "qa").unwrap());
+    assert_eq!(
+        repo.state.lock().unwrap()["sentryEnvironments"]["qa"]["running"],
+        true
+    );
+    fetch_environment(&repo, "qa");
+    let cache = repo.state.lock().unwrap()["sentryEnvironments"]["qa"].clone();
+    assert_eq!(cache["itemIds"], json!(["sentry:1", "sentry:2"]));
+    assert_eq!(cache["running"], false);
+    assert_eq!(cache["failures"], 0);
+
+    let (_temp, repo) = with_fixture(
+        Fixture {
+            listings: BTreeMap::from([("sentry", Err(Error::new("Sentry timed out.")))]),
+            refreshed: vec![],
+        },
+        |s| s["sentryEnvironments"] = json!({"qa":{"itemIds":["sentry:1"],"failures":1}}),
+    );
+    let start = now();
+    fetch_environment(&repo, "qa");
+    let cache = repo.state.lock().unwrap()["sentryEnvironments"]["qa"].clone();
+    assert_eq!(cache["failures"], 2);
+    assert_eq!(cache["error"], "Sentry timed out.");
+    assert_eq!(cache["itemIds"], json!(["sentry:1"]));
+    let next = cache["nextAttempt"].as_f64().unwrap();
+    assert!(next >= start + 600.0 && next <= now() + 600.0);
+}

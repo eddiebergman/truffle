@@ -27,6 +27,39 @@ pub trait ProviderSource: Send + Sync {
     fn refresh(&self, source: &str, refs: &[Value]) -> Result<Vec<Value>>;
 }
 
+/// Canned provider results for tests. A refresh returns the canned copy of each
+/// ref, or the ref marked sourceUnavailable, as the live provider does.
+#[cfg(test)]
+pub(super) struct Fixture {
+    pub listings: BTreeMap<&'static str, Result<Vec<Value>>>,
+    pub refreshed: Vec<Value>,
+}
+#[cfg(test)]
+impl ProviderSource for Fixture {
+    fn fetch(&self, source: &str, _: Option<&str>) -> Result<Vec<Value>> {
+        self.listings
+            .get(source)
+            .cloned()
+            .unwrap_or_else(|| Err(Error::new("No canned listing.")))
+    }
+    fn refresh(&self, _: &str, refs: &[Value]) -> Result<Vec<Value>> {
+        Ok(refs
+            .iter()
+            .map(|old| {
+                self.refreshed
+                    .iter()
+                    .find(|item| item["id"] == old["id"])
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        let mut gone = old.clone();
+                        gone["sourceUnavailable"] = json!(true);
+                        gone
+                    })
+            })
+            .collect())
+    }
+}
+
 pub struct SourceSync {
     provider: Arc<dyn ProviderSource>,
     /// Sources with a sync worker. Lock after the repository state.
