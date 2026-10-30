@@ -1,19 +1,143 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "files": { "includes": ["static/*.css"] },
-  "formatter": { "enabled": false },
-  "assist": { "enabled": false },
+  "files": {
+    "includes": [
+      "static/*.css",
+      "static/*.js",
+      "desktop/frontend/*.js",
+      "desktop/*.mjs",
+      "desktop/diffs-build/*.mjs",
+      "tests/*.cjs",
+      "tests/helpers/*.cjs"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
   "linter": {
     "rules": {
       "preset": "recommended",
-      "complexity": { "noImportantStyles": "off" },
-      "nursery": { "noDuplicateSelectors": "error" },
+      "complexity": {
+        "noAdjacentSpacesInRegex": "error",
+        "noCommaOperator": "off",
+        "noExtraBooleanCast": "error",
+        "noImplicitCoercions": "error",
+        "noImportantStyles": "off",
+        "noUselessCatch": "error",
+        "noUselessEscapeInRegex": "error",
+        "useArrowFunction": "off",
+        "useIndexOf": "off",
+        "useOptionalChain": "off"
+      },
+      "correctness": {
+        "noConstAssign": "error",
+        "noConstantCondition": "error",
+        "noConstructorReturn": "off",
+        "noEmptyCharacterClassInRegex": "error",
+        "noEmptyPattern": "error",
+        "noGlobalObjectCalls": "error",
+        "noInvalidBuiltinInstantiation": "error",
+        "noInvalidConstructorSuper": "error",
+        "noInvalidUseBeforeDeclaration": "error",
+        "noNonoctalDecimalEscape": "error",
+        "noPrecisionLoss": "error",
+        "noSelfAssign": "error",
+        "noSetterReturn": "error",
+        "noSwitchDeclarations": "error",
+        "noUndeclaredVariables": "error",
+        "noUnreachable": "error",
+        "noUnreachableSuper": "error",
+        "noUnsafeFinally": "error",
+        "noUnsafeOptionalChaining": "error",
+        "noUnusedFunctionParameters": "off",
+        "noUnusedLabels": "error",
+        "noUnusedPrivateClassMembers": "error",
+        "noUnusedVariables": "error",
+        "useIsNan": "error",
+        "useParseIntRadix": "error",
+        "useValidForDirection": "error",
+        "useValidTypeof": "error",
+        "useYield": "error"
+      },
+      "nursery": {
+        "noDuplicateSelectors": "error"
+      },
       "style": {
         "noDescendingSpecificity": "error",
         "noHexColors": "error",
-        "noValueAtRule": "error"
+        "noParameterAssign": "error",
+        "noUselessElse": "error",
+        "noValueAtRule": "error",
+        "useBlockStatements": "error",
+        "useConsistentObjectDefinitions": "error",
+        "useConst": "error",
+        "useErrorCause": {
+          "level": "error",
+          "options": {
+            "requireCatchParameter": false
+          }
+        },
+        "useTemplate": "error"
       },
-      "suspicious": { "noEmptySource": "error" }
+      "suspicious": {
+        "noAssignInExpressions": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noCatchAssign": "error",
+        "noClassAssign": "error",
+        "noCompareNegZero": "error",
+        "noConstantBinaryExpressions": "error",
+        "noControlCharactersInRegex": "error",
+        "noDebugger": "error",
+        "noDoubleEquals": "error",
+        "noDuplicateCase": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateElseIf": "error",
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateParameters": "error",
+        "noEmptyBlockStatements": "info",
+        "noEmptySource": "error",
+        "noFallthroughSwitchClause": "error",
+        "noFunctionAssign": "error",
+        "noGlobalAssign": "error",
+        "noImportAssign": "error",
+        "noIrregularWhitespace": "error",
+        "noMisleadingCharacterClass": "error",
+        "noPrototypeBuiltins": "error",
+        "noRedeclare": "error",
+        "noRedundantUseStrict": "off",
+        "noShadow": "error",
+        "noShadowRestrictedNames": "error",
+        "noSparseArray": "error",
+        "noUnassignedVariables": "error",
+        "noUnsafeNegation": "error",
+        "noUselessRegexBackrefs": "error",
+        "noVar": "error",
+        "noWith": "error",
+        "useDefaultSwitchClauseLast": "error",
+        "useGetterReturn": "error",
+        "useIterableCallbackReturn": "off"
+      }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "static/*.js"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "info",
+            "noUnusedVariables": "info"
+          },
+          "style": {
+            "useConst": "info"
+          }
+        }
+      }
+    }
+  ]
 }

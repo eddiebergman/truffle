@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:diffs && npm run lint:age && npm run lint:rust",
-    "lint:js": "eslint --max-warnings 0 . && prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/*.mjs\" \"desktop/diffs-build/*.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
-    "format:js": "eslint --fix . ; prettier --write \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/*.mjs\" \"desktop/diffs-build/*.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\" \"*.config.mjs\"",
-    "lint:css": "biome lint --error-on-warnings && node desktop/check-css.mjs && prettier --check \"static/*.css\"",
+    "lint:js": "biome lint --error-on-warnings --diagnostic-level=warn static/*.js desktop/frontend desktop/*.mjs desktop/diffs-build/*.mjs tests && node desktop/check-js.mjs && prettier --check \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/*.mjs\" \"desktop/diffs-build/*.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\"",
+    "format:js": "biome lint --write static/*.js desktop/frontend desktop/*.mjs desktop/diffs-build/*.mjs tests ; prettier --write \"static/*.js\" \"desktop/frontend/*.js\" \"desktop/*.mjs\" \"desktop/diffs-build/*.mjs\" \"tests/*.cjs\" \"tests/helpers/*.cjs\"",
+    "lint:css": "biome lint --error-on-warnings --diagnostic-level=warn static/*.css && node desktop/check-css.mjs && prettier --check \"static/*.css\"",
     "format:css": "prettier --write \"static/*.css\"",
     "lint:diffs": "node desktop/check-diffs.mjs",
     "check:diffs": "cd desktop/diffs-build && npm ci && node check.mjs",
@@ -14,11 +14,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@eslint/js": "10.0.1",
-    "eslint": "10.12.0",
-    "eslint-scope": "9.1.2",
-    "espree": "11.2.0",
-    "globals": "17.13.0",
     "prettier": "3.9.10"
   }
 }
