@@ -1008,7 +1008,11 @@ dialog {
 }
 
 .session-card:hover,
-.session-card:focus-within,
+.session-card:focus-within {
+  border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
+  background: var(--overlay);
+}
+
 .history-row:hover,
 .skill-row:hover,
 .result-table tr:hover {

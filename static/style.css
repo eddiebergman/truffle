@@ -2682,11 +2682,6 @@ a.ci-check-name:hover {
   border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
 }
 
-.session-card:hover,
-.session-card:focus-within {
-  border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
-}
-
 .row-actions .item-agent-links .agent-link:not(.item-agent-action) {
   display: none;
 }
