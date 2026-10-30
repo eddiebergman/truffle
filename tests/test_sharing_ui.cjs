@@ -271,6 +271,8 @@ function fixture() {
     "static/documents.js",
     "static/app.js",
     "static/sessions.js",
+    "static/features.js",
+    "static/workspace.js",
   ]);
   loadScripts(c, "static/sharing.js", {
     keepHost: [

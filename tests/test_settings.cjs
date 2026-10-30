@@ -592,7 +592,7 @@ test("saving a draft uses its captured identity, preserves conflicts and seriali
 test("quick-action execution keeps the identity captured when its command was displayed", async () => {
   const calls = [],
     c = browserContext({
-      currentAgentRecord: () => null,
+      selectedChat: () => ({ key: "", candidate: null, record: null }),
       appSettings: { revision: 9, contentHash: "b".repeat(64) },
       api: async (path, payload) => {
         calls.push(payload);
@@ -1489,7 +1489,7 @@ function reviewSkillFixture() {
     panel.append(f.c.settingInput(["agents", key, key, "text", ""]));
   }
   f.c.settingsCategory = "agents";
-  f.c.currentAgentRecord = () => null;
+  f.c.selectedChat = () => ({ key: "", candidate: null, record: null });
   f.c.skillPickerMatches = (skills) => skills;
   f.c.paintSettingsBody = () => {
     paints++;

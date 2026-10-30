@@ -683,7 +683,11 @@ test("a destination-change retry error stays visible without silently starting a
       },
     ];
   const { sharing: c } = sharingFixture({
-    liveCandidates: () => [],
+    selectedChat: () => ({
+      key: "record:chat",
+      candidate: null,
+      record: { id: "chat" },
+    }),
     state: { sessions: [{ id: "chat" }] },
     selectedAgentKey: "record:chat",
     api: async (path, { name, args }) => {
@@ -801,7 +805,7 @@ test("first sharing load builds from its fetched snapshot while later polls pres
           className: cls || "",
           textContent: text || "",
         }),
-      liveCandidates: () => [],
+      selectedChat: () => ({ key: "", candidate: null, record: null }),
       selectedAgentKey: "",
       source: "agents",
       document: new FakeDocument(),

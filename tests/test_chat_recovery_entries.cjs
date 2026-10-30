@@ -12,7 +12,7 @@ function fixture(context = { availability: "available", total: 2 }) {
   Object.assign(f.c, {
     source: "sessions",
     historyArchived: true,
-    currentAgentRecord: () => null,
+    selectedChat: () => ({ key: "", candidate: null, record: null }),
     candidateForRecord: () => null,
     workSummary: () => "",
     savedSessionOpenState: () => null,

@@ -1721,7 +1721,7 @@ async function browseReviewSkill(key) {
   query.focus();
   try {
     const catalog = await api("/api/skills/catalog", {
-      cwd: currentAgentRecord()?.cwd || "",
+      cwd: selectedChat().record?.cwd || "",
     });
     if (!current()) {
       return;
@@ -1796,7 +1796,7 @@ async function browseReviewSkill(key) {
   }
 }
 async function chooseQuickAction(action, identity) {
-  const record = currentAgentRecord(),
+  const { record } = selectedChat(),
     p = {
       revision: identity.revision,
       contentHash: identity.contentHash,

@@ -91,9 +91,6 @@ function selectedChat() {
     : null;
   return { key, candidate: null, record };
 }
-function currentAgentRecord() {
-  return selectedChat().record;
-}
 function snoozeAgentTab(candidate) {
   window.truffleGuidance?.complete("chat.snooze");
   agentRename?.cancel();

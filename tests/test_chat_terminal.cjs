@@ -240,8 +240,6 @@ function fixture({ api, embedded = true, empty = false } = {}) {
     candidateKey: (candidate) => `embedded:${candidate.recordId}`,
     recordForCandidate: (candidate) =>
       records.find((record) => record.id === candidate.recordId),
-    currentAgentRecord: () =>
-      records.find((record) => `embedded:${record.id}` === c.selectedAgentKey),
     inventory: {},
     agentRename: null,
     persist() {},

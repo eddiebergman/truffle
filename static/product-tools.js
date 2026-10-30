@@ -8,7 +8,7 @@ function chatTerminalCurrent(record, key, host) {
     $("#agent-workspace") === host &&
     source === "agents" &&
     selectedAgentKey === key &&
-    currentAgentRecord()?.id === record.id
+    selectedChat().record?.id === record.id
   );
 }
 function focusChatTerminal(record, key, view, origin, host, fallback = null) {
@@ -90,7 +90,7 @@ async function toggleChatTerminal() {
   if (source !== "agents") {
     return;
   }
-  const record = currentAgentRecord();
+  const { record } = selectedChat();
   if (!record || chatShellRequests.has(record.id)) {
     return;
   }

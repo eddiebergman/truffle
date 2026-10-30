@@ -608,11 +608,8 @@ if (typeof document !== "undefined") {
         !$("#app-chat-panel")?.hidden;
       const record =
         review?.record ||
-        (!dialog &&
-        !inlineSetup &&
-        source === "agents" &&
-        typeof currentAgentRecord === "function"
-          ? currentAgentRecord()
+        (!dialog && !inlineSetup && source === "agents"
+          ? selectedChat().record
           : null);
       const dialogTitle =
         dialog?.querySelector("h1,h2,h3")?.textContent ||
@@ -716,7 +713,7 @@ if (typeof document !== "undefined") {
           : sourceNames[page.source] || page.source)
       }${
         page.recordId && !page.ui.dialog
-          ? ` · ${currentAgentRecord()?.title || page.recordId}`
+          ? ` · ${selectedChat().record?.title || page.recordId}`
           : ""
       }`;
     }

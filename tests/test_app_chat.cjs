@@ -532,7 +532,11 @@ test("top Setup and Settings dialogs suppress obscured chat context while Review
   Object.assign(c, {
     source: "agents",
     sourceNames: { agents: "Chats" },
-    currentAgentRecord: () => ({ id: "underlying-chat", title: "Hidden chat" }),
+    selectedChat: () => ({
+      key: "record:underlying-chat",
+      candidate: null,
+      record: { id: "underlying-chat", title: "Hidden chat" },
+    }),
     selectedGitDirectory: () => "/underlying-worktree",
     reviewState: {
       record: { id: "review-chat", title: "Reviewed chat" },
@@ -958,7 +962,11 @@ test("inline setup context suppresses underlying chat details without reading se
   Object.assign(c, {
     source: "agents",
     sourceNames: { agents: "Chats" },
-    currentAgentRecord: () => ({ id: "underlying", title: "Hidden chat" }),
+    selectedChat: () => ({
+      key: "record:underlying",
+      candidate: null,
+      record: { id: "underlying", title: "Hidden chat" },
+    }),
     selectedGitDirectory: () => "/private-worktree",
     document: { querySelectorAll: () => [] },
   });
@@ -1205,7 +1213,11 @@ test("named render hook refreshes App chat visible context on results, saved cha
       querySelector: (selector) => nodes.get(selector),
       querySelectorAll: () => [],
     },
-    currentAgentRecord: () => (c.source === "agents" ? record : null),
+    selectedChat: () => ({
+      key: "",
+      candidate: null,
+      record: c.source === "agents" ? record : null,
+    }),
     selectedGitDirectory: () => record.cwd,
     loadInventory: async () => {},
     candidateForRecord: () => null,

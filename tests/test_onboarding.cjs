@@ -1225,6 +1225,7 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     MutationObserver,
     source: "all",
     window: {},
+    selectedChat: () => ({ key: "", candidate: null, record: null }),
     settingsCategory: "appearance",
     TextEncoder,
     structuredClone,

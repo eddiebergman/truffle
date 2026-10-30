@@ -194,15 +194,7 @@ if (typeof document !== "undefined") {
       openIntent = intent;
       return showImported(id, intent);
     }
-    function selected() {
-      const live = liveCandidates().find(
-        (c) => candidateKey(c) === selectedAgentKey,
-      );
-      return live
-        ? recordForCandidate(live)
-        : state?.sessions?.find((s) => `record:${s.id}` === selectedAgentKey);
-    }
-    function chatDraft(record = selected()) {
+    function chatDraft(record = selectedChat().record) {
       if (!record) {
         return null;
       }
@@ -399,7 +391,7 @@ if (typeof document !== "undefined") {
         );
       }
       if (tab === "share") {
-        const record = selected(),
+        const record = selectedChat().record,
           draftState = chatDraft(record);
         renderedRecordId = record?.id || "";
         panel.append(
@@ -885,7 +877,8 @@ if (typeof document !== "undefined") {
       }
       if (
         !panel.childElementCount ||
-        (tab === "share" && renderedRecordId !== (selected()?.id || ""))
+        (tab === "share" &&
+          renderedRecordId !== (selectedChat().record?.id || ""))
       ) {
         build();
         return;
@@ -992,7 +985,7 @@ if (typeof document !== "undefined") {
         const prepare = $("#sharing-prepare");
         if (prepare) {
           prepare.disabled =
-            !selected() ||
+            !selectedChat().record ||
             local?.preparing ||
             draftSending(local) ||
             draft?.status === "working";

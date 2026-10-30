@@ -536,10 +536,7 @@ function onboardingCompanyMessage(instructions) {
       skill,
       source: skill ? "installed" : "file",
       returnLabel: "Close and return to setup",
-      cwd:
-        typeof currentAgentRecord === "function"
-          ? currentAgentRecord()?.cwd || ""
-          : "",
+      cwd: selectedChat().record?.cwd || "",
       onSaved: (id) => {
         if (resume === suspended && suspended?.ticket === returnGeneration) {
           acceptedPresetId = id;
@@ -562,10 +559,7 @@ function onboardingCompanyMessage(instructions) {
     content.append(box);
     const expectedStep = documentState.progress.step;
     const catalog = await api("/api/skills/catalog", {
-      cwd:
-        typeof currentAgentRecord === "function"
-          ? currentAgentRecord()?.cwd || ""
-          : "",
+      cwd: selectedChat().record?.cwd || "",
     });
     if (!isCurrent() || documentState.progress.step !== expectedStep) {
       return;
