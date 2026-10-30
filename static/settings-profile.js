@@ -33,10 +33,7 @@ function settingsProfilePatch(baseline, rows) {
   }
   return patch;
 }
-function renderSettingsProfilePreview(
-  container,
-  { initialProfile, expectedRevision, expectedContentHash } = {},
-) {
+function renderSettingsProfilePreview(container) {
   const make = (tag, text, cls) => {
     const n = document.createElement(tag);
     if (text) {
@@ -84,8 +81,7 @@ function renderSettingsProfilePreview(
   let disposed = false,
     busy = false,
     generation = 0,
-    profile =
-      initialProfile === undefined ? null : structuredClone(initialProfile),
+    profile = null,
     review = null;
   const actionButton = (text, run) => {
     const b = make("button", text, "button ui-control");
@@ -155,10 +151,7 @@ function renderSettingsProfilePreview(
       }
     }
   }
-  async function validate(
-    candidate,
-    { expectedRevision: revision, expectedContentHash: contentHash } = {},
-  ) {
+  async function validate(candidate) {
     if (disposed) {
       return;
     }
@@ -177,14 +170,6 @@ function renderSettingsProfilePreview(
       }
       if (!current) {
         throw new Error("Settings could not load. Refresh the preview.");
-      }
-      if (
-        revision !== undefined &&
-        (current.revision !== revision || current.contentHash !== contentHash)
-      ) {
-        throw new Error(
-          "Settings changed since this proposal. Refresh the preview and choose changes again.",
-        );
       }
       const merged = mergeSettingsProfile(current.values, candidate),
         result = await api("/api/settings/preview", {
@@ -386,9 +371,7 @@ function renderSettingsProfilePreview(
   root.append(
     make(
       "p",
-      initialProfile === undefined
-        ? "Import a settings profile exported by truffle. Freeform setup instructions, credentials and sharing access are configured separately. Do not paste secrets."
-        : "Review the proposed settings. Quick actions replace the existing action list. Nothing applies until you choose Apply selected changes.",
+      "Import a settings profile exported by truffle. Freeform setup instructions, credentials and sharing access are configured separately. Do not paste secrets.",
       "form-hint",
     ),
     paste,
@@ -397,16 +380,6 @@ function renderSettingsProfilePreview(
     preview,
     status,
   );
-  paste.hidden =
-    previewButton.hidden =
-    choose.hidden =
-      initialProfile !== undefined;
   update();
-  root.ready =
-    initialProfile === undefined
-      ? Promise.resolve(root)
-      : validate(profile, { expectedRevision, expectedContentHash }).then(
-          () => root,
-        );
   return root;
 }

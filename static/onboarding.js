@@ -652,7 +652,7 @@ function onboardingCompanyMessage(instructions) {
       label,
       node(
         "p",
-        "Preparing this draft sends nothing and changes no settings. Review it, then choose Send in App chat. After Send, App chat can apply routine preferences; commands and sharing access use their normal approval flows. Keep API keys and other credentials in Connections.",
+        "Preparing this draft sends nothing and changes no settings. Review it, then choose Send in App chat. After Send, App chat can change settings. You approve each new or changed command in the chat. Sharing access keeps its own setup. Keep API keys and other credentials in Connections.",
       ),
       review,
     );

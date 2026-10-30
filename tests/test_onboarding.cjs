@@ -182,12 +182,7 @@ test("onboarding busy state does not disable the globally hosted App chat contro
   assert.equal(chat.disabled, false);
 });
 
-function profileFixture({
-  previewError,
-  initialProfile,
-  expectedRevision,
-  expectedContentHash = "a".repeat(64),
-} = {}) {
+function profileFixture({ previewError } = {}) {
   class Node {
     constructor(tag) {
       this.tagName = tag;
@@ -295,11 +290,7 @@ function profileFixture({
     "static/settings.js",
     "static/settings-profile.js",
   ]);
-  const root = c.renderSettingsProfilePreview(container, {
-    initialProfile,
-    expectedRevision,
-    expectedContentHash,
-  });
+  const root = c.renderSettingsProfilePreview(container);
   const nodes = () => {
     const visit = (n) => [n, ...n.children.flatMap(visit)];
     return visit(root);
@@ -510,132 +501,9 @@ test("onboarding busy state preserves company importer disabled policy", async (
   assert.equal(owned.disabled, false);
 });
 
-test("shared proposal review previews only requested changes and applies selected fields at the proposal revision", async () => {
-  const f = profileFixture({
-    initialProfile: {
-      format: "truffle-settings",
-      version: 1,
-      values: { theme: "midnight", editor: "code" },
-    },
-    expectedRevision: 3,
-  });
-  await f.root.ready;
-  assert.equal(f.input.hidden, true);
-  assert.equal(f.button("Choose profile file").hidden, true);
-  assert.equal(f.button("Preview pasted profile").hidden, true);
-  assert.equal(f.root.attrs["data-agent-context-exclude"], "true");
-  const boxes = f.nodes().filter((n) => n.type === "checkbox");
-  assert.equal(boxes.length, 2);
-  assert.equal(
-    boxes.find((n) => n.attrs["aria-label"] === "Apply Theme").checked,
-    true,
-  );
-  assert.equal(
-    boxes.find((n) => n.attrs["aria-label"] === "Approve changing Editor")
-      .checked,
-    false,
-  );
-  assert.equal(
-    f.calls.filter((c) => c.path === "/api/settings" && c.payload).length,
-    0,
-  );
-  await f.button("Apply selected changes").onclick();
-  const request = f.calls.find(
-    (c) => c.path === "/api/settings" && c.payload,
-  ).payload;
-  assert.equal(request.revision, 3);
-  assert.equal(request.contentHash, "a".repeat(64));
-  assert.deepEqual(Object.keys(request.patch), ["theme"]);
-  assert.equal(f.current.values.editor, "zed");
-});
-test("stale initial proposals require an explicit fresh preview and reset user approval choices", async () => {
-  const f = profileFixture({
-    initialProfile: {
-      format: "truffle-settings",
-      version: 1,
-      values: { theme: "midnight", editor: "code" },
-    },
-    expectedRevision: 2,
-  });
-  await f.root.ready;
-  assert.match(f.status.textContent, /Settings changed since this proposal/);
-  assert.equal(
-    f.nodes().some((n) => n.type === "checkbox"),
-    false,
-  );
-  assert.equal(f.button("Apply selected changes").disabled, true);
-  assert.equal(
-    f.calls.some((c) => c.path === "/api/settings/preview"),
-    false,
-  );
-  await f.button("Apply selected changes").onclick();
-  assert.equal(
-    f.calls.some((c) => c.path === "/api/settings" && c.payload),
-    false,
-  );
-  await f.button("Refresh preview").onclick();
-  assert.equal(
-    f.nodes().find((n) => n.attrs["aria-label"] === "Approve changing Editor")
-      .checked,
-    false,
-  );
-  assert.equal(f.button("Apply selected changes").disabled, false);
-});
-test("shared proposal renderer copies its input and enforces the bounded settings profile schema", async () => {
-  const initialProfile = {
-      format: "truffle-settings",
-      version: 1,
-      values: { editor: "code" },
-    },
-    f = profileFixture({ initialProfile, expectedRevision: 3 });
-  initialProfile.values.editor = "cursor";
-  await f.root.ready;
-  assert.ok(
-    f.nodes().some((n) => n.tagName === "pre" && n.textContent === "code"),
-  );
-  assert.equal(
-    f.nodes().some((n) => n.tagName === "pre" && n.textContent === "cursor"),
-    false,
-  );
-  const huge = profileFixture({
-    initialProfile: {
-      format: "truffle-settings",
-      version: 1,
-      values: { codexReviewCommand: "x".repeat(65537) },
-    },
-    expectedRevision: 3,
-  });
-  await huge.root.ready;
-  assert.match(huge.status.textContent, /64 KiB/);
-  assert.equal(huge.calls.length, 0);
-  assert.equal(huge.button("Apply selected changes").disabled, true);
-  f.root.disposeProfileImport();
-  assert.equal(
-    f.nodes().some((n) => n.type === "checkbox"),
-    false,
-  );
-  assert.equal(f.input.value, "");
-  assert.equal(f.button("Refresh preview").disabled, true);
-});
-
-test("same-revision file changes invalidate proposal previews and approvals", async () => {
-  const initialProfile = {
-      format: "truffle-settings",
-      version: 1,
-      values: { editor: "code" },
-    },
-    f = profileFixture({
-      initialProfile,
-      expectedRevision: 3,
-      expectedContentHash: "c".repeat(64),
-    });
-  await f.root.ready;
-  assert.match(f.status.textContent, /changed since this proposal/);
-  assert.equal(
-    f.calls.some((c) => c.path === "/api/settings/preview"),
-    false,
-  );
-  await f.button("Refresh preview").onclick();
+test("same-revision file changes invalidate approved profile changes", async () => {
+  const f = profileFixture();
+  await f.paste({ editor: "code" });
   const box = f.nodes().find((n) => n.type === "checkbox");
   box.checked = true;
   box.onchange();
