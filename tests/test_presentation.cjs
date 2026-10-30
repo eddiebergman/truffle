@@ -865,7 +865,9 @@ test("actual palette runner closes its modal before showing results and owns bou
     f.nodes.set("#action-palette", palette);
     f.document.modal = palette;
     f.c.settingsDirty = blocked;
-    f.c.actionEntries = f.c.presentationCommands();
+    f.c.actionRows = f.c
+      .presentationCommands()
+      .map((entry) => ({ kind: "command", entry }));
     let reads = 0;
     f.c.loadSavedViews = async () => {
       reads++;

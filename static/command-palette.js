@@ -1,6 +1,9 @@
 "use strict";
-let actionEntries = [],
-  actionSelected = 0;
+// Step 1 lists commands and variant groups; choosing a group opens step 2 with
+// only its variants. `actionStep` is null in step 1.
+let actionRows = [],
+  actionSelected = 0,
+  actionStep = null;
 function openCommandLink(url) {
   const link = el("a");
   link.href = url;
@@ -54,18 +57,24 @@ function commandEntries() {
   const entries = [],
     { record } = selectedChat(),
     candidate = record && candidateForRecord(record);
-  const add = (verb, noun, detail, run, extra = {}) =>
-    entries.push({ title: `${verb}: ${noun}`, detail, run, ...extra });
+  // Entries that share verb and noun and differ by `target` are variants of one group.
+  const add = (verb, noun, detail, run, { target, ...extra } = {}) =>
+    entries.push({
+      title:
+        target === undefined
+          ? `${verb}: ${noun}`
+          : `${verb}: ${noun} · ${target}`,
+      ...(target === undefined ? {} : { group: `${verb}: ${noun}`, target }),
+      detail,
+      run,
+      ...extra,
+    });
   if (record) {
     for (const item of agentWork(record)) {
       if (item.url) {
-        add(
-          "open",
-          `${item.source} · ${workReference(item) || item.title}`,
-          item.title,
-          () => openCommandLink(item.url),
-          { item },
-        );
+        add("open", item.source, item.title, () => openCommandLink(item.url), {
+          target: workReference(item) || item.title,
+        });
       }
     }
     for (const tree of gitDiffDirectories(record)) {
@@ -77,16 +86,21 @@ function commandEntries() {
           .join(" · ");
       add(
         "review",
-        `changes · ${label}`,
+        "changes",
         [refs, tree.path].filter(Boolean).join(" · "),
         () => {
           selectAgent(record, candidate);
           openDiffReview(record, undefined, tree.path);
         },
+        { target: label },
       );
       if (serviceClient.isDesktop) {
-        add("open", `editor diff · ${label}`, tree.path, () =>
-          serviceClient.openDiff(tree.path),
+        add(
+          "open",
+          "editor diff",
+          tree.path,
+          () => serviceClient.openDiff(tree.path),
+          { target: label },
         );
       }
     }
@@ -97,9 +111,10 @@ function commandEntries() {
     ).filter((x) => (x.sessionIds || []).includes(record.id))) {
       add(
         "open",
-        `result · ${result.title}`,
+        "result",
         [result.format, result.path || result.url].filter(Boolean).join(" · "),
         () => viewArtifact(result),
+        { target: result.title },
       );
     }
     const addResourceLink = (resource, ref) => {
@@ -114,9 +129,10 @@ function commandEntries() {
         }
         add(
           "open",
-          `resource · ${resource.name || resource.id} · ${ref.category}`,
+          "resource",
           resource.state || "Unknown",
           () => openCommandLink(url.href),
+          { target: `${resource.name || resource.id} · ${ref.category}` },
         );
       } catch {
         // Not a URL; offer no link for this reference.
@@ -185,17 +201,22 @@ function commandEntries() {
       snoozed = isAgentSnoozed(entry);
     add(
       snoozed ? "restore" : "switch",
-      `agent · ${linked?.title || entry.title}`,
+      "agent",
       `${runtimeInfo(entry, linked).summary} · ${
         linked?.cwd || entry.cwd || ""
       }`,
       () => selectAgent(linked, entry),
+      { target: linked?.title || entry.title },
     );
   }
   for (const [key, entry] of Object.entries(snoozedAgentTabs)) {
     if (!liveCandidates().some((c) => candidateKey(c) === key)) {
-      add("restore", `agent · ${entry.title}`, "Saved conversation", () =>
-        restoreSnoozedTab(key, { disabled: false }),
+      add(
+        "restore",
+        "agent",
+        "Saved conversation",
+        () => restoreSnoozedTab(key, { disabled: false }),
+        { target: entry.title },
       );
     }
   }
@@ -298,7 +319,10 @@ function commandEntries() {
   }
   if (typeof presentationCommands === "function") {
     for (const entry of presentationCommands()) {
-      add(entry.verb, entry.noun, entry.detail, entry.run);
+      const [noun, ...target] = entry.noun.split(" · ");
+      add(entry.verb, noun, entry.detail, entry.run, {
+        target: target.length ? target.join(" · ") : undefined,
+      });
     }
   }
   if (typeof setting === "function") {
@@ -359,12 +383,27 @@ function openCommands() {
     return false;
   }
   $("#action-query").value = "";
-  $("#action-context").textContent =
-    selectedChat().record?.title || "Dashboard";
   $("#action-palette").showModal();
   $("#action-query").setAttribute("aria-expanded", "true");
   paintCommands(true);
   $("#action-query").focus();
+}
+function paintCommandHints() {
+  const row = actionRows[actionSelected],
+    hints = [];
+  if (actionStep !== null) {
+    hints.push(["Back", "esc"]);
+  }
+  if (row !== undefined) {
+    hints.push([row.kind === "group" ? "Choose" : "Run", "↵"]);
+  }
+  $("#action-hint").replaceChildren(
+    ...hints.map(([label, key]) => {
+      const hint = el("span", "", label);
+      hint.append(el("kbd", "", key));
+      return hint;
+    }),
+  );
 }
 function paintCommandSelection({ scroll = false } = {}) {
   const rows = $("#action-results").querySelectorAll(".action-command");
@@ -383,20 +422,118 @@ function paintCommandSelection({ scroll = false } = {}) {
   } else {
     query.removeAttribute("aria-activedescendant");
   }
+  paintCommandHints();
 }
-function paintCommands(reset) {
+// Rows for step 1. A group with one variant stays a plain command. A search
+// also lists every variant, so a variant is found without opening its group.
+function commandRows(entries, { searching }) {
+  const sizes = new Map();
+  for (const entry of entries) {
+    if (entry.group !== undefined) {
+      sizes.set(entry.group, (sizes.get(entry.group) || 0) + 1);
+    }
+  }
+  const rows = [],
+    emitted = new Set();
+  for (const entry of entries) {
+    if (entry.group === undefined || sizes.get(entry.group) === 1) {
+      rows.push({
+        kind: "command",
+        entry,
+        text: entry.title,
+        detail: entry.detail,
+      });
+      continue;
+    }
+    if (!emitted.has(entry.group)) {
+      emitted.add(entry.group);
+      rows.push({
+        kind: "group",
+        title: entry.group,
+        entries: entries.filter((x) => x.group === entry.group),
+        text: entry.group,
+        detail: "",
+      });
+    }
+    if (searching) {
+      rows.push({
+        kind: "command",
+        entry,
+        text: entry.title,
+        detail: entry.detail,
+      });
+    }
+  }
+  return rows;
+}
+function paintCommandRow(row, index) {
+  const button = featureButton(
+    "",
+    () => runPaletteCommand(index),
+    "action-command",
+  );
+  button.id = `action-command-${index}`;
+  button.tabIndex = -1;
+  button.setAttribute("role", "option");
+  button.onmousedown = (event) => event.preventDefault();
+  button.onfocus = () => {
+    actionSelected = index;
+    paintCommandSelection();
+  };
+  switch (row.kind) {
+    case "command":
+      button.append(el("span", "action-command-label", row.entry.title));
+      break;
+    case "group":
+      button.setAttribute(
+        "aria-label",
+        `${row.title}, ${row.entries.length} choices`,
+      );
+      button.append(
+        el("span", "action-command-label", row.title),
+        el("small", "action-command-suffix", `${row.entries.length} ›`),
+      );
+      break;
+    case "variant": {
+      button.append(el("span", "action-command-label", row.entry.target));
+      if (row.entry.detail) {
+        const suffix = el("small", "action-command-suffix", row.entry.detail);
+        suffix.title = row.entry.detail;
+        button.append(suffix);
+      }
+      break;
+    }
+    default:
+      throw new Error(`Unknown command row: ${row.kind}`);
+  }
+  const shortcut = row.kind === "group" ? "" : row.entry.shortcut;
+  if (shortcut) {
+    button.append(el("kbd", "", shortcut));
+  }
+  return button;
+}
+function paintCommands(reset, { select } = {}) {
   const query = $("#action-query")
       .value.trim()
       .toLowerCase()
       .replaceAll(":", " "),
     words = query.split(/\s+/).filter(Boolean);
-  const matches = commandEntries()
-    .map((entry, index) => {
-      const text = `${entry.title} ${entry.detail}`
+  const rows =
+    actionStep === null
+      ? commandRows(commandEntries(), { searching: words.length > 0 })
+      : actionStep.entries.map((entry) => ({
+          kind: "variant",
+          entry,
+          text: entry.target,
+          detail: entry.detail,
+        }));
+  const matches = rows
+    .map((row, index) => {
+      const text = `${row.text} ${row.detail}`
         .toLowerCase()
         .replaceAll(":", " ");
       return {
-        entry,
+        row,
         index,
         direct: words.every((word) => text.includes(word)),
         score: query ? fuzzyScore(query, text) : 0,
@@ -404,44 +541,19 @@ function paintCommands(reset) {
     })
     .filter((x) => Number.isFinite(x.score));
   const direct = matches.filter((x) => x.direct);
-  actionEntries = (direct.length ? direct : matches)
+  actionRows = (direct.length ? direct : matches)
     .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map((x) => x.entry);
+    .map((x) => x.row);
   if (reset) {
     actionSelected = 0;
   }
-  actionSelected = Math.max(
-    0,
-    Math.min(actionSelected, actionEntries.length - 1),
-  );
-  const list = $("#action-results");
-  list.replaceChildren();
-  for (const [index, entry] of actionEntries.entries()) {
-    const button = featureButton(
-      "",
-      () => runPaletteCommand(index),
-      "action-command",
-    );
-    button.id = `action-command-${index}`;
-    button.tabIndex = -1;
-    button.setAttribute("role", "option");
-    button.onmousedown = (event) => event.preventDefault();
-    button.onfocus = () => {
-      actionSelected = index;
-      paintCommandSelection();
-    };
-    const heading = el("div", "action-command-heading");
-    heading.append(el("strong", "", entry.title));
-    if (entry.shortcut) {
-      heading.append(el("kbd", "", entry.shortcut));
-    }
-    button.append(heading, el("small", "", entry.detail));
-    if (entry.item) {
-      button.append(paletteMetadata({ item: entry.item }));
-    }
-    list.append(button);
+  if (select !== undefined) {
+    actionSelected = Math.max(0, actionRows.findIndex(select));
   }
-  if (!actionEntries.length) {
+  actionSelected = Math.max(0, Math.min(actionSelected, actionRows.length - 1));
+  const list = $("#action-results");
+  list.replaceChildren(...actionRows.map(paintCommandRow));
+  if (!actionRows.length) {
     list.append(el("p", "form-hint", "No matching commands."));
   }
   if (reset) {
@@ -449,14 +561,47 @@ function paintCommands(reset) {
   }
   paintCommandSelection();
 }
+function paintCommandStep() {
+  const step = $("#action-step"),
+    input = $("#action-query");
+  step.hidden = actionStep === null;
+  step.textContent = actionStep === null ? "" : actionStep.title;
+  input.placeholder =
+    actionStep === null ? "Execute a command…" : `Choose ${actionStep.title}…`;
+  input.setAttribute(
+    "aria-label",
+    actionStep === null ? "Search commands" : `Choose ${actionStep.title}`,
+  );
+}
+function enterCommandGroup(group) {
+  actionStep = { title: group.title, entries: group.entries };
+  $("#action-query").value = "";
+  paintCommandStep();
+  paintCommands(true);
+  $("#action-query").focus({ preventScroll: true });
+}
+function leaveCommandGroup() {
+  const title = actionStep.title;
+  actionStep = null;
+  $("#action-query").value = "";
+  paintCommandStep();
+  paintCommands(true, {
+    select: (row) => row.kind === "group" && row.title === title,
+  });
+  $("#action-query").focus({ preventScroll: true });
+}
 async function runPaletteCommand(index) {
-  const entry = actionEntries[index];
-  if (!entry) {
+  const row = actionRows[index];
+  if (row === undefined) {
+    return;
+  }
+  if (row.kind === "group") {
+    enterCommandGroup(row);
     return;
   }
   $("#action-palette").close();
   try {
-    await entry.run();
+    await row.entry.run();
   } catch (error) {
     toast(error.message || String(error));
   }
@@ -469,12 +614,22 @@ $("#action-query").oninput = (event) => {
 $("#action-query").addEventListener("compositionend", () =>
   paintCommands(true),
 );
+// The shared Escape handler asks this first, so Escape in step 2 goes back to step 1.
+$("#action-palette").dismissLayer = () => {
+  if (actionStep === null) {
+    return false;
+  }
+  leaveCommandGroup();
+  return true;
+};
 $("#action-palette").addEventListener("close", () => {
   $("#action-query").value = "";
   $("#action-query").setAttribute("aria-expanded", "false");
   $("#action-query").removeAttribute("aria-activedescendant");
-  actionEntries = [];
+  actionRows = [];
   actionSelected = 0;
+  actionStep = null;
+  paintCommandStep();
 });
 $("#action-palette").addEventListener("keydown", (event) => {
   if (
@@ -496,20 +651,28 @@ $("#action-palette").addEventListener("keydown", (event) => {
   if (["ArrowDown", "ArrowUp"].includes(event.key)) {
     event.preventDefault();
     event.stopPropagation();
-    if (!actionEntries.length) {
+    if (!actionRows.length) {
       return;
     }
     actionSelected =
       (actionSelected +
         (event.key === "ArrowDown" ? 1 : -1) +
-        actionEntries.length) %
-      actionEntries.length;
+        actionRows.length) %
+      actionRows.length;
     $("#action-query").focus({ preventScroll: true });
     paintCommandSelection({ scroll: true });
   } else if (event.key === "Enter") {
     event.preventDefault();
     event.stopPropagation();
     void runPaletteCommand(actionSelected);
+  } else if (
+    event.key === "Backspace" &&
+    actionStep !== null &&
+    $("#action-query").value === ""
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    leaveCommandGroup();
   }
 });
 $("#command-open").onclick = openCommands;

@@ -395,18 +395,12 @@ test("exact command words exclude unrelated fuzzy matches and editing resets sel
   f.$("#action-results").scrollTop = 100;
   f.query("theme");
   assert.equal(f.rows().length, 1);
-  assert.equal(
-    f.rows()[0].children[0].children[0].textContent,
-    "change: theme",
-  );
+  assert.equal(f.rows()[0].children[0].textContent, "change: theme");
   assert.equal(f.rows()[0].attrs["aria-selected"], "true");
   assert.equal(f.$("#action-results").scrollTop, 0);
   f.query("ch thm");
   assert.ok(f.rows().length > 0);
-  assert.equal(
-    f.rows()[0].children[0].children[0].textContent,
-    "change: theme",
-  );
+  assert.equal(f.rows()[0].children[0].textContent, "change: theme");
   f.query("zzzz");
   assert.equal(f.rows().length, 0);
   assert.equal(f.$("#action-query").attrs["aria-activedescendant"], undefined);
@@ -718,7 +712,7 @@ test("actual palette runner closes before awaiting a presentation owner and pres
   f.query("show agent results");
   assert.equal(f.rows().length, 1);
   assert.equal(
-    f.rows()[0].children[0].children[0].textContent,
+    f.rows()[0].children[0].textContent,
     "show: agent results · Investigation",
   );
   assert.deepEqual(order, []);
@@ -741,4 +735,124 @@ test("command palette self-toggle honors its cancel owner instead of forcibly cl
   f.c.openCommands();
   assert.equal(f.$("#action-palette").open, true);
   assert.equal(f.entryBuilds, 1);
+});
+
+function groupedPaletteFixture() {
+  const f = paletteFixture({ actualEntries: true }),
+    ran = [],
+    record = { id: "chat", title: "Chat", items: [], resources: [] },
+    result = (title) => ({
+      title,
+      format: "md",
+      path: `/data/artifacts/${title}.md`,
+      sessionIds: ["chat"],
+    });
+  installActualPaletteEntries(f);
+  Object.assign(f.c, {
+    selectedChat: () => ({ key: "record:chat", candidate: null, record }),
+    agentWork: () => [],
+    workReference: () => "",
+    gitDiffDirectories: () => [{ path: "/repo/api", branch: "api" }],
+    artifactLibrary: null,
+    state: {
+      artifacts: [
+        result("Alpha report"),
+        result("Beta notes"),
+        result("Gamma plan"),
+      ],
+    },
+    viewArtifact: (artifact) => ran.push(artifact.title),
+    selectAgent() {},
+    openDiffReview: (r, file, path) => ran.push(path),
+  });
+  const labels = () =>
+    f.rows().map((row) => row.children.map((child) => child.textContent));
+  return { ...f, ran, labels };
+}
+test("variants of one verb and noun show as one row that opens a second step", () => {
+  const f = groupedPaletteFixture();
+  f.c.openCommands();
+  const groups = f
+    .labels()
+    .filter(([label]) => label.startsWith("open: result"));
+  assert.deepEqual(groups, [["open: result", "3 ›"]]);
+  assert.ok(f.labels().some(([label]) => label === "review: changes · api"));
+  for (const row of f.rows()) {
+    assert.ok(row.children.length <= 3);
+  }
+  const index = f.labels().findIndex(([label]) => label === "open: result");
+  f.rows()[index].focus();
+  f.key("Enter");
+  assert.equal(f.$("#action-palette").open, true);
+  assert.deepEqual(f.ran, []);
+  assert.equal(f.$("#action-step").textContent, "open: result");
+  assert.equal(f.$("#action-step").hidden, false);
+  assert.deepEqual(f.labels(), [
+    ["Alpha report", "md · /data/artifacts/Alpha report.md"],
+    ["Beta notes", "md · /data/artifacts/Beta notes.md"],
+    ["Gamma plan", "md · /data/artifacts/Gamma plan.md"],
+  ]);
+  assert.equal(f.rows()[0].attrs.role, "option");
+  assert.equal(
+    f.$("#action-query").attrs["aria-activedescendant"],
+    f.rows()[0].id,
+  );
+  f.query("gam");
+  assert.deepEqual(
+    f.labels().map(([label]) => label),
+    ["Gamma plan"],
+  );
+  f.key("Enter");
+  assert.deepEqual(f.ran, ["Gamma plan"]);
+  assert.equal(f.$("#action-palette").open, false);
+  assert.equal(f.$("#action-step").hidden, true);
+});
+test("Escape and Backspace on an empty query return from the second step to its group", () => {
+  const f = groupedPaletteFixture();
+  f.c.openCommands();
+  const group = f.labels().findIndex(([label]) => label === "open: result");
+  f.rows()[group].focus();
+  const hints = () => f.$("#action-hint").children.map((x) => x.textContent);
+  assert.deepEqual(hints(), ["Choose"]);
+  f.key("Enter");
+  assert.deepEqual(hints(), ["Back", "Run"]);
+  f.query("al");
+  assert.equal(f.key("Backspace").defaultPrevented, undefined);
+  assert.equal(f.$("#action-step").textContent, "open: result");
+  f.query("");
+  f.key("Backspace");
+  assert.equal(f.$("#action-step").hidden, true);
+  assert.equal(f.rows()[group].attrs["aria-selected"], "true");
+  f.key("Enter");
+  assert.equal(f.$("#action-step").hidden, false);
+  f.key("Escape");
+  assert.equal(f.$("#action-palette").open, true);
+  assert.equal(f.$("#action-step").hidden, true);
+  assert.equal(f.rows()[group].attrs["aria-selected"], "true");
+  f.key("Escape");
+  assert.equal(f.$("#action-palette").open, false);
+  assert.deepEqual(f.ran, []);
+});
+test("a step-one search finds variants directly and runs them without the second step", () => {
+  const f = groupedPaletteFixture();
+  f.c.openCommands();
+  f.query("beta");
+  assert.deepEqual(f.labels(), [["open: result · Beta notes"]]);
+  f.key("Enter");
+  assert.deepEqual(f.ran, ["Beta notes"]);
+  assert.equal(f.$("#action-palette").open, false);
+  f.c.openCommands();
+  f.query("open result");
+  assert.deepEqual(
+    f.labels().map(([label]) => label),
+    [
+      "open: result",
+      "open: result · Alpha report",
+      "open: result · Beta notes",
+      "open: result · Gamma plan",
+    ],
+  );
+  f.query("review");
+  f.key("Enter");
+  assert.deepEqual(f.ran, ["Beta notes", "/repo/api"]);
 });

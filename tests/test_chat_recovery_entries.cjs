@@ -168,10 +168,13 @@ test("exact recovery palette command has no shortcut and closes its own palette 
       entry.detail,
       context.total ? /1 pending local chat request/ : /status unavailable/,
     );
-    evaluate(f.c, "actionEntries=commandEntries()");
+    evaluate(
+      f.c,
+      "actionRows=commandEntries().map(entry=>({kind:'command',entry}))",
+    );
     const index = evaluate(
       f.c,
-      "actionEntries.findIndex(entry=>entry.title==='open: chat recovery')",
+      "actionRows.findIndex(row=>row.entry.title==='open: chat recovery')",
     );
     await f.c.runPaletteCommand(index);
     assert.deepEqual(f.opened, ["recovery"]);
