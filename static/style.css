@@ -162,30 +162,6 @@ h1 {
   margin: 0;
 }
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 7px;
-  padding: 9px 14px;
-  font-size: 12px;
-  white-space: nowrap;
-  background: var(--bg);
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-}
-
-.primary {
-  background: var(--accent);
-  color: var(--bg);
-  border: 1px solid var(--accent);
-  font-weight: 600;
-}
-
-.primary:hover {
-  background: var(--foam);
-}
-
 .primary span {
   font-size: 20px;
   line-height: 16px;
@@ -248,18 +224,6 @@ h1 {
   gap: 8px;
   align-items: center;
   flex-wrap: nowrap;
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  max-width: 380px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 4px 9px;
 }
 
 .search > span {
@@ -587,14 +551,6 @@ dialog .optional {
   gap: 8px;
 }
 
-.connection-row {
-  padding: 12px;
-  background: var(--bg);
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  font-size: 12px;
-}
-
 .connection-row small {
   font-size: 11px;
   margin-top: 4px;
@@ -615,21 +571,6 @@ dialog .optional {
   color: color-mix(in srgb, var(--bg) 20%, var(--text));
   font-size: 13px;
   overflow-wrap: anywhere;
-}
-
-#toast {
-  position: fixed;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--text);
-  color: var(--bg);
-  padding: 12px 20px;
-  border-radius: 7px;
-  box-shadow: 0 4px 24px color-mix(in srgb, var(--shadow) 35%, transparent);
-  font-size: 12px;
-  z-index: 10;
-  max-width: 90vw;
 }
 
 .sr-only {
@@ -709,11 +650,6 @@ dialog .optional {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .search {
-    max-width: none;
-    width: 100%;
-  }
-
   .view-controls {
     width: 100%;
   }
@@ -743,10 +679,6 @@ dialog .optional {
   .footer-divider,
   .sync-footer > div > span:last-child {
     display: none;
-  }
-
-  .button {
-    padding: 8px 11px;
   }
 
   .page-heading .button {
@@ -931,21 +863,13 @@ a.ci-check-name:hover {
 
 .agent-link {
   font-size: 9px;
-  color: color-mix(in srgb, var(--bg) 25%, var(--text));
   border: 1px solid var(--line);
-  background: var(--bg);
   border-radius: 5px;
   padding: 2px 7px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.agent-link.claude {
-  background: var(--bg);
-  border-color: color-mix(in srgb, var(--bg) 85%, var(--text));
-  color: color-mix(in srgb, var(--gold) 45%, var(--muted));
 }
 
 .runtime-pill {
@@ -997,16 +921,6 @@ a.ci-check-name:hover {
   margin: 8px 0;
 }
 
-.form-tabs {
-  display: flex;
-  gap: 7px;
-  background: var(--bg);
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  border-radius: 7px;
-  padding: 5px;
-  margin-top: 18px;
-}
-
 .form-tabs label {
   display: flex;
   align-items: center;
@@ -1019,25 +933,11 @@ a.ci-check-name:hover {
   cursor: pointer;
 }
 
-.form-tabs label:has(input:checked) {
-  color: var(--foam);
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-}
-
 .form-tabs input[type="radio"] {
   margin: 0;
   width: 12px;
   height: 12px;
   accent-color: var(--foam);
-}
-
-.work-picker {
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  border-radius: 7px;
-  padding: 4px;
-  background: var(--bg);
 }
 
 .work-picker .work-option {
@@ -1078,11 +978,6 @@ a.ci-check-name:hover {
   margin-top: 3px;
 }
 
-.work-option:has(input:checked) {
-  background: var(--panel);
-  border-radius: 4px;
-}
-
 .work-picker-search {
   margin-bottom: 8px;
 }
@@ -1091,8 +986,6 @@ a.ci-check-name:hover {
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--love) 35%, var(--bg));
   border-radius: 6px;
-  color: var(--rose);
-  background: var(--panel);
   font-size: 12px;
 }
 
@@ -1201,12 +1094,6 @@ a.ci-check-name:hover {
   color: color-mix(in srgb, var(--bg) 35%, var(--text));
 }
 
-.session-filter-bar button.selected {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-color: color-mix(in srgb, var(--bg) 75%, var(--text));
-  color: var(--foam);
-}
-
 .row-open {
   color: color-mix(in srgb, var(--bg) 50%, var(--text));
   font-size: 15px;
@@ -1304,15 +1191,6 @@ a.ci-check-name:hover {
   height: 32px;
   padding: 4px 9px;
   min-width: 105px;
-}
-
-.add-button {
-  height: 32px;
-  width: 34px;
-  padding: 0;
-  font-size: 23px;
-  line-height: 1;
-  font-weight: 400;
 }
 
 .launcher #project-only {
@@ -1590,10 +1468,6 @@ a.ci-check-name:hover {
     gap: 5px;
   }
 
-  .search {
-    flex-basis: auto;
-  }
-
   .search kbd {
     display: none;
   }
@@ -1720,12 +1594,6 @@ a.ci-check-name:hover {
   font-size: 10px;
   color: color-mix(in srgb, var(--bg) 35%, var(--text));
   height: 28px;
-}
-
-.scope-chip[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-color: color-mix(in srgb, var(--foam) 40%, var(--bg));
-  color: var(--foam);
 }
 
 .toolbar .view-controls {
@@ -3218,13 +3086,6 @@ a.ci-check-name:hover {
 .session-card:focus-within {
   background: color-mix(in srgb, var(--bg) 90%, var(--text));
   border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
-}
-
-.icon-button:hover:not(:disabled),
-.agent-link:hover:not(:disabled) {
-  background: var(--line);
-  color: var(--text);
-  border-radius: 4px;
 }
 
 .row-actions .item-agent-links .agent-link:not(.item-agent-action) {
