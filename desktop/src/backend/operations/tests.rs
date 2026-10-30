@@ -41,7 +41,7 @@ fn only_the_browser_approves_executable_settings() {
 }
 
 #[test]
-fn only_the_browser_reads_settings_beyond_routine_preferences() {
+fn every_caller_reads_commands_and_agents_remove_them_directly() {
     let (_temp, repo, chat) = fixture();
     run(
         &repo,
@@ -50,16 +50,29 @@ fn only_the_browser_reads_settings_beyond_routine_preferences() {
         &quick_action_patch(&repo),
     )
     .unwrap();
+    std::fs::write(
+        repo.settings
+            .config_directory()
+            .join("workflows/agent-review.md"),
+        "Custom review workflow",
+    )
+    .unwrap();
     let full = run(&repo, Caller::Browser, "settings.read", &json!({})).unwrap();
-    assert_eq!(full["values"]["quickActions"][0]["command"], "printf hello");
     for caller in [Caller::Assistant, Caller::Agent { chat: &chat }] {
-        let routine = run(&repo, caller, "settings.read", &json!({})).unwrap();
-        assert!(
-            routine["values"].get("quickActions").is_none(),
-            "{caller:?}"
-        );
-        assert_eq!(routine["revision"], full["revision"]);
+        let read = run(&repo, caller, "settings.read", &json!({})).unwrap();
+        assert_eq!(read["values"], full["values"], "{caller:?}");
+        assert_eq!(read["workflows"], full["workflows"], "{caller:?}");
     }
+    let removal = json!({"revision":full["revision"],"contentHash":full["contentHash"],"patch":{"quickActions":[]}});
+    let saved = run(
+        &repo,
+        Caller::Agent { chat: &chat },
+        "settings.apply",
+        &removal,
+    )
+    .unwrap();
+    assert_eq!(saved["values"]["quickActions"], json!([]));
+    assert_eq!(saved["revision"], 2);
 }
 
 #[test]

@@ -117,7 +117,7 @@ fn agent_settings_writes_show_in_their_chat() {
     let p = settings_apply(Some(&id), &repo, &json!({"uiScale":110}));
     let reply = receive(&repo, &p).unwrap();
     assert_eq!(reply["settings"]["values"]["uiScale"], 110);
-    assert!(reply["settings"]["values"].get("quickActions").is_none());
+    assert_eq!(reply["settings"]["values"]["quickActions"], json!([]));
     let p = settings_apply(Some(&id), &repo, &json!({"editor":"code"}));
     assert!(receive(&repo, &p)
         .unwrap_err()

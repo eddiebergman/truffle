@@ -13,7 +13,7 @@ pub enum Caller<'a> {
     Agent { chat: &'a str },
 }
 impl Caller<'_> {
-    /// Only the user approves commands, hooks, credentials, access and trust settings.
+    /// Only the user approves new or changed executable command text.
     pub const fn settings_approval(self) -> Approval {
         match self {
             Caller::Browser => Approval::User,

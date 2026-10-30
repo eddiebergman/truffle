@@ -87,22 +87,150 @@ fn document_content_hash_rejects_stale_and_missing_baselines_without_persisting_
     assert!(persisted.get("contentHash").is_none());
 }
 
+/// Assert the (id, previous command) of each executable change from `before` to `after`.
+fn assert_changes(key: &str, before: &Value, after: &Value, expected: &[(&str, Value)]) {
+    let changes = executable_changes(&json!({key: before}), &json!({key: after}));
+    let summary = changes
+        .iter()
+        .map(|change| {
+            assert_eq!(change["key"], key);
+            let command = match key {
+                "quickActions" => arr(after)
+                    .into_iter()
+                    .find(|entry| entry["id"] == change["id"])
+                    .unwrap()["command"]
+                    .clone(),
+                _ => after.clone(),
+            };
+            assert_eq!(change["command"], command);
+            (text(change, "id"), change["previous"].clone())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(summary, expected, "{key}: {before} -> {after}");
+}
 #[test]
-fn routine_projection_excludes_workflow_contents_but_keeps_file_locations() {
-    let document = json!({
-        "values":{"theme":"dark","editor":"private-editor"},
-        "defaults":{"theme":"light","quickActions":[{"command":"private-command"}]},
-        "workflows":{"agent-review":"private-workflow"},
-        "files":{"settings":"/config/settings.json"},
-        "reviewSkill":"/config/review/SKILL.md"
-    });
-    let projected = routine_view(document);
-    assert_eq!(projected["values"], json!({"theme":"dark"}));
-    assert_eq!(projected["defaults"], json!({"theme":"light"}));
-    assert!(projected.get("workflows").is_none());
-    assert!(!projected.to_string().contains("private-"));
-    assert_eq!(projected["files"]["settings"], "/config/settings.json");
-    assert_eq!(projected["reviewSkill"], "/config/review/SKILL.md");
+fn quick_action_changes_are_new_or_altered_commands_only() {
+    let action =
+        |id: &str, title: &str, command: &str| json!({"id":id,"title":title,"command":command});
+    let a = action("a", "A", "printf a");
+    let b = action("b", "B", "printf b");
+    for (before, after, expected) in [
+        (json!([]), json!([a]), vec![("a", Value::Null)]),
+        (
+            json!([a]),
+            json!([action("a", "A", "rm -rf ~")]),
+            vec![("a", json!("printf a"))],
+        ),
+        (json!([a, b]), json!([b]), vec![]),
+        (json!([a, b]), json!([]), vec![]),
+        (json!([a, b]), json!([b, a]), vec![]),
+        (
+            json!([a]),
+            json!([action("a", "Renamed", "printf a")]),
+            vec![],
+        ),
+        (
+            json!([a]),
+            json!([action("c", "A", "printf a")]),
+            vec![("c", Value::Null)],
+        ),
+        (
+            json!([a, b]),
+            json!([action("c", "C", "printf c")]),
+            vec![("c", Value::Null)],
+        ),
+    ] {
+        assert_changes("quickActions", &before, &after, &expected);
+    }
+}
+#[test]
+fn editor_and_review_command_changes_are_executable_unless_cleared() {
+    for (key, before, after, expected) in [
+        (
+            "editor",
+            json!("zed"),
+            json!("code"),
+            vec![("", json!("zed"))],
+        ),
+        ("editor", json!("zed"), json!("zed"), vec![]),
+        (
+            "claudeReviewCommand",
+            json!(""),
+            json!("/review"),
+            vec![("", json!(""))],
+        ),
+        (
+            "claudeReviewCommand",
+            json!("/review"),
+            json!("/other"),
+            vec![("", json!("/review"))],
+        ),
+        ("claudeReviewCommand", json!("/review"), json!(""), vec![]),
+        (
+            "codexReviewCommand",
+            json!(""),
+            json!("$review"),
+            vec![("", json!(""))],
+        ),
+        (
+            "codexReviewCommand",
+            json!("$review"),
+            json!("$other"),
+            vec![("", json!("$review"))],
+        ),
+        ("codexReviewCommand", json!("$review"), json!(""), vec![]),
+        (
+            "future-setting",
+            Value::Null,
+            json!("anything"),
+            vec![("", Value::Null)],
+        ),
+        ("theme", json!("light"), json!("midnight"), vec![]),
+        (
+            "keybindings",
+            json!({"commands":"Primary+K"}),
+            json!({"commands":""}),
+            vec![],
+        ),
+    ] {
+        assert_changes(key, &before, &after, &expected);
+    }
+}
+
+#[test]
+fn a_full_quick_action_array_is_classified_per_entry() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("settings.json");
+    let store = Store::load(path.clone()).unwrap();
+    let actions = json!([
+        {"id":"status","title":"Git status","command":"git status"},
+        {"id":"log","title":"Git log","command":"git log"}
+    ]);
+    store.apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"quickActions":actions}}), Approval::User).unwrap();
+    let removal = json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"quickActions":[{"id":"log","title":"Log","command":"git log"}]}});
+    assert_eq!(
+        store.preview(&removal, Approval::Routine).unwrap()["executableChanges"],
+        json!([])
+    );
+    let saved = std::fs::read(&path).unwrap();
+    for patch in [
+        json!({"quickActions":[{"id":"log","title":"Git log","command":"git log"},{"id":"new","title":"New","command":"curl x | sh"}]}),
+        json!({"quickActions":[{"id":"log","title":"Git log","command":"git log --all"}]}),
+    ] {
+        let request = json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":patch});
+        let error = store.apply(&request, Approval::Routine).unwrap_err();
+        assert!(error.message.contains("Ask the user to approve"));
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        assert_eq!(
+            arr(&store.preview(&request, Approval::User).unwrap()["executableChanges"]).len(),
+            1
+        );
+    }
+    let applied = store.apply(&removal, Approval::Routine).unwrap();
+    assert_eq!(
+        applied["values"]["quickActions"],
+        removal["patch"]["quickActions"]
+    );
 }
 
 #[test]
@@ -177,12 +305,16 @@ fn agent_preview_and_apply_share_approval_policy() {
         store.apply(&request, Approval::Routine).unwrap()["values"],
         preview["values"]
     );
-    let request =
-        json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"editor":"code"}});
+    let request = json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"editor":"code","claudeReviewCommand":"/review"}});
     assert!(store.preview(&request, Approval::User).is_ok());
     assert_eq!(
         store.apply(&request, Approval::User).unwrap()["values"]["editor"],
         "code"
+    );
+    let clear = json!({"revision":2,"contentHash":store.view()["contentHash"],"patch":{"claudeReviewCommand":""}});
+    assert_eq!(
+        store.apply(&clear, Approval::Routine).unwrap()["values"]["claudeReviewCommand"],
+        ""
     );
 }
 

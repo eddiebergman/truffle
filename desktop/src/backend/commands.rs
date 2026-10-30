@@ -7,6 +7,7 @@ use super::{
 };
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Arc;
+const SETTINGS_PATCH: &str = "Changed settings only. An array value replaces the whole array: copy each entry to keep from settings.read. Each quick action is compared by id.";
 const SAVED_VIEW_FILTER_GRAMMAR: &str = r#"Filters are JSON objects with exactly the keys listed for their op; unknown keys/operators are rejected.
 Groups: {"op":"all","conditions":[FILTER,...]} means AND; {"op":"any","conditions":[FILTER,...]} means OR. Empty all matches all items; empty any matches no items.
 Scalar rules: {"op":"in","field":FIELD,"values":[STRING,...]} or op "notIn". FIELD is exactly "source", "kind", "status", "sourceStatus", or "scope". scope is the GitHub owner/repository, otherwise the project name. Values are case-sensitive strings.
@@ -342,9 +343,9 @@ fn chat_specifications() -> Vec<Operation> {
 fn settings_specifications() -> Vec<Operation> {
     vec![
         Operation {
-            run: |repo, _, caller| Ok(settings_view(caller, repo.settings.view())),
+            run: |repo, _, _| Ok(repo.settings.view()),
             name: "settings.read",
-            description: "Read routine settings and current revision",
+            description: "Read all settings, including quick-action, editor and review commands and the review workflow, with the current revision and contentHash",
             effect: Effect::Read,
             access: Access::Anyone, output: Output::Editable,
             args: json!({"type":"object","properties":{},"additionalProperties":false}),
@@ -390,20 +391,20 @@ fn settings_specifications() -> Vec<Operation> {
             args: json!({"type":"object","properties":{"page":{"type":"string","enum":["linear","github","sentry"]},"query":{"type":"string","maxLength":500},"offset":{"type":"integer","minimum":0,"maximum":4096},"snapshot":{"type":"string","maxLength":64,"pattern":"^[a-f0-9]{64}$"}},"required":["page"],"additionalProperties":false}),
         },
         Operation {
-            run: |repo, args, caller| Ok(settings_view(caller, repo.settings.preview(args, caller.settings_approval())?)),
+            run: |repo, args, caller| repo.settings.preview(args, caller.settings_approval()),
             name: "settings.preview",
-            description: "Validate routine preferences with current revision and contentHash from settings.read without saving. Use this to check a proposed change before settings.apply.",
+            description: "Validate a settings patch with the current revision and contentHash from settings.read without saving. Returns the resulting values and executableChanges, the command text that the patch adds or changes.",
             effect: Effect::Read,
             access: Access::Anyone, output: Output::Editable,
-            args: json!({"type":"object","properties":{"revision":{"type":"integer","minimum":0},"contentHash":{"type":"string","pattern":"^[a-f0-9]{64}$","maxLength":64},"patch":{"type":"object","description":"Routine settings only. Commands, editors and review workflows require user approval in Settings."}},"additionalProperties":false,"required":["revision","contentHash","patch"]}),
+            args: json!({"type":"object","properties":{"revision":{"type":"integer","minimum":0},"contentHash":{"type":"string","pattern":"^[a-f0-9]{64}$","maxLength":64},"patch":{"type":"object","description":SETTINGS_PATCH}},"additionalProperties":false,"required":["revision","contentHash","patch"]}),
         },
         Operation {
-            run: |repo, args, caller| Ok(settings_view(caller, repo.settings.apply(args, caller.settings_approval())?)),
+            run: |repo, args, caller| repo.settings.apply(args, caller.settings_approval()),
             name: "settings.apply",
-            description: "Apply routine preferences with exact revision and contentHash from settings.read",
+            description: "Apply a settings patch with the exact revision and contentHash from settings.read. Agents can change any setting and remove or retitle quick actions. Only the user can add or change executable command text.",
             effect: Effect::Write,
             access: Access::Anyone, output: Output::Editable,
-            args: json!({"type":"object","properties":{"revision":{"type":"integer","minimum":0},"contentHash":{"type":"string","pattern":"^[a-f0-9]{64}$","maxLength":64},"patch":{"type":"object","description":"Routine settings only. Executable commands and workflows require user approval in Settings."}},"additionalProperties":false,"required":["revision","contentHash","patch"]}),
+            args: json!({"type":"object","properties":{"revision":{"type":"integer","minimum":0},"contentHash":{"type":"string","pattern":"^[a-f0-9]{64}$","maxLength":64},"patch":{"type":"object","description":SETTINGS_PATCH}},"additionalProperties":false,"required":["revision","contentHash","patch"]}),
         },
         Operation {
             run: |repo, _, _| Ok(sharing_read(repo)),
@@ -811,12 +812,6 @@ fn diagnostics_logs(repo: &Repository, args: &Value) -> Result<Value> {
     Ok(
         json!({"path":path,"lines":rows,"newestFirst":true,"limit":limit,"maxReadBytes":MAX_LOG_SCAN_BYTES+1,"maxScanBytes":MAX_LOG_SCAN_BYTES,"scanTruncated":scan_truncated,"leadingRecordSkipped":leading_record_skipped}),
     )
-}
-fn settings_view(caller: Caller<'_>, document: Value) -> Value {
-    match caller.settings_approval() {
-        super::settings::Approval::User => document,
-        super::settings::Approval::Routine => super::settings::routine_view(document),
-    }
 }
 fn page_settings_read(repo: &Repository) -> Result<Value> {
     let current = super::page_settings::view(repo)?;

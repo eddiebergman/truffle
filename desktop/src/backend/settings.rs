@@ -3,7 +3,7 @@ use super::document::{Document, Format, Version};
 use super::{arr, json, now, text, Error, PathBuf, Result, Value};
 use std::{collections::BTreeSet, sync::Mutex};
 
-/// Who must approve a settings change.
+/// Who approves a settings change. An agent cannot add or change executable command text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Approval {
@@ -12,6 +12,7 @@ pub enum Approval {
 }
 
 // This policy is code-owned. Editable labels and field metadata cannot grant access.
+/// `User` for a setting whose value the app runs, or sends to an agent as a command.
 fn approval(key: &str) -> Approval {
     match key {
         "theme" | "uiScale" | "density" | "terminalFontSize" | "terminalScrollback"
@@ -21,14 +22,32 @@ fn approval(key: &str) -> Approval {
     }
 }
 
-pub fn routine_view(mut document: Value) -> Value {
-    document.as_object_mut().unwrap().remove("workflows");
-    for section in ["values", "defaults"] {
-        if let Some(values) = document[section].as_object_mut() {
-            values.retain(|key, _| approval(key) == Approval::Routine);
-        }
+/// The changes from `before` to `after` that add or alter executable command text. Removing,
+/// reordering or retitling a quick action, or clearing a review command, is not one.
+pub fn executable_changes(before: &Value, after: &Value) -> Vec<Value> {
+    after
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(key, value)| approval(key) == Approval::User && before[key.as_str()] != **value)
+        .flat_map(|(key, value)| executable_change(key, &before[key.as_str()], value))
+        .collect()
+}
+fn executable_change(key: &str, before: &Value, after: &Value) -> Vec<Value> {
+    match key {
+        "quickActions" => arr(after)
+            .into_iter()
+            .filter_map(|action| {
+                let previous = arr(before).into_iter().find(|old| old["id"] == action["id"]);
+                match previous {
+                    Some(old) if old["command"] == action["command"] => None,
+                    _ => Some(json!({"key":key,"id":action["id"],"title":action["title"],"command":action["command"],"previous":previous.map(|old| old["command"].clone())})),
+                }
+            })
+            .collect(),
+        "claudeReviewCommand" | "codexReviewCommand" if after == "" => vec![],
+        _ => vec![json!({"key":key,"command":after,"previous":before})],
     }
-    document
 }
 
 pub fn commands() -> Vec<Value> {
@@ -351,15 +370,14 @@ impl Store {
             .ok_or_else(|| Error::new("Supply a settings patch."))?;
         let mut values = doc["values"].clone();
         for (key, value) in patch {
-            if granted == Approval::Routine
-                && approval(key) == Approval::User
-                && values[key] != *value
-            {
-                return Err(Error::new("This changes executable commands or workflows. Ask the user to approve it in Settings."));
-            }
             values[key] = value.clone();
         }
         validate(&values)?;
+        if granted == Approval::Routine && !executable_changes(&doc["values"], &values).is_empty() {
+            return Err(Error::new(
+                "This adds or changes executable command text. Ask the user to approve it.",
+            ));
+        }
         // A saved theme whose file was removed stays valid until the user picks another one.
         if values["theme"] != doc["values"]["theme"]
             && values["theme"] != "system"
@@ -378,8 +396,9 @@ impl Store {
         let expected = Version::sent(p);
         let current = self.file.read_at(&expected)?.0;
         let values = self.proposed_values(&current, p, granted)?;
+        let changes = executable_changes(&current["values"], &values);
         Ok(
-            json!({"revision":expected.revision,"contentHash":expected.content_hash,"values":values}),
+            json!({"revision":expected.revision,"contentHash":expected.content_hash,"values":values,"executableChanges":changes}),
         )
     }
     /// Save a patch that `granted` may approve.

@@ -399,39 +399,74 @@ fn saved_view_navigation_uses_verified_registry_identity() {
     assert_eq!(commands.len(), 1);
 }
 #[test]
-fn settings_proposal_is_validated_without_mutation_or_private_setting_echo() {
+fn settings_proposal_returns_redacted_command_changes_without_saving() {
     let temp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        temp.path().join(".env"),
+        "TRUFFLE_TEST_SECRET=benign-private-command-sentinel",
+    )
+    .unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let current = repo.settings.view();
-    repo.settings.apply(&json!({"revision":current["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"private-current","title":"Private current","command":"printf benign-private-command-sentinel"}]}}),Approval::User).unwrap();
+    repo.settings.apply(&json!({"revision":current["revision"],"contentHash":current["contentHash"],"patch":{"quickActions":[{"id":"status","title":"Git status","command":"git status"}]}}),Approval::User).unwrap();
     let before = repo.settings.view();
     let state = repo.state.lock().unwrap().clone();
     let preferences = std::path::PathBuf::from(text(&before["files"], "preferences"));
     let saved = std::fs::read(&preferences).unwrap();
-    let request = json!({"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}});
+    let patch = json!({"quickActions":[{"id":"status","title":"Git status","command":"git status"},{"id":"deploy","title":"Deploy","command":"deploy --key benign-private-command-sentinel"}]});
+    let request =
+        json!({"revision":before["revision"],"contentHash":before["contentHash"],"patch":patch});
     let mut queued = vec![];
     let result = tool(&repo, "settings-propose", &request, &mut queued).unwrap();
     assert_eq!(result["applied"], false);
     assert_eq!(result["userApprovalRequired"], true);
-    assert_eq!(result["proposedFields"], json!(["editor"]));
-    assert_eq!(queued,json!([{"type":"settings-proposal","revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}}]).as_array().unwrap().clone());
-    for forbidden in [
-        "benign-private-command-sentinel",
-        "private-current",
-        "quickActions",
-        "queued",
-        "values",
-    ] {
-        assert!(!result.to_string().contains(forbidden));
-    }
+    assert_eq!(
+        result["executableChanges"],
+        json!([{"key":"quickActions","id":"deploy","title":"Deploy","command":"deploy --key [redacted]","previous":null}])
+    );
+    assert_eq!(queued,json!([{"type":"settings-proposal","revision":before["revision"],"contentHash":before["contentHash"],"patch":patch}]).as_array().unwrap().clone());
     assert_eq!(repo.settings.view()["values"], before["values"]);
     assert_eq!(repo.settings.view()["revision"], before["revision"]);
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&preferences).unwrap(), saved);
+    let removal = json!({"revision":before["revision"],"contentHash":before["contentHash"],"patch":{"quickActions":[]}});
+    let mut commands = vec![];
+    assert!(tool(&repo, "settings-propose", &removal, &mut commands)
+        .unwrap_err()
+        .message
+        .contains("Apply it with settings-apply"));
+    assert_eq!(commands, [] as [serde_json::Value; 0]);
+}
+#[test]
+fn app_chat_removes_a_quick_action_directly_and_keeps_the_others() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = Repository::open(temp.path().into(), None, true).unwrap();
+    let current = repo.settings.view();
+    repo.settings.apply(&json!({"revision":current["revision"],"contentHash":current["contentHash"],"patch":{"quickActions":[{"id":"status","title":"Git status","command":"git status"},{"id":"log","title":"Git log","command":"git log"}]}}),Approval::User).unwrap();
     let mut calls = 0;
-    let (_,commands)=run(&repo,&json!({}),|prompt| {calls+=1;if calls==1 {Ok(json!({"tool":"settings-propose","args":request}).to_string())}else {assert!(!prompt.contains("benign-private-command-sentinel"));assert!(!prompt.contains("private-current"));Ok(json!({"reply":"Review the proposed editor change in Settings. Nothing was applied."}).to_string())}}).unwrap();
-    assert_eq!(commands.len(), 1);
-    assert_eq!(repo.settings.view()["revision"], before["revision"]);
+    let (_, commands) = run(&repo, &json!({}), |prompt| {
+        calls += 1;
+        Ok(match calls {
+            1 => json!({"tool":"settings-read","args":{}}),
+            2 => {
+                let steps: Value = serde_json::from_str::<Value>(prompt).unwrap()["steps"].clone();
+                let read = &steps[0]["result"];
+                let kept = arr(&read["values"]["quickActions"])
+                    .into_iter()
+                    .filter(|action| action["command"] != "git status")
+                    .collect::<Vec<_>>();
+                json!({"tool":"settings-apply","args":{"revision":read["revision"],"contentHash":read["contentHash"],"patch":{"quickActions":kept}}})
+            }
+            _ => json!({"reply":"Removed the git status quick action."}),
+        }
+        .to_string())
+    })
+    .unwrap();
+    assert_eq!(commands, [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.settings.values()["quickActions"],
+        json!([{"id":"log","title":"Git log","command":"git log"}])
+    );
 }
 #[test]
 fn settings_proposal_rejects_bad_schema_stale_requests_and_queue_overflow() {
@@ -463,10 +498,10 @@ fn settings_proposal_rejects_bad_schema_stale_requests_and_queue_overflow() {
     assert_eq!(repo.settings.view()["revision"], before["revision"]);
 }
 #[test]
-fn both_settings_read_tools_omit_custom_workflow_content() {
+fn both_settings_read_tools_include_the_review_workflow() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let marker = "benign-private-workflow-marker";
+    let marker = "benign-workflow-marker";
     std::fs::write(
         repo.settings
             .config_directory()
@@ -474,7 +509,6 @@ fn both_settings_read_tools_omit_custom_workflow_content() {
         format!("Custom review instructions {marker}"),
     )
     .unwrap();
-    assert!(repo.settings.view().to_string().contains(marker));
     let mut commands = vec![];
     let alias = tool(&repo, "settings-read", &json!({}), &mut commands).unwrap();
     let generic = tool(
@@ -484,8 +518,8 @@ fn both_settings_read_tools_omit_custom_workflow_content() {
         &mut commands,
     )
     .unwrap();
-    assert!(!alias.to_string().contains(marker));
-    assert!(!generic.to_string().contains(marker));
+    assert!(alias["workflows"].to_string().contains(marker));
+    assert_eq!(alias, generic);
     assert_eq!(commands, [] as [serde_json::Value; 0]);
 }
 
@@ -560,22 +594,6 @@ fn model_finishes_with_the_pending_proposal_after_rejected_navigation() {
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0]["type"], "settings-proposal");
     assert_eq!(repo.settings.view()["revision"], revision);
-}
-
-#[test]
-fn settings_proposal_queues_requested_array_replacement_only() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let revision = repo.settings.view()["revision"].clone();
-    let patch = json!({"quickActions":[{"id":"new-action","title":"New action","command":"printf fixture"}]});
-    let mut commands = vec![];
-    let result=tool(&repo,"settings-propose",&json!({"revision":revision,"contentHash":repo.settings.view()["contentHash"],"patch":patch}),&mut commands).unwrap();
-    assert_eq!(commands[0]["patch"], patch);
-    assert!(result["note"]
-        .as_str()
-        .unwrap()
-        .contains("replace complete arrays"));
-    assert_eq!(repo.settings.view()["values"]["quickActions"], json!([]));
 }
 
 #[test]
@@ -1118,10 +1136,9 @@ fn typed_tools_find_work_navigate_and_gate_settings() {
             &mut commands
         )
         .is_err());
-    assert!(
-        tool(&repo, "settings-read", &json!({}), &mut commands).unwrap()["values"]
-            .get("quickActions")
-            .is_none()
+    assert_eq!(
+        tool(&repo, "settings-read", &json!({}), &mut commands).unwrap()["values"]["quickActions"],
+        json!([])
     );
     let responses = [
         json!({"tool":"query","args":{"query":"latency"}}),
@@ -1365,7 +1382,7 @@ fn tool_errors_are_returned_to_the_model_without_mutating_settings() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let mut call = 0;
-    let result=run(&repo,&json!({}),|prompt|{call+=1;if call==1{Ok(json!({"tool":"settings-apply","args":{"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"no","title":"No","command":"echo no"}]}}}).to_string())}else{assert!(prompt.contains("Ask the user to approve it in Settings"));Ok(json!({"reply":"Approve executable actions in Settings."}).to_string())}}).unwrap();
+    let result=run(&repo,&json!({}),|prompt|{call+=1;if call==1{Ok(json!({"tool":"settings-apply","args":{"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"no","title":"No","command":"echo no"}]}}}).to_string())}else{assert!(prompt.contains("Ask the user to approve it"));Ok(json!({"reply":"Adding a command needs your approval."}).to_string())}}).unwrap();
     assert_eq!(result.1, [] as [serde_json::Value; 0]);
     assert_eq!(repo.settings.view()["revision"], 0);
 }

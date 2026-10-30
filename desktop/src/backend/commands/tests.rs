@@ -2755,22 +2755,32 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
 }
 
 #[test]
-fn settings_preview_is_read_only_and_all_agent_results_keep_the_routine_projection() {
+fn agent_settings_results_show_commands_with_credentials_redacted() {
     let temp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        temp.path().join(".env"),
+        "TRUFFLE_TEST_SECRET=benign-private-command-sentinel",
+    )
+    .unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf private-command"}]}}),Approval::User).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"deploy --key benign-private-command-sentinel"}]}}),Approval::User).unwrap();
     let before = repo.settings.view();
     let result = invoke(&repo, &json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}), Caller::Assistant).unwrap();
     assert_eq!(result["values"]["density"], "comfortable");
-    assert!(result["values"].get("quickActions").is_none());
+    assert_eq!(result["executableChanges"], json!([]));
     assert_eq!(repo.settings.view()["values"], before["values"]);
     assert_eq!(repo.settings.view()["revision"], before["revision"]);
     assert!(invoke(&repo,&json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}}}),Caller::Assistant).is_err());
     for result in [invoke(&repo,&json!({"name":"settings.read"}),Caller::Assistant).unwrap(),invoke(&repo,&json!({"name":"settings.apply","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}),Caller::Assistant).unwrap()] {
-            assert!(result["values"].get("quickActions").is_none());
-            assert!(result["defaults"].get("editor").is_none());
-            assert_eq!(result["approval"]["editor"], "user");
-        }
+        assert_eq!(result["values"]["quickActions"][0]["command"], "deploy --key [redacted]");
+        assert_eq!(result["defaults"]["editor"], "zed");
+        assert_eq!(result["approval"]["editor"], "user");
+    }
+    let exact = invoke(&repo, &json!({"name":"settings.read"}), Caller::Browser).unwrap();
+    assert_eq!(
+        exact["values"]["quickActions"][0]["command"],
+        "deploy --key benign-private-command-sentinel"
+    );
 }
 
 #[test]
