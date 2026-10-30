@@ -91,6 +91,7 @@ await copyFile(
 );
 await build({
   entryPoints: [`${root}frontend/diff-viewer.js`],
+  absWorkingDir: root,
   outdir: `${root}../static/vendor/diffs`,
   entryNames: "diff-viewer",
   chunkNames: "chunk-[hash]",
