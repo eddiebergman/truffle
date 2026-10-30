@@ -119,6 +119,7 @@ let quickStarting = false;
 $("#quick-agent").value = ["claude", "codex"].includes(prefs.agent)
   ? prefs.agent
   : "claude";
+registerPersistedPrefs(() => ({ agent: $("#quick-agent").value }));
 function updateQuickAgent() {
   const agent = agentName($("#quick-agent").value);
   $("#new-note").setAttribute("aria-label", `Start ${agent} session`);

@@ -1,5 +1,6 @@
 "use strict";
 let gitDiffSelections = prefs.gitDiffSelections || {};
+registerPersistedPrefs(() => ({ gitDiffSelections }));
 function gitDiffDirectories(record) {
   const paths = new Map();
   if (record.cwd) {

@@ -9,6 +9,7 @@ let sentryFilters =
     ? prefs.sentryFilters
     : {};
 let sentryView = typeof prefs.sentryView === "string" ? prefs.sentryView : "";
+registerPersistedPrefs(() => ({ sentryFilters, sentryView }));
 function buildBundleIndex(items = allItems()) {
   bundleIndex = new Map();
   bundleCatalog = new Map();

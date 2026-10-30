@@ -142,46 +142,28 @@ for (const select of [$("#note-status"), $("#item-status")]) {
     select.add(new Option(text, value));
   }
 }
+const persistedPrefs = [];
+// Each script registers a reader for the browser preferences that it owns.
+function registerPersistedPrefs(read) {
+  persistedPrefs.push(read);
+}
+registerPersistedPrefs(() => ({
+  agentWorkspaceVersion: 1,
+  source,
+  githubView,
+  status: statusFilter.value,
+  group: $("#group-by").value,
+  groups: groupingPrefs,
+  scopes: scopePrefs,
+  launchFolders: folderPrefs,
+}));
 function persist() {
   try {
     localStorage.setItem(
       "truffle-view",
-      JSON.stringify({
-        leftSidebarCollapsed:
-          typeof leftSidebarCollapsed === "undefined"
-            ? false
-            : leftSidebarCollapsed,
-        agentContextCollapseVersion: 1,
-        agentSidebarCollapsed:
-          typeof agentSidebarCollapsed === "undefined"
-            ? true
-            : agentSidebarCollapsed,
-        contextSectionsCollapsed:
-          typeof contextSectionsCollapsed === "undefined"
-            ? {}
-            : contextSectionsCollapsed,
-        linkedWorkCollapsed:
-          typeof linkedWorkCollapsed !== "undefined" && linkedWorkCollapsed,
-        snoozedAgentTabs:
-          typeof snoozedAgentTabs === "undefined" ? {} : snoozedAgentTabs,
-        gitDiffSelections:
-          typeof gitDiffSelections === "undefined" ? {} : gitDiffSelections,
-        agentWorkspaceVersion: 1,
-        closedAgentTabs:
-          typeof closedAgentTabs === "undefined" ? [] : closedAgentTabs,
-        selectedAgentKey:
-          typeof selectedAgentKey === "undefined" ? "" : selectedAgentKey,
-        source,
-        githubView,
-        status: statusFilter.value,
-        group: $("#group-by").value,
-        agent: $("#quick-agent").value,
-        groups: groupingPrefs,
-        scopes: scopePrefs,
-        launchFolders: folderPrefs,
-        sentryFilters,
-        sentryView,
-      }),
+      JSON.stringify(
+        Object.assign({}, ...persistedPrefs.map((read) => read())),
+      ),
     );
   } catch {
     /* The server still stores all work. */

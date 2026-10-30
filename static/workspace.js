@@ -32,6 +32,16 @@ let snoozedAgentTabs = Object.fromEntries(
     ([key, value]) => key && value && Number.isFinite(value.at),
   ),
 );
+registerPersistedPrefs(() => ({
+  selectedAgentKey,
+  leftSidebarCollapsed,
+  agentContextCollapseVersion: 1,
+  agentSidebarCollapsed,
+  linkedWorkCollapsed,
+  contextSectionsCollapsed,
+  closedAgentTabs,
+  snoozedAgentTabs,
+}));
 const terminalViews = new Map();
 let agentRename = null;
 const terminalPool = el("div", "terminal-pool");
