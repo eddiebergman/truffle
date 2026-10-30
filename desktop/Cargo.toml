@@ -12,7 +12,9 @@ context-kit = { path = "../../context-kit/crates/context-kit" }
 base64 = "0.22"
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 chrono-tz = "0.10.4"
-tauri = { version = "2", features = [] }
+# The default features without `compression`, which adds four brotli crates to
+# shrink the embedded frontend.
+tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-dialog = "2"
