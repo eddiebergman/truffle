@@ -279,7 +279,7 @@ test("Escape dismisses guidance before Review and honors Review cancellation bef
     },
     document: { querySelectorAll: () => [dialog] },
   });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   const event = () => ({
     key: "Escape",
     target: { closest: () => dialog },

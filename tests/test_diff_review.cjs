@@ -18,6 +18,7 @@ function reviewContext(globals, files = []) {
   const c = browserContext(rest);
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     ...files,
     "static/diff-review.js",

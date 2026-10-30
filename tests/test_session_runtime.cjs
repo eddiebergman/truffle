@@ -5,7 +5,12 @@ const uuid = "10000000-0000-7000-8000-000000000001",
   otherUUID = "20000000-0000-4000-8000-000000000002";
 function runtime(candidates, session) {
   const c = browserContext({ inventory: { candidates } });
-  loadScripts(c, ["static/client.js", "static/app.js", "static/sessions.js"]);
+  loadScripts(c, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+    "static/sessions.js",
+  ]);
   return JSON.parse(
     JSON.stringify(
       c.sessionRuntime({

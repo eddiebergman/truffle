@@ -180,6 +180,7 @@ test("settings and visibility loaders discard delayed background responses after
     });
     loadScripts(c, [
       "static/client.js",
+      "static/documents.js",
       "static/app.js",
       "static/features.js",
       `static/${file}`,

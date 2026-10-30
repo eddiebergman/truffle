@@ -484,6 +484,7 @@ function reviewFixture(options) {
       ...options,
       scripts: [
         "static/client.js",
+        "static/documents.js",
         "static/app.js",
         "static/session-dispatch.js",
         "static/diff-review.js",
@@ -578,6 +579,7 @@ function ciFixture(options) {
     ...options,
     scripts: [
       "static/client.js",
+      "static/documents.js",
       "static/app.js",
       "static/sessions.js",
       "static/session-dispatch.js",

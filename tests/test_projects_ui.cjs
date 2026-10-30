@@ -270,17 +270,21 @@ function fixture({ handler } = {}) {
     },
   });
   // Load-time code fills the status select with options, which this fake does not model, so its handler is copied over.
-  const host = loadScripts(c, ["static/client.js", "static/app.js"], {
-    elements: Object.fromEntries(
-      [
-        "#note-form",
-        "#note-dialog",
-        "#item-dialog",
-        "#delete-note",
-        "#reset-status",
-      ].map((id) => [id, $(id)]),
-    ),
-  });
+  const host = loadScripts(
+    c,
+    ["static/client.js", "static/documents.js", "static/app.js"],
+    {
+      elements: Object.fromEntries(
+        [
+          "#note-form",
+          "#note-dialog",
+          "#item-dialog",
+          "#delete-note",
+          "#reset-status",
+        ].map((id) => [id, $(id)]),
+      ),
+    },
+  );
   itemStatus.onchange = host.document.querySelector("#item-status").onchange;
   return {
     c,

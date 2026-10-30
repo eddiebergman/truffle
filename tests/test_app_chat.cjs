@@ -1209,6 +1209,7 @@ test("named render hook refreshes App chat visible context on results, saved cha
   });
   const host = loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/app-chat.js",
     "static/chat-results.js",

@@ -97,6 +97,7 @@ function fixture() {
     c,
     [
       "static/client.js",
+      "static/documents.js",
       "static/app.js",
       "static/sessions.js",
       "static/workspace.js",

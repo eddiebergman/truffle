@@ -8,6 +8,7 @@ function helpers(globals = {}, options) {
     ctx,
     [
       "static/client.js",
+      "static/documents.js",
       "static/app.js",
       "static/sessions.js",
       "static/newsletters.js",

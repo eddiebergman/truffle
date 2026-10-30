@@ -1,7 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
-const appScripts = ["static/client.js", "static/app.js"];
+const appScripts = ["static/client.js", "static/documents.js", "static/app.js"];
 const featureScripts = [
   ...appScripts,
   "static/sessions.js",

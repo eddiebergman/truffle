@@ -302,6 +302,7 @@ test("CI badge accessible text includes paused cache status both at creation and
   c.state.sources.github = { disabled: true };
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/sessions.js",
     "static/workspace.js",

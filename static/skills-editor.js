@@ -216,7 +216,7 @@ async function saveSkillEditor(current, name, args) {
       }
     } catch (error) {
       current.rejectedStatus = error.status;
-      if (![400, 401, 403, 404, 409].includes(error.status)) {
+      if (writeFailureKind(error) === "unknown") {
         invalidateLibrary();
       }
       throw error;

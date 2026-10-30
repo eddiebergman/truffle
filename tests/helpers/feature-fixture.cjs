@@ -438,16 +438,25 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
     },
   });
   // Load-time lookups use the fixture document, so the scripts wire the fixture nodes.
-  loadScripts(c, ["static/client.js", "static/app.js", "static/features.js"], {
-    keepHost: [
-      "document",
-      "Event",
-      "MutationObserver",
-      "Option",
-      "navigator",
-      "localStorage",
+  loadScripts(
+    c,
+    [
+      "static/client.js",
+      "static/documents.js",
+      "static/app.js",
+      "static/features.js",
     ],
-  });
+    {
+      keepHost: [
+        "document",
+        "Event",
+        "MutationObserver",
+        "Option",
+        "navigator",
+        "localStorage",
+      ],
+    },
+  );
   // Stubbed after load, so tests of the real opener can restore it.
   const actual = { openItem: c.openItem };
   c.openItem = (item) => opened.push({ item: item.id });

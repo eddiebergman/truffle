@@ -246,6 +246,7 @@ function reviewPanelFixture() {
     });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/github-actions.js",
   ]);
@@ -598,7 +599,7 @@ test("review acknowledgement ignores its old response snapshot and commits only 
     },
     render: () => renders++,
   });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   loadScripts(c, "static/github-actions.js", { keepHost: ["document"] });
   hook["github:review-attention"]();
   assert.equal(requests[0].path, "/api/github/reviews/seen");

@@ -519,9 +519,7 @@ async function openThemeChooser() {
       current.result = { kind: "accepted" };
     } catch (error) {
       current.result = {
-        kind: [400, 401, 403, 404, 409].includes(error.status)
-          ? "rejected"
-          : "unknown",
+        kind: writeFailureKind(error) === "unknown" ? "unknown" : "rejected",
         conflict: error.status === 409,
         error: error.message,
       };

@@ -49,7 +49,12 @@ function fixture(entries) {
       },
       toast() {},
     });
-  loadScripts(c, ["static/client.js", "static/app.js", "static/features.js"]);
+  loadScripts(c, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+    "static/features.js",
+  ]);
   return { c, list: new Node("list"), controls: new Node("controls"), copied };
 }
 function descendants(node) {

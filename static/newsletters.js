@@ -569,7 +569,7 @@ $("#artifact-form").onsubmit = async (event) => {
       libraryFetched = 0;
     } catch (error) {
       current.rejectedStatus = error.status;
-      if (![400, 401, 403, 404, 409].includes(error.status)) {
+      if (writeFailureKind(error) === "unknown") {
         libraryGeneration++;
         libraryFetched = 0;
       }

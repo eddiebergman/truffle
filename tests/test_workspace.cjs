@@ -5,6 +5,7 @@ const fs = require("node:fs"),
 const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
 const workspaceScripts = [
   "static/client.js",
+  "static/documents.js",
   "static/app.js",
   "static/sessions.js",
   "static/features.js",

@@ -1008,7 +1008,7 @@ async function prepareSavedChat(
       });
     } catch (error) {
       invalidateSnapshot();
-      if ([400, 401, 403, 404, 409].includes(error.status)) {
+      if (writeFailureKind(error) !== "unknown") {
         chatPreparations.delete(target);
         persistChatPreparations();
         ui.result = { kind: "rejected", error: error.message };

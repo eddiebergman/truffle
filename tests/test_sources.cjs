@@ -27,7 +27,9 @@ function fixture() {
     },
     toast: (message) => messages.push(message),
   });
-  loadScripts(c, ["static/client.js", "static/app.js"], { elements: buttons });
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"], {
+    elements: buttons,
+  });
   return { c, buttons, calls, messages, resolve: (receipt) => finish(receipt) };
 }
 test("both source refresh buttons use the named owner and wait for its receipt before reloading state", async () => {

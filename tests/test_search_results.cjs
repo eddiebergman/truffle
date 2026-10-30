@@ -22,7 +22,7 @@ function fixture(items = []) {
       return item;
     },
   });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   loadScripts(c, "static/chat-results.js");
   return {
     c,

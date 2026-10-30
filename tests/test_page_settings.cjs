@@ -217,6 +217,7 @@ function dialogFixture({ fail = false } = {}) {
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/features.js",
     "static/page-settings.js",

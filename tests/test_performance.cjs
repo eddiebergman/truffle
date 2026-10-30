@@ -53,7 +53,11 @@ function fixture() {
     }),
     featureButton: (title, fn) => ({ title, fn }),
   });
-  loadScripts(context, ["static/client.js", "static/app.js"]);
+  loadScripts(context, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+  ]);
   loadWrapping(context, "static/performance.js");
   return {
     context,

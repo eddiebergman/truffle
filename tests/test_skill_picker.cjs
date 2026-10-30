@@ -4,6 +4,7 @@ const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
 // Scripts the picker needs, in index.html order.
 const pickerDependencies = [
   "static/client.js",
+  "static/documents.js",
   "static/app.js",
   "static/features.js",
   "static/skills-editor.js",

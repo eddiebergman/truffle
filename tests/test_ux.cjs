@@ -7,7 +7,12 @@ const {
   } = require("./helpers/static-script.cjs"),
   { FakeDocument, FakeElement } = require("./helpers/fake-dom.cjs");
 const load = (c, file) => {
-  loadScripts(c, ["static/client.js", "static/app.js", file]);
+  loadScripts(c, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+    file,
+  ]);
   return c;
 };
 test("file trees group directories without losing duplicate filenames or Git paths", () => {
@@ -310,6 +315,7 @@ test("artifact detach and Undo refresh the actual library used by the result pro
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/sessions.js",
     "static/features.js",

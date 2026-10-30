@@ -266,7 +266,12 @@ function fixture() {
     c.inventory = next;
     return next;
   };
-  loadScripts(c, ["static/client.js", "static/app.js", "static/sessions.js"]);
+  loadScripts(c, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+    "static/sessions.js",
+  ]);
   loadScripts(c, "static/sharing.js", {
     keepHost: [
       "document",

@@ -20,7 +20,7 @@ function fixture(handler) {
         return handler(path, payload, c);
       },
     });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   return { c, calls };
 }
 test("accepted POST body never commits and post-write read is the authoritative snapshot", async () => {
@@ -194,7 +194,7 @@ function visibilityFixture() {
       throw Error("Unsafe item read");
     },
   });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   return { c, $, document, Node };
 }
 test("actual visibility Undo and toast wrapper retain every non-ready warning and never infer success from an object", async () => {

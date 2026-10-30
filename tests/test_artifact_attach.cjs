@@ -91,6 +91,7 @@ function fixture({ command, library } = {}) {
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/sessions.js",
     "static/newsletters.js",

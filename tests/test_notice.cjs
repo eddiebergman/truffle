@@ -81,6 +81,7 @@ function fixture() {
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/page-settings.js",
   ]);

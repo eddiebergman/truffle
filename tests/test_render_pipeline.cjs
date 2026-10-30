@@ -11,7 +11,7 @@ function fixture() {
         return 42;
       },
     });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   return { c, events };
 }
 test("named render hooks run in explicit order regardless of registration order", () => {
@@ -126,6 +126,7 @@ test("workspace owner routes each page while shared controls and gear always ref
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/sessions.js",
     "static/workspace.js",

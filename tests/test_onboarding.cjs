@@ -15,6 +15,7 @@ function installSkillEditorInitializer(c) {
   c.refreshSkillEditor = () => {};
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/features.js",
     "static/skills-editor.js",
@@ -281,6 +282,7 @@ function profileFixture({
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/features.js",
     "static/settings.js",

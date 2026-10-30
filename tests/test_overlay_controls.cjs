@@ -82,6 +82,7 @@ function fixture() {
     c,
     [
       "static/client.js",
+      "static/documents.js",
       "static/app.js",
       "static/features.js",
       "static/views.js",
@@ -333,6 +334,7 @@ function themeFixture() {
   });
   loadScripts(c, [
     "static/client.js",
+    "static/documents.js",
     "static/app.js",
     "static/features.js",
     "static/settings.js",

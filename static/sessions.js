@@ -1213,7 +1213,7 @@ async function openSavedSession(
           throw new Error("The open response could not be confirmed.");
         }
       } catch (error) {
-        if ([400, 401, 403, 404, 409].includes(error.status)) {
+        if (writeFailureKind(error) !== "unknown") {
           return rejectOpen(error);
         }
         entry.receipt = {

@@ -36,7 +36,7 @@ function dispatch(listeners, event) {
 }
 function fuzzy() {
   const c = browserContext({});
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   return c.fuzzyScore;
 }
 test("fuzzy search accepts abbreviations and ranks contiguous words above scattered matches", () => {
@@ -204,7 +204,7 @@ test("Command-R renames only from an agent chat and preserves the shifted reload
 
 test("Escape closes an open dialog before search controls or terminals consume it", () => {
   const c = browserContext({ Event, document: { querySelectorAll: () => [] } });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   let closed = 0,
     prevented = 0,
     stopped = 0;
@@ -306,7 +306,7 @@ test("Escape dismisses a dialog child layer before closing the dialog itself", (
     Event,
     document: { querySelectorAll: () => [dialog], addEventListener() {} },
   });
-  loadScripts(c, ["static/client.js", "static/app.js"]);
+  loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
   const event = {
     key: "Escape",
     target: { closest: () => dialog },

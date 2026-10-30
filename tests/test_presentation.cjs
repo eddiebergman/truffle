@@ -161,7 +161,7 @@ function loadMore(f, files, { drop = [] } = {}) {
   }
   return loadScripts(f.c, files);
 }
-const appFiles = ["static/client.js", "static/app.js"],
+const appFiles = ["static/client.js", "static/documents.js", "static/app.js"],
   appStubs = ["$", "statusFilter"];
 // Load the whole App chat panel. It paints into tolerant fake elements, since the fixture
 // nodes lack the DOM methods it uses, and its load-time update reads the app.js page globals.

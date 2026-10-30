@@ -61,7 +61,12 @@ function fixture() {
       throw Error("Preview must never mutate.");
     },
   });
-  loadScripts(c, ["static/client.js", "static/app.js", "static/sessions.js"]);
+  loadScripts(c, [
+    "static/client.js",
+    "static/documents.js",
+    "static/app.js",
+    "static/sessions.js",
+  ]);
   const open = (item) => {
     c.currentItem = item;
     c.renderItemSessions(item);

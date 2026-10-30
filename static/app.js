@@ -302,9 +302,7 @@ async function presentLocalWrite(write) {
   try {
     await write();
   } catch (error) {
-    const kind = [400, 401, 403, 404, 409].includes(error.status)
-      ? "rejected"
-      : "unknown";
+    const kind = writeFailureKind(error) === "unknown" ? "unknown" : "rejected";
     if (kind === "unknown") {
       invalidateSnapshot();
     }
@@ -1895,7 +1893,7 @@ function disposeProjectStatusAction() {
   dialog.setAttribute("aria-busy", "false");
 }
 function projectUnknown(error) {
-  return ![400, 401, 403, 404, 409].includes(error.status);
+  return writeFailureKind(error) === "unknown";
 }
 function inspectProjects(dialog, isCurrent) {
   if (!isCurrent()) {

@@ -7,6 +7,7 @@ const {
 } = require("./helpers/static-script.cjs");
 const scripts = [
   "static/client.js",
+  "static/documents.js",
   "static/app.js",
   "static/sessions.js",
   "static/features.js",
