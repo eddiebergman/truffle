@@ -205,7 +205,8 @@ function paletteFixture({
       );
     }
     addEventListener(name, handler) {
-      (this.listeners[name] ??= []).push(handler);
+      this.listeners[name] ??= [];
+      this.listeners[name].push(handler);
     }
     dispatchEvent(event) {
       for (const handler of this.listeners[event.type] || []) {

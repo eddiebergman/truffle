@@ -20,10 +20,10 @@ const npmLocked = (path) =>
     .filter(([, entry]) =>
       entry.resolved?.startsWith("https://registry.npmjs.org/"),
     )
-    .map(([key, entry]) => ({
+    .map(([location, entry]) => ({
       registry: "npm",
-      name: key.slice(
-        key.lastIndexOf("node_modules/") + "node_modules/".length,
+      name: location.slice(
+        location.lastIndexOf("node_modules/") + "node_modules/".length,
       ),
       version: entry.version,
     }));

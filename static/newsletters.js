@@ -627,8 +627,10 @@ async function viewArtifact(artifact) {
     artifact.format,
   );
   let textPromise = null;
-  const raw = () =>
-    textPromise || (textPromise = serviceClient.readArtifact(artifact.id));
+  const raw = () => {
+    textPromise ??= serviceClient.readArtifact(artifact.id);
+    return textPromise;
+  };
   if (isText) {
     const table = ["csv", "json"].includes(artifact.format);
     if (table) {

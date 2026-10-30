@@ -154,7 +154,8 @@ function fixture({ api, embedded = true, empty = false } = {}) {
       new Node(),
     );
   };
-  const body = (document.body = new Node("body"));
+  const body = new Node("body");
+  document.body = body;
   document.activeElement = body;
   document.querySelector = (selector) => body.querySelector(selector);
   const pool = adopt(c.terminalPool);

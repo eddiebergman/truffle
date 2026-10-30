@@ -61,7 +61,8 @@ function fixture({ prefs = {}, responses = [] } = {}) {
       this.children.push(option);
     }
     addEventListener(type, callback) {
-      (this.listeners[type] ??= []).push(callback);
+      this.listeners[type] ??= [];
+      this.listeners[type].push(callback);
     }
     dispatchEvent(event) {
       for (const callback of this.listeners[event.type] || []) {
@@ -520,7 +521,7 @@ test("integrated selector counts the same lifecycle, predicates, scope and visib
   f.setDoc();
   replaceContents(f.c.scopePrefs, { github: "owner/repo" });
   f.c.matchesSentry = () => true;
-  f.c.scopeKey = (item) => item.project;
+  f.c.scopeKey = (work) => work.project;
   f.c.source = "github";
   f.c.activateSavedView("github-mine");
   f.c.setSavedViewScope("owner/repo");

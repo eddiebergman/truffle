@@ -197,7 +197,8 @@ function installedPickerFixture(catalog, { load } = {}) {
       this.attrs[key] = value;
     }
     addEventListener(name, handler) {
-      (this.listeners[name] ??= []).push(handler);
+      this.listeners[name] ??= [];
+      this.listeners[name].push(handler);
     }
     dispatch(name) {
       for (const handler of this.listeners[name] || []) {

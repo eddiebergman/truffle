@@ -131,7 +131,8 @@ function fixture({ handler } = {}) {
       return this.querySelectorAll(selector)[0] || null;
     }
     addEventListener(name, fn) {
-      (this.events[name] ??= []).push(fn);
+      this.events[name] ??= [];
+      this.events[name].push(fn);
     }
     dispatchEvent(event) {
       for (const fn of this.events[event.type] || []) {
@@ -157,14 +158,14 @@ function fixture({ handler } = {}) {
   }
   const document = { body: new Node("body"), activeElement: null };
   const ids = new Map();
-  const node = (id, tag = "div", cls = "") => {
+  const addNode = (id, tag = "div", cls = "") => {
     const value = new Node(tag, cls);
     value.id = id.slice(1);
     ids.set(id, value);
     return value;
   };
-  const note = node("#note-dialog", "dialog"),
-    form = node("#note-form", "form"),
+  const note = addNode("#note-dialog", "dialog"),
+    form = addNode("#note-form", "form"),
     actions = new Node("div", "dialog-actions");
   note.append(form);
   form.elements = {};
@@ -184,23 +185,23 @@ function fixture({ handler } = {}) {
       input.value = input.name === "status" ? "todo" : "";
     }
   };
-  const remove = node("#delete-note", "button"),
+  const remove = addNode("#delete-note", "button"),
     cancel = new Node("button", "close-dialog"),
     save = new Node("button");
   save.type = "submit";
   actions.append(remove, cancel, save);
   form.append(actions);
-  node("#note-dialog-title");
-  const itemDialog = node("#item-dialog", "dialog"),
-    itemStatus = node("#item-status", "select"),
-    complete = node("#complete-project", "button"),
-    edit = node("#edit-project", "button"),
-    archive = node("#archive-project", "button"),
+  addNode("#note-dialog-title");
+  const itemDialog = addNode("#item-dialog", "dialog"),
+    itemStatus = addNode("#item-status", "select"),
+    complete = addNode("#complete-project", "button"),
+    edit = addNode("#edit-project", "button"),
+    archive = addNode("#archive-project", "button"),
     itemClose = new Node("button", "close-dialog");
   itemDialog.append(itemStatus, complete, edit, archive, itemClose);
   const $ = (selector) => {
     if (!ids.has(selector)) {
-      node(selector);
+      addNode(selector);
     }
     return ids.get(selector);
   };

@@ -9,9 +9,9 @@ const readCompactCss = require("./helpers/compact-css.cjs");
 test("provider visibility keeps all, none and selected project meanings distinct", () => {
   const context = browserContext({ scopeKey: (item) => item.project });
   loadScripts(context, ["static/documents.js", "static/page-settings.js"]);
-  const check = (doc, item) => {
-    context.doc = doc;
-    context.item = item;
+  const check = (pageDocument, pageItem) => {
+    context.doc = pageDocument;
+    context.item = pageItem;
     return evaluate(
       context,
       "pageSettingsDocument=doc;pageSettingsAllows(item,item.source)",

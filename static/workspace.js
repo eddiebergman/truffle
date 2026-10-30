@@ -907,21 +907,21 @@ function renderLiveBar() {
         return node.getClientRects().length > 0;
       };
       const same = targets.filter(
-        (target) =>
+        (eachTarget) =>
           focus.process &&
-          target.key === focus.key &&
-          target.process === focus.process,
+          eachTarget.key === focus.key &&
+          eachTarget.process === focus.process,
       );
       const nearby = [
         ...oldTabs.slice(focus.index + 1),
         ...oldTabs.slice(0, focus.index).reverse(),
       ].map((tab) =>
         targets.find(
-          (target) =>
-            target.role === "tab" &&
+          (eachTarget) =>
+            eachTarget.role === "tab" &&
             tab.dataset.agentProcess &&
-            target.key === tab.dataset.agentKey &&
-            target.process === tab.dataset.agentProcess,
+            eachTarget.key === tab.dataset.agentKey &&
+            eachTarget.process === tab.dataset.agentProcess,
         ),
       );
       const target =

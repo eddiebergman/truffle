@@ -420,14 +420,14 @@ test("pending artifact write and presentation cannot be dismissed and accepted r
   assert.equal(f.error.attrs.role, "status");
   assert.equal(f.error.hidden, false);
   assert.match(f.error.textContent, /Attaching/);
-  const escape = () =>
+  const pressEscape = () =>
     f.details.onkeydown({
       key: "Escape",
       preventDefault() {},
       stopPropagation() {},
     });
   f.cancel.onclick();
-  escape();
+  pressEscape();
   summary.onclick({ preventDefault() {} });
   assert.equal(f.details.open, true);
   f.details.open = false;
@@ -435,7 +435,7 @@ test("pending artifact write and presentation cannot be dismissed and accepted r
   assert.equal(f.details.open, true);
   pending.resolve({ artifactId: "accepted", recordId: "chat", saved: true });
   await tick();
-  escape();
+  pressEscape();
   assert.equal(f.details.open, true);
   f.reads[0].reject(Error("Read failed"));
   await action;

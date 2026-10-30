@@ -197,7 +197,8 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
       this.attrs[key] = value;
     }
     addEventListener(type, fn) {
-      (this.events[type] ??= []).push(fn);
+      this.events[type] ??= [];
+      this.events[type].push(fn);
     }
     removeEventListener(type, fn) {
       this.events[type] = (this.events[type] || []).filter(
@@ -243,7 +244,8 @@ function scriptFixture({ handler, renderFailure = false, prefs = {} } = {}) {
         : document.body.querySelector(selector),
     listeners: {},
     addEventListener(type, fn) {
-      (this.listeners[type] ??= []).push(fn);
+      this.listeners[type] ??= [];
+      this.listeners[type].push(fn);
     },
   };
   document.activeElement = document.body;

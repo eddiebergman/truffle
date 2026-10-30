@@ -673,7 +673,7 @@ async function openDiffReview(
     mode = ui.mode;
   }
   const stored = sharedReviewDrafts.get(record.id);
-  const current = (reviewState = {
+  const current = {
     record,
     directory,
     draft: stored || { comments: [], note: "" },
@@ -688,7 +688,8 @@ async function openDiffReview(
     noteDirty: Boolean(ui.noteDirty),
     noteBase: ui.noteBase,
     restoredExpanded: new Set(ui.expanded || []),
-  });
+  };
+  reviewState = current;
   const dialog = $("#diff-review-dialog");
   dialog.classList.toggle("quick-file-review", quick);
   $("#diff-review-title").textContent = quick ? path : "Review";

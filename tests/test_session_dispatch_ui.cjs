@@ -590,7 +590,7 @@ function ciFixture(options) {
     ciInfo: () => ({ short: "CI", label: "Checks failing" }),
     chatCIHint: () => "Cached checks",
     chatCIBadgeLabel: () => "Cached checks",
-    workReference: (item) => item.id,
+    workReference: (work) => work.id,
     agentIcon: () => new f.Node("svg"),
     featureIconButton: (text, label, handler, cls) => {
       const control = f.c.featureButton(text, handler, cls);

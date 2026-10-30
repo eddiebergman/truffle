@@ -94,7 +94,8 @@ async function fixture({
       this.open = true;
     }
     addEventListener(type, callback, options) {
-      (this.listeners[type] ??= []).push({ callback, once: options?.once });
+      this.listeners[type] ??= [];
+      this.listeners[type].push({ callback, once: options?.once });
     }
     close() {
       this.open = false;

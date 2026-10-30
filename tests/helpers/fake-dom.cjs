@@ -47,7 +47,8 @@ class FakeEventTarget {
     this.listeners = {};
   }
   addEventListener(type, listener) {
-    (this.listeners[type] ??= []).push(listener);
+    this.listeners[type] ??= [];
+    this.listeners[type].push(listener);
   }
   removeEventListener(type, listener) {
     this.listeners[type] = (this.listeners[type] || []).filter(

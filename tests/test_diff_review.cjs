@@ -682,11 +682,11 @@ test("loading previous reviews does not replace or save the current draft", asyn
 
 test("review comments render safe Markdown while source excerpts keep literal whitespace and markup", () => {
   const nodes = [];
-  const el = (tag, cls, text) => {
+  const el = (tag, cls, content) => {
     const node = {
       tag,
       className: cls || "",
-      textContent: text || "",
+      textContent: content || "",
       children: [],
       append(...items) {
         this.children.push(...items);
@@ -775,7 +775,10 @@ test("stale comments and archived comments retain source blocks and individually
     {
       document: { activeElement: null },
       el,
-      $: (id) => nodes[id] ?? (nodes[id] = el("div")),
+      $: (id) => {
+        nodes[id] ??= el("div");
+        return nodes[id];
+      },
       reviewState: {
         record: { id: "agent" },
         directory: "/repo",

@@ -173,7 +173,8 @@ function fixture() {
       this.append(node);
     }
     addEventListener(name, listener) {
-      (this.events[name] ??= []).push(listener);
+      this.events[name] ??= [];
+      this.events[name].push(listener);
     }
     show() {
       this.open = true;

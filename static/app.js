@@ -2039,7 +2039,7 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
   if (projectStatusAction) {
     return;
   }
-  const current = (projectStatusAction = {
+  const current = {
       item,
       status,
       page: source,
@@ -2047,18 +2047,20 @@ async function changeProjectStatus(item, status, { close = false } = {}) {
       accepted: false,
       unknown: false,
       refreshing: false,
-    }),
+    },
     isCurrent = () =>
       projectStatusAction === current &&
       dialog.open &&
       currentItem?.id === item.id &&
       source === current.page;
+  projectStatusAction = current;
   current.isCurrent = isCurrent;
   if (!isCurrent()) {
     projectStatusAction = null;
     return;
   }
-  const ui = (current.ui = projectNotice(dialog));
+  const ui = projectNotice(dialog);
+  current.ui = ui;
   holdFormFocus(dialog, current);
   projectControls(dialog, current, true);
   ui.message.textContent = "Reading current project status…";
@@ -2719,23 +2721,25 @@ async function changeLocalItemStatus(item, status) {
     status === null
       ? "Using source status."
       : "Dashboard status updated locally.";
-  const current = (projectStatusAction = {
+  const current = {
       item,
       page: source,
       pending: true,
       refreshing: false,
-    }),
+    },
     isCurrent = () =>
       projectStatusAction === current &&
       dialog.open &&
       currentItem?.id === item.id &&
       source === current.page;
+  projectStatusAction = current;
   current.isCurrent = isCurrent;
   if (!isCurrent()) {
     projectStatusAction = null;
     return;
   }
-  const ui = (current.ui = projectNotice(dialog, "Status recovery actions"));
+  const ui = projectNotice(dialog, "Status recovery actions");
+  current.ui = ui;
   holdFormFocus(dialog, current);
   projectControls(dialog, current, true);
   ui.message.textContent = "Saving dashboard status…";

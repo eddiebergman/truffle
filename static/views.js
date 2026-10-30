@@ -1179,7 +1179,7 @@ function savedViewFilterBuilder(
       el("span", "", "of these rules"),
     );
     node.append(heading, children);
-    const add = (group) => {
+    const add = (asGroup) => {
       if (!canEdit()) {
         return;
       }
@@ -1188,7 +1188,7 @@ function savedViewFilterBuilder(
       }
       const focusFromMenu = menu.contains(document.activeElement);
       filter.conditions.push(
-        group
+        asGroup
           ? { op: "all", conditions: [] }
           : { op: "in", field: "status", values: ["todo"] },
       );
@@ -1341,20 +1341,20 @@ function savedViewFilterBuilder(
             ["calendarPeriod", "during"],
           ],
           filter.op,
-          (value) => {
+          (op) => {
             const { field, days, date, period, timezone } = filter;
             for (const key of Object.keys(filter)) {
               delete filter[key];
             }
             Object.assign(
               filter,
-              { field, op: value },
-              value === "calendarPeriod"
+              { field, op },
+              op === "calendarPeriod"
                 ? {
                     period: period || "yesterday",
                     timezone: timezone || savedViewLocalTimeZone(),
                   }
-                : ["withinLast", "olderThan"].includes(value)
+                : ["withinLast", "olderThan"].includes(op)
                   ? { days: days || 7 }
                   : { date: date || new Date().toISOString().slice(0, 10) },
             );
@@ -1367,8 +1367,8 @@ function savedViewFilterBuilder(
           const period = choose(
               Object.entries(savedViewCalendarPeriods),
               filter.period,
-              (value) => {
-                filter.period = value;
+              (choice) => {
+                filter.period = choice;
                 onchange();
               },
               "Calendar period",

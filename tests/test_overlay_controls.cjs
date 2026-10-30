@@ -106,7 +106,7 @@ function fixture() {
     },
   };
 }
-const escape = (dialog) => ({
+const escapeEvent = (dialog) => ({
   key: "Escape",
   target: { closest: () => dialog },
   preventDefault() {},
@@ -116,14 +116,14 @@ test("Escape honors the actual saved-view saving cancel guard after dismissing a
   const f = fixture();
   let layers = 1;
   f.dialog.dismissLayer = () => layers-- > 0;
-  f.c.dismissOpenDialog(escape(f.dialog));
+  f.c.dismissOpenDialog(escapeEvent(f.dialog));
   assert.equal(f.cancels(), 0);
   assert.equal(f.dialog.open, true);
-  f.c.dismissOpenDialog(escape(f.dialog));
+  f.c.dismissOpenDialog(escapeEvent(f.dialog));
   assert.equal(f.cancels(), 1);
   assert.equal(f.dialog.open, true);
   await f.stopSaving();
-  f.c.dismissOpenDialog(escape(f.dialog));
+  f.c.dismissOpenDialog(escapeEvent(f.dialog));
   assert.equal(f.cancels(), 2);
   assert.equal(f.dialog.closed, 1);
 });

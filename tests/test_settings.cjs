@@ -715,7 +715,8 @@ function settingsSaveFixture() {
       this.children.push(option);
     }
     addEventListener(type, callback) {
-      (this.listeners ??= {})[type] = callback;
+      this.listeners ??= {};
+      this.listeners[type] = callback;
     }
     querySelectorAll(selector) {
       return this.children

@@ -1276,9 +1276,9 @@ test("agent commands show newest first with their outcome and stay open by defau
     { keepHost: ["document"] },
   );
   let collapsed;
-  c.collapsibleContextSection = (section, key, count) => {
+  c.collapsibleContextSection = (content, key, count) => {
     collapsed = { key, count };
-    return section;
+    return content;
   };
   const all = (node, cls) =>
     (node.children || []).flatMap((child) => [

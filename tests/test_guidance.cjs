@@ -302,9 +302,9 @@ test("Escape dismisses guidance before Review and honors Review cancellation bef
     close: () => closed++,
   });
   let saving = true;
-  dialog.addEventListener("cancel", (event) => {
+  dialog.addEventListener("cancel", (cancelEvent) => {
     if (saving) {
-      event.preventDefault();
+      cancelEvent.preventDefault();
     }
   });
   const c = browserContext({

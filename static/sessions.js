@@ -1263,13 +1263,14 @@ async function openSavedSession(
       ready &&
       entry.receipt.status !== "unknown" &&
       entry.receipt.localSaved !== false;
-    const result = (outcome = {
+    const result = {
       ...entry.receipt,
       presentation: ready ? "ready" : "pending",
       record: latest || null,
       candidate: candidate || null,
       navigated: false,
-    });
+    };
+    outcome = result;
     if (
       navigate &&
       ready &&
