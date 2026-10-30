@@ -1,6 +1,6 @@
 //! App assistant with a bounded tool surface and no terminal access.
 use super::{
-    arr, checked, commands, domain, json, now, sessions, sid, text, uuid, Error, PathBuf,
+    arr, checked, domain, json, now, redaction, sessions, sid, text, uuid, Error, PathBuf,
     Repository, Result, Value,
 };
 use std::{
@@ -292,7 +292,7 @@ fn recovery_uuid(repo: &Repository, value: &Value) -> Result<String> {
         return Err(Error::new("Invalid chat recovery UUID."));
     }
     let mut safe = id.clone();
-    commands::redact_text(repo, &mut safe);
+    redaction::redact_text(repo, &mut safe);
     if safe != id {
         return Err(Error::new(
             "Chat recovery identity cannot be safely projected.",
@@ -507,7 +507,7 @@ fn settings_filter_context(repo: &Repository, value: &Value) -> Result<Value> {
         .as_str()
         .filter(|query| query.chars().count() <= 200 && !query.contains('\0'))
         .ok_or_else(|| Error::new("Invalid Settings search context."))?;
-    let mut redactor = commands::stream_redactor(repo);
+    let mut redactor = redaction::stream_redactor(repo);
     let mut query = redactor.push(query);
     query.push_str(&redactor.finish());
     let mut result = json!({"query":query,"scope":"individual-preferences-and-shortcuts"});

@@ -1,5 +1,5 @@
 use super::{
-    arr, checked, commands, expand, json, now, safe_url, sessions, sid, text, Error, PathBuf,
+    arr, checked, expand, json, now, redaction, safe_url, sessions, sid, text, Error, PathBuf,
     Repository, Result, Value,
 };
 use sha2::{Digest, Sha256};
@@ -201,7 +201,7 @@ fn metadata_conflict() -> Error {
 }
 fn metadata_exact(repo: &Repository, value: &str) -> Result<()> {
     let mut redacted = value.to_owned();
-    commands::redact_text(repo, &mut redacted);
+    redaction::redact_text(repo, &mut redacted);
     if redacted != value {
         return Err(Error::new(
             "Artifact identity or revision cannot be safely projected.",
@@ -252,7 +252,7 @@ fn metadata_view(repo: &Repository, entry: &Value, discovery: Option<&str>) -> R
     metadata_exact(repo, id)?;
     let values = metadata_values(entry)?;
     let mut title = text(&values, "title").to_owned();
-    commands::redact_text(repo, &mut title);
+    redaction::redact_text(repo, &mut title);
     if title.chars().count() > 300 {
         return Err(Error::new(
             "Artifact title cannot be safely projected within its limit.",

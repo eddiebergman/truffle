@@ -451,7 +451,7 @@ impl Repository {
             row["refreshing"] = json!(running.contains(text(row, "id")));
             if let Some(error) = row["error"].as_str() {
                 let mut error = error.to_owned();
-                super::commands::redact_text(self, &mut error);
+                super::redaction::redact_text(self, &mut error);
                 row["error"] = json!(error.chars().take(2000).collect::<String>());
             }
         }
@@ -474,7 +474,7 @@ impl Repository {
             self.demo,
         )?;
         let original = result.clone();
-        super::commands::redact(self, &mut result);
+        super::redaction::redact(self, &mut result);
         if result != original {
             return Err(Error::new(
                 "Environment identifiers cannot be returned safely.",

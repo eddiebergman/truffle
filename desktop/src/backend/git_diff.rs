@@ -378,7 +378,7 @@ fn command_identity(repo: &Repository, value: &Value, max: usize) -> Result<Valu
         .filter(|value| value.len() <= max && !value.contains('\0'))
         .ok_or_else(|| Error::new("Diff metadata exceeds the command limit."))?;
     let mut safe = value.to_owned();
-    super::commands::redact_text(repo, &mut safe);
+    super::redaction::redact_text(repo, &mut safe);
     if safe != value {
         return Err(Error::new("Diff identity cannot be safely projected."));
     }
@@ -427,7 +427,7 @@ pub fn command_file(repo: &Repository, args: &Value) -> Result<Value> {
             .as_str()
             .ok_or_else(|| Error::new("Diff text is unavailable."))?;
         let mut content = raw.to_owned();
-        super::commands::redact_text(repo, &mut content);
+        super::redaction::redact_text(repo, &mut content);
         redacted |= content != raw;
         if content.len() > 512 * 1024 {
             return Err(Error::new("Redacted diff text exceeds 512 KiB."));

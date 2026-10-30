@@ -1,5 +1,5 @@
 use super::{
-    arr, commands, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value,
+    arr, json, now, redaction, sessions, sid, text, uuid, Error, Repository, Result, Value,
 };
 mod access;
 pub use access::{history, read, update_note};
@@ -92,7 +92,7 @@ fn summary_identity(repo: &Repository, value: &Value, max: usize) -> Result<Valu
         })
         .ok_or_else(|| Error::new("Review identity is unavailable."))?;
     let mut safe = text.to_owned();
-    super::commands::redact_text(repo, &mut safe);
+    super::redaction::redact_text(repo, &mut safe);
     if safe != text {
         return Err(Error::new("Review identity cannot be safely projected."));
     }

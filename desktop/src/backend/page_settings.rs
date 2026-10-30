@@ -142,7 +142,7 @@ fn choices(
     // or page can hide an unsafe actionable key behind a count or snapshot.
     for key in choices.keys() {
         let mut projected = key.clone();
-        super::commands::redact_text(repo, &mut projected);
+        super::redaction::redact_text(repo, &mut projected);
         if projected != *key {
             return Err(Error::new(
                 "Page visibility scopes cannot be safely projected.",

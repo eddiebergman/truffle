@@ -182,7 +182,7 @@ fn conflict(message: &str) -> Error {
 }
 fn exact(repo: &Repository, value: &str) -> Result<()> {
     let mut safe = value.to_owned();
-    super::commands::redact_text(repo, &mut safe);
+    super::redaction::redact_text(repo, &mut safe);
     if safe != value || value.chars().any(char::is_control) {
         return Err(Error::new(
             "Preparation identity cannot be safely projected.",

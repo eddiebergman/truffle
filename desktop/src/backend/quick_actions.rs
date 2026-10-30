@@ -244,7 +244,7 @@ impl Host {
         .map(|mut stream| {
             let host = self.clone();
             let id = id.to_owned();
-            let mut redactor = super::commands::stream_redactor(repo);
+            let mut redactor = super::redaction::stream_redactor(repo);
             std::thread::spawn(move || {
                 let mut decoder = Utf8Output::default();
                 let mut bytes = [0; 2048];

@@ -1,5 +1,5 @@
 //! Cached observed changes and exact-ID read markers. No provider or filesystem reads.
-use super::{commands, json, safe_url, text, Error, Repository, Result, Value};
+use super::{json, redaction, safe_url, text, Error, Repository, Result, Value};
 use std::collections::BTreeSet;
 const MAX_CHANGES: usize = 500;
 fn keys(args: &Value, allowed: &[&str]) -> Result<()> {
@@ -43,7 +43,7 @@ fn rows(state: &Value) -> Result<&Vec<Value>> {
 }
 fn prefix(repo: &Repository, value: &Value, bound: usize) -> String {
     let mut value = value.as_str().unwrap_or("").to_owned();
-    commands::redact_text(repo, &mut value);
+    redaction::redact_text(repo, &mut value);
     value.chars().take(bound).collect()
 }
 fn projected_identity(repo: &Repository, value: &Value, optional: bool) -> Result<String> {
@@ -53,7 +53,7 @@ fn projected_identity(repo: &Repository, value: &Value, optional: bool) -> Resul
         id(value)?
     };
     let mut redacted = identity.to_owned();
-    commands::redact_text(repo, &mut redacted);
+    redaction::redact_text(repo, &mut redacted);
     if redacted != identity {
         return Err(Error::new(
             "A cached change identity cannot be safely projected.",

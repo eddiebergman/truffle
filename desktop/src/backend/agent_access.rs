@@ -13,7 +13,7 @@ fn page(args: &Value) -> (usize, usize) {
 }
 fn redacted(repo: &Repository, value: &str) -> String {
     let mut value = value.to_owned();
-    super::commands::redact_text(repo, &mut value);
+    super::redaction::redact_text(repo, &mut value);
     value
 }
 fn prefix(repo: &Repository, value: &str, limit: usize) -> String {
@@ -48,7 +48,7 @@ fn item(repo: &Repository, state: &Value, id: &str) -> Result<Value> {
         .remove(id)
         .ok_or_else(|| Error::new("Work item unavailable."))?;
     let mut item = super::work_search::effective(state, &item);
-    super::commands::redact(repo, &mut item);
+    super::redaction::redact(repo, &mut item);
     Ok(super::work_search::project(&item, 2000))
 }
 fn change_work(repo: &Repository, args: &Value) -> Result<Value> {

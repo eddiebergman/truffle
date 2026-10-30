@@ -85,7 +85,7 @@ fn editor_exact(repo: &Repository, value: &str) -> Result<()> {
         return Err(Error::new("This skill identity or edit token is invalid."));
     }
     let mut projected = value.to_owned();
-    super::commands::redact_text(repo, &mut projected);
+    super::redaction::redact_text(repo, &mut projected);
     if value != projected {
         return Err(Error::new(
             "This skill identity or edit token cannot be safely projected.",
@@ -381,7 +381,7 @@ pub fn save_schedule(repo: &Repository, args: &Value) -> Result<Value> {
 fn list_text(repo: &Repository, value: &Value, max: usize) -> Option<Value> {
     value.as_str().map(|value| {
         let mut value = value.to_owned();
-        super::commands::redact_text(repo, &mut value);
+        super::redaction::redact_text(repo, &mut value);
         json!(value.chars().take(max).collect::<String>())
     })
 }

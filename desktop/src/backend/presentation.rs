@@ -1,7 +1,7 @@
 //! Bounded navigation requests. Queuing does not confirm that a UI showed them.
 use super::{
-    arr, chat_search, checked, commands, domain, json, sid, text, views, work_search, Error,
-    Repository, Result, Value,
+    arr, chat_search, checked, commands, domain, json, redaction, sid, text, views, work_search,
+    Error, Repository, Result, Value,
 };
 use std::collections::BTreeSet;
 const MAX_PENDING: usize = 8;
@@ -14,7 +14,7 @@ fn conflict(message: &str) -> Error {
 }
 fn exact(repo: &Repository, value: &str) -> Result<()> {
     let mut projected = value.to_owned();
-    commands::redact_text(repo, &mut projected);
+    redaction::redact_text(repo, &mut projected);
     if projected != value {
         return Err(Error::new(
             "Presentation identity is unavailable for safe projection.",
@@ -57,7 +57,7 @@ fn vocabulary(repo: &Repository) -> Result<()> {
 }
 fn clipped(repo: &Repository, value: &Value, max: usize) -> Value {
     let mut value = value.as_str().unwrap_or("").to_owned();
-    commands::redact_text(repo, &mut value);
+    redaction::redact_text(repo, &mut value);
     json!(value.chars().take(max).collect::<String>())
 }
 fn work(repo: &Repository, item: &Value) -> Result<Value> {
@@ -122,7 +122,7 @@ fn work(repo: &Repository, item: &Value) -> Result<Value> {
             .filter_map(Value::as_str)
             .map(|value| {
                 let mut value = value.to_owned();
-                commands::redact_text(repo, &mut value);
+                redaction::redact_text(repo, &mut value);
                 value.chars().take(160).collect::<String>()
             })
             .collect::<Vec<_>>());

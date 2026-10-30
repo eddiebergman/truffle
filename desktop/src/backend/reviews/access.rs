@@ -1,5 +1,5 @@
 use super::{
-    arr, commands, draft, json, sessions, summary_identity, summary_time, text, Error, Repository,
+    arr, draft, json, redaction, sessions, summary_identity, summary_time, text, Error, Repository,
     Result, Value,
 };
 
@@ -15,7 +15,7 @@ fn display(repo: &Repository, value: &Value, limit: usize, flags: &mut Value) ->
         .as_str()
         .ok_or_else(|| Error::new("Invalid saved review text."))?;
     let mut text = original.to_owned();
-    commands::redact_text(repo, &mut text);
+    redaction::redact_text(repo, &mut text);
     if text != original {
         flags["contentRedacted"] = json!(true);
     }

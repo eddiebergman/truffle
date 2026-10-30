@@ -51,7 +51,7 @@ fn stored(state: &Value) -> Result<Vec<Pair>> {
 }
 fn exact_projection(repo: &Repository, value: Value) -> Result<Value> {
     let mut projected = value.clone();
-    super::commands::redact(repo, &mut projected);
+    super::redaction::redact(repo, &mut projected);
     if projected != value {
         return Err(Error::new(
             "Manual work-link identities cannot be safely projected.",

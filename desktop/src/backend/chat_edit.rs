@@ -1,7 +1,7 @@
 //! Captured-field edits of an existing saved chat; never opens an agent.
 use super::{
-    arr, checked, commands, directory, domain, json, now, safe_url, sessions, sid, text, Error,
-    Repository, Result, Value,
+    arr, checked, commands, directory, domain, json, now, redaction, safe_url, sessions, sid, text,
+    Error, Repository, Result, Value,
 };
 const FIELDS: [&str; 6] = [
     "title",
@@ -31,7 +31,7 @@ fn conflict(message: &str) -> Error {
 }
 fn exact(repo: &Repository, value: &str) -> Result<()> {
     let mut projected = value.to_owned();
-    commands::redact_text(repo, &mut projected);
+    redaction::redact_text(repo, &mut projected);
     if projected != value || value.chars().any(char::is_control) {
         return Err(Error::new(
             "Saved chat identity or edit tokens cannot be safely projected.",
@@ -126,7 +126,7 @@ fn view(repo: &Repository, row: &Value) -> Result<Value> {
             return Err(Error::new("Saved chat exceeds its editable field limit."));
         }
         let mut display = value.to_owned();
-        commands::redact_text(repo, &mut display);
+        redaction::redact_text(repo, &mut display);
         if display != value {
             redacted = true;
         }

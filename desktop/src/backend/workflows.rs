@@ -1,8 +1,8 @@
 use super::chat_preparation::{self, Created, Recipe};
 use super::terminals::{Live, Presence};
 use super::{
-    arr, checked, commands, directory, expand, home, json, now, safe_url, sid, text, uuid, Error,
-    PathBuf, Repository, Result, Value,
+    arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
+    uuid, Error, PathBuf, Repository, Result, Value,
 };
 use super::{artifacts, domain, sessions, terminal};
 use std::sync::Arc;
@@ -1265,7 +1265,7 @@ fn open_chat_arguments<'a>(repo: &Repository, args: &'a Value) -> Result<(String
         "unconfirmed",
     ] {
         let mut projected = value.to_owned();
-        commands::redact_text(repo, &mut projected);
+        redaction::redact_text(repo, &mut projected);
         if projected != value {
             return Err(Error::new(
                 "The saved chat open receipt cannot be safely projected.",
@@ -1284,7 +1284,7 @@ fn open_unregistered_codex(
         Presence::Live(Live{generation,agent,session_id,..}) if agent=="codex"&&session_id.is_empty()=>{
             let eligible=sessions::get(&*repo.state.lock().map_err(|_|Error::io())?,id).is_ok_and(|row|row["agent"]=="codex"&&row["launchNew"]==false&&(row["sessionId"].is_null()||row["sessionId"]=="")&&(intent=="embedded"||row["destination"]!="desktop"));
             if !eligible{return Ok(open_receipt(id,"embedded","unknown",false));}
-            let mut projected=generation.clone();commands::redact_text(repo,&mut projected);if projected!=generation{return Err(Error::new("Terminal generation cannot be safely projected."));}let mut receipt=open_receipt(id,"embedded","accepted",true);receipt["terminal"]=json!({"state":"observed","generation":generation});receipt["message"]=json!("Existing terminal found. No new open request was sent.");Ok(receipt)},
+            let mut projected=generation.clone();redaction::redact_text(repo,&mut projected);if projected!=generation{return Err(Error::new("Terminal generation cannot be safely projected."));}let mut receipt=open_receipt(id,"embedded","accepted",true);receipt["terminal"]=json!({"state":"observed","generation":generation});receipt["message"]=json!("Existing terminal found. No new open request was sent.");Ok(receipt)},
         // A terminal under this key that runs another agent or a registered conversation is not this chat.
         Presence::Live(_)|Presence::Unknown(_)=>Ok(open_receipt(id,"embedded","unknown",false)),
         Presence::Absent=>Err(Error::new("No live terminal could be confirmed for this unregistered chat. Link its exact conversation UUID or inspect History; a new agent was not started.")),

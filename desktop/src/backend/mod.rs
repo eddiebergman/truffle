@@ -16,6 +16,7 @@ pub mod onboarding;
 pub mod page_settings;
 pub mod presentation;
 pub mod quick_actions;
+mod redaction;
 pub mod settings;
 pub mod skills_catalog;
 pub mod views;

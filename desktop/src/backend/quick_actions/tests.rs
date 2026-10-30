@@ -26,7 +26,7 @@ fn stream_output_keeps_unicode_and_redacts_every_secret_byte_boundary() {
         let id = format!("split-{split}");
         output_job(&repo, &id);
         let mut decoder = Utf8Output::default();
-        let mut redactor = super::super::commands::stream_redactor(&repo);
+        let mut redactor = super::super::redaction::stream_redactor(&repo);
         repo.quick_actions.output(
             &id,
             &decoder.push_redacted(b"Live safe output: ", &mut redactor),
@@ -67,7 +67,7 @@ fn stream_output_truncated_unicode_secret_eof_never_releases_withheld_prefix() {
         output_job(&repo, &id);
         let bytes = &secret.as_bytes()[..end];
         let mut decoder = Utf8Output::default();
-        let mut redactor = super::super::commands::stream_redactor(&repo);
+        let mut redactor = super::super::redaction::stream_redactor(&repo);
         for byte in bytes {
             repo.quick_actions
                 .output(&id, &decoder.push_redacted(&[*byte], &mut redactor));
@@ -90,7 +90,7 @@ fn stream_output_truncated_unicode_secret_eof_never_releases_withheld_prefix() {
         (b"plain \xff end".as_slice(), "plain � end"),
     ] {
         let mut decoder = Utf8Output::default();
-        let mut redactor = super::super::commands::stream_redactor(&repo);
+        let mut redactor = super::super::redaction::stream_redactor(&repo);
         let mut output = decoder.push_redacted(bytes, &mut redactor);
         output.push_str(&finish_stream(&mut decoder, &mut redactor));
         assert_eq!(output, expected);
@@ -109,7 +109,7 @@ fn stream_output_invalid_unicode_boundaries_never_release_withheld_prefixes() {
             let id = format!("invalid-{end}-{}", suffix[0]);
             output_job(&repo, &id);
             let mut decoder = Utf8Output::default();
-            let mut redactor = super::super::commands::stream_redactor(&repo);
+            let mut redactor = super::super::redaction::stream_redactor(&repo);
             repo.quick_actions
                 .output(&id, &decoder.push_redacted(prefix, &mut redactor));
             assert_eq!(output_text(&repo, &id), "");
@@ -126,7 +126,7 @@ fn stream_output_invalid_unicode_boundaries_never_release_withheld_prefixes() {
         }
     }
     let mut decoder = Utf8Output::default();
-    let mut redactor = super::super::commands::stream_redactor(&repo);
+    let mut redactor = super::super::redaction::stream_redactor(&repo);
     assert_eq!(
         decoder.push_redacted(b"plain \xc3", &mut redactor),
         "plain "
@@ -142,7 +142,7 @@ fn stream_output_redacts_long_known_values_before_owner_tail_cut() {
     output_job(&repo, id);
     let raw = format!("safe prefix {secret}{}", "z".repeat(15990));
     let mut decoder = Utf8Output::default();
-    let mut redactor = super::super::commands::stream_redactor(&repo);
+    let mut redactor = super::super::redaction::stream_redactor(&repo);
     for bytes in raw.as_bytes().chunks(2048) {
         repo.quick_actions
             .output(id, &decoder.push_redacted(bytes, &mut redactor));
