@@ -6,9 +6,9 @@ let appSettings = null,
   settingsCategory = "appearance",
   settingsSaving = false,
   settingsOpenGeneration = 0,
-  quickActionTimer = null,
   shortcutRecording = null,
   shortcutRecordingSync = Promise.resolve();
+const quickActionWatch = watchJob(loadQuickActionRuns);
 // The theme catalog arrives with each settings read, keyed by its document.
 const settingsReadThemes = new WeakMap();
 const settingsStore = documentStore({
@@ -1164,7 +1164,7 @@ function paintSettingsBody() {
       const output = el("div");
       output.id = "quick-action-runs";
       panel.append(output);
-      void loadQuickActionRuns();
+      void quickActionWatch.start();
     }
     if (id === "connections") {
       const setup = el("div");
@@ -1876,10 +1876,9 @@ async function chooseQuickAction(action, identity) {
   dialog.showModal();
 }
 async function loadQuickActionRuns() {
-  clearTimeout(quickActionTimer);
   const root = $("#quick-action-runs");
   if (!root) {
-    return;
+    return null;
   }
   try {
     const { jobs } = await api("/api/quick-actions"),
@@ -1895,11 +1894,12 @@ async function loadQuickActionRuns() {
       details.append(summary, el("pre", "", job.output || "No output yet."));
       root.append(details);
     }
-    if (jobs.some((j) => j.state === "running") && $("#settings-dialog").open) {
-      quickActionTimer = setTimeout(loadQuickActionRuns, 1500);
-    }
+    return jobs.some((j) => j.state === "running") && $("#settings-dialog").open
+      ? 1500
+      : null;
   } catch (error) {
     root.textContent = error.message;
+    return null;
   }
 }
 window.addEventListener("truffle-configured-command", (event) =>
