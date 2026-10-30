@@ -223,13 +223,19 @@ fn failed_start_persistence_preserves_jobs_and_allows_retry() {
     *host.jobs.lock().unwrap() = jobs;
     let baseline = host.view();
     let bytes = std::fs::read(&path).unwrap();
-    let blocked_temp = path.with_extension("tmp");
-    std::fs::create_dir(&blocked_temp).unwrap();
+    let permissions = |mode| {
+        std::fs::set_permissions(
+            root.path(),
+            std::os::unix::fs::PermissionsExt::from_mode(mode),
+        )
+        .unwrap();
+    };
+    permissions(0o500);
     let request = json!({"revision":1,"contentHash":repo.settings.view()["contentHash"],"actionId":"fixture"});
     assert!(host.start(&repo, &request).is_err());
     assert_eq!(host.view(), baseline);
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
-    std::fs::remove_dir(blocked_temp).unwrap();
+    permissions(0o700);
     let run = host.start(&repo, &request).unwrap();
     let start = Instant::now();
     loop {

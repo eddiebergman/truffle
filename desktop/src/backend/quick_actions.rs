@@ -106,9 +106,7 @@ impl Host {
     }
     fn persist(&self, jobs: &BTreeMap<String, Value>) -> Result<()> {
         if let Some(path) = &self.path {
-            let temp = path.with_extension("tmp");
-            super::http::private_write(&temp, &serde_json::to_vec(jobs)?)?;
-            std::fs::rename(temp, path)?;
+            super::http::private_write(path, &serde_json::to_vec(jobs)?)?;
         }
         Ok(())
     }
