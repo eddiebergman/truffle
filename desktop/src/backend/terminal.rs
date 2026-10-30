@@ -2,10 +2,25 @@
 use super::{directory, home, json, sid, text, Error, PathBuf, Result, Value};
 use std::{
     io::{Read, Write},
-    process::{Command, ExitStatus, Stdio},
-    time::Duration,
+    process::{Child, Command, ExitStatus, Stdio},
+    time::{Duration, Instant},
 };
-use wait_timeout::ChildExt;
+/// Waits up to `timeout` for `child` to exit. Returns `None` when it is still running.
+pub fn wait_timeout(child: &mut Child, timeout: Duration) -> std::io::Result<Option<ExitStatus>> {
+    let deadline = Instant::now() + timeout;
+    let mut pause = Duration::from_millis(1);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Ok(None);
+        }
+        std::thread::sleep(pause.min(left));
+        pause = (pause * 2).min(Duration::from_millis(50));
+    }
+}
 pub fn run(program: &str, args: &[String], input: Option<&str>, seconds: u64) -> Result<String> {
     let timeout = Duration::from_secs(seconds);
     match bounded(program, args, input, timeout)? {
@@ -63,7 +78,7 @@ pub fn bounded(
         err.by_ref().take(1024 * 1024).read_to_end(&mut b).ok();
         b
     });
-    let status = child.wait_timeout(timeout)?;
+    let status = wait_timeout(&mut child, timeout)?;
     if status.is_none() {
         let _ = child.kill();
         let _ = child.wait();
@@ -133,7 +148,7 @@ fn desktop_command_outcome(mut command: Command, timeout: Duration) -> Result<Op
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| Error::new("The desktop opener could not start."))?;
-    match child.wait_timeout(timeout) {
+    match wait_timeout(&mut child, timeout) {
         Ok(Some(status)) if status.success() => Ok(OpenOutcome::Accepted),
         _ => {
             let _ = child.kill();
@@ -195,6 +210,24 @@ mod open_outcome_tests {
 #[cfg(test)]
 mod run_tests {
     use super::*;
+    #[test]
+    fn wait_timeout_returns_the_exit_status_or_none_while_running() {
+        let mut quick = Command::new("/bin/sh")
+            .args(["-c", "exit 3"])
+            .spawn()
+            .unwrap();
+        let status = wait_timeout(&mut quick, Duration::from_secs(5)).unwrap();
+        assert_eq!(status.and_then(|s| s.code()), Some(3));
+        let mut slow = Command::new("/bin/sleep").arg("5").spawn().unwrap();
+        let started = Instant::now();
+        assert!(wait_timeout(&mut slow, Duration::from_millis(100))
+            .unwrap()
+            .is_none());
+        assert!(started.elapsed() >= Duration::from_millis(100));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        slow.kill().unwrap();
+        slow.wait().unwrap();
+    }
     #[test]
     fn parsed_commands_never_inherit_forced_color() {
         let previous = std::env::var_os("CLICOLOR_FORCE");

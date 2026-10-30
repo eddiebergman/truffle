@@ -8,7 +8,6 @@ use std::{
     },
     time::Duration,
 };
-use wait_timeout::ChildExt;
 
 #[derive(Default)]
 pub struct LoginHost {
@@ -128,7 +127,7 @@ fn login(executable: &str, adc: bool, timeout: Duration, cancel: &AtomicBool) ->
                 json!({"status":"timed_out","message":"Login timed out after 10 minutes. Retry when ready to finish in your browser."})
             };
         }
-        match child.wait_timeout(Duration::from_millis(200)) {
+        match super::terminal::wait_timeout(&mut child, Duration::from_millis(200)) {
             Ok(Some(status)) => {
                 return if status.success() {
                     json!({"status":"succeeded","message":"Signed in."})

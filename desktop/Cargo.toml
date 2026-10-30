@@ -29,7 +29,6 @@ uuid = { version = "1", features = ["v4"] }
 hmac = "0.12"
 sha2 = "0.10"
 regex = "1"
-wait-timeout = "0.2"
 libc = "0.2"
 portable-pty = "0.9"
 

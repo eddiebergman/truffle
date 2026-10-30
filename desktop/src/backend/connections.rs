@@ -16,7 +16,6 @@ use std::{
     },
     time::Duration,
 };
-use wait_timeout::ChildExt;
 use zeroize::Zeroizing;
 
 const SERVICE: &str = "app.truffle.connections.v1";
@@ -621,7 +620,7 @@ fn github_cli_token() -> Result<Zeroizing<String>> {
             .read_to_end(&mut bytes)
             .map(|_| bytes)
     });
-    let Some(status) = child.wait_timeout(Duration::from_secs(15))? else {
+    let Some(status) = super::terminal::wait_timeout(&mut child, Duration::from_secs(15))? else {
         let _ = child.kill();
         let _ = child.wait();
         let _ = reader.join();
