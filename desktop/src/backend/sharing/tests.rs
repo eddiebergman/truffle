@@ -689,6 +689,130 @@ fn conversation_excerpt_excludes_tools_and_machine_notifications() {
     assert!(!serialized.contains("SECRET"));
     assert!(!serialized.contains("task-notification"));
 }
+/// "METHOD URL AUTHORIZATION" and the body of each request the fake GCS server received.
+type Requests = Vec<(String, Vec<u8>)>;
+/// Serves one reply per request on a local port.
+fn fake_gcs(replies: Vec<(u16, &'static [u8])>) -> (Gcs, std::thread::JoinHandle<Requests>) {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let api = Url::parse(&format!(
+        "http://{}/",
+        server.server_addr().to_ip().unwrap()
+    ))
+    .unwrap();
+    let handle = std::thread::spawn(move || {
+        replies
+            .into_iter()
+            .map(|(status, reply)| {
+                let mut request = server
+                    .recv_timeout(Duration::from_secs(10))
+                    .unwrap()
+                    .unwrap();
+                let mut body = Vec::new();
+                request.as_reader().read_to_end(&mut body).unwrap();
+                let authorization = request
+                    .headers()
+                    .iter()
+                    .find(|header| header.field.equiv("Authorization"))
+                    .map_or_else(String::new, |header| header.value.to_string());
+                let line = format!("{} {} {authorization}", request.method(), request.url());
+                request
+                    .respond(tiny_http::Response::from_data(reply).with_status_code(status))
+                    .unwrap();
+                (line, body)
+            })
+            .collect()
+    });
+    let gcs = Gcs::new(api, "bucket".into(), "team/v1".into(), "test-token".into()).unwrap();
+    (gcs, handle)
+}
+#[test]
+fn gcs_read_treats_404_as_missing() {
+    let (gcs, server) = fake_gcs(vec![(404, b"")]);
+    assert_eq!(gcs.read("directory.json", 100, Some("7")).unwrap(), None);
+    let requests = server.join().unwrap();
+    assert_eq!(
+        requests[0].0,
+        "GET /storage/v1/b/bucket/o/team%2Fv1%2Fdirectory.json?alt=media&generation=7 Bearer test-token"
+    );
+}
+#[test]
+fn gcs_existing_object_is_success_only_with_the_same_bytes() {
+    let (gcs, server) = fake_gcs(vec![
+        (412, b""),
+        (200, b"first"),
+        (412, b""),
+        (200, b"other"),
+    ]);
+    gcs.put_immutable("objects/a", b"first").unwrap();
+    let error = gcs.put_immutable("objects/a", b"first").unwrap_err();
+    assert_eq!(
+        error.message,
+        "Existing GCS object has different bytes; send stopped."
+    );
+    let requests = server.join().unwrap();
+    assert_eq!(
+        requests[0],
+        (
+            "POST /upload/storage/v1/b/bucket/o?uploadType=media&name=team%2Fv1%2Fobjects%2Fa&ifGenerationMatch=0 Bearer test-token".into(),
+            b"first".to_vec()
+        )
+    );
+    assert_eq!(
+        requests[1].0,
+        "GET /storage/v1/b/bucket/o/team%2Fv1%2Fobjects%2Fa?alt=media Bearer test-token"
+    );
+}
+#[test]
+fn gcs_recipient_discovery_follows_pages_and_strips_the_root_prefix() {
+    let (_t, repo) = fixture();
+    let (gcs, server) = fake_gcs(vec![
+        (404, b""),
+        (
+            200,
+            br#"{"prefixes":["team/v1/inboxes/alex/","team/v1/inboxes/sam/"],"nextPageToken":"two"}"#,
+        ),
+        (200, br#"{"prefixes":["team/v1/inboxes/zoe/"]}"#),
+    ]);
+    let store = Store {
+        root: "gs://bucket/team/v1".into(),
+        transport: Transport::Gcs {
+            root: "gs://bucket/team/v1".into(),
+        },
+        objects: Objects::Gcs(gcs),
+    };
+    refresh_people(&repo, &store).unwrap();
+    assert_eq!(
+        repo.sharing.lock().unwrap()["discoveredPeople"],
+        json!(["alex", "sam", "zoe"])
+    );
+    let requests = server.join().unwrap();
+    let listing = "GET /storage/v1/b/bucket/o?prefix=team%2Fv1%2Finboxes%2F&maxResults=100&fields=prefixes%2CnextPageToken&delimiter=%2F";
+    assert_eq!(requests[1].0, format!("{listing} Bearer test-token"));
+    assert_eq!(
+        requests[2].0,
+        format!("{listing}&pageToken=two Bearer test-token")
+    );
+}
+#[test]
+fn gcs_listing_strips_the_root_prefix_and_rejects_other_objects() {
+    let (gcs, server) = fake_gcs(vec![
+        (
+            200,
+            br#"{"items":[{"name":"team/v1/inboxes/eddie/deliveries/a.json","size":"5","generation":"1"}]}"#,
+        ),
+        (200, br#"{"items":[{"name":"team/v10/inboxes/eddie/deliveries/a.json"}]}"#),
+    ]);
+    let listing = gcs.list("inboxes/eddie/deliveries/", "", false).unwrap();
+    assert_eq!(
+        listing["items"][0]["name"],
+        "inboxes/eddie/deliveries/a.json"
+    );
+    let error = gcs
+        .list("inboxes/eddie/deliveries/", "", false)
+        .unwrap_err();
+    assert_eq!(error.message, "Unexpected object prefix.");
+    server.join().unwrap();
+}
 #[test]
 fn immutable_conflicts_and_unsafe_uris_fail_without_overwrite() {
     let (_t, repo) = fixture();
