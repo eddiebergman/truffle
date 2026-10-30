@@ -2,8 +2,8 @@
 use super::agents::Agent;
 use super::field_edit::{self, Edit, Record};
 use super::{
-    arr, checked, commands, directory, domain, json, now, redaction, safe_url, sessions, sid, text,
-    Error, Repository, Result, Value,
+    arr, checked, directory, domain, json, now, redaction, safe_url, sessions, sid, text, Error,
+    Repository, Result, Value,
 };
 const FIELDS: [&str; 6] = [
     "title",
@@ -157,12 +157,12 @@ fn view(repo: &Repository, row: &Value) -> Result<Value> {
     )
 }
 pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
-    commands::validate_chat_metadata_arguments("read", args)?;
+    super::schema::validate(&schema("read"), args, "args")?;
     let state = repo.state.lock().map_err(|_| Error::io())?;
     view(repo, sessions::get(&state, text(args, "recordId"))?)
 }
 fn validate<'a>(repo: &Repository, args: &Value) -> Result<Edit<Chat<'a>>> {
-    commands::validate_chat_metadata_arguments("update", args)?;
+    super::schema::validate(&schema("update"), args, "args")?;
     if serde_json::to_vec(args)?.len() > 65536 {
         return Err(Error::new("Chat edit exceeds 64 KiB."));
     }

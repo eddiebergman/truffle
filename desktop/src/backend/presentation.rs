@@ -1,9 +1,26 @@
 //! Bounded navigation requests. Queuing does not confirm that a UI showed them.
 use super::{
-    arr, chat_search, checked, commands, domain, json, redaction, sid, text, views, work_search,
-    Error, Repository, Result, Value,
+    arr, chat_search, checked, domain, json, redaction, sid, text, views, work_search, Error,
+    Repository, Result, Value,
 };
 use std::collections::BTreeSet;
+pub(super) fn schema(kind: &str) -> Value {
+    let request_id = json!({"type":"string","maxLength":36,"pattern":"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"});
+    let target = json!({"type":"object","properties":{"type":{"type":"string","enum":["work","chat"]},"id":{"type":"string","maxLength":160}},"required":["type","id"],"additionalProperties":false});
+    match kind {
+        "present" => {
+            json!({"type":"object","properties":{"requestId":request_id,"presentation":{"type":"object","oneOf":[
+            {"type":"object","properties":{"type":{"type":"string","enum":["saved-view"]},"id":{"type":"string","maxLength":80,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["type","id"],"additionalProperties":false},
+            {"type":"object","properties":{"type":{"type":"string","enum":["display-items"]},"title":{"type":"string","maxLength":120},"items":{"type":"array","minItems":1,"maxItems":40,"items":target},"recommended":target,"reason":{"type":"string","maxLength":300}},"required":["type","items"],"additionalProperties":false}
+        ]}},"required":["requestId","presentation"],"additionalProperties":false})
+        }
+        "read" => json!({"type":"object","properties":{},"additionalProperties":false}),
+        "ack" => {
+            json!({"type":"object","properties":{"requestId":request_id,"outcome":{"type":"string","enum":["shown","dismissed"]}},"required":["requestId","outcome"],"additionalProperties":false})
+        }
+        _ => Value::Null,
+    }
+}
 const MAX_PENDING: usize = 8;
 const MAX_ACKNOWLEDGED: usize = 32;
 const MAX_BYTES: usize = 512 * 1024;
@@ -345,7 +362,7 @@ fn stored_descriptor(repo: &Repository, value: &Value) -> Result<Value> {
     }
 }
 pub(super) fn present(repo: &Repository, args: &Value) -> Result<Value> {
-    commands::validate_presentation_arguments("present", args)?;
+    super::schema::validate(&schema("present"), args, "args")?;
     vocabulary(repo)?;
     let id = request(repo, &args["requestId"])?;
     let hash = context_kit::sha256(&serde_json::to_vec(&args["presentation"])?);
@@ -403,7 +420,7 @@ pub(super) fn read(repo: &Repository) -> Result<Value> {
     Ok(json!({"pending":pending,"receipts":receipts}))
 }
 pub(super) fn acknowledge(repo: &Repository, args: &Value) -> Result<Value> {
-    commands::validate_presentation_arguments("ack", args)?;
+    super::schema::validate(&schema("ack"), args, "args")?;
     vocabulary(repo)?;
     let id = request(repo, &args["requestId"])?;
     let outcome = text(args, "outcome");

@@ -1,6 +1,8 @@
 use super::*;
 use crate::backend::arr;
 use crate::backend::operations;
+use crate::backend::presentation;
+use crate::backend::schema;
 use crate::backend::sessions;
 use crate::backend::settings::Approval;
 use crate::backend::{now, uuid};
@@ -323,9 +325,10 @@ fn presentation_commands_validate_tagged_forms_and_acknowledgement_policy() {
         json!({"type":"saved-view","id":"standup"}),
         json!({"type":"display-items","title":"Matches","items":[{"type":"work","id":"github:one"}],"recommended":{"type":"work","id":"github:one"},"reason":"Exact title"}),
     ] {
-        validate_presentation_arguments(
-            "present",
+        schema::validate(
+            &presentation::schema("present"),
             &json!({"requestId":id,"presentation":presentation}),
+            "args",
         )
         .unwrap();
     }
@@ -338,14 +341,13 @@ fn presentation_commands_validate_tagged_forms_and_acknowledgement_policy() {
         json!({"type":"open-chat","id":"one"}),
         json!({"type":"saved-view"}),
     ] {
-        assert!(validate_presentation_arguments(
-            "present",
-            &json!({"requestId":id,"presentation":presentation})
+        assert!(schema::validate(
+            &presentation::schema("present"),
+            &json!({"requestId":id,"presentation":presentation}),
+            "args"
         )
         .is_err());
     }
-    let ambiguous = json!({"type":"string","oneOf":[{"type":"string"},{"type":"string"}]});
-    assert!(validate_arguments(&ambiguous, &json!("twice"), "args").is_err());
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let before = std::fs::read(&repo.data).ok();
@@ -2146,7 +2148,7 @@ fn sharing_commands_enforce_policy_before_owner_side_effects() {
         let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
         assert_eq!(spec.access, Access::UserAction);
-        validate_arguments(&spec.args, &args, "args").unwrap();
+        schema::validate(&spec.args, &args, "args").unwrap();
         let error =
             invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).unwrap_err();
         assert_eq!(
@@ -2622,13 +2624,12 @@ fn registry_schemas_use_only_the_validated_subset() {
             }
         }
         if let Some(default) = schema.get("default") {
-            validate_arguments(schema, default, "default").unwrap();
+            schema::validate(schema, default, "default").unwrap();
         }
     }
     for spec in table() {
         check(&spec.args);
     }
-    assert!(validate_arguments(&json!({"type":"object","oneOf":[]}), &json!({}), "args").is_err());
 }
 
 fn invalid_command_arguments(repo: &Repository) -> Vec<(&'static str, Value)> {
@@ -2738,14 +2739,14 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
         .iter()
         .find(|s| s.name == "pages.settings.apply")
         .unwrap();
-    assert!(validate_arguments(
+    assert!(schema::validate(
         &pages.args,
         &json!({"revision":0,"contentHash":"0".repeat(64),"page":"linear","scopes":null}),
         "args"
     )
     .is_ok());
     let settings = specs.iter().find(|s| s.name == "settings.apply").unwrap();
-    assert!(validate_arguments(
+    assert!(schema::validate(
             &settings.args,
             &json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"theme":"system"}}),
             "args"
@@ -2870,24 +2871,24 @@ fn connection_reload_accepts_only_secret_free_user_requests() {
         .unwrap();
     assert_eq!(spec.effect, Effect::Write);
     assert_eq!(spec.access, Access::UserAction);
-    assert!(validate_arguments(&spec.args, &json!({"provider":"github"}), "args").is_ok());
-    assert!(validate_arguments(
+    assert!(schema::validate(&spec.args, &json!({"provider":"github"}), "args").is_ok());
+    assert!(schema::validate(
         &spec.args,
         &json!({"provider":"linear","activate":true}),
         "args"
     )
     .is_ok());
-    assert!(validate_arguments(
+    assert!(schema::validate(
         &spec.args,
         &json!({"provider":"sentry","activate":false}),
         "args"
     )
     .is_ok());
-    assert!(validate_arguments(&spec.args, &json!({"activate":true}), "args").is_err());
+    assert!(schema::validate(&spec.args, &json!({"activate":true}), "args").is_err());
     for field in ["token", "previewId", "expectedRevision"] {
         let mut args = json!({"provider":"github"});
         args[field] = json!("not-accepted");
-        assert!(validate_arguments(&spec.args, &args, "args").is_err());
+        assert!(schema::validate(&spec.args, &args, "args").is_err());
     }
 }
 

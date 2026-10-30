@@ -1,7 +1,7 @@
 use super::*;
 use crate::backend::chat_preparation::{self, Kind};
 use crate::backend::operations::Caller;
-use crate::backend::{http, uuid};
+use crate::backend::{commands, http, uuid};
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
     let temp = tempfile::tempdir().unwrap();

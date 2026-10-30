@@ -384,7 +384,7 @@ pub fn save(repo: &Repository, kind: Kind, intent: &Value) -> Result<Value> {
     run(repo, kind, None, intent)
 }
 fn input(kind: Kind, args: &Value) -> Result<(String, Value)> {
-    super::commands::validate_arguments(&kind.schema(), args, "args")?;
+    super::schema::validate(&kind.schema(), args, "args")?;
     if serde_json::to_vec(args)?.len() > 64 * 1024 {
         return Err(Error::new("Preparation input exceeds 64 KiB."));
     }

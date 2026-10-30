@@ -36,29 +36,6 @@ fn skill_token_properties(fields: &[&str]) -> Value {
         .collect::<serde_json::Map<_, _>>();
     json!({"type":"object","properties":properties,"additionalProperties":false})
 }
-pub(super) fn validate_chat_metadata_arguments(kind: &str, args: &Value) -> Result<()> {
-    validate_arguments(&super::chat_edit::schema(kind), args, "args")
-}
-fn presentation_schema(kind: &str) -> Value {
-    let request_id = json!({"type":"string","maxLength":36,"pattern":"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"});
-    let target = json!({"type":"object","properties":{"type":{"type":"string","enum":["work","chat"]},"id":{"type":"string","maxLength":160}},"required":["type","id"],"additionalProperties":false});
-    match kind {
-        "present" => {
-            json!({"type":"object","properties":{"requestId":request_id,"presentation":{"type":"object","oneOf":[
-            {"type":"object","properties":{"type":{"type":"string","enum":["saved-view"]},"id":{"type":"string","maxLength":80,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["type","id"],"additionalProperties":false},
-            {"type":"object","properties":{"type":{"type":"string","enum":["display-items"]},"title":{"type":"string","maxLength":120},"items":{"type":"array","minItems":1,"maxItems":40,"items":target},"recommended":target,"reason":{"type":"string","maxLength":300}},"required":["type","items"],"additionalProperties":false}
-        ]}},"required":["requestId","presentation"],"additionalProperties":false})
-        }
-        "read" => json!({"type":"object","properties":{},"additionalProperties":false}),
-        "ack" => {
-            json!({"type":"object","properties":{"requestId":request_id,"outcome":{"type":"string","enum":["shown","dismissed"]}},"required":["requestId","outcome"],"additionalProperties":false})
-        }
-        _ => Value::Null,
-    }
-}
-pub(super) fn validate_presentation_arguments(kind: &str, args: &Value) -> Result<()> {
-    validate_arguments(&presentation_schema(kind), args, "args")
-}
 /// The operation table: every capability that App chat, agents or the browser can run by name.
 pub(super) fn table() -> Vec<Operation> {
     [
@@ -77,9 +54,9 @@ pub(super) fn table() -> Vec<Operation> {
 }
 fn ui_specifications() -> Vec<Operation> {
     vec![
-        Operation {run: |repo, args, _| super::presentation::present(repo, args),name:"ui.present",description:"Queue a verified saved view or mixed work/chat selection for the app. This does not open it: the user chooses Show or Dismiss. Use an exact requestId UUID; while retained, the same ID and intent returns its receipt and a changed intent conflicts. At most 8 pending requests; pending requests are never evicted. The last 32 acknowledged receipts are retained; an expired UUID can queue again. Reads cached metadata only; never starts a terminal or contacts a provider.",effect:Effect::Write,access:Access::Anyone,output:Output::Redacted,args:presentation_schema("present")},
-        Operation {run: |repo, _, _| super::presentation::read(repo),name:"ui.presentations.read",description:"Read pending verified result presentations and retained acknowledgement receipts. queued means available for explicit Show, not already displayed. shown is a UI acknowledgement, not proof of terminal delivery. This read does not navigate or launch anything.",effect:Effect::Read,access:Access::Anyone,output:Output::Redacted,args:presentation_schema("read")},
-        Operation {run: |repo, args, _| super::presentation::acknowledge(repo, args),name:"ui.presentations.ack",description:"Record the UI outcome for an exact queued request after explicit Show or Dismiss. Use shown only after the view was applied. Retrying the same acknowledgement is safe while retained; a different outcome conflicts. Does not open a view, remove work items or start a terminal.",effect:Effect::Write,access:Access::UserAction,output:Output::Redacted,args:presentation_schema("ack")},
+        Operation {run: |repo, args, _| super::presentation::present(repo, args),name:"ui.present",description:"Queue a verified saved view or mixed work/chat selection for the app. This does not open it: the user chooses Show or Dismiss. Use an exact requestId UUID; while retained, the same ID and intent returns its receipt and a changed intent conflicts. At most 8 pending requests; pending requests are never evicted. The last 32 acknowledged receipts are retained; an expired UUID can queue again. Reads cached metadata only; never starts a terminal or contacts a provider.",effect:Effect::Write,access:Access::Anyone,output:Output::Redacted,args:super::presentation::schema("present")},
+        Operation {run: |repo, _, _| super::presentation::read(repo),name:"ui.presentations.read",description:"Read pending verified result presentations and retained acknowledgement receipts. queued means available for explicit Show, not already displayed. shown is a UI acknowledgement, not proof of terminal delivery. This read does not navigate or launch anything.",effect:Effect::Read,access:Access::Anyone,output:Output::Redacted,args:super::presentation::schema("read")},
+        Operation {run: |repo, args, _| super::presentation::acknowledge(repo, args),name:"ui.presentations.ack",description:"Record the UI outcome for an exact queued request after explicit Show or Dismiss. Use shown only after the view was applied. Retrying the same acknowledgement is safe while retained; a different outcome conflicts. Does not open a view, remove work items or start a terminal.",effect:Effect::Write,access:Access::UserAction,output:Output::Redacted,args:super::presentation::schema("ack")},
         Operation {
             run: |_, _, _| Ok(catalog()),
             name: "commands.list",
@@ -656,200 +633,9 @@ fn terminal_specifications() -> Vec<Operation> {
     ]
 }
 
-// This validates the catalog's schema subset. Description and default are annotations.
 fn artifact_metadata_schema() -> Value {
     json!({"type":"object","properties":{"id":{"type":"string","maxLength":24,"pattern":"^[0-9a-fA-F]{24}$"},"patch":{"type":"object","properties":{"title":{"type":"string","maxLength":300},"sessionIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":80}}},"additionalProperties":false},"expected":{"type":"object","properties":{"title":{"type":"string","maxLength":64,"pattern":"^[0-9a-fA-F]{64}$"},"sessionIds":{"type":"string","maxLength":64,"pattern":"^[0-9a-fA-F]{64}$"}},"additionalProperties":false}},"required":["id","patch","expected"],"additionalProperties":false})
 }
-fn invalid_schema() -> Error {
-    Error::new("Invalid service command argument schema.")
-}
-fn invalid_argument(path: &str, reason: &str) -> Error {
-    Error::new(format!("Invalid command arguments: {path} {reason}."))
-}
-fn matches_type(constraint: &Value, value: &Value) -> Result<bool> {
-    let types = match constraint {
-        Value::String(name) => vec![name.as_str()],
-        Value::Array(names) => names
-            .iter()
-            .map(|name| name.as_str().ok_or_else(invalid_schema))
-            .collect::<Result<Vec<_>>>()?,
-        _ => return Err(invalid_schema()),
-    };
-    let mut matches = false;
-    for name in types {
-        matches |= match name {
-            "object" => value.is_object(),
-            "array" => value.is_array(),
-            "string" => value.is_string(),
-            "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
-            "boolean" => value.is_boolean(),
-            "null" => value.is_null(),
-            _ => return Err(invalid_schema()),
-        };
-    }
-    Ok(matches)
-}
-fn validate_object_keyword(
-    schema: &Value,
-    keyword: &str,
-    constraint: &Value,
-    value: &Value,
-    path: &str,
-) -> Result<()> {
-    let invalid = |reason: &str| invalid_argument(path, reason);
-    match keyword {
-        "properties" => {
-            let properties = constraint.as_object().ok_or_else(invalid_schema)?;
-            if let Some(object) = value.as_object() {
-                for (key, nested) in properties {
-                    if let Some(value) = object.get(key) {
-                        validate_arguments(nested, value, &format!("{path}.{key}"))?;
-                    }
-                }
-            }
-        }
-        "additionalProperties" => {
-            let allowed = constraint.as_bool().ok_or_else(invalid_schema)?;
-            if !allowed {
-                let properties = schema["properties"]
-                    .as_object()
-                    .ok_or_else(invalid_schema)?;
-                if value
-                    .as_object()
-                    .is_some_and(|object| object.keys().any(|key| !properties.contains_key(key)))
-                {
-                    return Err(invalid("contains an unknown field"));
-                }
-            }
-        }
-        "required" => {
-            for required in constraint.as_array().ok_or_else(invalid_schema)? {
-                let key = required.as_str().ok_or_else(invalid_schema)?;
-                if value
-                    .as_object()
-                    .is_some_and(|object| !object.contains_key(key))
-                {
-                    return Err(invalid(&format!("requires {key}")));
-                }
-            }
-        }
-        _ => return Err(invalid_schema()),
-    }
-    Ok(())
-}
-fn validate_array_keyword(
-    keyword: &str,
-    constraint: &Value,
-    value: &Value,
-    path: &str,
-) -> Result<()> {
-    let invalid = |reason: &str| invalid_argument(path, reason);
-    match keyword {
-        "items" => {
-            if let Some(items) = value.as_array() {
-                for item in items {
-                    validate_arguments(constraint, item, path)?;
-                }
-            }
-        }
-        "minItems" | "maxItems" => {
-            let limit = constraint.as_u64().ok_or_else(invalid_schema)?;
-            if value.as_array().is_some_and(|items| {
-                (keyword == "maxItems" && items.len() as u64 > limit)
-                    || (keyword == "minItems" && (items.len() as u64) < limit)
-            }) {
-                return Err(invalid("has an invalid number of items"));
-            }
-        }
-        "uniqueItems" => {
-            let unique = constraint.as_bool().ok_or_else(invalid_schema)?;
-            if unique
-                && value.as_array().is_some_and(|items| {
-                    items
-                        .iter()
-                        .enumerate()
-                        .any(|(index, item)| items[..index].contains(item))
-                })
-            {
-                return Err(invalid("contains duplicate items"));
-            }
-        }
-        _ => return Err(invalid_schema()),
-    }
-    Ok(())
-}
-pub(super) fn validate_arguments(schema: &Value, value: &Value, path: &str) -> Result<()> {
-    let invalid = |reason: &str| invalid_argument(path, reason);
-    let definition = schema.as_object().ok_or_else(invalid_schema)?;
-    for (keyword, constraint) in definition {
-        match keyword.as_str() {
-            "oneOf" => {
-                let alternatives = constraint
-                    .as_array()
-                    .filter(|items| !items.is_empty())
-                    .ok_or_else(invalid_schema)?;
-                if alternatives
-                    .iter()
-                    .filter(|nested| validate_arguments(nested, value, path).is_ok())
-                    .count()
-                    != 1
-                {
-                    return Err(invalid("must match exactly one supported form"));
-                }
-            }
-            "type" => {
-                if !matches_type(constraint, value)? {
-                    return Err(invalid("has the wrong type"));
-                }
-            }
-            "properties" | "additionalProperties" | "required" => {
-                validate_object_keyword(schema, keyword, constraint, value, path)?;
-            }
-            "enum" => {
-                if !constraint
-                    .as_array()
-                    .ok_or_else(invalid_schema)?
-                    .contains(value)
-                {
-                    return Err(invalid("has an unsupported value"));
-                }
-            }
-            "minimum" | "maximum" => {
-                let bound = constraint.as_f64().ok_or_else(invalid_schema)?;
-                if let Some(number) = value.as_f64() {
-                    if (keyword == "minimum" && number < bound)
-                        || (keyword == "maximum" && number > bound)
-                    {
-                        return Err(invalid("is outside the allowed range"));
-                    }
-                }
-            }
-            "maxLength" => {
-                let limit = constraint.as_u64().ok_or_else(invalid_schema)?;
-                if value
-                    .as_str()
-                    .is_some_and(|text| text.chars().count() as u64 > limit)
-                {
-                    return Err(invalid("is too long"));
-                }
-            }
-            "pattern" => {
-                let pattern = regex::Regex::new(constraint.as_str().ok_or_else(invalid_schema)?)
-                    .map_err(|_| invalid_schema())?;
-                if value.as_str().is_some_and(|text| !pattern.is_match(text)) {
-                    return Err(invalid("has an invalid format"));
-                }
-            }
-            "items" | "minItems" | "maxItems" | "uniqueItems" => {
-                validate_array_keyword(keyword, constraint, value, path)?;
-            }
-            "description" | "default" => {}
-            _ => return Err(invalid_schema()),
-        }
-    }
-    Ok(())
-}
-
 pub fn catalog() -> Value {
     json!({"version":1,"commands":table().into_iter().map(|spec|json!({
         "name":spec.name,"description":spec.description,

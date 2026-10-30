@@ -64,7 +64,7 @@ impl Operation {
                 "This command requires a user action. It cannot run from App chat.",
             ));
         }
-        super::commands::validate_arguments(&self.args, args, "args")?;
+        super::schema::validate(&self.args, args, "args")?;
         let mut result = (self.run)(repo, args, caller)?;
         match (self.output, caller) {
             (Output::Editable, Caller::Browser) => {}

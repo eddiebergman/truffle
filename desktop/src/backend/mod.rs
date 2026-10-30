@@ -46,6 +46,7 @@ pub mod repository;
 pub mod resources;
 pub mod reviews;
 pub mod scheduler;
+mod schema;
 pub mod session_ci;
 pub mod session_context;
 pub mod session_dispatch;
