@@ -326,12 +326,7 @@ function renderNewsletterView(list, controls, query) {
 }
 let artifactSessionFilter = "";
 function artifactEditorMutable(current) {
-  return (
-    featureFormMutable(current) &&
-    !current.loading &&
-    !current.conflict &&
-    !current.loadFailed
-  );
+  return featureFormMutable(current) && !current.loading && !current.loadFailed;
 }
 function paintArtifactEditor(current, metadata = null) {
   const form = current.host;
@@ -392,6 +387,8 @@ async function readArtifactEditor(current) {
       metadata.origin.type === "discovered"
         ? "Discovered artifact. Save explicitly registers its metadata locally."
         : "";
+    current.ui.refresh.textContent = "Refresh view";
+    current.ui.refresh.onclick = () => refreshArtifactEditor(current);
     current.ui.refresh.hidden = true;
   } catch (error) {
     if (current.isCurrent()) {
@@ -432,7 +429,6 @@ function editArtifact(artifact = null, session = null) {
   current.baseline = null;
   current.loading = false;
   current.loadFailed = false;
-  current.conflict = false;
   current.ui.refresh.onclick = () => refreshArtifactEditor(current);
   paintArtifactEditor(current);
   dialog.showModal();
@@ -518,27 +514,28 @@ $("#artifact-form").onsubmit = async (event) => {
     if (!baseline) {
       return;
     }
-    const patch = {},
-      expected = {};
-    if (title.trim() && title !== baseline.artifact.title) {
-      patch.title = title;
-    }
-    if (
-      JSON.stringify(ids) !==
-      JSON.stringify([...baseline.artifact.sessionIds].sort())
-    ) {
-      patch.sessionIds = ids;
-    }
     const discovered = baseline.origin.type === "discovered";
+    let { patch, expected } = checkedPatch(
+      {
+        values: {
+          title: baseline.artifact.title,
+          sessionIds: [...baseline.artifact.sessionIds].sort(),
+        },
+        expected: baseline.expected,
+      },
+      {
+        title: title.trim() ? title : baseline.artifact.title,
+        sessionIds: ids,
+      },
+      ["title", "sessionIds"],
+    );
     if (!Object.keys(patch).length) {
       if (!discovered) {
         current.dialog.close();
         return;
       }
-      patch.sessionIds = ids;
-    }
-    for (const field of Object.keys(patch)) {
-      expected[field] = baseline.expected[field];
+      patch = { sessionIds: ids };
+      expected = { sessionIds: baseline.expected.sessionIds };
     }
     name = discovered
       ? "artifacts.register-discovered"
@@ -554,81 +551,43 @@ $("#artifact-form").onsubmit = async (event) => {
       [target.startsWith("https://") ? "url" : "path"]: target,
     };
   }
-  current.pending = true;
-  holdFormFocus(form, current);
-  freezeFeatureForm(current, true);
-  current.ui.message.textContent = "Saving artifact…";
-  current.acceptedText = "Artifact saved.";
-  const result = await presentLocalWrite(async () => {
-    try {
-      await api(
-        name ? "/api/commands/invoke" : "/api/edit",
-        name ? { name, args } : args,
-      );
-      libraryGeneration++;
-      libraryFetched = 0;
-    } catch (error) {
-      current.rejectedStatus = error.status;
-      if (writeFailureKind(error) === "unknown") {
+  await submitFeatureForm(current, {
+    write: async () => {
+      try {
+        await api(
+          name ? "/api/commands/invoke" : "/api/edit",
+          name ? { name, args } : args,
+        );
         libraryGeneration++;
         libraryFetched = 0;
+      } catch (error) {
+        if (writeFailureKind(error) === "unknown") {
+          libraryGeneration++;
+          libraryFetched = 0;
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
-  current.result = result;
-  if (result.kind === "accepted") {
-    try {
+    },
+    acceptedText: "Artifact saved.",
+    afterReady: async () => {
       const library = await loadArtifactLibrary(true);
       if (!library.accepted) {
         throw new Error("The artifact library could not refresh.");
       }
-    } catch (error) {
-      current.result = {
-        kind: "accepted",
-        presentation: "pending",
-        error: error.message,
-      };
-    }
-  }
-  current.pending = false;
-  if (!current.isCurrent()) {
-    if (featureForms.get(current.dialog) === current && current.dialog.open) {
-      freezeFeatureForm(current, true);
-    }
-    toast(localWriteMessage(current.result, "Artifact saved."));
-    return;
-  }
-  if (
-    current.result.kind === "accepted" &&
-    current.result.presentation === "ready"
-  ) {
-    current.dialog.close();
-    toast("Artifact saved.");
-    return;
-  }
-  current.ui.refresh.textContent = "Refresh view";
-  current.ui.refresh.onclick = () => refreshArtifactEditor(current);
-  if (
-    current.result.kind === "rejected" &&
-    current.rejectedStatus === 409 &&
-    current.target
-  ) {
-    // A rejected checked write retains the draft and its captured baseline. A
-    // deliberate reload replaces that draft rather than silently rebasing it.
-    current.conflict = true;
-    freezeFeatureForm(current, false);
-    current.ui.message.textContent = `${
-      current.result.error
-    } Your draft remains. Reload artifact replaces this draft with current metadata before saving.`;
-    current.ui.refresh.textContent = "Reload artifact";
-    current.ui.refresh.hidden = false;
-    current.ui.refresh.onclick = () => readArtifactEditor(current);
-    form.querySelector('button[type="submit"]').disabled = true;
-    restoreFormFocus(current, current.ui.refresh);
-  } else {
-    presentFeatureFormResult(current);
-  }
+      current.dialog.close();
+    },
+    onConflict: current.target
+      ? (result) => {
+          current.ui.message.textContent = `${
+            result.error
+          } Your draft remains. Reload artifact replaces this draft with current metadata before saving.`;
+          current.ui.refresh.textContent = "Reload artifact";
+          current.ui.refresh.hidden = false;
+          current.ui.refresh.onclick = () => readArtifactEditor(current);
+          restoreFormFocus(current, current.ui.refresh);
+        }
+      : null,
+  });
 };
 function artifactCopyButton(label, action) {
   const button = featureButton(

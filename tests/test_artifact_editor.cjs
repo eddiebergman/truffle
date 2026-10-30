@@ -281,7 +281,8 @@ test("accepted save with failed library or state presentation recovers via reads
       ).length,
       1,
     );
-    assert.equal(f.libraries, 2);
+    // The library is read after the state refresh succeeds, then by Refresh view.
+    assert.equal(f.libraries, stateFailure ? 1 : 2);
   }
 });
 test("unknown add reply keeps original draft locked even after both read-only refreshes succeed", async () => {
