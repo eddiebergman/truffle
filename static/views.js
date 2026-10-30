@@ -878,8 +878,8 @@ function renderSavedViewControls() {
     label = view?.name || "Current view",
     modified = Boolean(
       view &&
-      viewState.base &&
-      !sameSavedViewDefinition(viewState.draft, viewState.base),
+        viewState.base &&
+        !sameSavedViewDefinition(viewState.draft, viewState.base),
     );
   const rules = savedViewRuleCount(viewState.draft.filter),
     filter = savedViewControl(`Filters${rules ? ` · ${rules}` : ""}`, () =>
@@ -1740,9 +1740,9 @@ function openSavedViewEditor() {
           latest = fresh?.views.find((candidate) => candidate.id === view?.id);
         conflictingView = Boolean(
           view &&
-          (!latest ||
-            view.name !== latest.name ||
-            !sameSavedViewDefinition(view, latest)),
+            (!latest ||
+              view.name !== latest.name ||
+              !sameSavedViewDefinition(view, latest)),
         );
         if (conflictingView) {
           copyBaseline = fresh;

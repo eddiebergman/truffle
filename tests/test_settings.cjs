@@ -912,172 +912,164 @@ function settingsSaveFixture() {
   };
 }
 
-test(
-  "deferred Settings Save freezes only its own draft controls and guards all edit handlers",
-  { timeout: 1000 },
-  async () => {
+test("deferred Settings Save freezes only its own draft controls and guards all edit handlers", {
+  timeout: 1000,
+}, async () => {
+  const f = settingsSaveFixture();
+  f.edit("midnight");
+  const pending = deferredSave();
+  f.api(() => pending.promise);
+  const saving = f.c.savePreferences();
+  await new Promise((resolve) => setImmediate(resolve));
+  for (const node of [
+    f.node("preference-theme"),
+    f.node("shortcut-commands"),
+    ...f.quickInputs(),
+    f.quickButton("Add quick action"),
+    f.file,
+  ]) {
+    assert.equal(node.disabled, true);
+  }
+  assert.equal(f.independent.disabled, false);
+  f.edit("later");
+  const shortcut = f.node("shortcut-commands");
+  shortcut.value = "Primary+J";
+  shortcut.oninput();
+  f.quickInputs()[0].value = "Later action";
+  f.quickInputs()[0].oninput();
+  f.quickButton("Add quick action").onclick();
+  f.quickButton("Remove").onclick();
+  f.reset().onclick();
+  f.file.files = [
+    {
+      size: 100,
+      text: async () =>
+        JSON.stringify({
+          format: "truffle-settings",
+          version: 1,
+          values: { theme: "imported" },
+        }),
+    },
+  ];
+  await f.file.onchange();
+  await f.c.discardSettingsDraft();
+  assert.equal(f.c.settingsDraft.theme, "midnight");
+  assert.equal(f.c.settingsDraft.keybindings.commands, "Primary+K");
+  assert.equal(f.c.settingsDraft.quickActions.length, 1);
+  assert.equal(f.c.settingsDraft.quickActions[0].title, "One");
+  assert.equal(f.calls.length, 1);
+  pending.resolve({
+    ...f.c.appSettings,
+    revision: 8,
+    contentHash: "b".repeat(64),
+    values: structuredClone(f.calls[0].payload.patch),
+  });
+  await saving;
+  assert.equal(f.node("preference-theme").disabled, false);
+  assert.equal(f.file.disabled, false);
+  assert.equal(f.c.settingsSaving, false);
+  assert.equal(f.c.settingsDirty, false);
+});
+
+test("deferred Settings Save submits an immutable snapshot and retains any unexpected newer draft", {
+  timeout: 1000,
+}, async () => {
+  const f = settingsSaveFixture();
+  f.edit("midnight");
+  const pending = deferredSave();
+  f.api(() => pending.promise);
+  const saving = f.c.savePreferences();
+  await new Promise((resolve) => setImmediate(resolve));
+  f.c.settingsDraft.theme = "later";
+  assert.equal(f.calls[0].payload.patch.theme, "midnight");
+  assert.equal(f.calls[0].payload.revision, 7);
+  assert.equal(f.calls[0].payload.contentHash, "a".repeat(64));
+  pending.resolve({
+    ...f.c.appSettings,
+    revision: 8,
+    contentHash: "b".repeat(64),
+    values: structuredClone(f.calls[0].payload.patch),
+  });
+  await saving;
+  assert.equal(f.c.settingsDraft.theme, "later");
+  assert.equal(f.c.settingsDirty, true);
+  assert.equal(f.c.settingsBaseline.revision, 8);
+  assert.match(f.error(), /newer draft is still unsaved/);
+});
+
+test("deferred Settings Save failure preserves draft and CAS errors, reenables controls and restores only lost focus", {
+  timeout: 1000,
+}, async () => {
+  for (const moveFocus of [false, true]) {
     const f = settingsSaveFixture();
     f.edit("midnight");
+    f.node("settings-save").focus();
     const pending = deferredSave();
     f.api(() => pending.promise);
     const saving = f.c.savePreferences();
     await new Promise((resolve) => setImmediate(resolve));
-    for (const node of [
-      f.node("preference-theme"),
-      f.node("shortcut-commands"),
-      ...f.quickInputs(),
-      f.quickButton("Add quick action"),
-      f.file,
-    ]) {
-      assert.equal(node.disabled, true);
+    if (moveFocus) {
+      f.independent.focus();
     }
-    assert.equal(f.independent.disabled, false);
-    f.edit("later");
-    const shortcut = f.node("shortcut-commands");
-    shortcut.value = "Primary+J";
-    shortcut.oninput();
-    f.quickInputs()[0].value = "Later action";
-    f.quickInputs()[0].oninput();
-    f.quickButton("Add quick action").onclick();
-    f.quickButton("Remove").onclick();
-    f.reset().onclick();
-    f.file.files = [
-      {
-        size: 100,
-        text: async () =>
-          JSON.stringify({
-            format: "truffle-settings",
-            version: 1,
-            values: { theme: "imported" },
-          }),
-      },
-    ];
-    await f.file.onchange();
-    await f.c.discardSettingsDraft();
-    assert.equal(f.c.settingsDraft.theme, "midnight");
-    assert.equal(f.c.settingsDraft.keybindings.commands, "Primary+K");
-    assert.equal(f.c.settingsDraft.quickActions.length, 1);
-    assert.equal(f.c.settingsDraft.quickActions[0].title, "One");
-    assert.equal(f.calls.length, 1);
-    pending.resolve({
-      ...f.c.appSettings,
-      revision: 8,
-      contentHash: "b".repeat(64),
-      values: structuredClone(f.calls[0].payload.patch),
-    });
+    pending.reject(
+      new Error("Settings changed elsewhere. Reload before saving."),
+    );
     await saving;
+    assert.equal(f.c.settingsDraft.theme, "midnight");
+    assert.equal(f.c.settingsBaseline.revision, 7);
+    assert.match(f.error(), /changed elsewhere/);
     assert.equal(f.node("preference-theme").disabled, false);
     assert.equal(f.file.disabled, false);
-    assert.equal(f.c.settingsSaving, false);
-    assert.equal(f.c.settingsDirty, false);
-  },
-);
-
-test(
-  "deferred Settings Save submits an immutable snapshot and retains any unexpected newer draft",
-  { timeout: 1000 },
-  async () => {
-    const f = settingsSaveFixture();
-    f.edit("midnight");
-    const pending = deferredSave();
-    f.api(() => pending.promise);
-    const saving = f.c.savePreferences();
-    await new Promise((resolve) => setImmediate(resolve));
-    f.c.settingsDraft.theme = "later";
-    assert.equal(f.calls[0].payload.patch.theme, "midnight");
-    assert.equal(f.calls[0].payload.revision, 7);
-    assert.equal(f.calls[0].payload.contentHash, "a".repeat(64));
-    pending.resolve({
-      ...f.c.appSettings,
-      revision: 8,
-      contentHash: "b".repeat(64),
-      values: structuredClone(f.calls[0].payload.patch),
-    });
-    await saving;
-    assert.equal(f.c.settingsDraft.theme, "later");
     assert.equal(f.c.settingsDirty, true);
-    assert.equal(f.c.settingsBaseline.revision, 8);
-    assert.match(f.error(), /newer draft is still unsaved/);
-  },
-);
-
-test(
-  "deferred Settings Save failure preserves draft and CAS errors, reenables controls and restores only lost focus",
-  { timeout: 1000 },
-  async () => {
-    for (const moveFocus of [false, true]) {
-      const f = settingsSaveFixture();
-      f.edit("midnight");
-      f.node("settings-save").focus();
-      const pending = deferredSave();
-      f.api(() => pending.promise);
-      const saving = f.c.savePreferences();
-      await new Promise((resolve) => setImmediate(resolve));
-      if (moveFocus) {
-        f.independent.focus();
-      }
-      pending.reject(
-        new Error("Settings changed elsewhere. Reload before saving."),
-      );
-      await saving;
-      assert.equal(f.c.settingsDraft.theme, "midnight");
-      assert.equal(f.c.settingsBaseline.revision, 7);
-      assert.match(f.error(), /changed elsewhere/);
-      assert.equal(f.node("preference-theme").disabled, false);
-      assert.equal(f.file.disabled, false);
-      assert.equal(f.c.settingsDirty, true);
-      assert.equal(
-        f.document.activeElement,
-        moveFocus ? f.independent : f.node("settings-save"),
-      );
-    }
-  },
-);
-
-test(
-  "profile reading and reload started before Save cannot overwrite the submitted or later draft",
-  { timeout: 1000 },
-  async () => {
-    const f = settingsSaveFixture();
-    f.edit("midnight");
-    const reading = deferredSave();
-    f.file.files = [{ size: 100, text: () => reading.promise }];
-    const importing = f.file.onchange();
-    const pending = deferredSave();
-    f.api(() => pending.promise);
-    const saving = f.c.savePreferences();
-    await new Promise((resolve) => setImmediate(resolve));
-    reading.resolve(
-      JSON.stringify({
-        format: "truffle-settings",
-        version: 1,
-        values: { theme: "imported" },
-      }),
+    assert.equal(
+      f.document.activeElement,
+      moveFocus ? f.independent : f.node("settings-save"),
     );
-    await importing;
-    assert.equal(f.c.settingsDraft.theme, "midnight");
-    assert.equal(f.calls.length, 1);
-    pending.reject(new Error("Save failed"));
-    await saving;
-    const reload = deferredSave();
-    f.load(() => reload.promise);
-    const discarding = f.c.discardSettingsDraft();
-    const request = deferredSave();
-    f.api(() => request.promise);
-    const second = f.c.savePreferences();
-    await new Promise((resolve) => setImmediate(resolve));
-    reload.resolve({
-      ...f.c.appSettings,
-      revision: 99,
-      values: { ...f.c.settingsDraft, theme: "stale reload" },
-    });
-    await discarding;
-    assert.equal(f.c.settingsBaseline.revision, 7);
-    assert.equal(f.c.settingsDraft.theme, "midnight");
-    request.reject(new Error("Save failed"));
-    await second;
-  },
-);
+  }
+});
+
+test("profile reading and reload started before Save cannot overwrite the submitted or later draft", {
+  timeout: 1000,
+}, async () => {
+  const f = settingsSaveFixture();
+  f.edit("midnight");
+  const reading = deferredSave();
+  f.file.files = [{ size: 100, text: () => reading.promise }];
+  const importing = f.file.onchange();
+  const pending = deferredSave();
+  f.api(() => pending.promise);
+  const saving = f.c.savePreferences();
+  await new Promise((resolve) => setImmediate(resolve));
+  reading.resolve(
+    JSON.stringify({
+      format: "truffle-settings",
+      version: 1,
+      values: { theme: "imported" },
+    }),
+  );
+  await importing;
+  assert.equal(f.c.settingsDraft.theme, "midnight");
+  assert.equal(f.calls.length, 1);
+  pending.reject(new Error("Save failed"));
+  await saving;
+  const reload = deferredSave();
+  f.load(() => reload.promise);
+  const discarding = f.c.discardSettingsDraft();
+  const request = deferredSave();
+  f.api(() => request.promise);
+  const second = f.c.savePreferences();
+  await new Promise((resolve) => setImmediate(resolve));
+  reload.resolve({
+    ...f.c.appSettings,
+    revision: 99,
+    values: { ...f.c.settingsDraft, theme: "stale reload" },
+  });
+  await discarding;
+  assert.equal(f.c.settingsBaseline.revision, 7);
+  assert.equal(f.c.settingsDraft.theme, "midnight");
+  request.reject(new Error("Save failed"));
+  await second;
+});
 
 test("Settings Save blocks shortcut capture and recording finalization never changes its draft", async () => {
   const f = recorderContext();

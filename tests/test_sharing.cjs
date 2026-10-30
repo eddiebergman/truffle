@@ -335,333 +335,311 @@ function sharingSettingsFixture() {
   };
 }
 
-test(
-  "Settings sharing unreadable initial metadata never claims saved and can retry",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    f.request(async () => ({
-      config: { error: "Sharing configuration is unreadable." },
-    }));
-    await f.render();
-    assert.equal(f.state().baseline, null);
-    assert.equal(f.state().draft, null);
-    assert.equal(f.button("Save sharing configuration"), undefined);
-    assert.match(f.text(), /configuration is unreadable/);
-    assert.doesNotMatch(f.text(), /configuration is saved/);
-    f.request(null);
-    await f.render();
-    assert.ok(f.button("Save sharing configuration"));
-    assert.equal(f.state().baseline.revision, 2);
-    assert.match(f.status(), /configuration is saved/);
-  },
-);
+test("Settings sharing unreadable initial metadata never claims saved and can retry", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  f.request(async () => ({
+    config: { error: "Sharing configuration is unreadable." },
+  }));
+  await f.render();
+  assert.equal(f.state().baseline, null);
+  assert.equal(f.state().draft, null);
+  assert.equal(f.button("Save sharing configuration"), undefined);
+  assert.match(f.text(), /configuration is unreadable/);
+  assert.doesNotMatch(f.text(), /configuration is saved/);
+  f.request(null);
+  await f.render();
+  assert.ok(f.button("Save sharing configuration"));
+  assert.equal(f.state().baseline.revision, 2);
+  assert.match(f.status(), /configuration is saved/);
+});
 
-test(
-  "Settings sharing failed reload and clean refresh preserve the current baseline and draft",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    f.edit("Receiving inbox name", "reviewed");
-    const baseline = JSON.stringify(f.state().baseline);
-    f.request(async () => ({
-      config: { error: "Sharing configuration is unreadable." },
-    }));
-    await f.button("Discard draft & reload").onclick();
-    assert.equal(f.input("Receiving inbox name").value, "reviewed");
-    assert.equal(JSON.stringify(f.state().baseline), baseline);
-    assert.match(f.status(), /configuration is unreadable/);
-    f.request(null);
-    await f.button("Discard draft & reload").onclick();
-    f.request(async () => ({ config: { revision: -1, contentHash: "bad" } }));
-    await f.render();
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(f.input("Receiving inbox name").value, "eddie");
-    assert.equal(JSON.stringify(f.state().baseline), baseline);
-    assert.match(f.status(), /Could not load/);
-  },
-);
+test("Settings sharing failed reload and clean refresh preserve the current baseline and draft", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  f.edit("Receiving inbox name", "reviewed");
+  const baseline = JSON.stringify(f.state().baseline);
+  f.request(async () => ({
+    config: { error: "Sharing configuration is unreadable." },
+  }));
+  await f.button("Discard draft & reload").onclick();
+  assert.equal(f.input("Receiving inbox name").value, "reviewed");
+  assert.equal(JSON.stringify(f.state().baseline), baseline);
+  assert.match(f.status(), /configuration is unreadable/);
+  f.request(null);
+  await f.button("Discard draft & reload").onclick();
+  f.request(async () => ({ config: { revision: -1, contentHash: "bad" } }));
+  await f.render();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.input("Receiving inbox name").value, "eddie");
+  assert.equal(JSON.stringify(f.state().baseline), baseline);
+  assert.match(f.status(), /Could not load/);
+});
 
-test(
-  "Settings sharing profile stays a reviewed draft across repaint and close/reopen with its pinned CAS",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const file = f.file();
-    file.files = [
-      {
-        size: 100,
-        text: async () =>
-          JSON.stringify(sharingProfile("folder", "/Volumes/Team", "sam")),
-      },
-    ];
-    await file.onchange();
-    assert.deepEqual(
-      f.calls.map((call) => call.name),
-      ["sharing.state"],
-    );
-    assert.match(f.status(), /loaded for review/);
-    const old = f.config();
-    f.setConfig({
-      ...old,
-      revision: 9,
+test("Settings sharing profile stays a reviewed draft across repaint and close/reopen with its pinned CAS", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const file = f.file();
+  file.files = [
+    {
+      size: 100,
+      text: async () =>
+        JSON.stringify(sharingProfile("folder", "/Volumes/Team", "sam")),
+    },
+  ];
+  await file.onchange();
+  assert.deepEqual(
+    f.calls.map((call) => call.name),
+    ["sharing.state"],
+  );
+  assert.match(f.status(), /loaded for review/);
+  const old = f.config();
+  f.setConfig({
+    ...old,
+    revision: 9,
+    contentHash: "c".repeat(64),
+    handle: "external",
+  });
+  await f.render();
+  assert.equal(f.input("Sharing storage root").value, "/Volumes/Team");
+  f.dialog.open = false;
+  f.dialog.open = true;
+  await f.render();
+  assert.equal(f.input("Receiving inbox name").value, "sam");
+  await f.button("Save sharing configuration").onclick();
+  const request = f.calls.find(
+    (call) => call.name === "sharing.configure",
+  ).args;
+  assert.equal(request.revision, 2);
+  assert.equal(request.contentHash, "a".repeat(64));
+  assert.equal(request.transport.root, "/Volumes/Team");
+  assert.equal(request.handle, "sam");
+  await f.button("Discard draft & reload").onclick();
+  assert.equal(f.input("Sharing storage root").value, "/Volumes/Team");
+  assert.match(f.status(), /discarded/);
+});
+
+test("Settings sharing refreshes a clean reopen but never rebases a dirty draft", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const original = f.config(),
+    fresh = {
+      ...original,
+      revision: 8,
       contentHash: "c".repeat(64),
-      handle: "external",
-    });
-    await f.render();
-    assert.equal(f.input("Sharing storage root").value, "/Volumes/Team");
-    f.dialog.open = false;
-    f.dialog.open = true;
-    await f.render();
-    assert.equal(f.input("Receiving inbox name").value, "sam");
-    await f.button("Save sharing configuration").onclick();
-    const request = f.calls.find(
-      (call) => call.name === "sharing.configure",
-    ).args;
-    assert.equal(request.revision, 2);
-    assert.equal(request.contentHash, "a".repeat(64));
-    assert.equal(request.transport.root, "/Volumes/Team");
-    assert.equal(request.handle, "sam");
-    await f.button("Discard draft & reload").onclick();
-    assert.equal(f.input("Sharing storage root").value, "/Volumes/Team");
-    assert.match(f.status(), /discarded/);
-  },
-);
+      handle: "fresh",
+    };
+  f.setConfig(fresh);
+  await f.render();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.input("Receiving inbox name").value, "fresh");
+  assert.equal(f.state().baseline.revision, 8);
+  f.edit("Receiving inbox name", "reviewed");
+  const calls = f.calls.length;
+  f.setConfig({ ...fresh, revision: 9, handle: "external" });
+  await f.render();
+  assert.equal(f.calls.length, calls);
+  assert.equal(f.input("Receiving inbox name").value, "reviewed");
+  assert.equal(f.state().baseline.revision, 8);
+});
 
-test(
-  "Settings sharing refreshes a clean reopen but never rebases a dirty draft",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const original = f.config(),
-      fresh = {
-        ...original,
-        revision: 8,
-        contentHash: "c".repeat(64),
-        handle: "fresh",
-      };
-    f.setConfig(fresh);
-    await f.render();
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(f.input("Receiving inbox name").value, "fresh");
-    assert.equal(f.state().baseline.revision, 8);
-    f.edit("Receiving inbox name", "reviewed");
-    const calls = f.calls.length;
-    f.setConfig({ ...fresh, revision: 9, handle: "external" });
-    await f.render();
-    assert.equal(f.calls.length, calls);
-    assert.equal(f.input("Receiving inbox name").value, "reviewed");
-    assert.equal(f.state().baseline.revision, 8);
-  },
-);
+test("Settings sharing clean refresh cannot overwrite an edit while its response is pending", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const pending = deferred();
+  f.request(() => pending.promise);
+  await f.render();
+  f.edit("Receiving inbox name", "typed");
+  pending.resolve({
+    config: { ...f.config(), revision: 9, handle: "external" },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.input("Receiving inbox name").value, "typed");
+  assert.equal(f.state().baseline.revision, 2);
+});
 
-test(
-  "Settings sharing clean refresh cannot overwrite an edit while its response is pending",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const pending = deferred();
-    f.request(() => pending.promise);
-    await f.render();
-    f.edit("Receiving inbox name", "typed");
-    pending.resolve({
-      config: { ...f.config(), revision: 9, handle: "external" },
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(f.input("Receiving inbox name").value, "typed");
-    assert.equal(f.state().baseline.revision, 2);
-  },
-);
+test("Settings sharing delayed imports cannot replace newer edits, newer imports or a replacement renderer", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const first = deferred(),
+    file = f.file();
+  file.files = [{ size: 100, text: () => first.promise }];
+  const pending = file.onchange();
+  f.edit("Sharing storage root", "/Volumes/Newer edit");
+  first.resolve(
+    JSON.stringify(sharingProfile("folder", "/Volumes/Old file", "sam")),
+  );
+  await pending;
+  assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer edit");
+  assert.match(f.status(), /changed while reading/);
+  const second = deferred();
+  file.files = [{ size: 100, text: () => second.promise }];
+  const olderImport = file.onchange();
+  file.files = [
+    {
+      size: 100,
+      text: async () =>
+        JSON.stringify(sharingProfile("folder", "/Volumes/Newer file", "sam")),
+    },
+  ];
+  await file.onchange();
+  second.resolve(
+    JSON.stringify(sharingProfile("folder", "/Volumes/Old file", "sam")),
+  );
+  await olderImport;
+  assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer file");
+  const third = deferred();
+  file.files = [{ size: 100, text: () => third.promise }];
+  const detachedImport = file.onchange();
+  await f.render();
+  third.resolve(
+    JSON.stringify(sharingProfile("folder", "/Volumes/Detached file", "sam")),
+  );
+  await detachedImport;
+  await f.render();
+  assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer file");
+  assert.equal(file.value, "");
+});
 
-test(
-  "Settings sharing delayed imports cannot replace newer edits, newer imports or a replacement renderer",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const first = deferred(),
-      file = f.file();
-    file.files = [{ size: 100, text: () => first.promise }];
-    const pending = file.onchange();
-    f.edit("Sharing storage root", "/Volumes/Newer edit");
-    first.resolve(
-      JSON.stringify(sharingProfile("folder", "/Volumes/Old file", "sam")),
-    );
-    await pending;
-    assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer edit");
-    assert.match(f.status(), /changed while reading/);
-    const second = deferred();
-    file.files = [{ size: 100, text: () => second.promise }];
-    const olderImport = file.onchange();
-    file.files = [
-      {
-        size: 100,
-        text: async () =>
-          JSON.stringify(
-            sharingProfile("folder", "/Volumes/Newer file", "sam"),
-          ),
-      },
-    ];
-    await file.onchange();
-    second.resolve(
-      JSON.stringify(sharingProfile("folder", "/Volumes/Old file", "sam")),
-    );
-    await olderImport;
-    assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer file");
-    const third = deferred();
-    file.files = [{ size: 100, text: () => third.promise }];
-    const detachedImport = file.onchange();
-    await f.render();
-    third.resolve(
-      JSON.stringify(sharingProfile("folder", "/Volumes/Detached file", "sam")),
-    );
-    await detachedImport;
-    await f.render();
-    assert.equal(f.input("Sharing storage root").value, "/Volumes/Newer file");
-    assert.equal(file.value, "");
-  },
-);
+test("Settings sharing ignores private file completion after the dialog closes", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const pending = deferred(),
+    file = f.file();
+  file.files = [{ size: 100, text: () => pending.promise }];
+  const importing = file.onchange();
+  f.dialog.open = false;
+  pending.resolve(
+    JSON.stringify(sharingProfile("folder", "/Volumes/Closed", "sam")),
+  );
+  await importing;
+  f.dialog.open = true;
+  await f.render();
+  assert.equal(f.input("Sharing storage root").value, "gs://bucket/prefix");
+  assert.equal(file.value, "");
+});
 
-test(
-  "Settings sharing ignores private file completion after the dialog closes",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const pending = deferred(),
-      file = f.file();
-    file.files = [{ size: 100, text: () => pending.promise }];
-    const importing = file.onchange();
-    f.dialog.open = false;
-    pending.resolve(
-      JSON.stringify(sharingProfile("folder", "/Volumes/Closed", "sam")),
-    );
-    await importing;
-    f.dialog.open = true;
-    await f.render();
-    assert.equal(f.input("Sharing storage root").value, "gs://bucket/prefix");
-    assert.equal(file.value, "");
-  },
-);
+test("Settings sharing delayed reload preserves edits made while loading and ignores detached completion", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  const pending = deferred();
+  f.request(() => pending.promise);
+  const reload = f.button("Discard draft & reload").onclick();
+  f.edit("Receiving inbox name", "newer");
+  pending.resolve({
+    config: { ...f.config(), handle: "external", revision: 3 },
+  });
+  await reload;
+  assert.equal(f.input("Receiving inbox name").value, "newer");
+  assert.match(f.status(), /changed while reloading/);
+  assert.equal(f.state().baseline.revision, 2);
+  const detached = deferred();
+  f.request(() => detached.promise);
+  const old = f.button("Discard draft & reload").onclick();
+  await f.render();
+  detached.resolve({
+    config: { ...f.config(), handle: "detached", revision: 4 },
+  });
+  await old;
+  assert.equal(f.input("Receiving inbox name").value, "newer");
+  assert.equal(f.state().baseline.revision, 2);
+  f.request(async () => ({
+    config: { ...f.config(), handle: "accepted", revision: 5 },
+  }));
+  await f.button("Discard draft & reload").onclick();
+  assert.equal(f.input("Receiving inbox name").value, "accepted");
+  assert.equal(f.state().baseline.revision, 5);
+});
 
-test(
-  "Settings sharing delayed reload preserves edits made while loading and ignores detached completion",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    const pending = deferred();
-    f.request(() => pending.promise);
-    const reload = f.button("Discard draft & reload").onclick();
-    f.edit("Receiving inbox name", "newer");
-    pending.resolve({
-      config: { ...f.config(), handle: "external", revision: 3 },
-    });
-    await reload;
-    assert.equal(f.input("Receiving inbox name").value, "newer");
-    assert.match(f.status(), /changed while reloading/);
-    assert.equal(f.state().baseline.revision, 2);
-    const detached = deferred();
-    f.request(() => detached.promise);
-    const old = f.button("Discard draft & reload").onclick();
-    await f.render();
-    detached.resolve({
-      config: { ...f.config(), handle: "detached", revision: 4 },
-    });
-    await old;
-    assert.equal(f.input("Receiving inbox name").value, "newer");
-    assert.equal(f.state().baseline.revision, 2);
-    f.request(async () => ({
-      config: { ...f.config(), handle: "accepted", revision: 5 },
-    }));
-    await f.button("Discard draft & reload").onclick();
-    assert.equal(f.input("Receiving inbox name").value, "accepted");
-    assert.equal(f.state().baseline.revision, 5);
-  },
-);
+test("Settings sharing pending Save freezes conflicting controls across repaint and restores the current renderer", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  f.edit("Receiving inbox name", "sam");
+  const pending = deferred();
+  f.request(() => pending.promise);
+  const save = f.button("Save sharing configuration").onclick();
+  await f.render();
+  for (const label of [
+    "Sharing storage type",
+    "Sharing storage root",
+    "Receiving inbox name",
+  ]) {
+    assert.equal(f.input(label).disabled, true);
+  }
+  for (const label of [
+    "Save sharing configuration",
+    "Discard draft & reload",
+    "Import sharing profile",
+    "Export sharing profile",
+    "Check inbox access",
+  ]) {
+    assert.equal(f.button(label).disabled, true);
+  }
+  const before = f.calls.length;
+  await f.button("Discard draft & reload").onclick();
+  assert.equal(f.calls.length, before);
+  pending.resolve({
+    config: {
+      ...f.config(),
+      handle: "sam",
+      revision: 3,
+      contentHash: "b".repeat(64),
+    },
+  });
+  await save;
+  assert.equal(f.input("Receiving inbox name").disabled, false);
+  assert.equal(f.input("Receiving inbox name").value, "sam");
+  assert.match(f.status(), /configuration saved/);
+  assert.equal(f.state().baseline.revision, 3);
+});
 
-test(
-  "Settings sharing pending Save freezes conflicting controls across repaint and restores the current renderer",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    f.edit("Receiving inbox name", "sam");
-    const pending = deferred();
-    f.request(() => pending.promise);
-    const save = f.button("Save sharing configuration").onclick();
-    await f.render();
-    for (const label of [
-      "Sharing storage type",
-      "Sharing storage root",
-      "Receiving inbox name",
-    ]) {
-      assert.equal(f.input(label).disabled, true);
-    }
-    for (const label of [
-      "Save sharing configuration",
-      "Discard draft & reload",
-      "Import sharing profile",
-      "Export sharing profile",
-      "Check inbox access",
-    ]) {
-      assert.equal(f.button(label).disabled, true);
-    }
-    const before = f.calls.length;
-    await f.button("Discard draft & reload").onclick();
-    assert.equal(f.calls.length, before);
-    pending.resolve({
-      config: {
-        ...f.config(),
-        handle: "sam",
-        revision: 3,
-        contentHash: "b".repeat(64),
-      },
-    });
-    await save;
-    assert.equal(f.input("Receiving inbox name").disabled, false);
-    assert.equal(f.input("Receiving inbox name").value, "sam");
-    assert.match(f.status(), /configuration saved/);
-    assert.equal(f.state().baseline.revision, 3);
-  },
-);
-
-test(
-  "Settings sharing Save only clears the exact submitted draft and retains stale-CAS errors",
-  { timeout: 1000 },
-  async () => {
-    const f = sharingSettingsFixture();
-    await f.render();
-    f.edit("Receiving inbox name", "sam");
-    const pending = deferred();
-    f.request(() => pending.promise);
-    const save = f.button("Save sharing configuration").onclick();
-    // Simulate a newer feature draft arriving independently of the disabled DOM.
-    f.state().draft = { ...f.state().draft, handle: "later" };
-    pending.resolve({
-      config: {
-        ...f.config(),
-        handle: "sam",
-        revision: 3,
-        contentHash: "b".repeat(64),
-      },
-    });
-    await save;
-    assert.equal(f.input("Receiving inbox name").value, "later");
-    assert.match(f.status(), /newer draft is still unsaved/);
-    f.request(async () => {
-      throw new Error("Sharing settings changed. Reload them before saving.");
-    });
-    await f.button("Save sharing configuration").onclick();
-    assert.equal(f.input("Receiving inbox name").value, "later");
-    assert.match(f.status(), /settings changed/);
-    assert.equal(f.state().baseline.revision, 3);
-  },
-);
+test("Settings sharing Save only clears the exact submitted draft and retains stale-CAS errors", {
+  timeout: 1000,
+}, async () => {
+  const f = sharingSettingsFixture();
+  await f.render();
+  f.edit("Receiving inbox name", "sam");
+  const pending = deferred();
+  f.request(() => pending.promise);
+  const save = f.button("Save sharing configuration").onclick();
+  // Simulate a newer feature draft arriving independently of the disabled DOM.
+  f.state().draft = { ...f.state().draft, handle: "later" };
+  pending.resolve({
+    config: {
+      ...f.config(),
+      handle: "sam",
+      revision: 3,
+      contentHash: "b".repeat(64),
+    },
+  });
+  await save;
+  assert.equal(f.input("Receiving inbox name").value, "later");
+  assert.match(f.status(), /newer draft is still unsaved/);
+  f.request(async () => {
+    throw new Error("Sharing settings changed. Reload them before saving.");
+  });
+  await f.button("Save sharing configuration").onclick();
+  assert.equal(f.input("Receiving inbox name").value, "later");
+  assert.match(f.status(), /settings changed/);
+  assert.equal(f.state().baseline.revision, 3);
+});
 
 test("a destination-change retry error stays visible without silently starting a new send", async () => {
   const calls = [],

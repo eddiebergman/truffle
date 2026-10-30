@@ -770,13 +770,13 @@ if (typeof document !== "undefined") {
           sharingOpen: Boolean($("#sharing-menu")?.open),
           sharingInbox: Boolean(
             $("#sharing-menu")?.open &&
-            [
-              ...$("#sharing-menu").querySelectorAll(".sharing-tabs button"),
-            ].some(
-              (eachButton) =>
-                eachButton.textContent === "Inbox" &&
-                eachButton.getAttribute("aria-pressed") === "true",
-            ),
+              [
+                ...$("#sharing-menu").querySelectorAll(".sharing-tabs button"),
+              ].some(
+                (eachButton) =>
+                  eachButton.textContent === "Inbox" &&
+                  eachButton.getAttribute("aria-pressed") === "true",
+              ),
           ),
           reviewFile: review?.activePath || review?.file?.path || "",
         },

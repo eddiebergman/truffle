@@ -115,9 +115,9 @@ function onboardingCompanyMessage(instructions) {
   function onboardingIsOpen() {
     return Boolean(
       active &&
-      shell?.parentElement === onboardingRoot() &&
-      onboardingRoot()?.isConnected &&
-      (host ? !host.hidden : dialog.open),
+        shell?.parentElement === onboardingRoot() &&
+        onboardingRoot()?.isConnected &&
+        (host ? !host.hidden : dialog.open),
     );
   }
   function disposeStep() {

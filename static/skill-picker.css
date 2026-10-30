@@ -40,7 +40,7 @@
 
 .skill-picker-description,
 .skill-picker-path {
-  grid-column: 1/-1;
+  grid-column: 1 / -1;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;

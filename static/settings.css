@@ -197,7 +197,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
 .settings-client-example,
 .quick-action-editor textarea {
   font:
-    12px/1.7 ui-monospace,
+    12px / 1.7 ui-monospace,
     SFMono-Regular,
     monospace;
   white-space: pre-wrap;
@@ -226,7 +226,7 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   overflow: auto;
   white-space: pre-wrap;
   font:
-    11px/1.6 ui-monospace,
+    11px / 1.6 ui-monospace,
     monospace;
 }
 

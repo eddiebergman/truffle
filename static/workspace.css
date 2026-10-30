@@ -221,7 +221,7 @@
 }
 
 .agent-heading {
-  grid-column: 1/-1;
+  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -561,7 +561,7 @@ main {
 body {
   margin: 0;
   font:
-    14px/1.5 -apple-system,
+    14px / 1.5 -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
@@ -709,7 +709,7 @@ dialog {
 
 .briefing-body code {
   font:
-    11.5px/1.6 ui-monospace,
+    11.5px / 1.6 ui-monospace,
     SFMono-Regular,
     monospace;
   border-radius: 4px;
@@ -1611,7 +1611,7 @@ summary::-webkit-details-marker {
 
 .agent-shortcut,
 .sidebar .nav-shortcut {
-  font: 9px/14px monospace;
+  font: 9px / 14px monospace;
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -2152,7 +2152,7 @@ summary::-webkit-details-marker {
   max-width: none;
   white-space: pre;
   font:
-    12px/1.6 Menlo,
+    12px / 1.6 Menlo,
     Monaco,
     monospace;
   tab-size: 4;
@@ -2196,7 +2196,7 @@ summary::-webkit-details-marker {
   border: 0;
   color: var(--muted);
   font:
-    10px/1.4 Menlo,
+    10px / 1.4 Menlo,
     Monaco,
     monospace;
   padding: 2px 0;
@@ -2436,7 +2436,9 @@ summary::-webkit-details-marker {
   gap: 8px;
   align-self: start;
   max-height: calc(
-    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 24px
+    calc(100dvh / var(--ui-scale, 1)) -
+    var(--titlebar-height) -
+    24px
   );
   background: var(--panel);
   border-radius: 6px;
@@ -3296,7 +3298,7 @@ button.git-file-row {
 
 /* The agent sidebar uses spacing and hover feedback instead of separator rules. */
 .agent-context-grid
-  :is(.resource-entry, .context-work-row, .worktree-entry, .artifact-row) {
+:is(.resource-entry, .context-work-row, .worktree-entry, .artifact-row) {
   border-bottom: 0;
 }
 
@@ -3516,7 +3518,9 @@ button.git-file-row {
 
 .agent-page .embedded-terminal {
   height: calc(
-    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 24px
+    calc(100dvh / var(--ui-scale, 1)) -
+    var(--titlebar-height) -
+    24px
   );
 }
 
@@ -4488,7 +4492,7 @@ button.git-file-row {
   border-left: 2px solid var(--iris);
   color: var(--text);
   font:
-    12px/1.5 -apple-system,
+    12px / 1.5 -apple-system,
     sans-serif;
   white-space: normal;
 }
@@ -4509,7 +4513,7 @@ button.git-file-row {
   background: color-mix(in srgb, var(--iris) 5%, var(--overlay));
   color: var(--iris);
   font:
-    600 10px/1.4 -apple-system,
+    600 10px / 1.4 -apple-system,
     sans-serif;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -4541,7 +4545,7 @@ button.git-file-row {
 
 .review-comment-markdown code {
   font:
-    11px/1.5 ui-monospace,
+    11px / 1.5 ui-monospace,
     monospace;
   background: var(--line);
   color: var(--rose);
@@ -4679,7 +4683,9 @@ button.git-file-row {
 
 .mac-titlebar .terminal-focused .embedded-terminal {
   height: calc(
-    calc(100dvh / var(--ui-scale, 1)) - var(--titlebar-height) - 8px
+    calc(100dvh / var(--ui-scale, 1)) -
+    var(--titlebar-height) -
+    8px
   );
 }
 
@@ -4727,7 +4733,7 @@ button.git-file-row {
   margin-bottom: 5px;
   color: var(--muted);
   font:
-    10px/1.4 -apple-system,
+    10px / 1.4 -apple-system,
     sans-serif;
 }
 
@@ -4747,7 +4753,7 @@ button.git-file-row {
 
 .review-source-excerpt code {
   font:
-    11px/1.6 ui-monospace,
+    11px / 1.6 ui-monospace,
     SFMono-Regular,
     Menlo,
     Monaco,

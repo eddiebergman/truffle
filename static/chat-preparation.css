@@ -31,7 +31,7 @@
 
 .chat-recovery-id {
   font:
-    10px/1.5 ui-monospace,
+    10px / 1.5 ui-monospace,
     monospace;
   color: var(--muted);
   overflow-wrap: anywhere;

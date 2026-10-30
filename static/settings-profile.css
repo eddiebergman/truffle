@@ -14,7 +14,7 @@
   background: var(--bg);
   color: var(--text);
   font:
-    12px/1.5 ui-monospace,
+    12px / 1.5 ui-monospace,
     monospace;
 }
 
@@ -75,7 +75,7 @@
   border-radius: 5px;
   background: var(--bg);
   font:
-    11px/1.5 ui-monospace,
+    11px / 1.5 ui-monospace,
     monospace;
 }
 
