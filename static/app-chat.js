@@ -587,7 +587,6 @@ if (typeof document !== "undefined") {
     document.body.append(panel);
     let open = false,
       pending = false,
-      timer = null,
       lastMessages = "",
       request = null,
       deferred = [],
@@ -959,7 +958,6 @@ if (typeof document !== "undefined") {
       }
     }
     async function poll() {
-      clearTimeout(timer);
       try {
         const value = await api("/api/app-chat");
         updateAssistant(value);
@@ -997,20 +995,22 @@ if (typeof document !== "undefined") {
         showError(problem.message);
       }
       update();
-      if (open || pending) {
-        timer = setTimeout(poll, pending ? 1000 : 5000);
+      if (!open && !pending) {
+        return null;
       }
+      return pending ? 1000 : 5000;
     }
+    const watch = watchJob(poll);
     button.onclick = () => {
       open = !open;
       update();
       if (open) {
-        poll();
+        void watch.start();
         input.focus();
       } else {
         window.closeOnboarding?.({ host: setup });
         if (!pending) {
-          clearTimeout(timer);
+          watch.stop();
         }
       }
     };
@@ -1029,7 +1029,7 @@ if (typeof document !== "undefined") {
         showError("");
         input.value = "";
         lastMessages = "";
-        await poll();
+        await watch.start();
         input.focus();
       } catch (problem) {
         showError(problem.message);
@@ -1042,7 +1042,7 @@ if (typeof document !== "undefined") {
       window.closeOnboarding?.({ host: setup });
       update();
       if (!pending) {
-        clearTimeout(timer);
+        watch.stop();
       }
       button.focus();
     };
@@ -1106,7 +1106,7 @@ if (typeof document !== "undefined") {
         });
         window.truffleChatImages?.clear();
         input.value = "";
-        await poll();
+        await watch.start();
       } catch (problem) {
         pending = false;
         showError(problem.message);
@@ -1143,7 +1143,7 @@ if (typeof document !== "undefined") {
       open = true;
       update();
       await appChatNavigate({ type: "navigate", destination: "setup" });
-      await poll();
+      await watch.start();
     };
     function placeChat() {
       const host =
@@ -1172,7 +1172,7 @@ if (typeof document !== "undefined") {
     }).observe(setup, { attributes: true, attributeFilter: ["hidden"] });
     window.addEventListener("truffle-service-restarted", () => {
       if (open) {
-        poll();
+        void watch.start();
       }
     });
     registerRenderHook("app-chat:context", updateContext, { order: 50 });
