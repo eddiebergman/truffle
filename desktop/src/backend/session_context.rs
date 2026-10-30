@@ -1,6 +1,7 @@
+use super::checkouts::{self, Link};
 use super::{
-    arr, checked, directory, domain, json, now, safe_url, sessions, sid, text, workflows, Error,
-    Repository, Result, Value,
+    arr, checked, directory, domain, json, now, safe_url, sessions, sid, text, Error, Repository,
+    Result, Value,
 };
 
 fn snapshot(s: &Value, id: &str) -> Result<Value> {
@@ -170,24 +171,28 @@ pub fn replace(repo: &Repository, id: &str, input: &Value) -> Result<Value> {
 pub fn replace_receipt(repo: &Repository, id: &str, input: &Value) -> Result<Value> {
     replace_result(repo, id, input).map(|(_, revision)| json!({"id":id,"revision":revision}))
 }
-type Worktree = (Value, Vec<Value>, bool);
-fn worktrees(trees: &[Value]) -> Result<Vec<Worktree>> {
+fn worktrees(trees: &[Value]) -> Result<Vec<Link>> {
     let trees = trees
         .iter()
         .map(|tree| {
             let path = directory(text(tree, "path"))?;
-            let metadata = super::checkouts::metadata(&path)
+            let metadata = checkouts::metadata(&path)
                 .ok_or_else(|| Error::new("Choose an existing Git checkout with a commit."))?;
             if tree.get("primary").is_some_and(|v| !v.is_boolean()) {
                 return Err(Error::new("Worktree primary must be true or false."));
             }
-            let ids = list(tree, "itemIds", 100)?.cloned().unwrap_or_default();
-            Ok((metadata, ids, tree["primary"] == true))
+            Ok(Link {
+                metadata,
+                item_ids: list(tree, "itemIds", 100)?.cloned().unwrap_or_default(),
+                primary: tree["primary"] == true,
+            })
         })
         .collect::<Result<Vec<_>>>()?;
     let mut paths = std::collections::HashSet::new();
-    if trees.iter().any(|(m, _, _)| !paths.insert(text(m, "path")))
-        || trees.iter().filter(|(_, _, p)| *p).count() > 1
+    if trees
+        .iter()
+        .any(|link| !paths.insert(text(&link.metadata, "path")))
+        || trees.iter().filter(|link| link.primary).count() > 1
     {
         return Err(Error::new(
             "Worktree paths must be unique, with at most one primary checkout.",
@@ -213,15 +218,8 @@ fn replace_items(s: &mut Value, id: &str, ids: &[Value]) -> Result<()> {
             selected.push(item);
         }
     }
-    let record = sessions::get_mut(s, id)?;
-    record["items"] = json!(selected);
-    for tree in record["worktrees"].as_array_mut().into_iter().flatten() {
-        tree["itemIds"] = json!(arr(&tree["itemIds"])
-            .into_iter()
-            .filter(|x| ids.contains(x))
-            .collect::<Vec<_>>());
-    }
-    Ok(())
+    sessions::get_mut(s, id)?["items"] = json!(selected);
+    checkouts::unlink_items(s, id, ids)
 }
 fn replace_artifacts(s: &mut Value, id: &str, ids: &[Value]) -> Result<()> {
     let mut artifacts = arr(&s["artifacts"]);
@@ -288,11 +286,8 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
         if let Some(entries) = resources {
             super::resources::replace_entries(s, id, &json!(entries))?;
         }
-        if let Some(trees) = &metadata {
-            sessions::get_mut(s, id)?["worktrees"] = json!([]);
-            for (meta, ids, primary) in trees {
-                workflows::save_worktree(s, id, meta, ids, *primary)?;
-            }
+        if let Some(links) = &metadata {
+            checkouts::replace_all(s, id, links)?;
         }
         if let Some(ids) = artifact_ids {
             replace_artifacts(s, id, ids)?;

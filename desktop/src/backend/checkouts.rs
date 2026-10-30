@@ -1,5 +1,8 @@
 //! A chat's local checkouts: which folders belong to it, their Git metadata and their versions.
-use super::{directory, expand, git, json, now, text, Error, PathBuf, Result, Value};
+use super::{
+    arr, directory, expand, git, json, now, sessions, text, Error, PathBuf, Result, Value,
+};
+use item_folders::Strength;
 use std::{
     fs,
     path::{Component, Path},
@@ -8,6 +11,7 @@ use std::{
 pub(super) mod item_folders;
 
 const MAX_FILES: usize = 500;
+const MAX_LINKED: usize = 64;
 
 /// The chat's working directory, then its linked worktrees, without blanks or repeats.
 pub(super) fn of(chat: &Value) -> Vec<&str> {
@@ -37,11 +41,105 @@ fn resolve(path: &str) -> Option<PathBuf> {
     }
     path.canonicalize().ok().filter(|path| path.is_dir())
 }
+/// A checkout to link to a chat, with the chat's work items done in it.
+pub(super) struct Link {
+    /// From `metadata`.
+    pub metadata: Value,
+    pub item_ids: Vec<Value>,
+    /// Makes the checkout the chat's working directory.
+    pub primary: bool,
+}
 /// What remembering a folder does to a different folder already remembered for the item.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Remember {
     Replace,
     Preserve,
+}
+/// Link a checkout to `chat`, or add items to the linked one at the same path, and
+/// remember the checkout as the explicit folder of those items.
+pub(super) fn link(
+    state: &mut Value,
+    chat: &str,
+    link: &Link,
+    existing: Remember,
+) -> Result<Value> {
+    let (metadata, ids) = (&link.metadata, &link.item_ids);
+    let record = sessions::get(state, chat)?;
+    let linked = arr(&record["items"]);
+    if ids
+        .iter()
+        .any(|id| !linked.iter().any(|item| item["id"] == *id))
+    {
+        return Err(Error::new(
+            "Register these work items with this session before linking their worktree.",
+        ));
+    }
+    if record.get("worktrees").is_some() && !record["worktrees"].is_array() {
+        return Err(Error::new("Invalid stored worktrees: expected a list."));
+    }
+    let mut trees = arr(&record["worktrees"]);
+    let old = trees
+        .iter()
+        .find(|x| x["path"] == metadata["path"])
+        .cloned()
+        .unwrap_or(Value::Null);
+    let mut item_ids = arr(&old["itemIds"]);
+    for id in ids {
+        if !item_ids.contains(id) {
+            item_ids.push(id.clone());
+        }
+    }
+    let mut entry = metadata.clone();
+    entry["itemIds"] = json!(item_ids);
+    entry["primary"] = json!(link.primary || old["primary"] == true);
+    if link.primary {
+        for tree in &mut trees {
+            tree["primary"] = json!(false);
+        }
+    }
+    trees.retain(|x| x["path"] != metadata["path"]);
+    if trees.len() >= MAX_LINKED {
+        return Err(Error::new("A session can link at most 64 worktrees."));
+    }
+    trees.push(entry);
+    let row = sessions::get_mut(state, chat)?;
+    row["worktrees"] = json!(trees);
+    if link.primary {
+        row["cwd"] = metadata["path"].clone();
+    }
+    row["updatedAt"] = json!(now());
+    for id in ids {
+        let item = id
+            .as_str()
+            .ok_or_else(|| Error::new("Invalid work item ID."))?;
+        item_folders::remember(
+            state,
+            item,
+            text(metadata, "path"),
+            Strength::Explicit,
+            existing,
+        );
+    }
+    Ok(sessions::get(state, chat)?.clone())
+}
+/// Replace every checkout linked to `chat` with `links`.
+pub(super) fn replace_all(state: &mut Value, chat: &str, links: &[Link]) -> Result<()> {
+    sessions::get_mut(state, chat)?["worktrees"] = json!([]);
+    for entry in links {
+        link(state, chat, entry, Remember::Replace)?;
+    }
+    Ok(())
+}
+/// Drop every work item but `keep` from the checkouts linked to `chat`.
+pub(super) fn unlink_items(state: &mut Value, chat: &str, keep: &[Value]) -> Result<()> {
+    let record = sessions::get_mut(state, chat)?;
+    for tree in record["worktrees"].as_array_mut().into_iter().flatten() {
+        tree["itemIds"] = json!(arr(&tree["itemIds"])
+            .into_iter()
+            .filter(|x| keep.contains(x))
+            .collect::<Vec<_>>());
+    }
+    Ok(())
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn metadata(cwd: &str) -> Option<Value> {

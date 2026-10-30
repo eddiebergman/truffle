@@ -1,6 +1,6 @@
 use super::chat_preparation::{self, Created, Recipe};
 use super::checkouts::item_folders::{self, Strength};
-use super::checkouts::Remember;
+use super::checkouts::{Link, Remember};
 use super::terminals::{Live, Presence};
 use super::{
     arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
@@ -615,75 +615,6 @@ impl Recipe for Recover<'_> {
         })
     }
 }
-pub(super) fn save_worktree(
-    s: &mut Value,
-    id: &str,
-    metadata: &Value,
-    ids: &[Value],
-    primary: bool,
-) -> Result<Value> {
-    save_worktree_with_folders(s, id, metadata, ids, primary, Remember::Replace)
-}
-fn save_worktree_with_folders(
-    s: &mut Value,
-    id: &str,
-    metadata: &Value,
-    ids: &[Value],
-    primary: bool,
-    existing: Remember,
-) -> Result<Value> {
-    let record = sessions::get(s, id)?.clone();
-    let linked = arr(&record["items"]);
-    if ids
-        .iter()
-        .any(|id| !linked.iter().any(|item| item["id"] == *id))
-    {
-        return Err(Error::new(
-            "Register these work items with this session before linking their worktree.",
-        ));
-    }
-    if record.get("worktrees").is_some() && !record["worktrees"].is_array() {
-        return Err(Error::new("Invalid stored worktrees: expected a list."));
-    }
-    let mut trees = arr(&record["worktrees"]);
-    let old = trees
-        .iter()
-        .find(|x| x["path"] == metadata["path"])
-        .cloned()
-        .unwrap_or(Value::Null);
-    let mut item_ids = arr(&old["itemIds"]);
-    for id in ids {
-        if !item_ids.contains(id) {
-            item_ids.push(id.clone());
-        }
-    }
-    let mut entry = metadata.clone();
-    entry["itemIds"] = json!(item_ids);
-    entry["primary"] = json!(primary || old["primary"] == true);
-    if primary {
-        for tree in &mut trees {
-            tree["primary"] = json!(false);
-        }
-    }
-    trees.retain(|x| x["path"] != metadata["path"]);
-    if trees.len() >= 64 {
-        return Err(Error::new("A session can link at most 64 worktrees."));
-    }
-    trees.push(entry);
-    let row = sessions::get_mut(s, id)?;
-    row["worktrees"] = json!(trees);
-    if primary {
-        row["cwd"] = metadata["path"].clone();
-    }
-    row["updatedAt"] = json!(now());
-    for id in ids {
-        let key = id
-            .as_str()
-            .ok_or_else(|| Error::new("Invalid work item ID."))?;
-        item_folders::remember(s, key, text(metadata, "path"), Strength::Explicit, existing);
-    }
-    Ok(sessions::get(s, id)?.clone())
-}
 pub fn registration_reply(record: &Value) -> Value {
     if !record["commandResult"].is_null() {
         return json!({"commandResult":record["commandResult"]});
@@ -771,7 +702,12 @@ fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
             .map(|x| x["id"].clone())
             .collect();
     }
-    repo.transaction(|s| save_worktree(s, text(p, "id"), &metadata, &ids, p["primary"] == true))
+    let link = Link {
+        metadata,
+        item_ids: ids,
+        primary: p["primary"] == true,
+    };
+    repo.transaction(|s| checkouts::link(s, text(p, "id"), &link, Remember::Replace))
 }
 fn apply_background_activity(
     runtime: &mut Value,
@@ -1016,14 +952,12 @@ fn finish_registration(
                 .cloned()
                 .collect::<Vec<_>>();
             if let Some(metadata) = metadata {
-                save_worktree_with_folders(
-                    s,
-                    text(record, "id"),
-                    metadata,
-                    &current_ids,
-                    true,
-                    Remember::Preserve,
-                )?;
+                let link = Link {
+                    metadata: metadata.clone(),
+                    item_ids: current_ids,
+                    primary: true,
+                };
+                checkouts::link(s, text(record, "id"), &link, Remember::Preserve)?;
             } else {
                 for id in &current_ids {
                     item_folders::remember(
