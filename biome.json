@@ -8,7 +8,9 @@
       "desktop/*.mjs",
       "desktop/diffs-build/*.mjs",
       "tests/*.cjs",
-      "tests/helpers/*.cjs"
+      "tests/helpers/*.cjs",
+      "!!.worktrees",
+      "!!.claude"
     ]
   },
   "formatter": {
