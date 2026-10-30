@@ -43,23 +43,6 @@ button:active {
   transform: translateY(1px);
 }
 
-.shell {
-  display: flex;
-  min-height: calc(100vh / var(--ui-scale, 1));
-}
-
-.sidebar {
-  width: 238px;
-  background: var(--sidebar);
-  border-right: 1px solid var(--line);
-  position: fixed;
-  inset: 0 auto 0 0;
-  padding: 30px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
 .brand {
   display: flex;
   align-items: center;
@@ -68,23 +51,6 @@ button:active {
   letter-spacing: -0.8px;
   font-weight: 650;
   padding: 0 8px;
-}
-
-.brand-icon {
-  width: 29px;
-  height: 29px;
-  background: var(--green);
-  color: var(--bg);
-  border-radius: 8px;
-  font-size: 26px;
-  line-height: 24px;
-  text-align: center;
-  letter-spacing: -4px;
-  padding-right: 3px;
-}
-
-.brand-icon span {
-  color: color-mix(in srgb, var(--foam) 40%, var(--bg));
 }
 
 .private {
@@ -127,28 +93,6 @@ small {
   margin-top: 3px;
 }
 
-.nav-label {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: color-mix(in srgb, var(--bg) 55%, var(--text));
-  padding: 0 12px;
-  margin-bottom: 12px;
-}
-
-.nav-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  border: 0;
-  border-radius: 7px;
-  padding: 10px 12px;
-  gap: 12px;
-  color: color-mix(in srgb, var(--bg) 30%, var(--text));
-  text-align: left;
-  font-size: 13px;
-  margin: 3px 0;
-}
-
 .nav-item > span {
   font-size: 18px;
   width: 20px;
@@ -159,41 +103,12 @@ small {
   margin-left: auto;
   font-weight: 400;
   font-size: 11px;
-  color: color-mix(in srgb, var(--bg) 50%, var(--text));
-}
-
-.nav-item.active {
-  background: var(--panel);
-  color: var(--text);
-}
-
-.nav-item.active b {
-  color: var(--foam);
-}
-
-.nav-divider {
-  border-top: 1px solid var(--panel);
-  margin: 20px 12px;
-}
-
-.linear-mark {
-  color: var(--iris);
 }
 
 .local-note {
   margin: 0 12px 20px;
   font-size: 11px;
   color: color-mix(in srgb, var(--bg) 20%, var(--text));
-}
-
-.live-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--foam);
-  margin-right: 8px;
-  vertical-align: middle;
 }
 
 .local-note small {
@@ -482,17 +397,6 @@ button.row-title {
   color: var(--green);
 }
 
-.sync-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid var(--line);
-  padding: 21px 0 0;
-  margin-top: 30px;
-  color: color-mix(in srgb, var(--bg) 50%, var(--text));
-  font-size: 10px;
-}
-
 .footer-divider {
   margin: 0 10px;
   color: var(--line);
@@ -742,10 +646,6 @@ dialog .optional {
 }
 
 @media (max-width: 1050px) {
-  .sidebar {
-    width: 200px;
-  }
-
   .brand {
     font-size: 19px;
   }
@@ -760,11 +660,6 @@ dialog .optional {
 }
 
 @media (max-width: 760px) {
-  .sidebar {
-    width: 70px;
-    padding: 22px 10px;
-  }
-
   .brand {
     padding: 0 9px;
     font-size: 0;
@@ -772,7 +667,6 @@ dialog .optional {
   }
 
   .brand-icon {
-    font-size: 26px;
     flex-shrink: 0;
   }
 
@@ -780,20 +674,12 @@ dialog .optional {
   .nav-label,
   .nav-divider,
   .nav-item b,
-  .settings-button span,
-  .brand .private,
-  .sidebar-bottom .local-note {
+  .settings-button span {
     display: none;
   }
 
   .sidebar nav {
     margin-top: 35px;
-  }
-
-  .nav-item {
-    font-size: 0;
-    padding: 12px;
-    gap: 0;
   }
 
   .nav-item > span {
@@ -1341,10 +1227,6 @@ a.ci-check-name:hover {
 }
 
 @media (max-width: 760px) {
-  .sidebar .nav-item {
-    overflow: hidden;
-  }
-
   .sidebar nav .nav-divider {
     display: block;
     margin: 13px 5px;
@@ -2428,14 +2310,6 @@ a.ci-check-name:hover {
   font-size: 10px;
 }
 
-.sidebar #command-open {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  margin-bottom: 10px;
-}
-
 .sidebar #command-open kbd {
   margin-left: auto;
   font-size: 9px;
@@ -2444,15 +2318,6 @@ a.ci-check-name:hover {
 
 .sidebar .workspace {
   margin: 17px 7px 14px;
-}
-
-.sidebar .nav-item {
-  padding-block: 6px;
-  font-size: 12px;
-}
-
-.sidebar .nav-divider {
-  margin-block: 8px;
 }
 
 .sidebar .sidebar-refresh {
@@ -2495,12 +2360,7 @@ a.ci-check-name:hover {
 }
 
 @media (min-width: 761px) {
-  .sidebar {
-    padding-top: 20px;
-  }
-
   .sidebar .nav-item {
-    padding-block: 4px;
     margin-block: 1px;
     line-height: 20px;
   }
@@ -2512,10 +2372,6 @@ a.ci-check-name:hover {
 
   .sidebar .workspace {
     margin-block: 14px;
-  }
-
-  .sidebar .sidebar-bottom {
-    padding-top: 10px;
   }
 }
 
@@ -3260,12 +3116,6 @@ a.ci-check-name:hover {
   }
 }
 
-#sources {
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
 .sidebar-bottom {
   padding-top: 12px;
   margin-top: auto;
@@ -3368,12 +3218,6 @@ a.ci-check-name:hover {
 .session-card:focus-within {
   background: color-mix(in srgb, var(--bg) 90%, var(--text));
   border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
-}
-
-.nav-item:focus-visible,
-.nav-item:hover:not(.active) {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  color: var(--text);
 }
 
 .icon-button:hover:not(:disabled),
