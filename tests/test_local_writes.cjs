@@ -327,6 +327,40 @@ test("unknown response after a possible commit invalidates earlier GET without c
     assert.equal(f.calls.filter((x) => x.path === "/api/edit").length, 1);
   }
 });
+test("chat metadata failures invalidate earlier reads only when the outcome is unknown", async () => {
+  for (const [status, kind] of [
+    [403, "rejected"],
+    [503, "unknown"],
+    [undefined, "unknown"],
+  ]) {
+    const old = deferred(),
+      messages = [];
+    const f = fixture((path) => {
+      if (path === "/api/state") {
+        return old.promise;
+      }
+      throw Object.assign(new Error("Chat update failed."), { status });
+    });
+    f.c.toast = (text) => messages.push(text);
+    f.c.state = { ...f.c.state, sessions: [] };
+    const periodic = f.c.loadStateSnapshot();
+    assert.equal(
+      await f.c.mutateChatMetadata("chats.rename", { id: "a", title: "B" }),
+      false,
+    );
+    old.resolve({ revision: "old:1", items: [] });
+    assert.equal((await periodic).accepted, kind === "rejected", status);
+    assert.deepEqual(
+      messages,
+      [
+        kind === "unknown"
+          ? "Chat update failed. The save outcome is unknown. Inspect the current view before trying again."
+          : "Chat update failed.",
+      ],
+      status,
+    );
+  }
+});
 test("visibility follow-up paint failure stays accepted pending with no Undo and releases owned focus without stealing outside", async () => {
   for (const outside of [false, true]) {
     const f = visibilityFixture(),

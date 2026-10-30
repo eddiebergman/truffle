@@ -354,15 +354,15 @@ function localWriteMessage(result, acceptedText) {
   return result.error;
 }
 async function mutateChatMetadata(name, args, { renderAfter = true } = {}) {
+  const fields = {
+    "chats.rename": ["title", "updatedAt"],
+    "chats.visibility": ["hidden"],
+    "chats.archive": ["archivedAt"],
+  }[name];
+  if (!fields) {
+    throw new Error("Unsupported chat metadata action.");
+  }
   try {
-    const fields = {
-      "chats.rename": ["title", "updatedAt"],
-      "chats.visibility": ["hidden"],
-      "chats.archive": ["archivedAt"],
-    }[name];
-    if (!fields) {
-      throw new Error("Unsupported chat metadata action.");
-    }
     const result = await api("/api/commands/invoke", { name, args }),
       patch = Object.fromEntries(fields.map((key) => [key, result.chat[key]]));
     state = {
@@ -376,7 +376,16 @@ async function mutateChatMetadata(name, args, { renderAfter = true } = {}) {
     }
     return true;
   } catch (error) {
-    toast(error.message);
+    const kind = writeFailureKind(error) === "unknown" ? "unknown" : "rejected";
+    if (kind === "unknown") {
+      invalidateSnapshot();
+    }
+    toast(
+      localWriteMessage({
+        kind,
+        error: error.message || "The local write could not be confirmed.",
+      }),
+    );
     return false;
   }
 }

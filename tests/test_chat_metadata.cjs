@@ -75,7 +75,7 @@ function fixture() {
     api: async (path, payload) => {
       calls.push({ path, payload });
       if (fail) {
-        throw new Error("Metadata failed");
+        throw Object.assign(new Error("Metadata failed"), { status: 400 });
       }
       const previous = c.state.sessions[0],
         args = payload.args,
