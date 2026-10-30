@@ -101,6 +101,10 @@ impl<R: Record> Edit<R> {
             record: PhantomData,
         })
     }
+    /// The normalized value of a patched field.
+    pub fn get(&self, field: &str) -> Option<&Value> {
+        self.fields.get(field)
+    }
     /// Refuse with 409 when a patched field changed since the client read its token.
     pub fn check(&self, record: &R) -> Result<()> {
         for field in self.fields.keys() {

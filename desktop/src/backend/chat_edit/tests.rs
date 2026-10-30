@@ -48,7 +48,7 @@ fn chat_metadata_patched_fields_commute_and_preserve_latest_extensions_folders_a
     assert!(!current.to_string().contains("retain"));
 }
 #[test]
-fn chat_metadata_stale_mixed_patch_and_bad_shape_leave_state_and_disk_unchanged() {
+fn chat_metadata_stale_mixed_patch_and_invalid_fields_leave_state_and_disk_unchanged() {
     let (_temp, repo, id) = fixture();
     let old = baseline(&repo, &id);
     update(&repo, &request(&old, &json!({"title":"Concurrent"}))).unwrap();
@@ -64,13 +64,15 @@ fn chat_metadata_stale_mixed_patch_and_bad_shape_leave_state_and_disk_unchanged(
         409
     );
     let valid = baseline(&repo, &id);
-    for bad in [
-        json!({"recordId":id,"patch":{},"expected":{}}),
-        json!({"recordId":id,"patch":{"title":"Bad"},"expected":{}}),
-        json!({"recordId":id,"patch":{"agent":"claude"},"expected":{"agent":"0".repeat(64)}}),
-        json!({"recordId":id,"patch":{"title":"Bad"},"expected":{"title":valid["expected"]["title"],"cwd":valid["expected"]["cwd"]}}),
+    for patch in [
+        json!({"title":"Line\nbreak"}),
+        json!({"title":" "}),
+        json!({"cwd":"/nonexistent/chat-edit-fixture"}),
+        json!({"sessionId":"not-a-uuid"}),
+        json!({"itemIds":[""]}),
+        json!({"agent":"claude"}),
     ] {
-        assert!(update(&repo, &bad).is_err());
+        assert!(update(&repo, &request(&valid, &patch)).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
