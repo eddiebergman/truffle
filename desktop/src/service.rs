@@ -39,6 +39,7 @@ const WRITE_ROUTES: &[&str] = &[
     "/api/shell-terminal/resize",
     "/api/shell-terminal/close",
     "/api/settings",
+    "/api/settings/preview",
     "/api/quick-actions/run",
     "/api/app-chat/send",
     "/api/app-chat/new",
@@ -365,7 +366,6 @@ mod transport_tests {
             "https://example.com",
             "//example.com",
             "/api/agent/register",
-            "/api/settings/preview",
             "/api/state?x=secret",
             "/../.env",
         ] {
