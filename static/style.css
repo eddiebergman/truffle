@@ -236,35 +236,6 @@ kbd {
   gap: 8px;
 }
 
-.group-count {
-  font-size: 10px;
-  color: color-mix(in srgb, var(--bg) 55%, var(--text));
-  background: var(--panel);
-  border: 1px solid color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-radius: 4px;
-  padding: 0 5px;
-  margin-left: 1px;
-}
-
-.group-line {
-  flex: 1;
-  height: 1px;
-  background: var(--panel);
-  margin-left: 4px;
-}
-
-.source-icon.linear {
-  background: var(--panel);
-  color: var(--iris);
-  border-color: color-mix(in srgb, var(--overlay) 85%, var(--muted));
-}
-
-.source-icon.notes {
-  background: var(--panel);
-  color: var(--foam);
-  border-color: color-mix(in srgb, var(--bg) 85%, var(--text));
-}
-
 button.row-title {
   text-align: left;
   border: 0;
@@ -292,42 +263,10 @@ button.row-title {
 
 .status-pill {
   border: 1px solid var(--line);
-  background: var(--panel);
-  color: color-mix(in srgb, var(--bg) 30%, var(--text));
   border-radius: 5px;
   font-size: 9px;
   white-space: nowrap;
   padding: 2px 6px;
-}
-
-.status-pill.needs-review {
-  background: var(--overlay);
-  border-color: color-mix(in srgb, var(--iris) 15%, var(--overlay));
-  color: var(--iris);
-}
-
-.status-pill.in-progress {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-color: color-mix(in srgb, var(--gold) 25%, var(--bg));
-  color: color-mix(in srgb, var(--gold) 85%, var(--muted));
-}
-
-.status-pill.blocked {
-  background: var(--panel);
-  border-color: color-mix(in srgb, var(--love) 25%, var(--bg));
-  color: color-mix(in srgb, var(--rose) 90%, var(--bg));
-}
-
-.status-pill.draft {
-  background: var(--panel);
-  border-color: var(--line);
-  color: color-mix(in srgb, var(--bg) 25%, var(--text));
-}
-
-.status-pill.done {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-color: color-mix(in srgb, var(--foam) 25%, var(--bg));
-  color: var(--foam);
 }
 
 .pin-button,
@@ -626,10 +565,6 @@ dialog .optional {
     min-width: 0;
   }
 
-  .row-actions .row-open {
-    display: none;
-  }
-
   .pin-button {
     font-size: 16px;
   }
@@ -664,16 +599,6 @@ dialog .optional {
   }
 }
 
-.dot.ready {
-  background: var(--foam);
-}
-
-.status-pill.ready-to-merge {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  border-color: color-mix(in srgb, var(--foam) 30%, var(--bg));
-  color: var(--foam);
-}
-
 .ci-pill {
   font-size: 10px;
   font-family: ui-monospace, SFMono-Regular, monospace;
@@ -682,18 +607,6 @@ dialog .optional {
   border-radius: 5px;
   color: color-mix(in srgb, var(--bg) 50%, var(--text));
   padding: 2px 3px;
-}
-
-.ci-pill.passed {
-  color: var(--foam);
-}
-
-.ci-pill.failed {
-  color: color-mix(in srgb, var(--love) 70%, var(--text));
-}
-
-.ci-pill.pending {
-  color: color-mix(in srgb, var(--gold) 85%, var(--muted));
 }
 
 .ci-pill:hover {
@@ -751,18 +664,6 @@ dialog .optional {
   flex-shrink: 0;
 }
 
-.ci-mark.passed {
-  color: var(--foam);
-}
-
-.ci-mark.failed {
-  color: color-mix(in srgb, var(--love) 70%, var(--text));
-}
-
-.ci-mark.pending {
-  color: color-mix(in srgb, var(--gold) 85%, var(--muted));
-}
-
 .ci-mark.skipped,
 .ci-mark.unknown {
   color: color-mix(in srgb, var(--bg) 50%, var(--text));
@@ -812,20 +713,8 @@ a.ci-check-name:hover {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: var(--panel);
-  color: var(--green);
   font-size: 22px;
   flex-shrink: 0;
-}
-
-.agent-icon.claude {
-  background: var(--panel);
-  color: color-mix(in srgb, var(--gold) 60%, var(--muted));
-}
-
-.agent-icon.codex {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  color: var(--foam);
 }
 
 .agent-link {
@@ -841,8 +730,6 @@ a.ci-check-name:hover {
 
 .runtime-pill {
   border: 1px solid var(--line);
-  color: color-mix(in srgb, var(--bg) 25%, var(--text));
-  background: var(--panel);
   font-size: 9px;
   padding: 3px 7px;
   border-radius: 5px;
@@ -1100,10 +987,6 @@ a.ci-check-name:hover {
     max-width: 100%;
   }
 
-  .row-actions {
-    justify-content: flex-end;
-  }
-
   .item-agent-links .agent-link {
     font-size: 8px;
   }
@@ -1178,8 +1061,6 @@ a.ci-check-name:hover {
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  background: var(--bg);
-  color: color-mix(in srgb, var(--bg) 15%, var(--text));
   flex-shrink: 0;
   height: 21px;
   width: 21px;
@@ -1189,10 +1070,6 @@ a.ci-check-name:hover {
 
 .row-main {
   flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
 }
 
 .row-title {
@@ -1255,7 +1132,6 @@ a.ci-check-name:hover {
 
 .session-card {
   border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
-  background: var(--bg);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1382,12 +1258,14 @@ a.ci-check-name:hover {
   }
 
   .row-actions {
+    justify-content: flex-end;
     flex-wrap: nowrap;
     gap: 2px;
     max-width: none;
   }
 
   .row-actions .row-open {
+    display: none;
     font-size: 14px;
   }
 
@@ -1399,10 +1277,6 @@ a.ci-check-name:hover {
     width: 18px;
     height: 19px;
     font-size: 12px;
-  }
-
-  .row-main {
-    min-width: 0;
   }
 
   .session-card {
@@ -1521,10 +1395,6 @@ a.ci-check-name:hover {
     font-size: 10px;
     max-width: 120px;
   }
-
-  .row-main {
-    gap: 5px;
-  }
 }
 
 /* Fixed source/role gutter; workflow status retains its full label. */
@@ -1532,7 +1402,6 @@ a.ci-check-name:hover {
   align-items: center;
   transition: border-color 0.15s;
   display: grid;
-  grid-template-columns: 21px minmax(0, 1fr);
   gap: 0;
   height: 34px;
   min-height: 34px;
@@ -1547,21 +1416,12 @@ a.ci-check-name:hover {
   border-color: var(--highlight);
 }
 
-.hidden-items .row,
-.hidden-items .session-card {
-  background: var(--bg);
-}
-
 .row-codes {
   display: grid;
   grid-template-columns: 18px;
   align-items: center;
   justify-content: start;
   gap: 1px;
-}
-
-.row.mixed-source {
-  grid-template-columns: 44px minmax(0, 1fr);
 }
 
 .mixed-source .row-codes {
@@ -1582,7 +1442,6 @@ a.ci-check-name:hover {
   min-width: 0;
   height: 32px;
   padding: 3px 8px;
-  background: var(--bg);
   border: 1px solid color-mix(in srgb, var(--bg) 90%, var(--text));
   border-radius: 4px;
 }
@@ -1645,20 +1504,12 @@ a.ci-check-name:hover {
   width: 23px;
 }
 
-.row.no-role-column {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .no-role-column .row-codes {
   display: none;
 }
 
 .hidden-items .row {
   background: transparent;
-}
-
-.hidden-items .row-bar {
-  background: var(--bg);
 }
 
 .commit-prefix.feat {
@@ -1705,16 +1556,8 @@ a.ci-check-name:hover {
 }
 
 @media (max-width: 760px) {
-  .row {
-    grid-template-columns: 18px minmax(0, 1fr);
-  }
-
   .row-codes {
     grid-template-columns: 15px;
-  }
-
-  .row.mixed-source {
-    grid-template-columns: 38px minmax(0, 1fr);
   }
 
   .mixed-source .row-codes {
@@ -1749,10 +1592,6 @@ a.ci-check-name:hover {
   .row-actions .ci-slot,
   .row-actions .pin-button {
     display: none;
-  }
-
-  .row.no-role-column {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2966,7 +2805,6 @@ a.ci-check-name:hover {
 
 .session-card:hover,
 .session-card:focus-within {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
   border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
 }
 

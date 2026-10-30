@@ -944,14 +944,19 @@ dialog label select,
   color: var(--muted);
 }
 
-.row-bar,
-.group-line,
-.group-count,
 .context-work-row,
 .agent-results-section,
 .agent-heading,
 .result-table td,
 .result-table th {
+  border-color: var(--line);
+}
+
+.group-line {
+  flex: 1;
+  height: 1px;
+  background: var(--panel);
+  margin-left: 4px;
   border-color: var(--line);
 }
 
@@ -976,16 +981,36 @@ dialog label select,
   background: var(--overlay);
 }
 
-.group-count,
 .source-icon,
 .runtime-pill,
 .agent-link,
 .agent-icon,
 .briefing-body code,
-.source-icon.linear,
-.source-icon.notes,
 .agent-icon.claude,
 .agent-icon.codex {
+  background: var(--overlay);
+  color: var(--muted);
+}
+
+.group-count {
+  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--bg) 90%, var(--text));
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-left: 1px;
+  border-color: var(--line);
+  background: var(--overlay);
+  color: var(--muted);
+}
+
+.source-icon.linear {
+  border-color: color-mix(in srgb, var(--overlay) 85%, var(--muted));
+  background: var(--overlay);
+  color: var(--muted);
+}
+
+.source-icon.notes {
+  border-color: color-mix(in srgb, var(--bg) 85%, var(--text));
   background: var(--overlay);
   color: var(--muted);
 }
