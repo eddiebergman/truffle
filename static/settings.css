@@ -1,9 +1,3 @@
-:root {
-  --ui-scale: 1;
-  --diff-font-size: 10px;
-  --diff-line-height: 16px;
-}
-
 html[data-theme] {
   color: var(--text);
   background: var(--bg);
