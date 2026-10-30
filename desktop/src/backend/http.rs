@@ -309,6 +309,7 @@ fn asset_file(path: &str) -> Option<&'static str> {
         "/ui-controls.css" => "ui-controls.css",
         "/command-palette.css" => "command-palette.css",
         "/client.js" => "client.js",
+        "/documents.js" => "documents.js",
         "/poller.js" => "poller.js",
         "/desktop.js" => "desktop.js",
         "/performance.js" => "performance.js",
@@ -798,6 +799,28 @@ pub fn serve(
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod asset_route_tests {
+    use super::*;
+
+    #[test]
+    fn every_asset_index_html_loads_has_a_browser_route() {
+        let index =
+            String::from_utf8(super::super::assets::asset("index.html").unwrap().to_vec()).unwrap();
+        let missing = index
+            .split(['"', '\''])
+            .filter(|part| {
+                part.starts_with('/')
+                    && part
+                        .rsplit_once('.')
+                        .is_some_and(|(_, ext)| matches!(ext, "js" | "css"))
+            })
+            .filter(|path| asset_file(path).is_none())
+            .collect::<Vec<_>>();
+        assert!(missing.is_empty(), "no browser route for {missing:?}");
+    }
 }
 
 #[cfg(test)]
