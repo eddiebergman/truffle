@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::operations::Caller;
 use crate::backend::sessions;
 use crate::backend::workflows;
 use std::path::PathBuf;
@@ -367,7 +368,7 @@ fn review_check_command_summary_is_read_only_fresh_and_excludes_private_draft_pa
     let result = super::super::commands::invoke(
         &repo,
         &json!({"name":"review.check","args":{"id":id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["id"], id);

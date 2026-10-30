@@ -1,9 +1,10 @@
 use super::*;
+use crate::backend::operations::Caller;
 use crate::backend::sessions;
 fn invoke(repo: &std::sync::Arc<Repository>, name: &str, args: Value) -> Result<Value> {
     let mut request = json!({"name":name});
     request["args"] = args;
-    super::super::commands::invoke(repo, &request, true)
+    super::super::commands::invoke(repo, &request, Caller::Assistant)
 }
 #[test]
 fn artifact_pages_use_the_redacted_stream_at_every_cursor() {

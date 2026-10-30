@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::operations::Caller;
 use crate::backend::sessions;
 fn commit(root: &Path) {
     git(root, &["add", "-A"]).unwrap();
@@ -211,7 +212,7 @@ fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
     let result = super::super::commands::invoke(
         &repo,
         &json!({"name":"chats.diff","args":{"recordId":id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["root"], initial["root"]);
@@ -220,7 +221,7 @@ fn chat_diff_commands_reuse_linked_owner_and_whitelist_cached_overview() {
     let file = super::super::commands::invoke(
         &repo,
         &json!({"name":"chats.diff.file","args":{"recordId":id,"path":"a.txt"}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(file["oldContent"], "base\nkeep\n");
@@ -300,7 +301,7 @@ fn chat_diff_command_redacts_source_but_preserves_original_fingerprint() {
     let result = super::super::commands::invoke(
         &repo,
         &json!({"name":"chats.diff.file","args":{"recordId":id,"path":"a.txt"}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["fingerprint"], raw["fingerprint"]);

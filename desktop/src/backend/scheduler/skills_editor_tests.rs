@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::operations::Caller;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, Value) {
     let temp = tempfile::tempdir().unwrap();
@@ -50,9 +51,12 @@ fn skills_editor_list_redacts_complete_known_values_before_display_cap() {
         Ok(())
     })
     .unwrap();
-    let result =
-        super::super::commands::invoke(&repo, &json!({"name":"skills.list","args":{}}), true)
-            .unwrap();
+    let result = super::super::commands::invoke(
+        &repo,
+        &json!({"name":"skills.list","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert!(!result.to_string().contains("sensitive-prefix-"));
     assert!(result["runs"][0]["message"]
         .as_str()
@@ -65,9 +69,12 @@ fn skills_editor_list_whitelists_presets_current_schedules_and_bounded_runs_with
     let id = text(&created, "presetId");
     repo.transaction(|s|{s["skillPresets"][0]["privateNs"]=json!({"canary":"private-list-canary"});s["skillSchedules"][id]=json!({"presetId":id,"mode":"interval","everyMinutes":5,"enabled":false,"nextRun":10,"updatedAt":1,"privateNs":"private-list-canary"});s["skillSchedules"]["removed-preset"]=json!({"privateNs":"private-list-canary"});s["skillRuns"]=json!((0..110).map(|index|json!({"id":format!("run-{index}"),"presetId":id,"sessionId":uuid(),"at":1,"outcome":"completed","message":"Completed","privateNs":"private-list-canary","openReceipt":{"private":"private-list-canary"}})).collect::<Vec<_>>());Ok(())}).unwrap();
     let bytes = std::fs::read(&repo.data).unwrap();
-    let result =
-        super::super::commands::invoke(&repo, &json!({"name":"skills.list","args":{}}), true)
-            .unwrap();
+    let result = super::super::commands::invoke(
+        &repo,
+        &json!({"name":"skills.list","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(arr(&result["presets"]).len(), 1);
     assert_eq!(arr(&result["runs"]).len(), 100);
     assert_eq!(result["schedules"].as_object().unwrap().len(), 1);
@@ -275,8 +282,12 @@ fn skills_editor_projection_identity_is_rejected_before_any_command_write() {
             json!({"presetId":secret,"patch":{"title":"New"},"expected":{"title":expected}}),
         ),
     ] {
-        let error = super::super::commands::invoke(&repo, &json!({"name":name,"args":args}), false)
-            .unwrap_err();
+        let error = super::super::commands::invoke(
+            &repo,
+            &json!({"name":name,"args":args}),
+            Caller::Browser,
+        )
+        .unwrap_err();
         assert!(!error.message.contains(secret));
         assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
         assert_eq!(*repo.state.lock().unwrap(), before);

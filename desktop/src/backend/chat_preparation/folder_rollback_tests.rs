@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::settings::Approval;
 use crate::backend::uuid;
 use std::os::unix::fs::symlink;
 use std::sync::Arc;
@@ -63,7 +64,7 @@ fn quick_folder_review_validation_precedes_creation_for_missing_or_malformed_tem
     for malformed in [false, true] {
         let (_temp, repo, root) = fixture();
         let settings = repo.settings.view();
-        repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),false).unwrap();
+        repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),Approval::User).unwrap();
         let template = repo
             .settings
             .config_directory()
@@ -92,7 +93,7 @@ fn quick_folder_invalid_title_or_instruction_is_rejected_before_creation() {
         let review = invalid_instruction;
         if review {
             let settings = repo.settings.view();
-            repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),false).unwrap();
+            repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),Approval::User).unwrap();
             std::fs::write(
                 repo.settings
                     .config_directory()

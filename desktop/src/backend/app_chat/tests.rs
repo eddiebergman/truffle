@@ -1,4 +1,6 @@
 use super::*;
+use crate::backend::operations::Caller;
+use crate::backend::settings::Approval;
 fn codex_events(response: &Value) -> String {
     [json!({"type":"thread.started","thread_id":"fixture"}),json!({"type":"item.completed","item":{"type":"error","message":CODEX_DISABLED_HOST_NOTICE}}),json!({"type":"turn.started"}),json!({"type":"item.completed","item":{"type":"agent_message","text":"Intermediate native async question; never send this."}}),json!({"type":"item.completed","item":{"type":"agent_message","text":json!({"responseJson":response.to_string()}).to_string()}}),json!({"type":"turn.completed"})].iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
 }
@@ -76,7 +78,7 @@ fn captured_codex_fixture(
     let transcript: Value = serde_json::from_str(prompt)?;
     if arr(&transcript["steps"]).is_empty() {
         let baseline = repo.settings.view();
-        repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"claude"}}),false)?;
+        repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"claude"}}),Approval::User)?;
         Ok(json!({"tool":"discover","args":{}}).to_string())
     } else {
         Ok(json!({"reply":"Fixture completed with captured Codex."}).to_string())
@@ -87,7 +89,7 @@ fn assistant_is_captured_for_entire_reply_even_when_default_changes_between_tool
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, false).unwrap();
     let baseline = repo.settings.view();
-    repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"codex"}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"codex"}}),Approval::User).unwrap();
     let host = Arc::new(Host::default());
     let job=host.start_with(&repo,&json!({"message":"fixture","requestId":uuid(),"context":{"source":"agents","filters":{}}}),|_|true,captured_codex_fixture).unwrap();
     assert_eq!(job["assistant"], Assistant::Codex.metadata());
@@ -133,7 +135,7 @@ fn failed_selected_assistant_does_not_retry_with_another_installed_provider() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, false).unwrap();
     let baseline = repo.settings.view();
-    repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"codex"}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"codex"}}),Approval::User).unwrap();
     let host = Arc::new(Host::default());
     host.start_with(
         &repo,
@@ -616,7 +618,7 @@ fn settings_proposal_is_validated_without_mutation_or_private_setting_echo() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let current = repo.settings.view();
-    repo.settings.apply(&json!({"revision":current["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"private-current","title":"Private current","command":"printf benign-private-command-sentinel"}]}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":current["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"private-current","title":"Private current","command":"printf benign-private-command-sentinel"}]}}),Approval::User).unwrap();
     let before = repo.settings.view();
     let state = repo.state.lock().unwrap().clone();
     let preferences = PathBuf::from(text(&before["files"], "preferences"));
@@ -918,7 +920,7 @@ fn agent_query_item_and_display_share_effective_work_projection() {
     let generic = super::super::commands::invoke(
         &repo,
         &json!({"name":"work.query","args":{"query":"thinkingv2"}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(query, generic);
@@ -1354,9 +1356,11 @@ fn typed_tools_find_work_navigate_and_gate_settings() {
             &mut commands
         )
         .is_err());
-    assert!(routine_settings(&repo)["values"]
-        .get("quickActions")
-        .is_none());
+    assert!(
+        tool(&repo, "settings-read", &json!({}), &mut commands).unwrap()["values"]
+            .get("quickActions")
+            .is_none()
+    );
     let responses = [
         json!({"tool":"query","args":{"query":"latency"}}),
         json!({"tool":"show","args":{"source":"all","query":"latency","status":"all"}}),

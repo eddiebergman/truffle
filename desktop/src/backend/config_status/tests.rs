@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::settings::Approval;
 use crate::backend::text;
 use std::path::PathBuf;
 fn token<'a>(value: &'a Value, resource: &str) -> &'a Value {
@@ -27,7 +28,7 @@ fn stable_tokens_follow_each_domains_api_writes() {
         assert_eq!(value.len(), 64);
         assert!(value.bytes().all(|byte| byte.is_ascii_hexdigit()));
     }
-    repo.settings.apply(&json!({"revision":repo.settings.view()["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"uiScale":120}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":repo.settings.view()["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"uiScale":120}}),Approval::User).unwrap();
     let after = view(&repo);
     assert_only_changed(&before, &after, "settings");
     before = after;
@@ -108,7 +109,7 @@ fn resource_errors_are_independent_and_never_expose_configuration() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let directory = repo.settings.config_directory();
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"private","title":"Private","command":"printf benign-private-command-marker"}]}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"private","title":"Private","command":"printf benign-private-command-marker"}]}}),Approval::User).unwrap();
     std::fs::write(
         directory.join("workflows/agent-review.md"),
         "benign-private-workflow-marker",

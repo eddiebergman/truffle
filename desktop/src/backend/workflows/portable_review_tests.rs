@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::settings::Approval;
 use chat_preparation::Kind;
 #[test]
 fn custom_review_uses_native_discovery_and_preserves_editable_legacy_templates() {
@@ -10,7 +11,7 @@ fn custom_review_uses_native_discovery_and_preserves_editable_legacy_templates()
                 &json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{
                     "claudeReviewCommand":"/custom-review","codexReviewCommand":"$custom-review"
                 }}),
-                false,
+                Approval::User,
             )
             .unwrap();
         let path = repo
@@ -74,7 +75,7 @@ fn builtin_pr_review_reads_profile_skill_for_either_agent() {
                 &json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{
                     "claudeReviewCommand":"/truffle-review","codexReviewCommand":"$truffle-review"
                 }}),
-                false,
+                Approval::User,
             )
             .unwrap();
         repo.transaction(|state| {

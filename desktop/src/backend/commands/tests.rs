@@ -1,6 +1,8 @@
 use super::*;
 use crate::backend::arr;
+use crate::backend::operations;
 use crate::backend::sessions;
+use crate::backend::settings::Approval;
 use crate::backend::{now, uuid};
 
 #[test]
@@ -29,7 +31,7 @@ fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effec
         invoke(
             &repo,
             &json!({"name":"pages.scopes.read","args":args}),
-            true,
+            Caller::Assistant,
         )
         .unwrap()
     };
@@ -71,12 +73,12 @@ fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effec
         repo.terminals.inventory().unwrap().rows(),
         [] as [serde_json::Value; 0]
     );
-    let spec = specifications()
+    let spec = table()
         .into_iter()
-        .find(|entry| entry.id == CommandId::PagesScopesRead)
+        .find(|entry| entry.name == "pages.scopes.read")
         .unwrap();
     assert_eq!(spec.effect, Effect::Read);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
 }
 
 #[test]
@@ -88,7 +90,7 @@ fn page_scopes_command_pagination_binds_full_catalog_query_and_configuration() {
         invoke(
             &repo,
             &json!({"name":"pages.scopes.read","args":args}),
-            true,
+            Caller::Assistant,
         )
     };
     let first = read(json!({"page":"linear"})).unwrap();
@@ -175,7 +177,7 @@ fn page_scopes_command_rejects_secret_scope_identities_without_altering_storage(
         let error = invoke(
             &repo,
             &json!({"name":"pages.scopes.read","args":{"page":"linear"}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap_err();
         assert_eq!(
@@ -204,7 +206,7 @@ fn page_scopes_command_rejects_secret_scope_identities_without_altering_storage(
             invoke(
                 &repo,
                 &json!({"name":"pages.scopes.read","args":args}),
-                true
+                Caller::Assistant
             )
             .unwrap_err()
             .message,
@@ -237,7 +239,7 @@ fn page_visibility_commands_reject_redacted_current_and_new_scope_identities() {
     let error = invoke(
         &repo,
         &json!({"name":"pages.settings.apply","args":proposed}),
-        true,
+        Caller::Assistant,
     )
     .unwrap_err();
     assert_eq!(
@@ -256,7 +258,7 @@ fn page_visibility_commands_reject_redacted_current_and_new_scope_identities() {
         json!({"name":"pages.settings.read"}),
         json!({"name":"pages.settings.apply","args":payload(&current,"sentry",json!(["Safe project"]))}),
     ] {
-        let error = invoke(&repo, &request, true).unwrap_err();
+        let error = invoke(&repo, &request, Caller::Assistant).unwrap_err();
         assert_eq!(
             error.message,
             "Page visibility scopes cannot be safely projected."
@@ -272,7 +274,14 @@ fn page_visibility_commands_preserve_exact_scopes_and_checked_baselines() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let path = repo.settings.config_directory().join("page-settings.json");
-    let read = || invoke(&repo, &json!({"name":"pages.settings.read"}), true).unwrap();
+    let read = || {
+        invoke(
+            &repo,
+            &json!({"name":"pages.settings.read"}),
+            Caller::Assistant,
+        )
+        .unwrap()
+    };
     let initial = read();
     let payload = |current: &Value, scopes: Value| json!({"revision":current["revision"],"contentHash":current["contentHash"],"page":"linear","scopes":scopes});
     let mut current = initial.clone();
@@ -280,7 +289,7 @@ fn page_visibility_commands_preserve_exact_scopes_and_checked_baselines() {
         let next = invoke(
             &repo,
             &json!({"name":"pages.settings.apply","args":payload(&current,scopes.clone())}),
-            true,
+            Caller::Assistant,
         )
         .unwrap();
         assert_eq!(next["pages"]["linear"]["scopes"], scopes);
@@ -297,7 +306,7 @@ fn page_visibility_commands_preserve_exact_scopes_and_checked_baselines() {
             invoke(
                 &repo,
                 &json!({"name":"pages.settings.apply","args":stale}),
-                true
+                Caller::Assistant
             )
             .unwrap_err()
             .status,
@@ -343,7 +352,7 @@ fn presentation_commands_validate_tagged_forms_and_acknowledgement_policy() {
     assert!(invoke(
         &repo,
         &json!({"name":"ui.presentations.ack","args":{"requestId":id,"outcome":"shown"}}),
-        true
+        Caller::Assistant
     )
     .unwrap_err()
     .message
@@ -373,13 +382,28 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
     let request_id = uuid();
     let before = repo.state.lock().unwrap().clone();
     let args = json!({"requestId":request_id,"presentation":{"type":"display-items","title":"Selected work","items":[{"type":"work","id":item_id}],"recommended":{"type":"work","id":item_id}}});
-    let receipt = invoke(&repo, &json!({"name":"ui.present","args":args}), true).unwrap();
+    let receipt = invoke(
+        &repo,
+        &json!({"name":"ui.present","args":args}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(receipt, json!({"requestId":request_id,"status":"queued"}));
     assert_eq!(
-        invoke(&repo, &json!({"name":"ui.present","args":args}), true).unwrap(),
+        invoke(
+            &repo,
+            &json!({"name":"ui.present","args":args}),
+            Caller::Assistant
+        )
+        .unwrap(),
         receipt
     );
-    let read = invoke(&repo, &json!({"name":"ui.presentations.read"}), true).unwrap();
+    let read = invoke(
+        &repo,
+        &json!({"name":"ui.presentations.read"}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(read["pending"].as_array().unwrap().len(), 1);
     assert_eq!(
         read["pending"][0]["presentation"]["items"][0]["item"]["id"],
@@ -389,7 +413,7 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
     let acknowledged = invoke(
         &repo,
         &json!({"name":"ui.presentations.ack","args":{"requestId":request_id,"outcome":"shown"}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(
@@ -397,7 +421,12 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
         json!({"requestId":request_id,"status":"shown"})
     );
     assert_eq!(
-        invoke(&repo, &json!({"name":"ui.presentations.read"}), true).unwrap()["pending"]
+        invoke(
+            &repo,
+            &json!({"name":"ui.presentations.read"}),
+            Caller::Assistant
+        )
+        .unwrap()["pending"]
             .as_array()
             .unwrap()
             .as_slice(),
@@ -489,16 +518,15 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
         ("chats.diff", json!({"recordId":id})),
         ("chats.diff.file", json!({"recordId":id,"path":"code.txt"})),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|s| s.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|s| s.name == name).unwrap();
         assert_eq!(spec.effect, Effect::Read);
-        assert_eq!(spec.assistant, AssistantPolicy::UserAction);
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true)
-            .unwrap_err()
-            .message
-            .contains("requires a user action"));
+        assert_eq!(spec.access, Access::UserAction);
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant)
+                .unwrap_err()
+                .message
+                .contains("requires a user action")
+        );
         assert!(!marker.exists());
     }
     for (name, args) in [
@@ -507,7 +535,7 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
         ("chats.diff.file", json!({"recordId":id})),
         ("chats.diff.file", json!({"recordId":id,"path":7})),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
         assert!(!marker.exists());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -516,7 +544,7 @@ fn git_backed_read_commands_deny_assistant_before_configured_helpers_and_validat
     invoke(
         &repo,
         &json!({"name":"chats.diff","args":{"recordId":id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert!(
@@ -532,18 +560,22 @@ fn skills_editor_commands_are_strict_user_writes_with_bounded_read_and_exact_rec
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
     let create = json!({"title":"Command editor","cwd":temp.path(),"skill":"SKILL.md","command":"$fixture","agent":"codex"});
     for name in ["skills.save", "skills.preset.update", "skills.schedule"] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, Effect::Write);
-        assert_eq!(spec.assistant, AssistantPolicy::UserAction);
-        assert!(invoke(&repo, &json!({"name":name,"args":{}}), true)
-            .unwrap_err()
-            .message
-            .contains("requires a user action"));
+        assert_eq!(spec.access, Access::UserAction);
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":{}}), Caller::Assistant)
+                .unwrap_err()
+                .message
+                .contains("requires a user action")
+        );
     }
-    let saved = invoke(&repo, &json!({"name":"skills.save","args":create}), false).unwrap();
+    let saved = invoke(
+        &repo,
+        &json!({"name":"skills.save","args":create}),
+        Caller::Browser,
+    )
+    .unwrap();
     let id = &saved["presetId"];
     assert_eq!(saved["preset"]["id"], *id);
     assert!(uuid::Uuid::parse_str(id.as_str().unwrap()).is_ok());
@@ -557,7 +589,7 @@ fn skills_editor_commands_are_strict_user_writes_with_bounded_read_and_exact_rec
     let read = invoke(
         &repo,
         &json!({"name":"skills.preset.read","args":{"presetId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert!(!read.to_string().contains("private-skills-command-canary"));
@@ -589,13 +621,13 @@ fn skills_editor_commands_are_strict_user_writes_with_bounded_read_and_exact_rec
             json!({"presetId":id,"path":"/private"}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
         assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     }
-    let updated=invoke(&repo,&json!({"name":"skills.preset.update","args":{"presetId":id,"patch":{"title":"Updated"},"expected":{"title":read["expected"]["title"]}}}),false).unwrap();
+    let updated=invoke(&repo,&json!({"name":"skills.preset.update","args":{"presetId":id,"patch":{"title":"Updated"},"expected":{"title":read["expected"]["title"]}}}),Caller::Browser).unwrap();
     assert_eq!(updated["changedFields"], json!(["title"]));
     assert_eq!(updated["preset"]["title"], "Updated");
-    let scheduled=invoke(&repo,&json!({"name":"skills.schedule","args":{"presetId":id,"patch":{"enabled":false},"expected":{"enabled":read["scheduleExpected"]["enabled"]}}}),false).unwrap();
+    let scheduled=invoke(&repo,&json!({"name":"skills.schedule","args":{"presetId":id,"patch":{"enabled":false},"expected":{"enabled":read["scheduleExpected"]["enabled"]}}}),Caller::Browser).unwrap();
     assert_eq!(scheduled["saved"], true);
     assert_eq!(scheduled["schedule"]["enabled"], false);
     assert_eq!(scheduled.as_object().unwrap().len(), 5);
@@ -612,16 +644,16 @@ fn saved_chat_open_command_is_strict_user_action_and_returns_only_bounded_receip
     let id = uuid();
     repo.transaction(|s|{s["sessions"]=json!([{"id":id,"agent":"codex","cwd":temp.path(),"title":"Private title marker","destination":"embedded","launchNew":true,"items":[],"private":"private-open-marker"}]);Ok(())}).unwrap();
     let before = std::fs::read(&repo.data).unwrap();
-    let spec = specifications()
+    let spec = table()
         .into_iter()
         .find(|s| s.name == "chats.open")
         .unwrap();
     assert_eq!(spec.effect, Effect::Write);
-    assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+    assert_eq!(spec.access, Access::UserAction);
     let denied = invoke(
         &repo,
         &json!({"name":"chats.open","args":{"recordId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap_err();
     assert!(denied.message.contains("requires a user action"));
@@ -633,12 +665,17 @@ fn saved_chat_open_command_is_strict_user_action_and_returns_only_bounded_receip
         json!({"id":id}),
         json!({"recordId":7}),
     ] {
-        assert!(invoke(&repo, &json!({"name":"chats.open","args":args}), false).is_err());
+        assert!(invoke(
+            &repo,
+            &json!({"name":"chats.open","args":args}),
+            Caller::Browser
+        )
+        .is_err());
     }
     let receipt = invoke(
         &repo,
         &json!({"name":"chats.open","args":{"recordId":id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(receipt["status"], "preview");
@@ -658,37 +695,26 @@ fn artifact_metadata_commands_share_cas_owner_and_deny_discovery_registration_to
     let id = crate::backend::artifacts::id("https://example.invalid/command-metadata");
     repo.transaction(|state|{state["artifacts"]=json!([{"id":id,"title":"Original","url":"https://example.invalid/command-metadata","sessionIds":[],"privateNs":"private-command-artifact"}]);Ok(())}).unwrap();
     for (name, effect, policy) in [
-        (
-            "artifacts.metadata.read",
-            Effect::Read,
-            AssistantPolicy::Allowed,
-        ),
-        (
-            "artifacts.metadata.update",
-            Effect::Write,
-            AssistantPolicy::Allowed,
-        ),
+        ("artifacts.metadata.read", Effect::Read, Access::Anyone),
+        ("artifacts.metadata.update", Effect::Write, Access::Anyone),
         (
             "artifacts.register-discovered",
             Effect::Write,
-            AssistantPolicy::UserAction,
+            Access::UserAction,
         ),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, policy);
+        assert_eq!(spec.access, policy);
     }
     let read = invoke(
         &repo,
         &json!({"name":"artifacts.metadata.read","args":{"id":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert!(!read.to_string().contains("private-command-artifact"));
-    let denied=invoke(&repo,&json!({"name":"artifacts.register-discovered","args":{"id":id,"patch":{"title":"Not allowed"},"expected":{}}}),true).unwrap_err();
+    let denied=invoke(&repo,&json!({"name":"artifacts.register-discovered","args":{"id":id,"patch":{"title":"Not allowed"},"expected":{}}}),Caller::Assistant).unwrap_err();
     assert!(denied.message.contains("requires a user action"));
     let before = repo.state.lock().unwrap().clone();
     for args in [
@@ -699,12 +725,12 @@ fn artifact_metadata_commands_share_cas_owner_and_deny_discovery_registration_to
         assert!(invoke(
             &repo,
             &json!({"name":"artifacts.metadata.update","args":args}),
-            true
+            Caller::Assistant
         )
         .is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
-    let updated=invoke(&repo,&json!({"name":"artifacts.metadata.update","args":{"id":id,"patch":{"title":"Changed"},"expected":{"title":read["expected"]["title"]}}}),true).unwrap();
+    let updated=invoke(&repo,&json!({"name":"artifacts.metadata.update","args":{"id":id,"patch":{"title":"Changed"},"expected":{"title":read["expected"]["title"]}}}),Caller::Assistant).unwrap();
     assert_eq!(updated["saved"], true);
     assert_eq!(updated["changedFields"], json!(["title"]));
     assert_eq!(
@@ -721,15 +747,17 @@ fn changes_commands_are_strict_cached_routine_owners() {
         ("changes.list", Effect::Read),
         ("changes.mark-read", Effect::Write),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+        assert_eq!(spec.access, Access::Anyone);
     }
     let before = std::fs::read(&repo.data).unwrap();
-    let result = invoke(&repo, &json!({"name":"changes.list","args":{}}), true).unwrap();
+    let result = invoke(
+        &repo,
+        &json!({"name":"changes.list","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert!(!result.to_string().contains("private-change-marker"));
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     for (name, args) in [
@@ -740,13 +768,13 @@ fn changes_commands_are_strict_cached_routine_owners() {
         ("changes.mark-read", json!({"ids":[7]})),
         ("changes.mark-read", json!({"ids":vec!["observed";501]})),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).is_err());
     }
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     let receipt = invoke(
         &repo,
         &json!({"name":"changes.mark-read","args":{"ids":["observed","pruned"]}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(receipt["markedIds"], json!(["observed"]));
@@ -773,16 +801,16 @@ fn project_folder_command_is_strict_read_only_and_available_to_the_assistant() {
     let id = &project["project"]["id"];
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
-    let spec = specifications()
+    let spec = table()
         .into_iter()
         .find(|spec| spec.name == "projects.folder")
         .unwrap();
     assert_eq!(spec.effect, Effect::Read);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
     let result = invoke(
         &repo,
         &json!({"name":"projects.folder","args":{"id":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(
@@ -795,7 +823,12 @@ fn project_folder_command_is_strict_read_only_and_available_to_the_assistant() {
         json!({"id":7}),
         json!({}),
     ] {
-        assert!(invoke(&repo, &json!({"name":"projects.folder","args":args}), true).is_err());
+        assert!(invoke(
+            &repo,
+            &json!({"name":"projects.folder","args":args}),
+            Caller::Assistant
+        )
+        .is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
@@ -814,14 +847,11 @@ fn projects_commands_are_strict_routine_metadata_with_bounded_owner_receipts() {
         ("projects.create", Effect::Write),
         ("projects.update", Effect::Write),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+        assert_eq!(spec.access, Access::Anyone);
     }
-    let result=invoke(&repo,&json!({"name":"projects.create","args":{"title":"Routine project","detail":"Full editable detail"}}),true).unwrap();
+    let result=invoke(&repo,&json!({"name":"projects.create","args":{"title":"Routine project","detail":"Full editable detail"}}),Caller::Assistant).unwrap();
     let id = text(&result["project"], "id");
     assert!(id.starts_with("note:"));
     assert_eq!(result["created"], true);
@@ -833,11 +863,11 @@ fn projects_commands_are_strict_routine_metadata_with_bounded_owner_receipts() {
     let read = invoke(
         &repo,
         &json!({"name":"projects.read","args":{"id":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert!(!read.to_string().contains("private-project-command-marker"));
-    let changed=invoke(&repo,&json!({"name":"projects.update","args":{"id":id,"patch":{"title":"Changed project"},"expected":{"title":read["expected"]["title"]}}}),true).unwrap();
+    let changed=invoke(&repo,&json!({"name":"projects.update","args":{"id":id,"patch":{"title":"Changed project"},"expected":{"title":read["expected"]["title"]}}}),Caller::Assistant).unwrap();
     assert_eq!(changed["changedFields"], json!(["title"]));
     assert_eq!(changed["project"]["detail"], "Full editable detail");
     assert_eq!(
@@ -859,7 +889,7 @@ fn projects_commands_are_strict_routine_metadata_with_bounded_owner_receipts() {
             json!({"id":id,"patch":{"title":"New"},"expected":{"title":7}}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
 }
@@ -884,17 +914,16 @@ fn tracked_dispatch_commands_deny_assistant_writes_before_preparation_and_expose
         "chats.dispatch.finalize",
         "chats.dispatch.resolve",
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
-        assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
+        assert_eq!(spec.access, Access::UserAction);
         assert_eq!(spec.effect, Effect::Write);
         let args = json!({"recordId":id,"operationId":uuid(),"revision":0,"itemId":"github:pr","decision":"submitted"});
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true)
-            .unwrap_err()
-            .message
-            .contains("requires a user action"));
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant)
+                .unwrap_err()
+                .message
+                .contains("requires a user action")
+        );
     }
     for (name, args) in [
         (
@@ -918,24 +947,24 @@ fn tracked_dispatch_commands_deny_assistant_writes_before_preparation_and_expose
             json!({"recordId":id,"operationId":uuid(),"decision":"retry"}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(
         invoke(
             &repo,
             &json!({"name":"chats.dispatch.read","args":{"recordId":id}}),
-            true
+            Caller::Assistant
         )
         .unwrap()["operations"],
         json!([])
     );
-    let spec = specifications()
+    let spec = table()
         .into_iter()
         .find(|spec| spec.name == "chats.dispatch.read")
         .unwrap();
     assert_eq!(spec.effect, Effect::Read);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
 }
 #[test]
 fn tracked_dispatch_v2_retires_creation_names_and_never_submits_unknown_ids() {
@@ -952,7 +981,7 @@ fn tracked_dispatch_v2_retires_creation_names_and_never_submits_unknown_ids() {
         assert!(invoke(
             &repo,
             &json!({"name":name,"args":{"recordId":id,"operationId":uuid(),"revision":0}}),
-            false
+            Caller::Browser
         )
         .is_err());
     }
@@ -962,10 +991,7 @@ fn tracked_dispatch_v2_retires_creation_names_and_never_submits_unknown_ids() {
         "review.send.prepare",
         "chats.ci.investigate.prepare",
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert!(spec.args["properties"].get("operationId").is_none());
         let mut args = json!({"recordId":id,"operationId":uuid()});
         if name == "chats.ci.investigate.prepare" {
@@ -973,14 +999,14 @@ fn tracked_dispatch_v2_retires_creation_names_and_never_submits_unknown_ids() {
         } else {
             args["revision"] = json!(0);
         }
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
-    assert!(invoke(&repo,&json!({"name":"chats.dispatch.submit","args":{"recordId":id,"operationId":uuid(),"revision":0}}),false).is_err());
+    assert!(invoke(&repo,&json!({"name":"chats.dispatch.submit","args":{"recordId":id,"operationId":uuid(),"revision":0}}),Caller::Browser).is_err());
     let missing = invoke(
         &repo,
         &json!({"name":"chats.dispatch.submit","args":{"recordId":id,"operationId":uuid()}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(missing["type"], "unavailable");
@@ -1004,17 +1030,17 @@ fn chat_ci_command_is_strict_user_action_and_denies_before_admission() {
         Ok(())
     })
     .unwrap();
-    let spec = specifications()
+    let spec = table()
         .into_iter()
         .find(|spec| spec.name == "chats.ci.refresh")
         .unwrap();
     assert_eq!(spec.effect, Effect::Write);
-    assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+    assert_eq!(spec.access, Access::UserAction);
     let before = repo.state.lock().unwrap().clone();
     assert!(invoke(
         &repo,
         &json!({"name":"chats.ci.refresh","args":{"recordId":id}}),
-        true
+        Caller::Assistant
     )
     .unwrap_err()
     .message
@@ -1029,7 +1055,7 @@ fn chat_ci_command_is_strict_user_action_and_denies_before_admission() {
         assert!(invoke(
             &repo,
             &json!({"name":"chats.ci.refresh","args":args}),
-            false
+            Caller::Browser
         )
         .is_err());
     }
@@ -1039,7 +1065,7 @@ fn chat_ci_command_is_strict_user_action_and_denies_before_admission() {
     let result = invoke(
         &repo,
         &json!({"name":"chats.ci.refresh","args":{"recordId":id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["reason"], "demo");
@@ -1061,18 +1087,15 @@ fn link_work_commands_have_strict_schemas_and_deny_url_resolution_before_owner()
         .unwrap();
     let id = text(&chat, "id");
     for (name, policy) in [
-        ("chats.link-work", AssistantPolicy::Allowed),
-        ("chats.link-work-url", AssistantPolicy::UserAction),
+        ("chats.link-work", Access::Anyone),
+        ("chats.link-work-url", Access::UserAction),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, Effect::Write);
-        assert_eq!(spec.assistant, policy);
+        assert_eq!(spec.access, policy);
     }
     let before = repo.state.lock().unwrap().clone();
-    let denied=invoke(&repo,&json!({"name":"chats.link-work-url","args":{"recordId":id,"url":"https://github.com/example/project/issues/1"}}),true).unwrap_err();
+    let denied=invoke(&repo,&json!({"name":"chats.link-work-url","args":{"recordId":id,"url":"https://github.com/example/project/issues/1"}}),Caller::Assistant).unwrap_err();
     assert!(denied.message.contains("requires a user action"));
     assert_eq!(*repo.state.lock().unwrap(), before);
     for (name, args) in [
@@ -1095,13 +1118,13 @@ fn link_work_commands_have_strict_schemas_and_deny_url_resolution_before_owner()
             json!({"recordId":id,"url":"https://example.invalid","cwd":"/tmp"}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     let result = invoke(
         &repo,
         &json!({"name":"chats.link-work","args":{"recordId":id,"itemIds":["known"]}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(result["recordId"], id);
@@ -1130,16 +1153,15 @@ fn artifact_attachment_commands_are_strict_and_policy_denial_precedes_file_snaps
             json!({"recordId":record,"url":"https://example.invalid/result"}),
         ),
     ] {
-        let entry = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let entry = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(entry.effect, Effect::Write);
-        assert_eq!(entry.assistant, AssistantPolicy::UserAction);
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true)
-            .unwrap_err()
-            .message
-            .contains("requires a user action"));
+        assert_eq!(entry.access, Access::UserAction);
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant)
+                .unwrap_err()
+                .message
+                .contains("requires a user action")
+        );
     }
     for (name, args) in [
         (
@@ -1171,7 +1193,7 @@ fn artifact_attachment_commands_are_strict_and_policy_denial_precedes_file_snaps
             json!({"recordId":uuid(),"path":path}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
@@ -1179,7 +1201,7 @@ fn artifact_attachment_commands_are_strict_and_policy_denial_precedes_file_snaps
     let result = invoke(
         &repo,
         &json!({"name":"artifacts.attach-file","args":{"recordId":record,"path":path}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["saved"], true);
@@ -1200,12 +1222,9 @@ fn github_pr_commands_are_discoverable_strict_and_deny_app_chat_before_side_effe
         "github.pr.request-review",
         "github.pr.refresh",
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, Effect::Write);
-        assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+        assert_eq!(spec.access, Access::UserAction);
         let entry = arr(&catalog()["commands"])
             .into_iter()
             .find(|entry| entry["name"] == name)
@@ -1217,7 +1236,8 @@ fn github_pr_commands_are_discoverable_strict_and_deny_app_chat_before_side_effe
         } else {
             json!({"id":"github:PR_test"})
         };
-        let error = invoke(&repo, &json!({"name":name,"args":args}), true).unwrap_err();
+        let error =
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).unwrap_err();
         assert!(error.message.contains("requires a user action"));
         assert!(repo.cooldown.lock().unwrap().is_empty());
         assert!(repo.opening.lock().unwrap().is_empty());
@@ -1256,7 +1276,7 @@ fn github_pr_commands_are_discoverable_strict_and_deny_app_chat_before_side_effe
         ),
         ("github.pr.ready", json!({"id":"github:uncached"})),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
         assert!(repo.cooldown.lock().unwrap().is_empty());
         assert!(repo.opening.lock().unwrap().is_empty());
     }
@@ -1278,7 +1298,7 @@ fn github_pr_named_commands_delegate_owner_and_return_only_truthful_demo_receipt
         } else {
             json!({"id":"github:PR_test"})
         };
-        let receipt = invoke(&repo, &json!({"name":name,"args":args}), false).unwrap();
+        let receipt = invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).unwrap();
         assert_eq!(
             receipt,
             json!({"id":"github:PR_test","action":action,"status":"preview","remote":"not-contacted","localSaved":true})
@@ -1305,34 +1325,26 @@ fn source_commands_publish_strict_policies_and_read_only_redacted_status() {
     repo.transaction(|state| {state["sources"]["github"]=json!({"disabled":false,"lastSuccess":123,"nextAttempt":456,"failures":2,"error":"Failed fixture-private-source-secret","privateExtension":"fixture-private-source-extension"});Ok(())}).unwrap();
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
-    for (name, id, effect, policy) in [
-        (
-            "sources.status",
-            CommandId::SourcesStatus,
-            Effect::Read,
-            AssistantPolicy::Allowed,
-        ),
-        (
-            "sources.refresh",
-            CommandId::SourcesRefresh,
-            Effect::Write,
-            AssistantPolicy::UserAction,
-        ),
+    for (name, effect, policy) in [
+        ("sources.status", Effect::Read, Access::Anyone),
+        ("sources.refresh", Effect::Write, Access::UserAction),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.id == id)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, policy);
+        assert_eq!(spec.access, policy);
         let entry = arr(&catalog()["commands"])
             .into_iter()
             .find(|entry| entry["name"] == name)
             .unwrap();
         assert_eq!(entry["readOnly"], effect == Effect::Read);
-        assert_eq!(entry["appChat"], policy == AssistantPolicy::Allowed);
+        assert_eq!(entry["appChat"], policy == Access::Anyone);
     }
-    let status = invoke(&repo, &json!({"name":"sources.status","args":{}}), true).unwrap();
+    let status = invoke(
+        &repo,
+        &json!({"name":"sources.status","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(arr(&status["sources"]).len(), 3);
     let github = arr(&status["sources"])
         .into_iter()
@@ -1369,7 +1381,7 @@ fn sentry_environment_read_is_cached_bounded_and_preserves_unknown_membership() 
         invoke(
             &repo,
             &json!({"name":"sentry.environments.read","args":args}),
-            true,
+            Caller::Assistant,
         )
         .unwrap()
     };
@@ -1416,7 +1428,7 @@ fn sentry_environment_read_is_cached_bounded_and_preserves_unknown_membership() 
         assert!(invoke(
             &repo,
             &json!({"name":"sentry.environments.read","args":args}),
-            true
+            Caller::Assistant
         )
         .is_err());
     }
@@ -1459,7 +1471,7 @@ fn sentry_environment_read_rejects_oversize_malformed_and_redacted_identity() {
         assert!(invoke(
             &repo,
             &json!({"name":"sentry.environments.read","args":{"environment":"qa"}}),
-            true
+            Caller::Assistant
         )
         .is_err());
         assert_eq!(*repo.state.lock().unwrap(), before);
@@ -1473,7 +1485,7 @@ fn sentry_environment_read_rejects_oversize_malformed_and_redacted_identity() {
     let result = invoke(
         &repo,
         &json!({"name":"sentry.environments.read","args":{}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     let row = &result["environments"][0];
@@ -1507,14 +1519,16 @@ fn preparation_commands_enforce_policy_and_exact_argument_shapes_before_effects(
             .unwrap();
         assert_eq!(entry["readOnly"], false);
         assert_eq!(entry["appChat"], false);
-        assert!(invoke(&repo, &json!({"name":name,"args":{}}), true)
-            .unwrap_err()
-            .message
-            .contains("requires a user action"));
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":{}}), Caller::Assistant)
+                .unwrap_err()
+                .message
+                .contains("requires a user action")
+        );
         assert!(invoke(
             &repo,
             &json!({"name":name,"args":{"requestId":uuid(),"privateOverride":true}}),
-            false
+            Caller::Browser
         )
         .is_err());
     }
@@ -1522,7 +1536,7 @@ fn preparation_commands_enforce_policy_and_exact_argument_shapes_before_effects(
     let unknown = invoke(
         &repo,
         &json!({"name":"chats.preparation.read","args":{"requestId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(unknown, json!({"requestId":id,"status":"not-found"}));
@@ -1534,7 +1548,7 @@ fn preparation_commands_enforce_policy_and_exact_argument_shapes_before_effects(
         assert!(invoke(
             &repo,
             &json!({"name":"chats.preparation.read","args":args}),
-            true
+            Caller::Assistant
         )
         .is_err());
     }
@@ -1555,7 +1569,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
     let result = invoke(
         &repo,
         &json!({"name":"chats.prepare.new","args":args}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["status"], "prepared");
@@ -1570,7 +1584,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
         invoke(
             &repo,
             &json!({"name":"chats.prepare.new","args":args}),
-            false
+            Caller::Browser
         )
         .unwrap(),
         result
@@ -1579,7 +1593,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
         invoke(
             &repo,
             &json!({"name":"chats.preparation.read","args":{"requestId":request_id}}),
-            true
+            Caller::Assistant
         )
         .unwrap(),
         result
@@ -1590,7 +1604,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
         invoke(
             &repo,
             &json!({"name":"chats.prepare.new","args":changed}),
-            false
+            Caller::Browser
         )
         .unwrap_err()
         .status,
@@ -1601,7 +1615,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
     assert!(invoke(
         &repo,
         &json!({"name":"chats.prepare.new","args":edit}),
-        false
+        Caller::Browser
     )
     .is_err());
     let mut attach = args;
@@ -1609,7 +1623,7 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
     assert!(invoke(
         &repo,
         &json!({"name":"chats.prepare.new","args":attach}),
-        false
+        Caller::Browser
     )
     .is_err());
     assert_eq!(*repo.state.lock().unwrap(), state);
@@ -1629,28 +1643,17 @@ fn chat_metadata_commands_validate_and_enforce_the_user_action_boundary() {
     let before = repo.state.lock().unwrap().clone();
     let disk = std::fs::read(&repo.data).unwrap();
     for (name, effect, policy) in [
-        (
-            "chats.metadata.read",
-            Effect::Read,
-            AssistantPolicy::Allowed,
-        ),
-        (
-            "chats.metadata.update",
-            Effect::Write,
-            AssistantPolicy::UserAction,
-        ),
+        ("chats.metadata.read", Effect::Read, Access::Anyone),
+        ("chats.metadata.update", Effect::Write, Access::UserAction),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, policy);
+        assert_eq!(spec.access, policy);
     }
     let read = invoke(
         &repo,
         &json!({"name":"chats.metadata.read","args":{"recordId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(read["recordId"], id);
@@ -1660,7 +1663,7 @@ fn chat_metadata_commands_validate_and_enforce_the_user_action_boundary() {
     assert!(invoke(
         &repo,
         &json!({"name":"chats.metadata.update","args":args}),
-        true
+        Caller::Assistant
     )
     .unwrap_err()
     .message
@@ -1685,7 +1688,7 @@ fn chat_metadata_commands_validate_and_enforce_the_user_action_boundary() {
             json!({"recordId":id,"patch":{"title":"Edited"},"expected":{"title":read["expected"]["title"]},"sessionId":uuid()}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).is_err());
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
@@ -1705,7 +1708,7 @@ fn chat_metadata_command_merges_current_unpatched_fields_and_conflicts_on_a_stal
     let read = invoke(
         &repo,
         &json!({"name":"chats.metadata.read","args":{"recordId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     let args = json!({"recordId":id,"patch":{"title":"Edited"},"expected":{"title":read["expected"]["title"]}});
@@ -1718,7 +1721,7 @@ fn chat_metadata_command_merges_current_unpatched_fields_and_conflicts_on_a_stal
     let result = invoke(
         &repo,
         &json!({"name":"chats.metadata.update","args":args}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["recordId"], id);
@@ -1742,7 +1745,7 @@ fn chat_metadata_command_merges_current_unpatched_fields_and_conflicts_on_a_stal
         invoke(
             &repo,
             &json!({"name":"chats.metadata.update","args":args}),
-            false
+            Caller::Browser
         )
         .unwrap_err()
         .status,
@@ -1762,7 +1765,7 @@ fn every_preparation_command_delegates_its_owner_without_opening_an_agent() {
     std::fs::write(temp.path().join("SKILL.md"), "Inert fixture").unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let settings = repo.settings.view();
-    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),Approval::User).unwrap();
     repo.transaction(|state|{state["items"]=json!([{"id":"github:prepare-fixture","source":"github","kind":"Pull request","title":"Preparation fixture","url":"https://github.com/example/project/pull/1","project":"example/project","reference":"#1","status":"todo"}]);state["itemSettings"]["github:prepare-fixture"]=json!({"explicit":true,"cwd":temp.path()});state["skillPresets"]=json!([{"id":"prepare-fixture","title":"Fixture skill","cwd":temp.path(),"skill":"SKILL.md","reports":"reports","agent":"codex","command":"$fixture"}]);Ok(())}).unwrap();
     let original=super::super::chat_preparation::save(&repo,super::super::chat_preparation::Kind::New,&json!({"agent":"codex","title":"Original fixture","cwd":temp.path(),"destination":"embedded","instruction":"Context only","itemIds":[]})).unwrap();
     for (kind, mut args) in [
@@ -1792,21 +1795,21 @@ fn every_preparation_command_delegates_its_owner_without_opening_an_agent() {
     ] {
         args["requestId"] = json!(uuid());
         let name = format!("chats.prepare.{kind}");
-        let result = invoke(&repo, &json!({"name":name,"args":args}), false).unwrap();
+        let result = invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).unwrap();
         assert_eq!(result["kind"], kind);
         assert_eq!(result["status"], "prepared");
         assert_eq!(result["requestId"], args["requestId"]);
         let before = repo.state.lock().unwrap().clone();
         let disk = std::fs::read(&repo.data).unwrap();
         assert_eq!(
-            invoke(&repo, &json!({"name":name,"args":args}), false).unwrap(),
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).unwrap(),
             result
         );
         assert_eq!(
             invoke(
                 &repo,
                 &json!({"name":"chats.preparation.read","args":{"requestId":args["requestId"]}}),
-                true
+                Caller::Assistant
             )
             .unwrap(),
             result
@@ -1837,7 +1840,7 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
     let error = invoke(
         &repo,
         &json!({"name":"sources.refresh","args":{"force":true}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap_err();
     assert!(error.message.contains("requires a user action"));
@@ -1855,10 +1858,12 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
             json!({"force":false,"token":"unsupported"}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), false)
-            .unwrap_err()
-            .message
-            .starts_with("Invalid command arguments:"));
+        assert!(
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser)
+                .unwrap_err()
+                .message
+                .starts_with("Invalid command arguments:")
+        );
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert!(repo.cooldown.lock().unwrap().is_empty());
         assert!(repo.running.lock().unwrap().is_empty());
@@ -1867,7 +1872,12 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
     let demo = Repository::open(demo_temp.path().into(), None, true).unwrap();
     let before = demo.state.lock().unwrap().clone();
     for (args, force) in [(json!({}), false), (json!({"force":true}), true)] {
-        let receipt = invoke(&demo, &json!({"name":"sources.refresh","args":args}), false).unwrap();
+        let receipt = invoke(
+            &demo,
+            &json!({"name":"sources.refresh","args":args}),
+            Caller::Browser,
+        )
+        .unwrap();
         assert_eq!(receipt["status"], "skipped");
         assert_eq!(receipt["force"], force);
         assert_eq!(arr(&receipt["results"]).len(), 3);
@@ -1903,13 +1913,10 @@ fn chat_metadata_commands_are_reversible_allowed_and_return_only_updated_metadat
         ("chats.archive", json!({"id":id,"archived":true})),
         ("chats.archive", json!({"id":id,"archived":false})),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, Effect::Write);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
-        let result = invoke(&repo, &json!({"name":name,"args":args}), true).unwrap();
+        assert_eq!(spec.access, Access::Anyone);
+        let result = invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).unwrap();
         let row = repo.state.lock().unwrap()["sessions"][0].clone();
         assert_eq!(result.as_object().unwrap().len(), 2);
         assert_eq!(result["chat"].as_object().unwrap().len(), 5);
@@ -1991,7 +1998,7 @@ fn chat_metadata_commands_reject_bad_targets_and_unknown_fields_without_writes()
             json!({"id":"x".repeat(81),"hidden":true}),
         ),
     ] {
-        assert!(invoke(&repo, &json!({"name":name,"args":args}), true).is_err());
+        assert!(invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).is_err());
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     }
@@ -2007,7 +2014,7 @@ fn assert_assistant_cannot_write_skills(repo: &Arc<Repository>, preset: &Value) 
         ),
         ("skills.run", json!({"presetId":"fixture"})),
     ] {
-        let error = invoke(repo, &json!({"name":name,"args":args}), true).unwrap_err();
+        let error = invoke(repo, &json!({"name":name,"args":args}), Caller::Assistant).unwrap_err();
         assert!(error.message.contains("requires a user action"));
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert!(repo.cooldown.lock().unwrap().is_empty());
@@ -2020,7 +2027,9 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
     std::fs::write(temp.path().join("SKILL.md"), "Fixture skill").unwrap();
     let preset = json!({"title":"Fixture","cwd":temp.path(),"skill":"SKILL.md","command":"$fixture","agent":"codex"});
     assert_assistant_cannot_write_skills(&repo, &preset);
-    let saved = invoke(&repo, &json!({"name":"skills.save","args":preset}), false).unwrap();
+    let browser =
+        |name: &str, args: Value| invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser);
+    let saved = browser("skills.save", preset).unwrap();
     assert_eq!(saved["saved"], true);
     assert_eq!(saved["presetId"], saved["preset"]["id"]);
     let preset_id = saved["presetId"].clone();
@@ -2042,18 +2051,17 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
     }
     assert_eq!(stored["reports"], "reports");
     assert!(saved["preset"].get("reports").is_none());
-    let baseline = invoke(
-        &repo,
-        &json!({"name":"skills.preset.read","args":{"presetId":preset_id}}),
-        false,
-    )
-    .unwrap();
+    let baseline = browser("skills.preset.read", json!({"presetId":preset_id})).unwrap();
     let patch = json!({"mode":"interval","everyMinutes":5,"missed":"skip","enabled":true});
     let mut expected = json!({});
     for key in patch.as_object().unwrap().keys() {
         expected[key] = baseline["scheduleExpected"][key].clone();
     }
-    let schedule = invoke(&repo, &json!({"name":"skills.schedule","args":{"presetId":preset_id,"patch":patch,"expected":expected}}), false).unwrap();
+    let schedule = browser(
+        "skills.schedule",
+        json!({"presetId":preset_id,"patch":patch,"expected":expected}),
+    )
+    .unwrap();
     assert_eq!(schedule["saved"], true);
     assert_eq!(schedule["presetId"], preset_id);
     let raw = repo.state.lock().unwrap()["skillSchedules"][text(&saved, "presetId")].clone();
@@ -2075,19 +2083,12 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
         json!({"presetId":preset_id,"command":"execute"}),
         json!({"presetId":"x".repeat(81)}),
     ] {
-        assert!(
-            invoke(&repo, &json!({"name":"skills.run","args":args}), false)
-                .unwrap_err()
-                .message
-                .starts_with("Invalid command arguments:")
-        );
+        assert!(browser("skills.run", args)
+            .unwrap_err()
+            .message
+            .starts_with("Invalid command arguments:"));
     }
-    let receipt = invoke(
-        &repo,
-        &json!({"name":"skills.run","args":{"presetId":preset_id}}),
-        false,
-    )
-    .unwrap();
+    let receipt = browser("skills.run", json!({"presetId":preset_id})).unwrap();
     assert_eq!(receipt["presetId"], preset_id);
     assert_eq!(receipt["status"], "preview");
     assert_eq!(receipt.as_object().unwrap().len(), 6);
@@ -2142,14 +2143,12 @@ fn sharing_commands_enforce_policy_before_owner_side_effects() {
             Effect::Write,
         ),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.name == name)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+        assert_eq!(spec.access, Access::UserAction);
         validate_arguments(&spec.args, &args, "args").unwrap();
-        let error = invoke(&repo, &json!({"name":name,"args":args}), true).unwrap_err();
+        let error =
+            invoke(&repo, &json!({"name":name,"args":args}), Caller::Assistant).unwrap_err();
         assert_eq!(
             error.message,
             "This command requires a user action. It cannot run from App chat."
@@ -2215,7 +2214,7 @@ fn sharing_commands_reject_invalid_arguments_before_owner_side_effects() {
         ("sharing.dismiss", json!({"id":id,"dismissed":"true"})),
     ];
     for (name, args) in cases {
-        let error = invoke(&repo, &json!({"name":name,"args":args}), false).unwrap_err();
+        let error = invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser).unwrap_err();
         assert!(
             error.message.starts_with("Invalid command arguments: args"),
             "{name}: {}",
@@ -2251,27 +2250,32 @@ fn sharing_commands_read_known_private_job_and_dismiss_cached_entry() {
     let job = invoke(
         &repo,
         &json!({"name":"sharing.job","args":{"id":job_id}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(job["id"], job_id);
     assert_eq!(job["preview"], preview);
     assert_eq!(*repo.sharing.lock().unwrap(), before);
-    let full = invoke(&repo, &json!({"name":"sharing.state","args":{}}), false).unwrap();
+    let full = invoke(
+        &repo,
+        &json!({"name":"sharing.state","args":{}}),
+        Caller::Browser,
+    )
+    .unwrap();
     assert_eq!(full, super::super::sharing::view(&repo));
     assert_eq!(arr(&full["entries"]).len(), 1);
     assert!(!full.to_string().contains("fixture private conversation"));
-    let spec = specifications()
+    let spec = table()
         .into_iter()
         .find(|spec| spec.name == "sharing.dismiss")
         .unwrap();
     assert_eq!(spec.effect, Effect::Write);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
     for dismissed in [true, false] {
         let response = invoke(
             &repo,
             &json!({"name":"sharing.dismiss","args":{"id":id,"dismissed":dismissed}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap();
         assert_eq!(response, json!({"id":id,"dismissed":dismissed}));
@@ -2296,7 +2300,7 @@ fn sharing_commands_read_known_private_job_and_dismiss_cached_entry() {
     let user_response = invoke(
         &repo,
         &json!({"name":"sharing.dismiss","args":{"id":id,"dismissed":true}}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(
@@ -2311,16 +2315,13 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     repo.transaction(|state| {state["guidance"]=json!({"version":1,"revision":0,"enabled":true,"tips":{},"extension":"benign-private-guidance-extension"});Ok(())}).unwrap();
-    for (name, id, effect) in [
-        ("guidance.read", CommandId::GuidanceRead, Effect::Read),
-        ("guidance.apply", CommandId::GuidanceApply, Effect::Write),
+    for (name, effect) in [
+        ("guidance.read", Effect::Read),
+        ("guidance.apply", Effect::Write),
     ] {
-        let spec = specifications()
-            .into_iter()
-            .find(|spec| spec.id == id)
-            .unwrap();
+        let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+        assert_eq!(spec.access, Access::Anyone);
         let entry = arr(&catalog()["commands"])
             .into_iter()
             .find(|entry| entry["name"] == name)
@@ -2330,7 +2331,12 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
     }
     let state = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
-    let read = invoke(&repo, &json!({"name":"guidance.read","args":{}}), true).unwrap();
+    let read = invoke(
+        &repo,
+        &json!({"name":"guidance.read","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(read, super::super::guidance::view(&repo).unwrap());
     assert!(!read.to_string().contains("benign-private"));
     assert_eq!(*repo.state.lock().unwrap(), state);
@@ -2342,19 +2348,24 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
         json!({"revision":0,"action":"enabled","enabled":false,"id":"chat.shell"}),
         json!({"revision":0,"action":"replay","extra":true}),
     ] {
-        assert!(invoke(&repo, &json!({"name":"guidance.apply","args":args}), true).is_err());
+        assert!(invoke(
+            &repo,
+            &json!({"name":"guidance.apply","args":args}),
+            Caller::Assistant
+        )
+        .is_err());
         assert_eq!(*repo.state.lock().unwrap(), state);
     }
     assert!(invoke(
         &repo,
         &json!({"name":"guidance.read","args":{"path":"/not-accepted"}}),
-        true
+        Caller::Assistant
     )
     .is_err());
     let disabled = invoke(
         &repo,
         &json!({"name":"guidance.apply","args":{"revision":0,"action":"enabled","enabled":false}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(disabled["enabled"], false);
@@ -2364,19 +2375,19 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
         invoke(
             &repo,
             &json!({"name":"guidance.apply","args":{"revision":0,"action":"replay"}}),
-            true
+            Caller::Assistant
         )
         .unwrap_err()
         .status,
         409
     );
     assert_eq!(std::fs::read(&repo.data).unwrap(), saved);
-    let dismissed=invoke(&repo,&json!({"name":"guidance.apply","args":{"revision":1,"action":"dismiss","id":"chat.shell"}}),false).unwrap();
+    let dismissed=invoke(&repo,&json!({"name":"guidance.apply","args":{"revision":1,"action":"dismiss","id":"chat.shell"}}),Caller::Browser).unwrap();
     assert_eq!(dismissed["tips"]["chat.shell"], "dismissed");
     let replay = invoke(
         &repo,
         &json!({"name":"guidance.apply","args":{"revision":2,"action":"replay"}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(replay["enabled"], true);
@@ -2392,18 +2403,10 @@ fn guidance_commands_inspect_and_change_only_routine_tip_preferences() {
     }
 }
 
-fn assert_strict_read_only_command(
-    repo: &Arc<Repository>,
-    catalog: &Value,
-    name: &str,
-    id: CommandId,
-) {
-    let spec = specifications()
-        .into_iter()
-        .find(|spec| spec.id == id)
-        .unwrap();
+fn assert_strict_read_only_command(repo: &Arc<Repository>, catalog: &Value, name: &str) {
+    let spec = table().into_iter().find(|spec| spec.name == name).unwrap();
     assert_eq!(spec.effect, Effect::Read);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
     let row = arr(&catalog["commands"])
         .into_iter()
         .find(|row| row["name"] == name)
@@ -2412,13 +2415,13 @@ fn assert_strict_read_only_command(
     assert_eq!(row["appChat"], true);
     let request = json!({"name":name,"args":{}});
     assert_eq!(
-        invoke(repo, &request, false).unwrap(),
-        invoke(repo, &request, true).unwrap()
+        invoke(repo, &request, Caller::Browser).unwrap(),
+        invoke(repo, &request, Caller::Assistant).unwrap()
     );
     assert!(invoke(
         repo,
         &json!({"name":name,"args":{"path":"/not-accepted"}}),
-        true
+        Caller::Assistant
     )
     .is_err());
 }
@@ -2436,13 +2439,10 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
     let state = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let catalog = catalog();
-    for (name, id) in [
-        ("themes.list", CommandId::ThemesList),
-        ("config.status", CommandId::ConfigStatus),
-    ] {
-        assert_strict_read_only_command(&repo, &catalog, name, id);
+    for name in ["themes.list", "config.status"] {
+        assert_strict_read_only_command(&repo, &catalog, name);
     }
-    let result = invoke(&repo, &json!({"name":"themes.list","args":{}}), true).unwrap();
+    let result = operations::run(&repo, Caller::Assistant, "themes.list", &json!({})).unwrap();
     let rows = arr(&result["themes"]);
     assert!(rows.len() <= 32);
     let theme = rows
@@ -2457,7 +2457,7 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
     assert!(!result.to_string().contains("benign-private"));
     assert!(!result.to_string().contains("#123456"));
     assert!(rows.iter().all(|row| row.as_object().unwrap().len() == 3));
-    let projected = invoke(&repo, &json!({"name":"config.status","args":{}}), true).unwrap();
+    let projected = operations::run(&repo, Caller::Assistant, "config.status", &json!({})).unwrap();
     let owner = super::super::config_status::view(&repo);
     assert_eq!(projected.as_object().unwrap().len(), 2);
     assert_eq!(projected["version"], 1);
@@ -2475,7 +2475,7 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
     let mut long = custom;
     long["displayName"] = json!("é".repeat(200));
     std::fs::write(path, serde_json::to_vec(&long).unwrap()).unwrap();
-    let result = invoke(&repo, &json!({"name":"themes.list","args":{}}), true).unwrap();
+    let result = operations::run(&repo, Caller::Assistant, "themes.list", &json!({})).unwrap();
     let rows = arr(&result["themes"]);
     assert_eq!(
         text(
@@ -2493,7 +2493,7 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
         "benign-private-invalid-config",
     )
     .unwrap();
-    let status = invoke(&repo, &json!({"name":"config.status","args":{}}), true).unwrap();
+    let status = operations::run(&repo, Caller::Assistant, "config.status", &json!({})).unwrap();
     assert_eq!(
         status["resources"]["views"],
         json!({"error":"Saved views configuration could not load."})
@@ -2508,7 +2508,7 @@ fn theme_and_configuration_status_commands_are_discovered_strict_and_read_only()
         "{malformed benign-private-theme-content",
     )
     .unwrap();
-    let error = invoke(&repo, &json!({"name":"themes.list","args":{}}), true).unwrap_err();
+    let error = operations::run(&repo, Caller::Assistant, "themes.list", &json!({})).unwrap_err();
     assert!(!error.message.contains("benign-private"));
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
@@ -2528,12 +2528,12 @@ fn onboarding_read_is_discovered_read_only_and_matches_owner_without_mutation() 
             state["sources"]["linear"]["disabled"]=json!(true);
             Ok(())
         }).unwrap();
-    let spec = specifications()
+    let spec = table()
         .into_iter()
-        .find(|spec| spec.id == CommandId::OnboardingRead)
+        .find(|spec| spec.name == "onboarding.read")
         .unwrap();
     assert_eq!(spec.effect, Effect::Read);
-    assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+    assert_eq!(spec.access, Access::Anyone);
     let entry = arr(&catalog()["commands"])
         .into_iter()
         .find(|entry| entry["name"] == "onboarding.read")
@@ -2543,7 +2543,12 @@ fn onboarding_read_is_discovered_read_only_and_matches_owner_without_mutation() 
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let expected = super::super::onboarding::view(&repo);
-    let result = invoke(&repo, &json!({"name":"onboarding.read","args":{}}), true).unwrap();
+    let result = invoke(
+        &repo,
+        &json!({"name":"onboarding.read","args":{}}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(result, expected);
     assert_eq!(result["progress"]["step"], "company");
     assert!(result["assistants"].is_array());
@@ -2554,7 +2559,7 @@ fn onboarding_read_is_discovered_read_only_and_matches_owner_without_mutation() 
     assert!(invoke(
         &repo,
         &json!({"name":"onboarding.read","args":{"path":"/not-accepted"}}),
-        true
+        Caller::Assistant
     )
     .is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -2620,7 +2625,7 @@ fn registry_schemas_use_only_the_validated_subset() {
             validate_arguments(schema, default, "default").unwrap();
         }
     }
-    for spec in specifications() {
+    for spec in table() {
         check(&spec.args);
     }
     assert!(validate_arguments(&json!({"type":"object","oneOf":[]}), &json!({}), "args").is_err());
@@ -2712,7 +2717,7 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let before = repo.state.lock().unwrap().clone();
     for (name, args) in invalid_command_arguments(&repo) {
-        let error = invoke(&repo, &json!({"name":name,"args":args}), false)
+        let error = invoke(&repo, &json!({"name":name,"args":args}), Caller::Browser)
             .err()
             .unwrap();
         assert!(
@@ -2725,13 +2730,13 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
     assert!(invoke(
         &repo,
         &json!({"name":"work.query","args":{"includeHidden":true,"lifecycle":"any"}}),
-        true
+        Caller::Assistant
     )
     .is_ok());
-    let specs = specifications();
+    let specs = table();
     let pages = specs
         .iter()
-        .find(|s| s.id == CommandId::PagesSettingsApply)
+        .find(|s| s.name == "pages.settings.apply")
         .unwrap();
     assert!(validate_arguments(
         &pages.args,
@@ -2739,10 +2744,7 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
         "args"
     )
     .is_ok());
-    let settings = specs
-        .iter()
-        .find(|s| s.id == CommandId::SettingsApply)
-        .unwrap();
+    let settings = specs.iter().find(|s| s.name == "settings.apply").unwrap();
     assert!(validate_arguments(
             &settings.args,
             &json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"theme":"system"}}),
@@ -2755,15 +2757,15 @@ fn advertised_argument_constraints_reject_invalid_commands_before_dispatch() {
 fn settings_preview_is_read_only_and_all_agent_results_keep_the_routine_projection() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf private-command"}]}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf private-command"}]}}),Approval::User).unwrap();
     let before = repo.settings.view();
-    let result = invoke(&repo, &json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}), true).unwrap();
+    let result = invoke(&repo, &json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}), Caller::Assistant).unwrap();
     assert_eq!(result["values"]["density"], "comfortable");
     assert!(result["values"].get("quickActions").is_none());
     assert_eq!(repo.settings.view()["values"], before["values"]);
     assert_eq!(repo.settings.view()["revision"], before["revision"]);
-    assert!(invoke(&repo,&json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}}}),true).is_err());
-    for result in [invoke(&repo,&json!({"name":"settings.read"}),true).unwrap(),invoke(&repo,&json!({"name":"settings.apply","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}),true).unwrap()] {
+    assert!(invoke(&repo,&json!({"name":"settings.preview","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"editor":"code"}}}),Caller::Assistant).is_err());
+    for result in [invoke(&repo,&json!({"name":"settings.read"}),Caller::Assistant).unwrap(),invoke(&repo,&json!({"name":"settings.apply","args":{"revision":before["revision"],"contentHash":repo.settings.view()["contentHash"],"patch":{"density":"comfortable"}}}),Caller::Assistant).unwrap()] {
             assert!(result["values"].get("quickActions").is_none());
             assert!(result["defaults"].get("editor").is_none());
             assert_eq!(result["approval"]["editor"], "user");
@@ -2772,7 +2774,7 @@ fn settings_preview_is_read_only_and_all_agent_results_keep_the_routine_projecti
 
 #[test]
 fn catalog_names_ids_policies_and_schemas_agree() {
-    let specs = specifications();
+    let specs = table();
     let catalog = catalog();
     let entries = arr(&catalog["commands"]);
     assert_eq!(entries.len(), specs.len());
@@ -2780,34 +2782,34 @@ fn catalog_names_ids_policies_and_schemas_agree() {
     let mut ids = vec![];
     for (spec, entry) in specs.iter().zip(entries) {
         assert!(names.insert(spec.name));
-        assert!(!ids.contains(&spec.id));
-        ids.push(spec.id);
+        assert!(!ids.contains(&spec.name));
+        ids.push(spec.name);
         assert_eq!(entry["name"], spec.name);
         assert_eq!(entry["readOnly"], spec.effect == Effect::Read);
-        assert_eq!(entry["appChat"], spec.assistant == AssistantPolicy::Allowed);
+        assert_eq!(entry["appChat"], spec.access == Access::Anyone);
         assert_eq!(entry["args"], spec.args);
         assert_eq!(spec.args["type"], "object");
         let properties = spec.args["properties"].as_object().unwrap();
         let takes_arguments = !matches!(
-            spec.id,
-            CommandId::CommandsList
-                | CommandId::ThemesList
-                | CommandId::ConfigStatus
-                | CommandId::SourcesStatus
-                | CommandId::GuidanceRead
-                | CommandId::DiagnosticsStorage
-                | CommandId::ConnectionsStatus
-                | CommandId::OnboardingRead
-                | CommandId::ChatsList
-                | CommandId::SettingsRead
-                | CommandId::ViewsRead
-                | CommandId::UiPresentationsRead
-                | CommandId::PagesSettingsRead
-                | CommandId::SharingRead
-                | CommandId::SharingState
-                | CommandId::SkillsList
-                | CommandId::SharingRefresh
-                | CommandId::QuickActionsList
+            spec.name,
+            "commands.list"
+                | "themes.list"
+                | "config.status"
+                | "sources.status"
+                | "guidance.read"
+                | "diagnostics.storage"
+                | "connections.status"
+                | "onboarding.read"
+                | "chats.list"
+                | "settings.read"
+                | "views.read"
+                | "ui.presentations.read"
+                | "pages.settings.read"
+                | "sharing.read"
+                | "sharing.state"
+                | "skills.list"
+                | "sharing.refresh"
+                | "quick-actions.list"
         );
         assert_eq!(!properties.is_empty(), takes_arguments, "{}", spec.name);
         for required in arr(&spec.args["required"]) {
@@ -2816,58 +2818,58 @@ fn catalog_names_ids_policies_and_schemas_agree() {
     }
     let pages = specs
         .iter()
-        .find(|s| s.id == CommandId::PagesSettingsApply)
+        .find(|s| s.name == "pages.settings.apply")
         .unwrap();
     assert_eq!(pages.effect, Effect::Write);
-    assert_eq!(pages.assistant, AssistantPolicy::Allowed);
+    assert_eq!(pages.access, Access::Anyone);
     let poll = specs
         .iter()
-        .find(|s| s.id == CommandId::ChatTerminalPoll)
+        .find(|s| s.name == "chat-terminal.poll")
         .unwrap();
     assert_eq!(poll.effect, Effect::Read);
-    assert_eq!(poll.assistant, AssistantPolicy::UserAction);
+    assert_eq!(poll.access, Access::UserAction);
 }
 
 #[test]
 fn local_work_changes_and_bounded_reads_allow_the_assistant_without_execution() {
-    let specs = specifications();
+    let specs = table();
     for (id, effect) in [
-        (CommandId::WorkUpdate, Effect::Write),
-        (CommandId::WorkSnooze, Effect::Write),
-        (CommandId::WorkLinksRead, Effect::Read),
-        (CommandId::WorkLinksAdd, Effect::Write),
-        (CommandId::WorkLinksRemove, Effect::Write),
-        (CommandId::ArtifactsList, Effect::Read),
-        (CommandId::ArtifactsReadText, Effect::Read),
-        (CommandId::SharingInbox, Effect::Read),
-        (CommandId::QuickActionOutputs, Effect::Read),
+        ("work.update", Effect::Write),
+        ("work.snooze", Effect::Write),
+        ("work.links.read", Effect::Read),
+        ("work.links.add", Effect::Write),
+        ("work.links.remove", Effect::Write),
+        ("artifacts.list", Effect::Read),
+        ("artifacts.read-text", Effect::Read),
+        ("sharing.inbox", Effect::Read),
+        ("quick-actions.outputs", Effect::Read),
     ] {
-        let spec = specs.iter().find(|spec| spec.id == id).unwrap();
+        let spec = specs.iter().find(|spec| spec.name == id).unwrap();
         assert_eq!(spec.effect, effect);
-        assert_eq!(spec.assistant, AssistantPolicy::Allowed);
+        assert_eq!(spec.access, Access::Anyone);
     }
     for id in [
-        CommandId::QuickActionsRun,
-        CommandId::QuickActionsList,
-        CommandId::SharingRefresh,
-        CommandId::SkillsSchedule,
-        CommandId::ChatTerminalInput,
+        "quick-actions.run",
+        "quick-actions.list",
+        "sharing.refresh",
+        "skills.schedule",
+        "chat-terminal.input",
     ] {
         assert_eq!(
-            specs.iter().find(|spec| spec.id == id).unwrap().assistant,
-            AssistantPolicy::UserAction
+            specs.iter().find(|spec| spec.name == id).unwrap().access,
+            Access::UserAction
         );
     }
 }
 
 #[test]
 fn connection_reload_accepts_only_secret_free_user_requests() {
-    let spec = specifications()
+    let spec = table()
         .into_iter()
-        .find(|spec| spec.id == CommandId::ConnectionsReload)
+        .find(|spec| spec.name == "connections.reload")
         .unwrap();
     assert_eq!(spec.effect, Effect::Write);
-    assert_eq!(spec.assistant, AssistantPolicy::UserAction);
+    assert_eq!(spec.access, Access::UserAction);
     assert!(validate_arguments(&spec.args, &json!({"provider":"github"}), "args").is_ok());
     assert!(validate_arguments(
         &spec.args,
@@ -2894,11 +2896,12 @@ fn assistant_denial_precedes_every_restricted_handler() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let before = repo.state.lock().unwrap().clone();
-    for spec in specifications()
-        .iter()
-        .filter(|s| s.assistant == AssistantPolicy::UserAction)
-    {
-        let result = invoke(&repo, &json!({"name":spec.name,"args":{}}), true);
+    for spec in table().iter().filter(|s| s.access == Access::UserAction) {
+        let result = invoke(
+            &repo,
+            &json!({"name":spec.name,"args":{}}),
+            Caller::Assistant,
+        );
         let Err(error) = result else {
             panic!("Restricted command was allowed.")
         };
@@ -2911,7 +2914,7 @@ fn assistant_denial_precedes_every_restricted_handler() {
     let error = invoke(&repo, &json!({"name":"settings.apply","args":{
             "revision":repo.settings.view()["revision"],"contentHash":repo.settings.view()["contentHash"],
             "patch":{"quickActions":[{"id":"unsafe","title":"Unsafe","command":"printf denied"}]}
-        }}), true).err().unwrap();
+        }}), Caller::Assistant).err().unwrap();
     assert!(error.message.contains("Ask the user to approve"));
 }
 
@@ -2933,7 +2936,7 @@ fn diagnostics_log_records_redact_before_unicode_display_limits() {
         let value = invoke(
             &repo,
             &json!({"name":"diagnostics.logs","args":{"limit":1}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap();
         let expected = format!("{}[redacted] end", "é".repeat(start))
@@ -2969,7 +2972,7 @@ fn diagnostics_logs_skip_tail_fragments_including_partial_utf8_and_keep_full_rec
         let value = invoke(
             &repo,
             &json!({"name":"diagnostics.logs","args":{"kind":"sync","limit":100}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap();
         assert_eq!(
@@ -2988,7 +2991,7 @@ fn diagnostics_logs_skip_tail_fragments_including_partial_utf8_and_keep_full_rec
     let value = invoke(
         &repo,
         &json!({"name":"diagnostics.logs","args":{"kind":"sync"}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(value["leadingRecordSkipped"], false);
@@ -3057,23 +3060,38 @@ fn diagnostics_log_buffer_redaction_precedes_multiline_record_splitting() {
 fn diagnostics_are_bounded_and_storage_truthful() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let value = invoke(&repo, &json!({"name":"diagnostics.storage"}), true).unwrap();
+    let value = invoke(
+        &repo,
+        &json!({"name":"diagnostics.storage"}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(value["engine"], "json");
     assert!(value["sqlSchema"].is_null());
     assert!(invoke(
         &repo,
         &json!({"name":"diagnostics.logs","args":{"kind":"../../.env"}}),
-        true
+        Caller::Assistant
     )
     .is_err());
-    assert!(invoke(&repo, &json!({"name":"commands.list","args":[]}), true).is_err());
+    assert!(invoke(
+        &repo,
+        &json!({"name":"commands.list","args":[]}),
+        Caller::Assistant
+    )
+    .is_err());
     assert!(invoke(
         &repo,
         &json!({"name":"commands.list","args":{"extra":"x".repeat(64*1024)}}),
-        true
+        Caller::Assistant
     )
     .is_err());
-    assert!(invoke(&repo, &json!({"name":"unregistered.command"}), true).is_err());
+    assert!(invoke(
+        &repo,
+        &json!({"name":"unregistered.command"}),
+        Caller::Assistant
+    )
+    .is_err());
 }
 
 #[test]
@@ -3155,26 +3173,40 @@ fn saved_view_discovery_exposes_complete_grammar_and_a_valid_calendar_example() 
 fn assistant_can_read_and_update_views_with_compare_and_swap() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    let initial = invoke(&repo, &json!({"name":"views.read"}), true).unwrap();
+    let initial = invoke(&repo, &json!({"name":"views.read"}), Caller::Assistant).unwrap();
     let mut views = initial["views"].clone();
     views[0]["name"] = json!("Routine saved filter");
     let args =
         json!({"revision":initial["revision"],"contentHash":initial["contentHash"],"views":views});
-    let updated = invoke(&repo, &json!({"name":"views.apply","args":args}), true).unwrap();
+    let updated = invoke(
+        &repo,
+        &json!({"name":"views.apply","args":args}),
+        Caller::Assistant,
+    )
+    .unwrap();
     assert_eq!(
         updated["revision"],
         initial["revision"].as_u64().unwrap() + 1
     );
     assert_eq!(updated["views"][0]["name"], "Routine saved filter");
-    let stale = invoke(&repo, &json!({"name":"views.apply","args":args}), true)
-        .err()
-        .unwrap();
+    let stale = invoke(
+        &repo,
+        &json!({"name":"views.apply","args":args}),
+        Caller::Assistant,
+    )
+    .err()
+    .unwrap();
     assert_eq!(stale.status, 409);
     let mut invalid = json!({"revision":updated["revision"],"contentHash":updated["contentHash"],"views":updated["views"]});
     invalid["views"][0]["filter"] = json!({"op":"command","command":"printf denied"});
-    assert!(invoke(&repo, &json!({"name":"views.apply","args":invalid}), true).is_err());
+    assert!(invoke(
+        &repo,
+        &json!({"name":"views.apply","args":invalid}),
+        Caller::Assistant
+    )
+    .is_err());
     assert_eq!(
-        invoke(&repo, &json!({"name":"views.read"}), true).unwrap(),
+        invoke(&repo, &json!({"name":"views.read"}), Caller::Assistant).unwrap(),
         updated
     );
 }
@@ -3191,7 +3223,7 @@ fn review_history_reads_the_existing_saved_history() {
     let result = invoke(
         &repo,
         &json!({"name":"review.history","args":{"id":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(result["reviews"][0]["id"], "earlier-round");

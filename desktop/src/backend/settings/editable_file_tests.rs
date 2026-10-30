@@ -10,13 +10,13 @@ fn manual_edits_reload_and_invalid_files_do_not_replace_good_values() {
     assert_eq!(store.view()["values"]["theme"], "catppuccin-latte");
     assert_eq!(store.view()["revision"], 1);
     assert!(store
-            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":11}}), false)
+            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":11}}), Approval::User)
             .is_err());
     std::fs::write(&path, b"broken").unwrap();
     assert_eq!(store.view()["values"]["theme"], "catppuccin-latte");
     assert!(store.view()["configError"].is_string());
     assert!(store
-            .apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":11}}), false)
+            .apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":11}}), Approval::User)
             .is_err());
 }
 #[test]

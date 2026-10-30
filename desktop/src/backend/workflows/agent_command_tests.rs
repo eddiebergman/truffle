@@ -1,4 +1,6 @@
 use super::*;
+use crate::backend::operations::AGENT_COMMAND_LOG;
+use crate::backend::uuid;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
@@ -97,4 +99,35 @@ fn agent_command_notices_keep_the_latest_twenty() {
     let log = log(&repo, &id);
     assert_eq!(log.len(), AGENT_COMMAND_LOG);
     assert!(log.iter().all(|row| row["ok"] == true));
+}
+fn settings_apply(id: Option<&str>, repo: &Repository, patch: &Value) -> Value {
+    let current = repo.settings.view();
+    let mut p = json!({"operation":"settings-apply","revision":current["revision"],"contentHash":current["contentHash"],"patch":patch});
+    if let Some(id) = id {
+        p["id"] = json!(id);
+    }
+    p
+}
+#[test]
+fn agent_settings_writes_show_in_their_chat() {
+    let (_temp, repo, id) = fixture();
+    let p = settings_apply(None, &repo, &json!({"uiScale":110}));
+    assert!(register(&repo, &p).is_err());
+    assert_ne!(repo.settings.values()["uiScale"], 110);
+    let p = settings_apply(Some(&id), &repo, &json!({"uiScale":110}));
+    let reply = register(&repo, &p).unwrap();
+    assert_eq!(reply["settings"]["values"]["uiScale"], 110);
+    assert!(reply["settings"]["values"].get("quickActions").is_none());
+    let p = settings_apply(Some(&id), &repo, &json!({"editor":"code"}));
+    assert!(register(&repo, &p)
+        .unwrap_err()
+        .message
+        .contains("Ask the user to approve"));
+    let log = log(&repo, &id);
+    assert_eq!(log.len(), 2);
+    assert!(log.iter().all(|row| row["name"] == "settings.apply"));
+    assert_eq!(
+        (log[0]["ok"].clone(), log[1]["ok"].clone()),
+        (json!(true), json!(false))
+    );
 }

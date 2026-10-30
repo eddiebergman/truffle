@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::uuid;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String, String) {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();

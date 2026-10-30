@@ -1,9 +1,10 @@
 use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
 use std::{collections::BTreeSet, io::Write, os::unix::fs::OpenOptionsExt, sync::Mutex};
 
+/// Who must approve a settings change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
-enum Approval {
+pub enum Approval {
     Routine,
     User,
 }
@@ -357,7 +358,7 @@ impl Store {
     pub fn themes(&self) -> Result<Value> {
         super::config::themes(&self.directory)
     }
-    fn proposed_values(&self, doc: &Value, p: &Value, agent: bool) -> Result<Value> {
+    fn proposed_values(&self, doc: &Value, p: &Value, granted: Approval) -> Result<Value> {
         if p["revision"].as_u64().is_none()
             || p["revision"] != doc["revision"]
             || p["contentHash"].as_str() != Some(document_hash(doc)?.as_str())
@@ -372,7 +373,10 @@ impl Store {
             .ok_or_else(|| Error::new("Supply a settings patch."))?;
         let mut values = doc["values"].clone();
         for (key, value) in patch {
-            if agent && approval(key) == Approval::User && values[key] != *value {
+            if granted == Approval::Routine
+                && approval(key) == Approval::User
+                && values[key] != *value
+            {
                 return Err(Error::new("This changes executable commands or workflows. Ask the user to approve it in Settings."));
             }
             values[key] = value.clone();
@@ -391,24 +395,26 @@ impl Store {
         }
         Ok(values)
     }
-    pub fn preview(&self, p: &Value, agent: bool) -> Result<Value> {
+    /// Validate a patch that `granted` may approve, without saving it.
+    pub fn preview(&self, p: &Value, granted: Approval) -> Result<Value> {
         self.refresh()?;
         let doc = self.document.lock().map_err(|_| Error::io())?;
-        let values = self.proposed_values(&doc, p, agent)?;
+        let values = self.proposed_values(&doc, p, granted)?;
         let view =
             json!({"revision":doc["revision"],"contentHash":document_hash(&doc)?,"values":values});
         drop(doc);
         Ok(view)
     }
-    pub fn apply(&self, p: &Value, agent: bool) -> Result<Value> {
+    /// Save a patch that `granted` may approve.
+    pub fn apply(&self, p: &Value, granted: Approval) -> Result<Value> {
         self.refresh()?;
         let mut doc = self.document.lock().map_err(|_| Error::io())?;
-        let values = self.proposed_values(&doc, p, agent)?;
+        let values = self.proposed_values(&doc, p, granted)?;
         if values == doc["values"] {
             drop(doc);
             return Ok(self.view());
         }
-        let next = json!({"version":1,"revision":doc["revision"].as_u64().unwrap()+1,"values":values,"updatedAt":now(),"updatedBy":if agent{"agent"}else{"user"}});
+        let next = json!({"version":1,"revision":doc["revision"].as_u64().unwrap()+1,"values":values,"updatedAt":now(),"updatedBy":match granted{Approval::Routine=>"agent",Approval::User=>"user"}});
         let temp = self.path.with_extension(format!("{}.tmp", uuid()));
         let result = (|| -> Result<()> {
             let mut f = std::fs::OpenOptions::new()

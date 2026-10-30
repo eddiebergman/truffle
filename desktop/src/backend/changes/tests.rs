@@ -1,6 +1,7 @@
 use super::*;
 use crate::backend::commands;
 use crate::backend::domain;
+use crate::backend::operations::Caller;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
@@ -179,7 +180,7 @@ fn changes_identity_projection_is_exact_or_fails_without_exposing_or_marking_sec
         let error = commands::invoke(
             &repo,
             &json!({"name":"changes.list","args":{"limit":1}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap_err();
         assert!(!error.message.contains(secret));
@@ -193,7 +194,7 @@ fn changes_identity_projection_is_exact_or_fails_without_exposing_or_marking_sec
         assert!(commands::invoke(
             &repo,
             &json!({"name":"changes.mark-read","args":{"ids":["next",secret]}}),
-            true
+            Caller::Assistant
         )
         .is_err());
         assert_eq!(*repo.state.lock().unwrap(), before);
@@ -208,7 +209,7 @@ fn changes_identity_projection_is_exact_or_fails_without_exposing_or_marking_sec
     let result = commands::invoke(
         &repo,
         &json!({"name":"changes.list","args":{"limit":1}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(result["changes"][0]["id"], "safe-id");

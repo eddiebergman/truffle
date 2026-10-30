@@ -1,6 +1,7 @@
 use super::*;
 use crate::backend::chat_preparation::{self, Kind};
 use crate::backend::sessions;
+use crate::backend::settings::Approval;
 use std::sync::Mutex;
 /// Held by tests that change process environment variables.
 pub(super) static ENV: Mutex<()> = Mutex::new(());
@@ -369,7 +370,7 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     })
     .unwrap();
     let p = json!({"agent":"claude","itemId":"github:42"});
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"claudeReviewCommand":"/eddie-review"}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"claudeReviewCommand":"/eddie-review"}}),Approval::User).unwrap();
     let record = chat_preparation::save(&repo, Kind::PrReview, &p).unwrap();
     assert_eq!(record["workflow"], "pr-review");
     let tree = folder.join(".worktrees/review-pr-42");

@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::settings::Approval;
 use crate::backend::{now, uuid};
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
@@ -181,7 +182,7 @@ fn preparation_newsletter_validation_failure_does_not_consume_the_retry_window()
 fn preparation_saved_pr_review_reuse_bypasses_admission_even_after_it_was_opened() {
     let (_temp, repo) = fixture();
     let settings = repo.settings.view();
-    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),Approval::User).unwrap();
     let id = uuid();
     repo.transaction(|state|{state["items"]=json!([{"id":"github:fixture","source":"github","kind":"Pull request","title":"Fixture PR","status":"todo"}]);state["sessions"]=json!([{"id":id,"agent":"codex","workflow":"pr-review","reviewItemId":"github:fixture","archivedAt":null,"launchNew":false,"title":"Saved review","items":[]}]);Ok(())}).unwrap();
     repo.cooldown

@@ -36,8 +36,8 @@ fn malformed_settings_containers_fail_safely_on_load_and_refresh_without_writes(
         );
         assert_eq!(current["values"], baseline["values"]);
         let settings_patch = json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"uiScale":120}});
-        assert!(store.preview(&settings_patch, false).is_err());
-        assert!(store.apply(&settings_patch, false).is_err());
+        assert!(store.preview(&settings_patch, Approval::User).is_err());
+        assert!(store.apply(&settings_patch, Approval::User).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
 }
@@ -61,8 +61,14 @@ fn document_content_hash_rejects_stale_and_missing_baselines_without_persisting_
         json!({"revision":fresh["revision"],"patch":{}}),
         json!({"contentHash":fresh["contentHash"],"patch":{}}),
     ] {
-        assert_eq!(store.preview(&request, false).unwrap_err().status, 409);
-        assert_eq!(store.apply(&request, false).unwrap_err().status, 409);
+        assert_eq!(
+            store.preview(&request, Approval::User).unwrap_err().status,
+            409
+        );
+        assert_eq!(
+            store.apply(&request, Approval::User).unwrap_err().status,
+            409
+        );
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
     std::fs::write(
@@ -72,10 +78,10 @@ fn document_content_hash_rejects_stale_and_missing_baselines_without_persisting_
     .unwrap();
     assert_eq!(store.view()["contentHash"], fresh["contentHash"]);
     let request = json!({"revision":fresh["revision"],"contentHash":fresh["contentHash"],"patch":{"uiScale":120}});
-    let preview = store.preview(&request, false).unwrap();
+    let preview = store.preview(&request, Approval::User).unwrap();
     assert_eq!(preview["contentHash"], fresh["contentHash"]);
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
-    let applied = store.apply(&request, false).unwrap();
+    let applied = store.apply(&request, Approval::User).unwrap();
     assert_ne!(applied["contentHash"], fresh["contentHash"]);
     let persisted: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     assert!(persisted.get("contentHash").is_none());
@@ -161,21 +167,21 @@ fn agent_preview_and_apply_share_approval_policy() {
         json!({"future-setting":true}),
     ] {
         let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
-        assert!(store.preview(&request, true).is_err());
-        assert!(store.apply(&request, true).is_err());
+        assert!(store.preview(&request, Approval::Routine).is_err());
+        assert!(store.apply(&request, Approval::Routine).is_err());
     }
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"defaultAgent":"codex","uiScale":120,"keybindings":store.values()["keybindings"]}});
-    let preview = store.preview(&request, true).unwrap();
+    let preview = store.preview(&request, Approval::Routine).unwrap();
     assert_eq!(
-        store.apply(&request, true).unwrap()["values"],
+        store.apply(&request, Approval::Routine).unwrap()["values"],
         preview["values"]
     );
     let request =
         json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"editor":"code"}});
-    assert!(store.preview(&request, false).is_ok());
+    assert!(store.preview(&request, Approval::User).is_ok());
     assert_eq!(
-        store.apply(&request, false).unwrap()["values"]["editor"],
+        store.apply(&request, Approval::User).unwrap()["values"]["editor"],
         "code"
     );
 }
@@ -220,30 +226,30 @@ fn preview_reuses_apply_validation_without_writing_or_advancing_revision() {
         json!({"theme":"unknown-theme-fixture"}),
     ] {
         let request = json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":patch});
-        assert!(store.preview(&request, false).is_err());
-        assert!(store.apply(&request, false).is_err());
+        assert!(store.preview(&request, Approval::User).is_err());
+        assert!(store.apply(&request, Approval::User).is_err());
     }
     let request =
         json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"uiScale":120}});
-    let preview = store.preview(&request, false).unwrap();
+    let preview = store.preview(&request, Approval::User).unwrap();
     assert_eq!(preview["revision"], 0);
     assert_eq!(preview["values"]["uiScale"], 120);
     assert_eq!(store.values(), initial);
     assert_eq!(std::fs::read(&path).unwrap(), saved);
-    assert!(store.preview(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"editor":"code"}}), true).is_err());
-    let applied = store.apply(&request, false).unwrap();
+    assert!(store.preview(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"editor":"code"}}), Approval::Routine).is_err());
+    let applied = store.apply(&request, Approval::User).unwrap();
     assert_eq!(applied["values"], preview["values"]);
-    assert!(store.preview(&request, false).is_err());
+    assert!(store.preview(&request, Approval::User).is_err());
 }
 
 #[test]
 fn a_saved_theme_whose_file_was_removed_does_not_block_other_settings() {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::load(temp.path().join("settings.json")).unwrap();
-    store.apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"nord"}}), false).unwrap();
+    store.apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"nord"}}), Approval::User).unwrap();
     std::fs::remove_file(temp.path().join("config/themes/nord.json")).unwrap();
-    store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":12}}), false).unwrap();
-    assert!(store.apply(&json!({"revision":2,"contentHash":store.view()["contentHash"],"patch":{"theme":"midnight"}}), false).is_err());
+    store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"diffFontSize":12}}), Approval::User).unwrap();
+    assert!(store.apply(&json!({"revision":2,"contentHash":store.view()["contentHash"],"patch":{"theme":"midnight"}}), Approval::User).is_err());
     assert_eq!(store.values()["theme"], "nord");
 }
 
@@ -255,24 +261,24 @@ fn settings_persist_reject_conflicts_and_gate_agent_commands() {
     let changed = store
             .apply(
                 &json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"github-light","diffFontSize":11}}),
-                true,
+                Approval::Routine,
             )
             .unwrap();
     assert_eq!(changed["revision"], 1);
     assert_eq!(Store::load(path).unwrap().values()["theme"], "github-light");
     assert!(store
-            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"github-dark"}}), false)
+            .apply(&json!({"revision":0,"contentHash":store.view()["contentHash"],"patch":{"theme":"github-dark"}}), Approval::User)
             .is_err());
-    assert!(store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"quickActions":[{"id":"test","title":"Test","command":"printf test"}]}}),true).is_err());
+    assert!(store.apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"quickActions":[{"id":"test","title":"Test","command":"printf test"}]}}),Approval::Routine).is_err());
     assert!(store
-            .apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"token":"secret"}}), false)
+            .apply(&json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"token":"secret"}}), Approval::User)
             .is_err());
     let mut bindings = defaults()["keybindings"].clone();
     bindings["commands"] = json!("Primary+H");
     assert!(store
             .apply(
                 &json!({"revision":1,"contentHash":store.view()["contentHash"],"patch":{"keybindings":bindings}}),
-                false
+                Approval::User
             )
             .is_err());
     assert_eq!(store.view()["revision"], 1);

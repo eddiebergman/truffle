@@ -129,6 +129,23 @@ fn settings_updates_carry_the_explicit_captured_content_hash() {
     assert_eq!(request["revision"], 7);
     assert_eq!(request["contentHash"], hash);
     assert_eq!(request["patch"], json!({"theme":"light"}));
+    assert!(request.get("id").is_none());
+    let record = uuid();
+    let recorded = payload(
+        "settings",
+        &options(&[
+            "--record",
+            &record,
+            "--file",
+            file,
+            "--revision",
+            "7",
+            "--content-hash",
+            &hash,
+        ]),
+    )
+    .unwrap();
+    assert_eq!(recorded["id"], record);
     assert!(
         payload("settings", &options(&["--file", file, "--revision", "7"]))
             .unwrap_err()

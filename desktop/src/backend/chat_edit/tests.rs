@@ -1,5 +1,6 @@
 use super::*;
 use crate::backend::chat_preparation::{self, Kind};
+use crate::backend::operations::Caller;
 use crate::backend::{http, uuid};
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
@@ -243,7 +244,7 @@ fn chat_metadata_command_redaction_preserves_tokens_and_hides_reference_text() {
     let base = commands::invoke(
         &repo,
         &json!({"name":"chats.metadata.read","args":{"recordId":id}}),
-        true,
+        Caller::Assistant,
     )
     .unwrap();
     assert_eq!(base["redacted"], true);
@@ -251,7 +252,7 @@ fn chat_metadata_command_redaction_preserves_tokens_and_hides_reference_text() {
     let result = commands::invoke(
         &repo,
         &json!({"name":"chats.metadata.update","args":request(&base, &json!({"title":"Changed"}))}),
-        false,
+        Caller::Browser,
     )
     .unwrap();
     assert_eq!(result["recordId"], id);

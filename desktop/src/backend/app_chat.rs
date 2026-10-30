@@ -3,6 +3,8 @@ use super::{
     arr, checked, domain, json, now, redaction, sessions, sid, text, uuid, Error, PathBuf,
     Repository, Result, Value,
 };
+use crate::backend::operations::{self, Caller};
+use crate::backend::settings::Approval;
 use std::{
     io::{Read, Write},
     os::unix::{
@@ -529,9 +531,6 @@ fn selected_worktree(record: Option<&Value>, p: &Value) -> Result<Value> {
     }
     Ok(json!(path))
 }
-fn routine_settings(repo: &Repository) -> Value {
-    super::settings::routine_view(repo.settings.view())
-}
 
 fn tool(
     repo: &Arc<Repository>,
@@ -571,14 +570,11 @@ fn tool(
     match name {
         "discover" => Ok(guide()),
         "commands" => Ok(super::commands::catalog()),
-        "command" => super::commands::invoke(repo, args, true),
-        "settings-read" => Ok(routine_settings(repo)),
-        "settings-apply" => {
-            repo.settings.apply(args, true)?;
-            Ok(routine_settings(repo))
-        }
+        "command" => super::commands::invoke(repo, args, Caller::Assistant),
+        "settings-read" => operations::run(repo, Caller::Assistant, "settings.read", &json!({})),
+        "settings-apply" => operations::run(repo, Caller::Assistant, "settings.apply", args),
         "settings-propose" => propose_settings(repo, args, commands),
-        "query" => super::commands::invoke(repo, &json!({"name":"work.query","args":args}), true),
+        "query" => operations::run(repo, Caller::Assistant, "work.query", args),
         "navigate" => navigate(args, commands),
         "show-view" => {
             if commands.len() >= 4 {
@@ -630,7 +626,7 @@ fn propose_settings(repo: &Repository, args: &Value, commands: &mut Vec<Value>) 
         ));
     }
     // The full preview can contain private current commands. Never put it in the model transcript.
-    repo.settings.preview(args, false)?;
+    repo.settings.preview(args, Approval::User)?;
     let fields = args["patch"]
         .as_object()
         .unwrap()

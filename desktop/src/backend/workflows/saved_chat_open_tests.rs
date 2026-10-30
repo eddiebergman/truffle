@@ -1,5 +1,7 @@
 use super::super::terminals::fake::Fake;
 use super::*;
+use crate::backend::operations::Caller;
+use crate::backend::uuid;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, Arc<Fake>, String) {
     let temp = tempfile::tempdir().unwrap();
     let mut repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
@@ -23,7 +25,7 @@ fn saved_chat_open_receipt_vocabulary_is_projection_safe_before_effects() {
         let error = commands::invoke(
             &repo,
             &json!({"name":"chats.open","args":{"recordId":uuid()}}),
-            false,
+            Caller::Browser,
         )
         .unwrap_err();
         assert!(error.message.contains("safely projected"));

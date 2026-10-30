@@ -1,5 +1,6 @@
 use super::*;
 use crate::backend::commands;
+use crate::backend::operations::Caller;
 use crate::backend::uuid;
 
 fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>, String) {
@@ -25,7 +26,7 @@ fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>, String) {
 fn invoke(repo: &std::sync::Arc<Repository>, name: &str, args: Value) -> Result<Value> {
     let mut request = json!({"name":name});
     request["args"] = args;
-    commands::invoke(repo, &request, true)
+    commands::invoke(repo, &request, Caller::Assistant)
 }
 
 #[test]

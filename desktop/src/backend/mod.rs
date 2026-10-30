@@ -13,6 +13,7 @@ pub mod feedback;
 pub mod guidance;
 mod local_files;
 pub mod onboarding;
+pub mod operations;
 pub mod page_settings;
 pub mod presentation;
 pub mod quick_actions;

@@ -180,7 +180,10 @@ fn command_payload(o: &Options, p: &mut Value) -> Result<()> {
     Ok(())
 }
 fn settings_payload(o: &Options, p: &mut Value) -> Result<()> {
-    o.validate(&["show", "file", "revision", "content-hash"])?;
+    o.validate(&["record", "show", "file", "revision", "content-hash"])?;
+    if !o.get("record").is_empty() {
+        p["id"] = json!(sid(o.get("record"))?);
+    }
     if o.has("show") {
         if !o.get("file").is_empty() {
             return Err(Error::new("Read settings separately from updates."));
@@ -607,7 +610,7 @@ fn shown_result<'a>(command: &str, result: &'a Value) -> &'a Value {
     }]
 }
 fn command_help(command: &str) -> String {
-    format!("{command}: --record UUID [--home DIRECTORY] [--file PATH] [--state STATE] [--show]\nregister: --agent claude|codex [--session UUID] [--cwd PATH] [--url URL] [--item ID]\nreview/ci: --request UUID [--pass NAME] [--reviewed-revision NUMBER]\ncommand: --record UUID --name COMMAND [--file ARGUMENTS_JSON] (writes show in that chat)\nsettings: --show OR --file PATCH_JSON --revision NUMBER --content-hash HASH (routine settings only)\ncontext: --record UUID --show OR --file CONTEXT_JSON (replacement requires its captured revision)\nresource: --record UUID --file REPORT_JSON [--replace]; --replace requires report.revision from context --show\nReplacement lists: omitted stays unchanged; [] clears dashboard links only, never external resources/files. On conflict re-read context and reapply intended edits; do not substitute a fresh revision into the stale file.\nUse --inbox to use the private signed local inbox.")
+    format!("{command}: --record UUID [--home DIRECTORY] [--file PATH] [--state STATE] [--show]\nregister: --agent claude|codex [--session UUID] [--cwd PATH] [--url URL] [--item ID]\nreview/ci: --request UUID [--pass NAME] [--reviewed-revision NUMBER]\ncommand: --record UUID --name COMMAND [--file ARGUMENTS_JSON] (writes show in that chat)\nsettings: --show OR --record UUID --file PATCH_JSON --revision NUMBER --content-hash HASH (routine settings only; writes show in that chat)\ncontext: --record UUID --show OR --file CONTEXT_JSON (replacement requires its captured revision)\nresource: --record UUID --file REPORT_JSON [--replace]; --replace requires report.revision from context --show\nReplacement lists: omitted stays unchanged; [] clears dashboard links only, never external resources/files. On conflict re-read context and reapply intended edits; do not substitute a fresh revision into the stale file.\nUse --inbox to use the private signed local inbox.")
 }
 pub fn run(args: &[String]) -> Option<Result<()>> {
     let mut index = 1;

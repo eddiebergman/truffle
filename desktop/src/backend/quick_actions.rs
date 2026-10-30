@@ -1,6 +1,7 @@
 use super::{
     arr, home, json, now, sessions, text, uuid, Error, PathBuf, Repository, Result, Value,
 };
+use crate::backend::settings::Approval;
 use std::{
     collections::BTreeMap,
     io::Read,
@@ -12,7 +13,7 @@ use std::{
 fn checked_action(repo: &Repository, payload: &Value) -> Result<Value> {
     let snapshot = repo.settings.preview(
         &json!({"revision":payload["revision"],"contentHash":payload["contentHash"],"patch":{}}),
-        false,
+        Approval::User,
     )?;
     arr(&snapshot["values"]["quickActions"])
         .into_iter()

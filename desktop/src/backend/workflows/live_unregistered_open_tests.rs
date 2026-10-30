@@ -1,5 +1,6 @@
 use super::super::terminals::{fake::Fake, Terminals};
 use super::*;
+use crate::backend::uuid;
 struct DemoCleanup<'a> {
     terminals: &'a Terminals,
     id: String,

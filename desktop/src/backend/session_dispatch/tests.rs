@@ -1,5 +1,6 @@
 use super::super::terminals::fake::Fake;
 use super::*;
+use crate::backend::settings::Approval;
 use std::path::PathBuf;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, Arc<Fake>, Value, String) {
@@ -423,7 +424,7 @@ fn dispatch_request_and_ci_queue_are_atomic_and_resolution_cancels_only_matching
     let settings = repo.settings.view();
     let command = text(&settings["reviewSkill"]["commands"], "codex");
     assert_ne!(command, "");
-    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":command}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":command}}),Approval::User).unwrap();
     let (during, operation) = (repo.clone(), text(&args, "operationId").to_owned());
     fake.on_send(move |payload| {
         assert!(payload.contains("truffle-review"));

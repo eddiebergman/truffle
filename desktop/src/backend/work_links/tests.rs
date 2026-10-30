@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::operations::Caller;
 use crate::backend::{arr, commands};
 use std::sync::{Arc, Barrier};
 
@@ -14,7 +15,7 @@ fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
     (temp, repo)
 }
 fn invoke(repo: &Arc<Repository>, name: &str, args: &Value) -> Result<Value> {
-    commands::invoke(repo, &json!({"name":name,"args":args}), true)
+    commands::invoke(repo, &json!({"name":name,"args":args}), Caller::Assistant)
 }
 
 #[test]

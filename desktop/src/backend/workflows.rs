@@ -2,9 +2,10 @@ use super::chat_preparation::{self, Created, Recipe};
 use super::terminals::{Live, Presence};
 use super::{
     arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
-    uuid, Error, PathBuf, Repository, Result, Value,
+    Error, PathBuf, Repository, Result, Value,
 };
 use super::{artifacts, domain, sessions, terminal};
+use crate::backend::operations::{self, Caller};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
     std::env::var("TRUFFLE_WORKDIR").map_or_else(|_| home().join("code"), |s| expand(&s))
@@ -959,55 +960,26 @@ fn save_session_output(repo: &Repository, p: &Value) -> Result<Value> {
     repo.edit(&edit)?;
     Ok(record)
 }
-const AGENT_COMMAND_LOG: usize = 20;
-/// Run an app command for an agent. Writes and user-action commands are logged on the
-/// session first, so its chat shows every one that ran.
-fn agent_command(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
-    let name = text(p, "name");
-    if !commands::shown_to_user(name) {
-        return Ok(json!({"commandResult": commands::invoke(repo, p, false)?}));
-    }
-    let id = sid(text(p, "id"))?;
-    let entry = json!({"id": uuid(), "name": name, "at": now()});
-    repo.transaction(|s| {
-        let record = sessions::get_mut(s, &id).map_err(|_| {
-            Error::new("Pass this chat's --record ID so the chat can show the command.")
-        })?;
-        let mut log = arr(&record["agentCommands"]);
-        log.push(entry.clone());
-        let excess = log.len().saturating_sub(AGENT_COMMAND_LOG);
-        log.drain(..excess);
-        record["agentCommands"] = Value::Array(log);
-        Ok(())
-    })?;
-    let result = commands::invoke(repo, p, false);
-    let ok = result.is_ok();
-    // The command already ran; failing to store its outcome must not report it as failed.
-    let _ = repo.transaction(|s| {
-        if let Some(logged) = sessions::get_mut(s, &id)
-            .ok()
-            .and_then(|record| record["agentCommands"].as_array_mut())
-            .and_then(|log| log.iter_mut().find(|row| row["id"] == entry["id"]))
-        {
-            logged["ok"] = json!(ok);
-        }
-        Ok(())
-    });
-    Ok(json!({"commandResult": result?}))
-}
 fn register_resolving(
     repo: &Arc<Repository>,
     p: &Value,
     resolve: impl Fn(&str) -> Result<Value>,
 ) -> Result<Value> {
+    let agent = Caller::Agent {
+        chat: text(p, "id"),
+    };
     if p["operation"] == "command" {
-        return agent_command(repo, p);
+        return Ok(json!({"commandResult": commands::invoke(repo, p, agent)?}));
     }
     if p["operation"] == "settings-read" {
-        return Ok(json!({"settings":repo.settings.view()}));
+        let settings = operations::run(repo, agent, "settings.read", &json!({}))?;
+        return Ok(json!({ "settings": settings }));
     }
     if p["operation"] == "settings-apply" {
-        return Ok(json!({"settings":repo.settings.apply(p,true)?}));
+        let args =
+            json!({"revision":p["revision"],"contentHash":p["contentHash"],"patch":p["patch"]});
+        let settings = operations::run(repo, agent, "settings.apply", &args)?;
+        return Ok(json!({ "settings": settings }));
     }
     if p["operation"] == "ci-investigation" {
         return super::session_ci::investigation(repo, p);

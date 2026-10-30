@@ -5,6 +5,8 @@ use super::{
     Result, Value,
 };
 use super::{artifacts, workflows};
+use crate::backend::operations::Caller;
+use crate::backend::settings::Approval;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{
@@ -380,7 +382,7 @@ fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         "/api/connections/reload" => super::commands::invoke(
             repo,
             &json!({"name":"connections.reload","args":payload}),
-            false,
+            Caller::Browser,
         )?,
         "/api/views" => super::views::update(repo, payload)?,
         "/api/page-settings" => super::page_settings::update(repo, payload)?,
@@ -389,13 +391,13 @@ fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         "/api/onboarding" => super::onboarding::update(repo, payload)?,
         "/api/shell-terminal/open" => super::chat_terminal::open(repo, payload)?,
         p if p.starts_with("/api/shell-terminal/") => shell_terminal(repo, p, payload)?,
-        "/api/commands/invoke" => super::commands::invoke(repo, payload, false)?,
+        "/api/commands/invoke" => super::commands::invoke(repo, payload, Caller::Browser)?,
         "/api/skills/catalog" => skills_catalog(repo, payload)?,
         "/api/app-chat/send" => repo.app_chat.start(repo, payload)?,
         "/api/app-chat/new" => repo.app_chat.new_chat(repo)?,
         "/api/app-chat/cancel" => repo.app_chat.cancel(),
-        "/api/settings/preview" => repo.settings.preview(payload, false)?,
-        "/api/settings" => repo.settings.apply(payload, false)?,
+        "/api/settings/preview" => repo.settings.preview(payload, Approval::User)?,
+        "/api/settings" => repo.settings.apply(payload, Approval::User)?,
         "/api/quick-actions/run" => repo.quick_actions.start(repo, payload)?,
         _ => return Ok(None),
     }))

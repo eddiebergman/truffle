@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::settings::Approval;
 fn output_fixture(secret: &str) -> (tempfile::TempDir, Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -185,7 +186,7 @@ fn stream_output_withholds_ambiguous_prefixes_and_bounds_pending_sensitive_text(
 fn reviewed_command_identity_is_checked_before_lookup_without_execution() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf reviewed"}]}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf reviewed"}]}}),Approval::User).unwrap();
     let baseline = repo.settings.view();
     let request = json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"actionId":"fixture"});
     assert_eq!(
@@ -212,7 +213,7 @@ fn reviewed_command_identity_is_checked_before_lookup_without_execution() {
 fn failed_start_persistence_preserves_jobs_and_allows_retry() {
     let root = tempfile::tempdir().unwrap();
     let repo = Repository::open(root.path().join("profile"), None, false).unwrap();
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf retry"}]}}), false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"fixture","title":"Fixture","command":"printf retry"}]}}), Approval::User).unwrap();
     let path = root.path().join("runs.json");
     let host = Arc::new(Host::load(path.clone()).unwrap());
     let jobs = (0..30)
@@ -281,7 +282,7 @@ fn quick_action_context_is_literal_and_rejects_unlinked_items() {
     let context = context(&repo, &json!({"recordId":id})).unwrap();
     assert_eq!(context["CHAT_TITLE"], title);
     assert!(super::context(&repo, &json!({"recordId":id,"prId":"unlinked"})).is_err());
-    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"literal","title":"Literal","command":"printf '%s' \"$CHAT_TITLE\""}]}}),false).unwrap();
+    repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"quickActions":[{"id":"literal","title":"Literal","command":"printf '%s' \"$CHAT_TITLE\""}]}}),Approval::User).unwrap();
     let run = repo
             .quick_actions
             .start(

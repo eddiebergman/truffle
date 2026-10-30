@@ -1,5 +1,6 @@
 use super::*;
 use crate::backend::commands;
+use crate::backend::operations::Caller;
 use crate::backend::uuid;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String, Vec<String>) {
@@ -207,11 +208,11 @@ fn artifact_metadata_actionable_ids_and_tokens_are_exact_or_fail_before_any_writ
         let error = commands::invoke(
             &repo,
             &json!({"name":"artifacts.metadata.read","args":{"id":artifact}}),
-            true,
+            Caller::Assistant,
         )
         .unwrap_err();
         assert!(!error.message.contains(secret));
-        assert!(commands::invoke(&repo,&json!({"name":"artifacts.metadata.update","args":{"id":artifact,"patch":{"title":"Changed"},"expected":{"title":token}}}),true).is_err());
+        assert!(commands::invoke(&repo,&json!({"name":"artifacts.metadata.update","args":{"id":artifact,"patch":{"title":"Changed"},"expected":{"title":token}}}),Caller::Assistant).is_err());
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     }
