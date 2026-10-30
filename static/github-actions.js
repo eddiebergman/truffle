@@ -613,12 +613,7 @@ function chatCIContext() {
   if (document.hidden || source !== "agents") {
     return null;
   }
-  const candidate = liveCandidates().find(
-    (c) => candidateKey(c) === selectedAgentKey,
-  );
-  const record = selectedAgentKey.startsWith("record:")
-    ? state?.sessions.find((r) => r.id === selectedAgentKey.slice(7))
-    : candidate && recordForCandidate(candidate);
+  const { record } = selectedChat();
   if (!record) {
     return null;
   }

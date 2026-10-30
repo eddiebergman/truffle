@@ -185,6 +185,7 @@ async function fixture({
     clearTimeout() {},
     liveCandidates: () => candidates,
     currentAgentRecord: () => record,
+    selectedChat: () => ({ key: "", candidate: null, record }),
     api,
     el: (tag, cls, text) => new Node(tag, cls, text),
     featureButton: (text, onclick, cls) =>

@@ -115,15 +115,7 @@ let reviewRefreshAt = 0,
   reviewRefreshPending = false,
   reviewFreshnessAt = 0;
 function syncActiveDiff() {
-  const candidate = liveCandidates().find(
-    (c) => candidateKey(c) === selectedAgentKey,
-  );
-  const record =
-    source === "agents"
-      ? selectedAgentKey.startsWith("record:")
-        ? state.sessions.find((r) => r.id === selectedAgentKey.slice(7))
-        : candidate && recordForCandidate(candidate)
-      : null;
+  const record = source === "agents" ? selectedChat().record : null;
   const directory = record && selectedGitDirectory(record),
     key = record ? `${record.id}\0${directory}` : "";
   if (activeDiffCache.key !== key) {
@@ -658,12 +650,7 @@ async function openDiffReview(
     fallbackKey: gitReviewFocusKey(record, directory),
     preserve: preserveReturn,
     isCurrent: () => {
-      const candidate = liveCandidates().find(
-          (c) => candidateKey(c) === selectedAgentKey,
-        ),
-        selected = selectedAgentKey.startsWith("record:")
-          ? state.sessions.find((row) => row.id === selectedAgentKey.slice(7))
-          : candidate && recordForCandidate(candidate);
+      const selected = selectedChat().record;
       return (
         source === "agents" &&
         selected?.id === record.id &&

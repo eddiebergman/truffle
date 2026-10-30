@@ -260,12 +260,7 @@ function paintGitDiff(body, view) {
       document.activeElement === document.body ||
       !document.activeElement?.isConnected)
   ) {
-    const candidate = liveCandidates().find(
-        (c) => candidateKey(c) === selectedAgentKey,
-      ),
-      selected = selectedAgentKey.startsWith("record:")
-        ? state.sessions.find((row) => row.id === selectedAgentKey.slice(7))
-        : candidate && recordForCandidate(candidate);
+    const selected = selectedChat().record;
     if (
       selected?.id === view.record.id &&
       selectedGitDirectory(selected) === view.directory

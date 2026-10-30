@@ -67,6 +67,23 @@ function isAgentSnoozed(candidate) {
 function visibleAgentCandidates() {
   return liveCandidates().filter((c) => !isAgentSnoozed(c));
 }
+// The chat that the workspace shows. Snoozed candidates are left out, as in the
+// live bar, so diff, review and CI never fetch for a chat that is not shown.
+function selectedChat() {
+  const key = selectedAgentKey,
+    candidate =
+      visibleAgentCandidates().find((c) => candidateKey(c) === key) || null;
+  if (candidate) {
+    return { key, candidate, record: recordForCandidate(candidate) || null };
+  }
+  const record = key.startsWith("record:")
+    ? (state?.sessions || []).find((s) => s.id === key.slice(7)) || null
+    : null;
+  return { key, candidate: null, record };
+}
+function currentAgentRecord() {
+  return selectedChat().record;
+}
 function snoozeAgentTab(candidate) {
   window.truffleGuidance?.complete("chat.snooze");
   agentRename?.cancel();
@@ -317,10 +334,7 @@ function beginAgentRename() {
     agentRename.input.focus();
     return;
   }
-  const candidate = liveCandidates().find(
-      (c) => candidateKey(c) === selectedAgentKey,
-    ),
-    record = candidate && recordForCandidate(candidate);
+  const { candidate, record } = selectedChat();
   const tab =
     candidate &&
     $(
@@ -617,14 +631,7 @@ function renderTitlebarEditor() {
     header.insertBefore(button, launcher);
     header.append(launcher);
   }
-  const candidate = liveCandidates().find(
-    (c) => candidateKey(c) === selectedAgentKey,
-  );
-  const record = selectedAgentKey.startsWith("record:")
-    ? state.sessions.find((s) => s.id === selectedAgentKey.slice(7))
-    : candidate
-      ? recordForCandidate(candidate)
-      : null;
+  const { record } = selectedChat();
   const directory =
     source === "agents" && record ? selectedGitDirectory(record) : "";
   button.dataset.directory = directory || "";
@@ -962,9 +969,7 @@ async function runTabCommand(command) {
   if (command === "close" && $("#launch-options").open) {
     $("#launch-options").open = false;
     $("#location-prompt").hidden = true;
-    const candidate = liveCandidates().find(
-      (c) => candidateKey(c) === selectedAgentKey,
-    );
+    const { candidate } = selectedChat();
     const terminal = terminalViews.get(candidate?.recordId);
     if (terminal) {
       terminal.terminal.focus();
@@ -974,9 +979,7 @@ async function runTabCommand(command) {
     return;
   }
   if (command === "close") {
-    const candidate = liveCandidates().find(
-      (c) => candidateKey(c) === selectedAgentKey,
-    );
+    const { candidate } = selectedChat();
     if (source !== "agents" || !candidate) {
       toast("Select an agent tab to close.");
       return;
@@ -1451,12 +1454,7 @@ function linkedWorkCI(record, item) {
 }
 function renderAgentWorkspace() {
   const live = visibleAgentCandidates();
-  const candidate = live.find((c) => candidateKey(c) === selectedAgentKey);
-  const record = selectedAgentKey.startsWith("record:")
-    ? state.sessions.find((s) => s.id === selectedAgentKey.slice(7))
-    : candidate
-      ? recordForCandidate(candidate)
-      : null;
+  const { candidate, record } = selectedChat();
   const list = $("#work-list"),
     key = candidate
       ? candidateKey(candidate)

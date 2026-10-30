@@ -310,9 +310,11 @@ if (typeof document !== "undefined") {
       ) {
         return ["chat.snooze", snooze];
       }
+      const { record } = selectedChat();
       if (
         source !== "agents" ||
-        candidateForRecord(currentAgentRecord() || {})?.host !== "embedded"
+        !record ||
+        candidateForRecord(record)?.host !== "embedded"
       ) {
         return null;
       }

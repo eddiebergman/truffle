@@ -4,7 +4,12 @@ const { browserContext, loadScripts } = require("./helpers/static-script.cjs");
 const uuid = "10000000-0000-7000-8000-000000000001";
 const recordA = { id: "a", agent: "claude", sessionId: uuid },
   recordB = { id: "b", agent: "claude", sessionId: uuid };
-function workspace({ candidates, sessions = [recordA, recordB], ...globals }) {
+function workspace({
+  candidates,
+  sessions = [recordA, recordB],
+  files = [],
+  ...globals
+}) {
   const c = browserContext({
     inventory: { candidates: candidates.map((x) => ({ live: true, ...x })) },
     state: sessions === null ? null : { sessions },
@@ -16,6 +21,7 @@ function workspace({ candidates, sessions = [recordA, recordB], ...globals }) {
     "static/sessions.js",
     "static/features.js",
     "static/workspace.js",
+    ...files,
   ]);
   return c;
 }
@@ -57,4 +63,45 @@ test("a record prefers its exact candidate over a session match in any order", (
     const c = workspace({ candidates });
     assert.equal(c.candidateForRecord(recordA)?.host, "embedded");
   }
+});
+test("the selected chat follows the visible candidates, so a snoozed chat is not selected", () => {
+  const shown = { host: "embedded", recordId: "a", agent: "claude" },
+    snoozed = { host: "embedded", recordId: "b", agent: "claude" };
+  const c = workspace({
+    candidates: [shown, snoozed],
+    snoozedAgentTabs: { "embedded:b": { at: 1, recordId: "b", title: "B" } },
+    selectedAgentKey: "embedded:a",
+  });
+  const chat = c.selectedChat();
+  assert.equal(chat.key, "embedded:a");
+  assert.equal(chat.candidate.recordId, "a");
+  assert.equal(chat.record, recordA);
+  c.selectedAgentKey = "embedded:b";
+  assert.deepEqual(
+    { ...c.selectedChat() },
+    { key: "embedded:b", candidate: null, record: null },
+  );
+});
+test("a record key selects a saved chat without a candidate", () => {
+  const c = workspace({ candidates: [], selectedAgentKey: "record:b" });
+  assert.deepEqual(
+    { ...c.selectedChat() },
+    { key: "record:b", candidate: null, record: recordB },
+  );
+  c.selectedAgentKey = "record:gone";
+  assert.equal(c.selectedChat().record, null);
+});
+test("the selected chat and the diff poll tolerate a missing state before the first load", () => {
+  const c = workspace({
+    candidates: [{ host: "embedded", recordId: "a", agent: "claude" }],
+    sessions: null,
+    source: "agents",
+    selectedAgentKey: "record:a",
+    files: ["static/git-diff.js", "static/diff-review.js"],
+  });
+  assert.equal(c.selectedChat().record, null);
+  c.syncActiveDiff();
+  c.selectedAgentKey = "embedded:a";
+  assert.equal(c.selectedChat().record, null);
+  assert.equal(c.selectedChat().candidate.recordId, "a");
 });

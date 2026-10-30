@@ -221,7 +221,7 @@ test("keyboard focus keeps a tip alive during the idle pause and dismissal retur
       window: { getSelection: () => null },
       source: "agents",
       selectedAgentKey: "one",
-      currentAgentRecord: () => ({}),
+      selectedChat: () => ({ key: "one", candidate: null, record: {} }),
       candidateForRecord: () => ({ host: "embedded" }),
       chatCIChecks: checks,
     },

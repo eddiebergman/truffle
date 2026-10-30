@@ -203,7 +203,7 @@
       !value.starEligible ||
       Date.now() - lastInteraction < 15000 ||
       (source === "agents" &&
-        (liveCandidates().length > 0 || currentAgentRecord())) ||
+        (liveCandidates().length > 0 || selectedChat().record)) ||
       document.querySelector("dialog[open]") ||
       (panel && !panel.hidden) ||
       $("#truffle-guidance-tip") ||

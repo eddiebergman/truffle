@@ -26,9 +26,10 @@ function fixture(extra = {}) {
     source: "agents",
     selectedAgentKey: "one",
     state: { sessions: records, sources: { github: {} } },
-    liveCandidates: () => records,
-    candidateKey: (r) => r.id,
-    recordForCandidate: (r) => r,
+    selectedChat: () => {
+      const record = records.find((r) => r.id === c.selectedAgentKey) || null;
+      return { key: c.selectedAgentKey, candidate: record, record };
+    },
     agentWork: (r) =>
       r.items.map((i) => ({ ...i, source: "github", kind: "Pull request" })),
     allItems: () => [],

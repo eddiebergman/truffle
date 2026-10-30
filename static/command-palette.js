@@ -1,16 +1,6 @@
 "use strict";
 let actionEntries = [],
   actionSelected = 0;
-function currentAgentRecord() {
-  const candidate = liveCandidates().find(
-    (c) => candidateKey(c) === selectedAgentKey,
-  );
-  return candidate
-    ? recordForCandidate(candidate)
-    : (state?.sessions || []).find(
-        (s) => selectedAgentKey === `record:${s.id}`,
-      );
-}
 function openCommandLink(url) {
   const link = el("a");
   link.href = url;
@@ -62,7 +52,7 @@ async function refreshClaudeSession(record) {
 }
 function commandEntries() {
   const entries = [],
-    record = currentAgentRecord(),
+    { record } = selectedChat(),
     candidate = record && candidateForRecord(record);
   const add = (verb, noun, detail, run, extra = {}) =>
     entries.push({ title: `${verb}: ${noun}`, detail, run, ...extra });
@@ -393,7 +383,8 @@ function openCommands() {
     return false;
   }
   $("#action-query").value = "";
-  $("#action-context").textContent = currentAgentRecord()?.title || "Dashboard";
+  $("#action-context").textContent =
+    selectedChat().record?.title || "Dashboard";
   $("#action-palette").showModal();
   $("#action-query").setAttribute("aria-expanded", "true");
   paintCommands(true);

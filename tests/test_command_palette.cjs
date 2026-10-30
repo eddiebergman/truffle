@@ -68,7 +68,7 @@ test("context commands retain separate source links and checkout targets for mul
     setting: (key, fallback) => fallback,
     openSettings() {},
     source: "agents",
-    currentAgentRecord: () => record,
+    selectedChat: () => ({ key: "record:chat", candidate: null, record }),
     candidateForRecord: () => null,
     agentWork: () => items,
     workReference: (x) => x.reference,
@@ -296,7 +296,7 @@ function paletteFixture({
     appSettings: {},
     source: "all",
     cycleAgentTab: () => false,
-    currentAgentRecord: () => null,
+    selectedChat: () => ({ key: "", candidate: null, record: null }),
     ...(actualEntries
       ? {}
       : {
@@ -600,7 +600,7 @@ test("go Agents uses the explicit workspace owner after saved-view handling whil
       source: "github",
       selectedAgentKey: "",
       chatPreparationContext: () => ({ availability: "available", total: 0 }),
-      currentAgentRecord: () => null,
+      selectedChat: () => ({ key: "", candidate: null, record: null }),
       candidateForRecord: () => null,
       liveCandidates: () => [],
       snoozedAgentTabs: {},
