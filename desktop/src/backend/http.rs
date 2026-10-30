@@ -309,6 +309,7 @@ fn asset_file(path: &str) -> Option<&'static str> {
         "/ui-controls.css" => "ui-controls.css",
         "/command-palette.css" => "command-palette.css",
         "/client.js" => "client.js",
+        "/poller.js" => "poller.js",
         "/desktop.js" => "desktop.js",
         "/performance.js" => "performance.js",
         "/workspace.js" => "workspace.js",

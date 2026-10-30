@@ -192,6 +192,7 @@ async function fixture({
     $: (selector) => document.querySelector(selector),
     toast() {},
     setInterval: (fn) => intervals.push(fn),
+    poller: { register() {}, kick() {} },
   });
   const keepHost = ["window", "document", "setInterval"];
   loadScripts(c, "static/app-chat.js", { keepHost });

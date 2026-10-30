@@ -12,6 +12,7 @@ const scripts = new Map(),
   raws = new WeakMap();
 const identifier = /^[A-Za-z_$][\w$]*$/;
 const slot = "__staticScriptValue";
+const pollerScript = "static/poller.js";
 
 function compiled(file) {
   const filename = path.resolve(root, file);
@@ -111,8 +112,13 @@ function loadScripts(c, files, { keepHost = [], elements = {} } = {}) {
       raw[name] = host[name];
     }
   }
+  // index.html loads poller.js before every script that registers a poll task.
+  const list = [files].flat();
+  if (readGlobal(raw, "poller") === undefined && !list.includes(pollerScript)) {
+    list.unshift(pollerScript);
+  }
   try {
-    for (const file of [files].flat()) {
+    for (const file of list) {
       compiled(file).runInContext(raw);
     }
   } finally {
