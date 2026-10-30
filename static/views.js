@@ -421,42 +421,42 @@ function currentSavedViewState(page = source) {
   if (!savedViewPages.includes(page)) {
     return null;
   }
-  let state = savedViewPageStates[page];
+  let viewState = savedViewPageStates[page];
   try {
     if (
-      !state ||
-      typeof state.id !== "string" ||
-      !state.draft ||
-      state.draft.parent !== page ||
-      !savedViewLifecycles.includes(state.draft.lifecycle) ||
-      typeof state.draft.query !== "string" ||
-      !savedViewGroups.includes(state.draft.groupBy)
+      !viewState ||
+      typeof viewState.id !== "string" ||
+      !viewState.draft ||
+      viewState.draft.parent !== page ||
+      !savedViewLifecycles.includes(viewState.draft.lifecycle) ||
+      typeof viewState.draft.query !== "string" ||
+      !savedViewGroups.includes(viewState.draft.groupBy)
     ) {
       throw new Error();
     }
-    validateSavedViewFilter(state.draft.filter);
+    validateSavedViewFilter(viewState.draft.filter);
   } catch {
-    state = defaultSavedViewState(page);
-    savedViewPageStates[page] = state;
+    viewState = defaultSavedViewState(page);
+    savedViewPageStates[page] = viewState;
   }
-  return state;
+  return viewState;
 }
 function resetSavedViewState(page = source) {
-  const state = currentSavedViewState(page);
-  if (!state) {
+  const viewState = currentSavedViewState(page);
+  if (!viewState) {
     return;
   }
-  state.id = "";
-  delete state.base;
-  delete state.stale;
-  state.draft = {
+  viewState.id = "";
+  delete viewState.base;
+  delete viewState.stale;
+  viewState.draft = {
     parent: page,
     lifecycle: "active",
     filter: { op: "all", conditions: [] },
     query: "",
-    groupBy: state.draft.groupBy,
+    groupBy: viewState.draft.groupBy,
   };
-  applySavedViewPresentation(state.draft);
+  applySavedViewPresentation(viewState.draft);
   persistSavedViewState();
 }
 function prepareSavedViewPage() {
@@ -467,18 +467,18 @@ function prepareSavedViewPage() {
   savedViewUsePage(source);
 }
 function setSavedViewScope(scope, page = source) {
-  const state = currentSavedViewState(page);
-  if (!state) {
+  const viewState = currentSavedViewState(page);
+  if (!viewState) {
     return;
   }
-  const previous = state.draft.filter,
+  const previous = viewState.draft.filter,
     conditions = previous.op === "all" ? previous.conditions : [previous];
-  state.draft.filter = {
+  viewState.draft.filter = {
     op: "all",
     conditions: conditions.filter((condition) => condition.field !== "scope"),
   };
   if (scope) {
-    state.draft.filter.conditions.push({
+    viewState.draft.filter.conditions.push({
       op: "in",
       field: "scope",
       values: [scope],
@@ -487,20 +487,20 @@ function setSavedViewScope(scope, page = source) {
   persistSavedViewState();
 }
 function setSavedViewStatus(status, page = source) {
-  const state = currentSavedViewState(page);
-  if (!state) {
+  const viewState = currentSavedViewState(page);
+  if (!viewState) {
     return;
   }
   savedViewCapturePresentation(page);
-  const previous = state.draft.filter,
+  const previous = viewState.draft.filter,
     conditions = previous.op === "all" ? previous.conditions : [previous];
-  state.draft.filter = {
+  viewState.draft.filter = {
     op: "all",
     conditions: conditions.filter((condition) => condition.field !== "status"),
   };
-  state.draft.lifecycle = status === "active" ? "active" : "any";
+  viewState.draft.lifecycle = status === "active" ? "active" : "any";
   if (status !== "active") {
-    state.draft.filter.conditions.push({
+    viewState.draft.filter.conditions.push({
       op: "in",
       field: "status",
       values: [status],
@@ -519,14 +519,14 @@ function persistSavedViewState() {
   }
 }
 function savedViewAllows(item, page = source) {
-  const state = currentSavedViewState(page);
-  if (!state) {
+  const viewState = currentSavedViewState(page);
+  if (!viewState) {
     return true;
   }
   if (savedViewsError) {
     return false;
   }
-  return savedViewMatches(state.draft, item);
+  return savedViewMatches(viewState.draft, item);
 }
 function savedViewSearchAllows(query, item) {
   return Number.isFinite(workSearchScore(query, item));
@@ -592,25 +592,25 @@ function activateSavedView(id) {
   savedViewRefresh();
 }
 function savedViewUsePage(page) {
-  const state = currentSavedViewState(page);
-  if (state) {
-    applySavedViewPresentation(state.draft);
+  const viewState = currentSavedViewState(page);
+  if (viewState) {
+    applySavedViewPresentation(viewState.draft);
   }
 }
 function savedViewCapturePresentation(page = source) {
-  const state = currentSavedViewState(page);
-  if (!state) {
+  const viewState = currentSavedViewState(page);
+  if (!viewState) {
     return;
   }
   const query = document.querySelector("#search");
   if (query) {
-    state.draft.query = query.value;
+    viewState.draft.query = query.value;
   }
   if (
     typeof groupingPrefs === "object" &&
     savedViewGroups.includes(groupingPrefs[page])
   ) {
-    state.draft.groupBy = groupingPrefs[page];
+    viewState.draft.groupBy = groupingPrefs[page];
   }
   persistSavedViewState();
 }
@@ -647,10 +647,10 @@ async function loadSavedViews({ canApply = () => true } = {}) {
     savedViewsDocument = next;
     savedViewsError = "";
     for (const page of savedViewPages) {
-      const state = currentSavedViewState(page);
+      const viewState = currentSavedViewState(page);
       if (
         !savedViewMigrationComplete &&
-        !state.id &&
+        !viewState.id &&
         page === "github" &&
         typeof prefs === "object" &&
         ["mine", "review"].includes(prefs.githubView)
@@ -659,34 +659,36 @@ async function loadSavedViews({ canApply = () => true } = {}) {
           (eachView) => eachView.id === `github-${prefs.githubView}`,
         );
         if (view) {
-          state.id = view.id;
-          state.draft = cloneSavedView(view);
-          state.base = cloneSavedView(view);
+          viewState.id = view.id;
+          viewState.draft = cloneSavedView(view);
+          viewState.base = cloneSavedView(view);
         }
       }
-      if (!state.id) {
+      if (!viewState.id) {
         continue;
       }
       const latest = next.views.find(
-        (view) => view.id === state.id && view.parent === page,
+        (view) => view.id === viewState.id && view.parent === page,
       );
       if (!latest) {
-        state.id = "";
-        state.stale = "removed";
+        viewState.id = "";
+        viewState.stale = "removed";
         continue;
       }
       const knownBaseline =
-          state.base ||
-          previous.find((view) => view.id === state.id && view.parent === page),
+          viewState.base ||
+          previous.find(
+            (view) => view.id === viewState.id && view.parent === page,
+          ),
         baseline = knownBaseline || latest;
-      if (sameSavedViewDefinition(state.draft, baseline)) {
-        state.draft = cloneSavedView(latest);
-        state.base = cloneSavedView(latest);
-        delete state.stale;
+      if (sameSavedViewDefinition(viewState.draft, baseline)) {
+        viewState.draft = cloneSavedView(latest);
+        viewState.base = cloneSavedView(latest);
+        delete viewState.stale;
       } else {
-        state.base = cloneSavedView(baseline);
+        viewState.base = cloneSavedView(baseline);
         if (!knownBaseline || !sameSavedViewDefinition(latest, baseline)) {
-          state.stale = "changed";
+          viewState.stale = "changed";
         }
       }
     }
@@ -795,9 +797,9 @@ function savedViewRuleCount(filter) {
   );
 }
 function renderSavedViewControls() {
-  const state = currentSavedViewState();
+  const viewState = currentSavedViewState();
   let host = document.querySelector("#saved-view-controls");
-  if (!state) {
+  if (!viewState) {
     if (host) {
       host.hidden = true;
     }
@@ -856,28 +858,30 @@ function renderSavedViewControls() {
   ]) {
     const button = savedViewControl(label, () => {
       savedViewCapturePresentation();
-      state.draft.lifecycle = value;
+      viewState.draft.lifecycle = value;
       savedViewRefresh();
     });
     button.dataset.savedViewControl = `lifecycle:${value}`;
     button.setAttribute(
       "aria-pressed",
-      String(state.draft.lifecycle === value),
+      String(viewState.draft.lifecycle === value),
     );
     lifecycle.append(button);
   }
   const view = savedViewsDocument?.views.find(
-      (eachView) => eachView.id === state.id,
+      (eachView) => eachView.id === viewState.id,
     ),
     label = view?.name || "Current view",
     modified = Boolean(
-      view && state.base && !sameSavedViewDefinition(state.draft, state.base),
+      view &&
+      viewState.base &&
+      !sameSavedViewDefinition(viewState.draft, viewState.base),
     );
-  const rules = savedViewRuleCount(state.draft.filter),
+  const rules = savedViewRuleCount(viewState.draft.filter),
     filter = savedViewControl(`Filters${rules ? ` · ${rules}` : ""}`, () =>
       openSavedViewEditor(),
     );
-  filter.title = savedViewSummary(state.draft.filter);
+  filter.title = savedViewSummary(viewState.draft.filter);
   filter.dataset.savedViewControl = "filters";
   const save = savedViewControl(view ? "Edit view" : "Save view", () =>
     openSavedViewEditor(),
@@ -885,11 +889,11 @@ function renderSavedViewControls() {
   save.dataset.savedViewControl = "save";
   save.disabled = !savedViewsDocument;
   host.append(lifecycle, filter, save);
-  if (state.stale) {
+  if (viewState.stale) {
     const notice = el(
       "small",
       "form-hint",
-      state.stale === "removed"
+      viewState.stale === "removed"
         ? "Saved view removed. Your filters are kept as an unsaved view."
         : "Saved view changed. Your filters are kept. Reset to use the saved version.",
     );
@@ -901,7 +905,7 @@ function renderSavedViewControls() {
   if (view) {
     host.append(el("span", "saved-view-name", label));
   }
-  if (view && (modified || state.stale)) {
+  if (view && (modified || viewState.stale)) {
     const reset = savedViewControl("Reset", () => activateSavedView(view.id));
     reset.dataset.savedViewControl = "reset";
     reset.title = "Restore saved filters";
@@ -1532,8 +1536,8 @@ async function deleteSavedViewDefinition(id, baseline) {
   return savedViewsDocument;
 }
 function openSavedViewEditor() {
-  const state = currentSavedViewState();
-  if (!state) {
+  const viewState = currentSavedViewState();
+  if (!viewState) {
     return;
   }
   savedViewCapturePresentation();
@@ -1544,8 +1548,8 @@ function openSavedViewEditor() {
     deletionConfirmation = null,
     saving = false,
     accepted = null;
-  const draft = cloneSavedView(state.draft),
-    view = baseline?.views.find((eachView) => eachView.id === state.id),
+  const draft = cloneSavedView(viewState.draft),
+    view = baseline?.views.find((eachView) => eachView.id === viewState.id),
     dialog = el("dialog", "saved-view-editor");
   dialog.setAttribute("aria-label", "Edit saved view");
   const header = el("div", "saved-view-editor-heading"),
@@ -1578,7 +1582,7 @@ function openSavedViewEditor() {
     pending: false,
     refreshing: false,
     ui: { message: status },
-    state,
+    state: viewState,
   };
   savedViewEditor = current;
   current.isCurrent = () =>
@@ -1771,8 +1775,8 @@ function openSavedViewEditor() {
       }
       try {
         validateSavedViewFilter(draft.filter);
-        state.draft = cloneSavedView(draft);
-        applySavedViewPresentation(state.draft);
+        viewState.draft = cloneSavedView(draft);
+        applySavedViewPresentation(viewState.draft);
         savedViewRefresh();
         dialog.close();
       } catch (e) {
