@@ -311,7 +311,7 @@ fn finalize_entry(repo: &Repository, id: &str, operation: &str) -> Result<Value>
             return Ok(all[index].clone());
         }
         if all[index]["kind"] == "review-feedback" {
-            super::reviews::acknowledge_dispatch(state, id, &all[index]["ack"])?;
+            super::reviews::acknowledge(state, id, &all[index]["ack"])?;
         }
         all[index]["finalized"] = json!(true);
         all[index]["finalizedAt"] = json!(now());
@@ -359,7 +359,7 @@ pub fn resolve(repo: &Repository, args: &Value) -> Result<Value> {
             all[index].as_object_mut().unwrap().remove("payload");
             all[index].as_object_mut().unwrap().remove("ack");
             match text(&all[index], "kind") {
-                "review-request" => super::reviews::cancel_dispatch(state, &id, &operation)?,
+                "review-request" => super::reviews::cancel(state, &id, &operation)?,
                 "ci-investigation" => super::session_ci::cancel_dispatch(
                     state,
                     &id,
@@ -645,7 +645,7 @@ fn prepare_with(
             let record=sessions::get(state,&id)?.clone();let draft=super::reviews::draft(&record);
             if kind!=Kind::CiInvestigation&&expected_revision!=draft["revision"].as_u64(){return Err(Error::new("The review changed. Reload it before submitting."));}
             let (prompt,ack)=match kind{
-                Kind::ReviewRequest=>{let review=super::reviews::reserve_request(state,&id,&operation,expected_revision.unwrap(),&baseline)?;(request_prompt(repo,&record,&review["run"],&settings)?,Value::Null)},
+                Kind::ReviewRequest=>{let review=super::reviews::request(state,&id,&operation,expected_revision.unwrap(),&baseline)?;(request_prompt(repo,&record,&review["run"],&settings)?,Value::Null)},
                 Kind::ReviewFeedback=>feedback(&record,&draft,&checked)?,
                 Kind::CiInvestigation=>{let work=domain::catalog(state).remove(&item).filter(|item|item["source"]=="github"&&item["kind"]=="Pull request").ok_or_else(|| Error::new("Choose a linked GitHub pull request."))?;super::session_ci::investigation_in_state(state,&json!({"id":id,"itemId":item,"requestId":operation,"state":"queued"}))?;(ci_prompt(repo,&record,&work,&operation),Value::Null)},
             };

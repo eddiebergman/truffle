@@ -4,7 +4,7 @@ use super::{
     arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
     Error, PathBuf, Repository, Result, Value,
 };
-use super::{artifacts, domain, sessions, terminal};
+use super::{artifacts, domain, reviews, sessions, terminal};
 use crate::backend::operations::{self, Caller};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
@@ -759,21 +759,23 @@ fn register_review(repo: &Repository, p: &Value) -> Result<Value> {
             return Err(Error::new("The review batch has no comments."));
         }
     }
-    let mut request = p.clone();
-    request["action"] = json!(if !arr(&p["report"]["comments"]).is_empty()
-        || p["report"]["overall"].is_object()
+    let review = if !arr(&p["report"]["comments"]).is_empty() || p["report"]["overall"].is_object()
     {
-        "append"
+        let mut batch = p.clone();
+        batch["comments"] = p["report"]["comments"].clone();
+        if let Some(overall) = p["report"].get("overall") {
+            batch["overall"] = overall.clone();
+        }
+        reviews::append(repo, &reviews::Git, &batch)?
     } else if !text(p, "state").is_empty() {
-        "status"
+        reviews::status(repo, &reviews::Git, p)?
     } else {
-        "read"
-    });
-    request["comments"] = p["report"]["comments"].clone();
-    if let Some(overall) = p["report"].get("overall") {
-        request["overall"] = overall.clone();
-    }
-    super::reviews::action(repo, &super::reviews::Git, &request)
+        reviews::draft(sessions::get(
+            &*repo.state.lock().map_err(|_| Error::io())?,
+            text(p, "id"),
+        )?)
+    };
+    Ok(json!({"id":text(p, "id"),"review":review}))
 }
 fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
     let path = directory(text(p, "path"))?;

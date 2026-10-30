@@ -1,8 +1,111 @@
+use super::super::redaction;
 use super::{
-    arr, draft, json, note_token, redaction, sessions, summary_identity, summary_time, text, Error,
-    Repository, Result, Value,
+    arr, check, draft, edit_note, json, note_token, sessions, sid, text, Error, Git, Repository,
+    Result, Value,
 };
 
+fn summary_identity(repo: &Repository, value: &Value, max: usize) -> Result<Value> {
+    let text = value
+        .as_str()
+        .filter(|value| {
+            !value.is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+        })
+        .ok_or_else(|| Error::new("Review identity is unavailable."))?;
+    let mut safe = text.to_owned();
+    redaction::redact_text(repo, &mut safe);
+    if safe != text {
+        return Err(Error::new("Review identity cannot be safely projected."));
+    }
+    Ok(json!(text))
+}
+fn summary_time(value: &Value) -> Value {
+    value
+        .as_f64()
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .map_or(Value::Null, |value| json!(value))
+}
+fn summary_freshness(value: &Value) -> Result<Value> {
+    match value.as_str() {
+        Some("current" | "outdated" | "unverified") => Ok(value.clone()),
+        _ => Err(Error::new("Review freshness is unavailable.")),
+    }
+}
+/// Freshness is a local observation, not completion or delivery acknowledgement.
+pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
+    let object = args
+        .as_object()
+        .ok_or_else(|| Error::new("Review check arguments must be an object."))?;
+    if object.len() != 1 || !object.contains_key("id") {
+        return Err(Error::new("Review check accepts only a saved chat ID."));
+    }
+    let id = sid(args["id"]
+        .as_str()
+        .ok_or_else(|| Error::new("Supply the saved chat ID."))?)?;
+    summary_identity(repo, &json!(id), 80)?;
+    let review = {
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        draft(sessions::get(&state, &id)?)
+    };
+    if arr(&review["comments"]).len() > 100 || arr(&review["assessments"]).len() > 100 {
+        return Err(Error::new(
+            "Review freshness summaries support up to 100 comments and 100 assessments.",
+        ));
+    }
+    let review = &check(repo, &Git, &id)?;
+    let revision = review["revision"]
+        .as_u64()
+        .filter(|value| *value <= 9_007_199_254_740_991)
+        .ok_or_else(|| Error::new("Review revision is unavailable."))?;
+    let mut comments = vec![];
+    let mut assessments = vec![];
+    for (field, result) in [
+        ("comments", &mut comments),
+        ("assessments", &mut assessments),
+    ] {
+        let rows = arr(&review[field]);
+        if rows.len() > 100 {
+            return Err(Error::new(
+                "Review freshness summary exceeds its row limit.",
+            ));
+        }
+        for row in rows {
+            let mut entry = json!({"id":summary_identity(repo,&row["id"],120)?,"freshness":summary_freshness(&row["freshness"])?,"reviewedAt":summary_time(&row["reviewedAt"])});
+            if field == "assessments" {
+                entry["sentAt"] = summary_time(&row["sentAt"]);
+            }
+            result.push(entry);
+        }
+    }
+    let run = if review["run"].is_object() {
+        let raw = &review["run"];
+        let state = raw["state"]
+            .as_str()
+            .filter(|value| {
+                ["requested", "reviewing", "complete", "failed", "cancelled"].contains(value)
+            })
+            .ok_or_else(|| Error::new("Review run state is unavailable."))?;
+        json!({"id":summary_identity(repo,&raw["id"],80)?,"state":state,"scope":raw["scope"].as_str().filter(|value|*value=="conversation"),"startedAt":summary_time(&raw["startedAt"]),"updatedAt":summary_time(&raw["updatedAt"]),"completedAt":summary_time(&raw["completedAt"])})
+    } else {
+        Value::Null
+    };
+    let result = json!({"id":id,"revision":revision,"run":run,"freshness":summary_freshness(&review["freshness"])?,"freshnessCheckedAt":summary_time(&review["freshnessCheckedAt"]),"comments":comments,"assessments":assessments});
+    // Fixed status tags are actionable too; do not let generic redaction silently
+    // turn a valid freshness/run state into a different result after this owner.
+    for value in [
+        "current",
+        "outdated",
+        "unverified",
+        "requested",
+        "reviewing",
+        "complete",
+        "failed",
+        "cancelled",
+        "conversation",
+    ] {
+        summary_identity(repo, &json!(value), 80)?;
+    }
+    Ok(result)
+}
 fn revision(review: &Value) -> Result<u64> {
     review["revision"]
         .as_u64()
@@ -191,22 +294,9 @@ pub fn update_note(repo: &Repository, args: &Value) -> Result<Value> {
         .ok_or_else(|| Error::new("Supply a review note of at most 8000 bytes."))?;
     summary_identity(repo, &json!(id), 80)?;
     repo.transaction(|state| {
-        let mut review = draft(sessions::get(state, id)?);
-        if args["noteToken"] != note_token(text(&review, "note")) {
-            let mut error = Error::new("The review note changed. Read it again before editing.");
-            error.status = 409;
-            return Err(error);
-        }
-        let changed = review["note"] != note;
-        if changed {
-            review["note"] = json!(note);
-            review["revision"] = json!(revision(&review)? + 1);
-        }
-        let next = revision(&review)?;
-        if changed {
-            sessions::get_mut(state, id)?["reviewDraft"] = review;
-        }
-        Ok(json!({"id":id,"revision":next,"changed":changed}))
+        let before = draft(sessions::get(state, id)?);
+        let review = edit_note(state, id, text(args, "noteToken"), note)?;
+        Ok(json!({"id":id,"revision":revision(&review)?,"changed":review != before}))
     })
 }
 

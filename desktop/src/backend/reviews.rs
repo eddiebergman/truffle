@@ -1,8 +1,6 @@
-use super::{
-    arr, json, now, redaction, sessions, sid, text, uuid, Error, Repository, Result, Value,
-};
+use super::{arr, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value};
 mod access;
-pub use access::{history, read, update_note};
+pub use access::{check_summary, history, read, update_note};
 
 pub(super) fn draft(record: &Value) -> Value {
     if record["reviewDraft"].is_object() {
@@ -41,6 +39,14 @@ impl Versions for Git {
         result
     }
 }
+#[cfg(test)]
+pub(super) struct Fixed(pub Value);
+#[cfg(test)]
+impl Versions for Fixed {
+    fn of(&self, _: &Value) -> Value {
+        self.0.clone()
+    }
+}
 fn freshness(before: &Value, current: &Value) -> &'static str {
     let Some(before) = before.as_object().filter(|m| !m.is_empty()) else {
         return "unverified";
@@ -65,10 +71,7 @@ fn freshness(before: &Value, current: &Value) -> &'static str {
 }
 /// Mark each part of the draft current, outdated or unverified against the checkouts. Writes nothing.
 pub(super) fn check(repo: &Repository, versions: &impl Versions, id: &str) -> Result<Value> {
-    let chat = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        sessions::get(&state, id)?.clone()
-    };
+    let chat = chat(repo, id)?;
     let current = versions.of(&chat);
     let mut review = draft(&chat);
     let mut assessments = arr(&review["assessments"]);
@@ -90,208 +93,6 @@ pub(super) fn check(repo: &Repository, versions: &impl Versions, id: &str) -> Re
     review["freshness"] = json!(freshness(&review["run"]["versions"], &current));
     review["freshnessCheckedAt"] = json!(now());
     Ok(review)
-}
-fn summary_identity(repo: &Repository, value: &Value, max: usize) -> Result<Value> {
-    let text = value
-        .as_str()
-        .filter(|value| {
-            !value.is_empty() && value.len() <= max && !value.chars().any(char::is_control)
-        })
-        .ok_or_else(|| Error::new("Review identity is unavailable."))?;
-    let mut safe = text.to_owned();
-    super::redaction::redact_text(repo, &mut safe);
-    if safe != text {
-        return Err(Error::new("Review identity cannot be safely projected."));
-    }
-    Ok(json!(text))
-}
-fn summary_time(value: &Value) -> Value {
-    value
-        .as_f64()
-        .filter(|value| value.is_finite() && *value >= 0.0)
-        .map_or(Value::Null, |value| json!(value))
-}
-fn summary_freshness(value: &Value) -> Result<Value> {
-    match value.as_str() {
-        Some("current" | "outdated" | "unverified") => Ok(value.clone()),
-        _ => Err(Error::new("Review freshness is unavailable.")),
-    }
-}
-/// Freshness is a local observation, not completion or delivery acknowledgement.
-pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
-    let object = args
-        .as_object()
-        .ok_or_else(|| Error::new("Review check arguments must be an object."))?;
-    if object.len() != 1 || !object.contains_key("id") {
-        return Err(Error::new("Review check accepts only a saved chat ID."));
-    }
-    let id = sid(args["id"]
-        .as_str()
-        .ok_or_else(|| Error::new("Supply the saved chat ID."))?)?;
-    summary_identity(repo, &json!(id), 80)?;
-    let review = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        draft(sessions::get(&state, &id)?)
-    };
-    if arr(&review["comments"]).len() > 100 || arr(&review["assessments"]).len() > 100 {
-        return Err(Error::new(
-            "Review freshness summaries support up to 100 comments and 100 assessments.",
-        ));
-    }
-    let review = &check(repo, &Git, &id)?;
-    let revision = review["revision"]
-        .as_u64()
-        .filter(|value| *value <= 9_007_199_254_740_991)
-        .ok_or_else(|| Error::new("Review revision is unavailable."))?;
-    let mut comments = vec![];
-    let mut assessments = vec![];
-    for (field, result) in [
-        ("comments", &mut comments),
-        ("assessments", &mut assessments),
-    ] {
-        let rows = arr(&review[field]);
-        if rows.len() > 100 {
-            return Err(Error::new(
-                "Review freshness summary exceeds its row limit.",
-            ));
-        }
-        for row in rows {
-            let mut entry = json!({"id":summary_identity(repo,&row["id"],120)?,"freshness":summary_freshness(&row["freshness"])?,"reviewedAt":summary_time(&row["reviewedAt"])});
-            if field == "assessments" {
-                entry["sentAt"] = summary_time(&row["sentAt"]);
-            }
-            result.push(entry);
-        }
-    }
-    let run = if review["run"].is_object() {
-        let raw = &review["run"];
-        let state = raw["state"]
-            .as_str()
-            .filter(|value| {
-                ["requested", "reviewing", "complete", "failed", "cancelled"].contains(value)
-            })
-            .ok_or_else(|| Error::new("Review run state is unavailable."))?;
-        json!({"id":summary_identity(repo,&raw["id"],80)?,"state":state,"scope":raw["scope"].as_str().filter(|value|*value=="conversation"),"startedAt":summary_time(&raw["startedAt"]),"updatedAt":summary_time(&raw["updatedAt"]),"completedAt":summary_time(&raw["completedAt"])})
-    } else {
-        Value::Null
-    };
-    let result = json!({"id":id,"revision":revision,"run":run,"freshness":summary_freshness(&review["freshness"])?,"freshnessCheckedAt":summary_time(&review["freshnessCheckedAt"]),"comments":comments,"assessments":assessments});
-    // Fixed status tags are actionable too; do not let generic redaction silently
-    // turn a valid freshness/run state into a different result after this owner.
-    for value in [
-        "current",
-        "outdated",
-        "unverified",
-        "requested",
-        "reviewing",
-        "complete",
-        "failed",
-        "cancelled",
-        "conversation",
-    ] {
-        summary_identity(repo, &json!(value), 80)?;
-    }
-    Ok(result)
-}
-fn set_request(review: &mut Value, request: &str, baseline: &Value) -> Result<()> {
-    let request = sid(request)?;
-    if review["run"]["id"] != request {
-        if ["requested", "reviewing"].contains(&text(&review["run"], "state")) {
-            return Err(Error::new(
-                "A review is already active. Clear its indicator before starting another.",
-            ));
-        }
-        review["run"] = json!({"id":request,"state":"requested","scope":"conversation","versions":baseline,"startedAt":now(),"updatedAt":now(),"passes":{},"inputCommentIds":arr(&review["comments"]).iter().map(|c|c["id"].clone()).collect::<Vec<_>>(),"inputNote":review["note"]});
-    }
-    Ok(())
-}
-fn remove_or_ack(review: &mut Value, saved: &mut Vec<Value>, p: &Value, operation: &str) {
-    let ids = arr(&p["commentIds"]);
-    saved.retain(|c| !ids.contains(&c["id"]));
-    if operation == "remove" && p["assessmentIds"].is_array() {
-        let ids = arr(&p["assessmentIds"]);
-        let mut assessments = arr(&review["assessments"]);
-        assessments.retain(|a| !ids.contains(&a["id"]));
-        review["assessments"] = json!(assessments);
-    }
-    if operation == "ack" {
-        let ids = arr(&p["assessmentIds"]);
-        let mut assessments = arr(&review["assessments"]);
-        for assessment in &mut assessments {
-            if ids.contains(&assessment["id"]) && assessment.get("sentAt").is_none() {
-                assessment["sentAt"] = json!(now());
-            }
-        }
-        if !assessments.is_empty() {
-            review["assessments"] = json!(assessments);
-        }
-    }
-    if operation == "ack" && p["note"] == review["note"] {
-        review["note"] = json!("");
-    }
-}
-pub(super) fn reserve_request(
-    state: &mut Value,
-    id: &str,
-    request: &str,
-    revision: u64,
-    baseline: &Value,
-) -> Result<Value> {
-    let mut review = draft(sessions::get(state, id)?);
-    if review["revision"] != revision {
-        return Err(Error::new(
-            "The review changed. Reload it before requesting a review.",
-        ));
-    }
-    let before = review.clone();
-    set_request(&mut review, request, baseline)?;
-    if review != before {
-        review["revision"] = json!(revision + 1);
-    }
-    sessions::get_mut(state, id)?["reviewDraft"] = review.clone();
-    Ok(review)
-}
-pub(super) fn acknowledge_dispatch(state: &mut Value, id: &str, ack: &Value) -> Result<()> {
-    let record = sessions::get(state, id)?;
-    if ack["historyId"] != record["reviewHistory"]["entries"][0]["id"] {
-        return Ok(());
-    }
-    let mut review = draft(record);
-    let before = review.clone();
-    let mut saved = arr(&review["comments"]);
-    let mut exact = ack.clone();
-    exact["commentIds"] = json!(arr(&ack["comments"])
-        .iter()
-        .filter(|captured| saved.iter().any(|current| current == *captured))
-        .map(|captured| captured["id"].clone())
-        .collect::<Vec<_>>());
-    exact["assessmentIds"] = json!(arr(&ack["assessments"])
-        .iter()
-        .filter(|captured| arr(&review["assessments"])
-            .iter()
-            .any(|current| current == *captured))
-        .map(|captured| captured["id"].clone())
-        .collect::<Vec<_>>());
-    remove_or_ack(&mut review, &mut saved, &exact, "ack");
-    review["comments"] = json!(saved);
-    if review != before {
-        review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
-    }
-    sessions::get_mut(state, id)?["reviewDraft"] = review;
-    super::guidance::complete(state, "review.pending-comments");
-    Ok(())
-}
-pub(super) fn cancel_dispatch(state: &mut Value, id: &str, operation: &str) -> Result<()> {
-    let mut review = draft(sessions::get(state, id)?);
-    if review["run"]["id"] == operation
-        && ["requested", "reviewing"].contains(&text(&review["run"], "state"))
-    {
-        review["run"]["state"] = json!("cancelled");
-        review["run"]["updatedAt"] = json!(now());
-        review["revision"] = json!(review["revision"].as_u64().unwrap_or(0) + 1);
-        sessions::get_mut(state, id)?["reviewDraft"] = review;
-    }
-    Ok(())
 }
 fn anchor_comments(repo: &Repository, id: &str, p: &Value, comments: &mut [Value]) -> Result<()> {
     if (comments.is_empty() && !p["overall"].is_object())
@@ -358,11 +159,171 @@ fn anchor_comments(repo: &Repository, id: &str, p: &Value, comments: &mut [Value
     }
     Ok(())
 }
-fn add_overall(review: &mut Value, p: &Value) -> Result<()> {
-    let pass = text(p, "pass");
-    let overall = &p["overall"];
+fn active(review: &Value) -> bool {
+    ["requested", "reviewing"].contains(&text(&review["run"], "state"))
+}
+/// Apply one transition to a chat's draft. A change bumps the revision once.
+fn commit(
+    state: &mut Value,
+    id: &str,
+    change: impl FnOnce(&mut Value) -> Result<()>,
+) -> Result<Value> {
+    let chat = sessions::get_mut(state, id)?;
+    let before = draft(chat);
+    let mut review = before.clone();
+    change(&mut review)?;
+    if serde_json::to_vec(&review)?.len() > 256 * 1024 {
+        return Err(Error::new("Review draft exceeds 256 KiB."));
+    }
+    if review != before {
+        review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
+        chat["reviewDraft"] = review.clone();
+    }
+    Ok(review)
+}
+/// Start a conversation review at the captured draft revision. Repeating the request changes nothing.
+pub(super) fn request(
+    state: &mut Value,
+    id: &str,
+    request: &str,
+    revision: u64,
+    baseline: &Value,
+) -> Result<Value> {
+    let request = sid(request)?;
+    commit(state, id, |review| {
+        if review["revision"] != revision {
+            return Err(Error::new(
+                "The review changed. Reload it before requesting a review.",
+            ));
+        }
+        if review["run"]["id"] != request {
+            if active(review) {
+                return Err(Error::new(
+                    "A review is already active. Clear its indicator before starting another.",
+                ));
+            }
+            review["run"] = json!({"id":request,"state":"requested","scope":"conversation","versions":baseline,"startedAt":now(),"updatedAt":now(),"passes":{},"inputCommentIds":arr(&review["comments"]).iter().map(|c|c["id"].clone()).collect::<Vec<_>>(),"inputNote":review["note"]});
+        }
+        Ok(())
+    })
+}
+/// A reviewer's update to the run it was requested for.
+struct Progress<'a> {
+    request: &'a str,
+    /// Empty for the whole run.
+    pass: &'a str,
+    /// Empty when the update only adds feedback.
+    state: &'a str,
+    reviewed_revision: Option<&'a Value>,
+    /// Versions the whole run covers once it starts reviewing.
+    baseline: Option<Value>,
+}
+fn progress<'a>(repo: &Repository, versions: &impl Versions, p: &'a Value) -> Result<Progress<'a>> {
+    let (state, pass) = (text(p, "state"), text(p, "pass"));
+    let baseline = if state == "reviewing" && pass.is_empty() {
+        Some(versions.of(&chat(repo, text(p, "id"))?))
+    } else {
+        None
+    };
+    Ok(Progress {
+        request: text(p, "requestId"),
+        pass,
+        state,
+        reviewed_revision: p.get("reviewedRevision"),
+        baseline,
+    })
+}
+fn current(review: &Value, request: &str) -> Result<()> {
+    if request.is_empty() || review["run"]["id"] != request {
+        return Err(Error::new(
+            "This review request is no longer current. Read its draft before updating it.",
+        ));
+    }
+    if !active(review) {
+        return Err(Error::new("This review request has already finished."));
+    }
+    Ok(())
+}
+fn progress_guidance(state: &mut Value, progress: &Progress) {
+    if ["reviewing", "complete"].contains(&progress.state) {
+        super::guidance::complete(state, "review.agent-scope");
+        super::guidance::complete(state, "review.pending-comments");
+    }
+}
+/// Feedback added to the draft in one step.
+struct Batch<'a> {
+    /// Comments already anchored to the diff.
+    comments: Vec<Value>,
+    overall: Option<&'a Value>,
+    progress: Option<Progress<'a>>,
+}
+/// Anchor comments from a browser or agent batch to the chat's diff, then report them.
+pub(super) fn append(repo: &Repository, versions: &impl Versions, p: &Value) -> Result<Value> {
+    let id = text(p, "id");
+    let mut comments = arr(&p["comments"]);
+    anchor_comments(repo, id, p, &mut comments)?;
+    let progress = p
+        .get("requestId")
+        .map(|_| progress(repo, versions, p))
+        .transpose()?;
+    repo.transaction(|state| {
+        report(
+            state,
+            id,
+            Batch {
+                comments,
+                overall: p.get("overall"),
+                progress,
+            },
+        )
+    })
+}
+fn report(state: &mut Value, id: &str, batch: Batch) -> Result<Value> {
+    let Batch {
+        comments,
+        overall,
+        progress,
+    } = batch;
+    let review = commit(state, id, |review| {
+        if let Some(progress) = &progress {
+            current(review, progress.request)?;
+        }
+        if let Some(overall) = overall {
+            add_overall(review, progress.as_ref(), overall)?;
+        }
+        merge_comments(review, comments)?;
+        progress
+            .as_ref()
+            .map_or(Ok(()), |progress| apply_status(review, progress))
+    })?;
+    if arr(&review["comments"])
+        .iter()
+        .any(|c| c["author"] == "You")
+    {
+        super::guidance::complete(state, "review.comment-selection");
+    }
+    if let Some(progress) = &progress {
+        progress_guidance(state, progress);
+    }
+    Ok(review)
+}
+/// Move the run or one of its passes to a new state.
+pub(super) fn status(repo: &Repository, versions: &impl Versions, p: &Value) -> Result<Value> {
+    let progress = progress(repo, versions, p)?;
+    repo.transaction(|state| set_status(state, text(p, "id"), &progress))
+}
+fn set_status(state: &mut Value, id: &str, progress: &Progress) -> Result<Value> {
+    let review = commit(state, id, |review| {
+        current(review, progress.request)?;
+        apply_status(review, progress)
+    })?;
+    progress_guidance(state, progress);
+    Ok(review)
+}
+fn add_overall(review: &mut Value, progress: Option<&Progress>, overall: &Value) -> Result<()> {
+    let (request, pass) = progress.map_or(("", ""), |p| (p.request, p.pass));
     if !valid_pass(pass)
-        || text(p, "requestId").is_empty()
+        || request.is_empty()
         || text(overall, "author").trim().is_empty()
         || text(overall, "author").len() > 120
         || text(overall, "text").trim().is_empty()
@@ -370,7 +331,7 @@ fn add_overall(review: &mut Value, p: &Value) -> Result<()> {
     {
         return Err(Error::new("An overall assessment needs a current request, review pass, author and text of at most 8000 bytes."));
     }
-    let key = format!("{}-{pass}", text(p, "requestId"));
+    let key = format!("{request}-{pass}");
     let mut assessments = arr(&review["assessments"]);
     if let Some(existing) = assessments.iter().find(|a| a["id"] == key) {
         if text(existing, "author") != text(overall, "author").trim()
@@ -381,94 +342,78 @@ fn add_overall(review: &mut Value, p: &Value) -> Result<()> {
             ));
         }
     } else {
-        assessments.push(json!({"id":key,"requestId":p["requestId"],"pass":pass,"author":text(overall,"author").trim(),"text":text(overall,"text").trim(),"root":review["run"]["root"],"baseCommit":review["run"]["baseCommit"],"versions":review["run"]["versions"],"createdAt":now()}));
+        assessments.push(json!({"id":key,"requestId":request,"pass":pass,"author":text(overall,"author").trim(),"text":text(overall,"text").trim(),"root":review["run"]["root"],"baseCommit":review["run"]["baseCommit"],"versions":review["run"]["versions"],"createdAt":now()}));
     }
     review["assessments"] = json!(assessments);
     Ok(())
 }
-fn apply_status(review: &mut Value, saved: &mut [Value], p: &Value) -> Result<()> {
-    let status = text(p, "state");
-    let pass = text(p, "pass");
-    if !status.is_empty()
-        && (if pass.is_empty() {
-            text(&review["run"], "state") != status
+fn apply_status(review: &mut Value, progress: &Progress) -> Result<()> {
+    let Progress {
+        state: status,
+        pass,
+        reviewed_revision: receipt,
+        ..
+    } = *progress;
+    if status.is_empty()
+        || (if pass.is_empty() {
+            text(&review["run"], "state") == status
         } else {
-            text(&review["run"]["passes"], pass) != status
+            text(&review["run"]["passes"], pass) == status
         })
     {
-        if !["reviewing", "complete", "failed", "cancelled"].contains(&status) {
-            return Err(Error::new("Invalid review state."));
-        }
-        if pass.is_empty() {
-            if status == "complete" {
-                let receipt = p.get("reviewedRevision");
-                if receipt.is_some() && receipt != review.get("revision") {
-                    return Err(Error::new("Review feedback changed. Read the draft again before completing this round."));
-                }
-                let inputs = arr(&review["run"]["inputCommentIds"]);
-                for comment in saved.iter_mut() {
-                    if receipt.is_some()
-                        || inputs.contains(&comment["id"])
-                        || comment["requestId"] == review["run"]["id"]
-                    {
-                        comment["reviewedAt"] = json!(now());
-                    }
-                }
-                let mut assessments = arr(&review["assessments"]);
-                for assessment in &mut assessments {
-                    if receipt.is_some() || assessment["requestId"] == review["run"]["id"] {
-                        assessment["reviewedAt"] = json!(now());
-                    }
-                }
-                review["assessments"] = json!(assessments);
-                if receipt.is_some() || review["note"] == review["run"]["inputNote"] {
-                    review["reviewedNote"] = review["note"].clone();
-                }
-                review["run"]["completedAt"] = json!(now());
-            }
-            review["run"]["state"] = json!(status);
-        } else {
-            if !valid_pass(pass) {
-                return Err(Error::new("Invalid review pass."));
-            }
-            review["run"]["passes"][pass] = json!(status);
-            review["run"]["state"] = json!("reviewing");
-        }
-        review["run"]["updatedAt"] = json!(now());
+        return Ok(());
     }
+    if !["reviewing", "complete", "failed", "cancelled"].contains(&status) {
+        return Err(Error::new("Invalid review state."));
+    }
+    if !pass.is_empty() {
+        if !valid_pass(pass) {
+            return Err(Error::new("Invalid review pass."));
+        }
+        review["run"]["passes"][pass] = json!(status);
+        review["run"]["state"] = json!("reviewing");
+    } else if status == "complete" {
+        if receipt.is_some() && receipt != review.get("revision") {
+            return Err(Error::new(
+                "Review feedback changed. Read the draft again before completing this round.",
+            ));
+        }
+        mark_reviewed(review, receipt.is_some());
+        review["run"]["state"] = json!(status);
+    } else {
+        if let (Some(baseline), "requested") = (&progress.baseline, text(&review["run"], "state")) {
+            review["run"]["versions"] = baseline.clone();
+        }
+        review["run"]["state"] = json!(status);
+    }
+    review["run"]["updatedAt"] = json!(now());
     Ok(())
 }
-fn archive_review(session: &mut Value, review: &Value, saved: &[Value], p: &Value) -> Result<()> {
-    if p["revision"].as_u64().is_none() || p["revision"] != review["revision"] {
-        return Err(Error::new(
-            "The review changed. Reload it before starting a new review.",
-        ));
+/// A completed run consumes the feedback it read. With a revision receipt that is the whole draft.
+fn mark_reviewed(review: &mut Value, whole_draft: bool) {
+    let run = review["run"].clone();
+    let inputs = arr(&run["inputCommentIds"]);
+    let mut comments = arr(&review["comments"]);
+    for comment in &mut comments {
+        if whole_draft || inputs.contains(&comment["id"]) || comment["requestId"] == run["id"] {
+            comment["reviewedAt"] = json!(now());
+        }
     }
-    if ["requested", "reviewing"].contains(&text(&review["run"], "state")) {
-        return Err(Error::new(
-            "Finish or cancel the active review before starting a new review.",
-        ));
+    review["comments"] = json!(comments);
+    let mut assessments = arr(&review["assessments"]);
+    for assessment in &mut assessments {
+        if whole_draft || assessment["requestId"] == run["id"] {
+            assessment["reviewedAt"] = json!(now());
+        }
     }
-    let history = &session["reviewHistory"];
-    if !history.is_null() && history["version"] != 1 {
-        return Err(Error::new("Unsupported review history version."));
+    review["assessments"] = json!(assessments);
+    if whole_draft || review["note"] == run["inputNote"] {
+        review["reviewedNote"] = review["note"].clone();
     }
-    let mut entries = arr(&history["entries"]);
-    if !saved.is_empty()
-        || !text(review, "note").is_empty()
-        || !arr(&review["assessments"]).is_empty()
-        || review["run"].is_object()
-    {
-        entries.insert(0, json!({"id":uuid(),"archivedAt":now(),"review":review}));
-    }
-    entries.truncate(20);
-    while serde_json::to_vec(&entries)?.len() > 1024 * 1024 {
-        entries.pop();
-    }
-    session["reviewHistory"] = json!({"version":1,"entries":entries});
-    Ok(())
+    review["run"]["completedAt"] = json!(now());
 }
-fn merge_comments(saved: &mut Vec<Value>, comments: Vec<Value>) -> Result<()> {
+fn merge_comments(review: &mut Value, comments: Vec<Value>) -> Result<()> {
+    let mut saved = arr(&review["comments"]);
     for comment in comments {
         if let Some(existing) = saved.iter().find(|c| c["id"] == comment["id"]) {
             for field in [
@@ -496,134 +441,171 @@ fn merge_comments(saved: &mut Vec<Value>, comments: Vec<Value>) -> Result<()> {
             "Send or remove comments before adding more. A draft holds 100 comments.",
         ));
     }
+    review["comments"] = json!(saved);
     Ok(())
 }
-fn set_note(review: &mut Value, p: &Value) -> Result<()> {
-    let note = p["note"]
-        .as_str()
-        .ok_or_else(|| Error::new("Expected review note."))?;
+/// Replace the note when `token` matches the current one.
+fn edit_note(state: &mut Value, id: &str, token: &str, note: &str) -> Result<Value> {
     if note.len() > 8000 {
         return Err(Error::new("Review note exceeds 8000 bytes."));
     }
-    if p["noteToken"] != note_token(text(review, "note")) {
-        let mut error = Error::new("The review note changed. Read it again before editing.");
-        error.status = 409;
-        return Err(error);
-    }
-    review["note"] = json!(note);
-    Ok(())
+    commit(state, id, |review| {
+        if note_token(text(review, "note")) != token {
+            let mut error = Error::new("The review note changed. Read it again before editing.");
+            error.status = 409;
+            return Err(error);
+        }
+        review["note"] = json!(note);
+        Ok(())
+    })
 }
 /// Identifies the note a caller based its edit on. The browser computes the same SHA-256.
-pub(super) fn note_token(note: &str) -> String {
+fn note_token(note: &str) -> String {
     context_kit::sha256(note.as_bytes())
 }
-fn complete_guidance(state: &mut Value, operation: &str, p: &Value, review: &Value) {
-    if operation == "append"
-        && arr(&review["comments"])
-            .iter()
-            .any(|c| c["author"] == "You")
-    {
-        super::guidance::complete(state, "review.comment-selection");
-    }
-    if operation == "ack" {
-        super::guidance::complete(state, "review.pending-comments");
-    }
-    if operation == "status" && ["reviewing", "complete"].contains(&text(p, "state")) {
-        super::guidance::complete(state, "review.agent-scope");
-        super::guidance::complete(state, "review.pending-comments");
-    }
+/// Delete comments, and assessments when `assessments` is given, by ID.
+fn remove(
+    state: &mut Value,
+    id: &str,
+    comments: &[Value],
+    assessments: Option<&[Value]>,
+) -> Result<Value> {
+    commit(state, id, |review| {
+        let mut saved = arr(&review["comments"]);
+        saved.retain(|c| !comments.contains(&c["id"]));
+        review["comments"] = json!(saved);
+        if let Some(ids) = assessments {
+            let mut saved = arr(&review["assessments"]);
+            saved.retain(|a| !ids.contains(&a["id"]));
+            review["assessments"] = json!(saved);
+        }
+        Ok(())
+    })
 }
+/// Consume the feedback a written dispatch delivered. Feedback that changed since capture stays pending.
+pub(super) fn acknowledge(state: &mut Value, id: &str, ack: &Value) -> Result<()> {
+    if ack["historyId"] != sessions::get(state, id)?["reviewHistory"]["entries"][0]["id"] {
+        return Ok(());
+    }
+    let delivered = |review: &Value, field: &str| {
+        arr(&ack[field])
+            .into_iter()
+            .filter(|captured| arr(&review[field]).contains(captured))
+            .map(|captured| captured["id"].clone())
+            .collect::<Vec<_>>()
+    };
+    commit(state, id, |review| {
+        let comments = delivered(review, "comments");
+        let mut saved = arr(&review["comments"]);
+        saved.retain(|c| !comments.contains(&c["id"]));
+        review["comments"] = json!(saved);
+        let sent = delivered(review, "assessments");
+        let mut assessments = arr(&review["assessments"]);
+        for assessment in &mut assessments {
+            if sent.contains(&assessment["id"]) && assessment.get("sentAt").is_none() {
+                assessment["sentAt"] = json!(now());
+            }
+        }
+        if !assessments.is_empty() {
+            review["assessments"] = json!(assessments);
+        }
+        if ack["note"] == review["note"] {
+            review["note"] = json!("");
+        }
+        Ok(())
+    })?;
+    super::guidance::complete(state, "review.pending-comments");
+    Ok(())
+}
+/// Cancel the run started by `request` if it is still active.
+pub(super) fn cancel(state: &mut Value, id: &str, request: &str) -> Result<()> {
+    commit(state, id, |review| {
+        if review["run"]["id"] == request && active(review) {
+            review["run"]["state"] = json!("cancelled");
+            review["run"]["updatedAt"] = json!(now());
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+/// Archive the finished draft at `revision` and start an empty one.
+fn start_new(state: &mut Value, id: &str, revision: u64) -> Result<Value> {
+    let chat = sessions::get_mut(state, id)?;
+    let review = draft(chat);
+    if review["revision"] != revision {
+        return Err(Error::new(
+            "The review changed. Reload it before starting a new review.",
+        ));
+    }
+    if active(&review) {
+        return Err(Error::new(
+            "Finish or cancel the active review before starting a new review.",
+        ));
+    }
+    let history = &chat["reviewHistory"];
+    if !history.is_null() && history["version"] != 1 {
+        return Err(Error::new("Unsupported review history version."));
+    }
+    let mut entries = arr(&history["entries"]);
+    if !arr(&review["comments"]).is_empty()
+        || !text(&review, "note").is_empty()
+        || !arr(&review["assessments"]).is_empty()
+        || review["run"].is_object()
+    {
+        entries.insert(0, json!({"id":uuid(),"archivedAt":now(),"review":review}));
+    }
+    entries.truncate(20);
+    while serde_json::to_vec(&entries)?.len() > 1024 * 1024 {
+        entries.pop();
+    }
+    chat["reviewHistory"] = json!({"version":1,"entries":entries});
+    commit(state, id, |review| {
+        *review = json!({"comments":[],"note":"","revision":review["revision"]});
+        Ok(())
+    })
+}
+fn chat(repo: &Repository, id: &str) -> Result<Value> {
+    let state = repo.state.lock().map_err(|_| Error::io())?;
+    Ok(sessions::get(&state, id)?.clone())
+}
+/// Serve the browser's review drawer.
 pub(super) fn action(repo: &Repository, versions: &impl Versions, p: &Value) -> Result<Value> {
     let id = text(p, "id");
-    let operation = text(p, "action");
-    if operation == "history" {
-        let history = {
-            let state = repo.state.lock().map_err(|_| Error::io())?;
-            sessions::get(&state, id)?["reviewHistory"].clone()
-        };
-        if !history.is_null() && history["version"] != 1 {
-            return Err(Error::new("Unsupported review history version."));
+    let review = match text(p, "action") {
+        "history" => {
+            let history = chat(repo, id)?["reviewHistory"].clone();
+            if !history.is_null() && history["version"] != 1 {
+                return Err(Error::new("Unsupported review history version."));
+            }
+            return Ok(json!({"id":id,"reviews":arr(&history["entries"]),"limit":20}));
         }
-        return Ok(json!({"id":id,"reviews":arr(&history["entries"]),"limit":20}));
-    }
-    if operation == "check" {
-        return Ok(json!({"id":id,"review":check(repo, versions, id)?}));
-    }
-    if operation == "read" {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        return Ok(json!({"id":id,"review":draft(sessions::get(&state, id)?)}));
-    }
-    let baseline = if operation == "request"
-        || operation == "status" && p["state"] == "reviewing" && text(p, "pass").is_empty()
-    {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        Some(versions.of(sessions::get(&state, id)?))
-    } else {
-        None
+        "read" => draft(&chat(repo, id)?),
+        "check" => check(repo, versions, id)?,
+        "append" => append(repo, versions, p)?,
+        "status" => status(repo, versions, p)?,
+        "remove" => repo.transaction(|state| {
+            remove(
+                state,
+                id,
+                &arr(&p["commentIds"]),
+                p["assessmentIds"].as_array().map(Vec::as_slice),
+            )
+        })?,
+        "note" => {
+            let note = p["note"]
+                .as_str()
+                .ok_or_else(|| Error::new("Expected review note."))?;
+            repo.transaction(|state| edit_note(state, id, text(p, "noteToken"), note))?
+        }
+        "new" => {
+            let revision = p["revision"].as_u64().ok_or_else(|| {
+                Error::new("The review changed. Reload it before starting a new review.")
+            })?;
+            repo.transaction(|state| start_new(state, id, revision))?
+        }
+        _ => return Err(Error::new("Unknown review action.")),
     };
-    let mut comments = arr(&p["comments"]);
-    if operation == "append" {
-        anchor_comments(repo, id, p, &mut comments)?;
-    }
-    repo.transaction(|state| {
-        let mut review = draft(sessions::get(state, id)?);
-        let before = review.clone();
-        let mut saved = arr(&review["comments"]);
-        if operation == "status" || p.get("requestId").is_some() && operation == "append" {
-            if text(p, "requestId").is_empty() || review["run"]["id"] != p["requestId"] {
-                return Err(Error::new(
-                    "This review request is no longer current. Read its draft before updating it.",
-                ));
-            }
-            if !["requested", "reviewing"].contains(&text(&review["run"], "state")) {
-                return Err(Error::new("This review request has already finished."));
-            }
-        }
-        if operation == "append" && p.get("overall").is_some() {
-            add_overall(&mut review, p)?;
-        }
-        match operation {
-            "new" => {
-                archive_review(sessions::get_mut(state, id)?, &review, &saved, p)?;
-                review = json!({"comments":[],"note":"","revision":before["revision"]});
-                saved.clear();
-            }
-            "request" => {
-                set_request(
-                    &mut review,
-                    text(p, "requestId"),
-                    baseline.as_ref().unwrap(),
-                )?;
-            }
-            "status" => {
-                if review["run"]["state"] == "requested" {
-                    if let Some(versions) = &baseline {
-                        review["run"]["versions"] = versions.clone();
-                    }
-                }
-            }
-
-            "append" => merge_comments(&mut saved, comments)?,
-            "remove" | "ack" => {
-                remove_or_ack(&mut review, &mut saved, p, operation);
-            }
-            "note" => set_note(&mut review, p)?,
-            _ => return Err(Error::new("Unknown review action.")),
-        }
-        if operation == "status" || operation == "append" && p.get("requestId").is_some() {
-            apply_status(&mut review, &mut saved, p)?;
-        }
-        review["comments"] = json!(saved);
-        if serde_json::to_vec(&review)?.len() > 256 * 1024 {
-            return Err(Error::new("Review draft exceeds 256 KiB."));
-        }
-        if review != before {
-            review["revision"] = json!(before["revision"].as_u64().unwrap_or(0) + 1);
-        }
-        sessions::get_mut(state, id)?["reviewDraft"] = review.clone();
-        complete_guidance(state, operation, p, &review);
-        Ok(json!({"id":id,"review":review}))
-    })
+    Ok(json!({"id":id,"review":review}))
 }
 
 #[cfg(test)]
