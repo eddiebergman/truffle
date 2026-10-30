@@ -169,6 +169,32 @@ function persist() {
     /* The server still stores all work. */
   }
 }
+// "reset" opens the page on its plain view when a saved view is active there;
+// "keep" shows the page as the user left it.
+function navigate(page, { savedView }) {
+  if (savedView !== "keep" && savedView !== "reset") {
+    throw new Error(`Unknown saved view policy: ${savedView}`);
+  }
+  const from = source;
+  source = page;
+  if (savedView === "reset" && currentSavedViewState(page)?.id) {
+    resetSavedViewState(page);
+  }
+  savedViewUsePage(page);
+  persist();
+  render();
+  window.dispatchEvent(
+    new CustomEvent("truffle-navigate", { detail: { from, to: page } }),
+  );
+}
+// The sidebar, its shortcuts and the command palette all open pages this way.
+function openPage(page) {
+  if (page === "agents") {
+    showAgentWorkspace();
+    return;
+  }
+  navigate(page, { savedView: "reset" });
+}
 function el(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) {
@@ -1764,11 +1790,7 @@ function renderSync() {
   logs.type = "button";
   logs.dataset.variant = "secondary";
   logs.dataset.noticeFocus = "logs";
-  logs.onclick = () => {
-    source = "logs";
-    persist();
-    render();
-  };
+  logs.onclick = () => navigate("logs", { savedView: "keep" });
   actions.append(button, logs);
   notice.replaceChildren(header, body, actions);
   if (noticeFocused && !notice.hidden) {
@@ -1884,9 +1906,7 @@ function inspectProjects(dialog, isCurrent) {
     return;
   }
   dialog.close();
-  source = "notes";
-  persist();
-  render();
+  navigate("notes", { savedView: "keep" });
 }
 async function openNote(item = null) {
   const dialog = $("#note-dialog");
@@ -2437,26 +2457,7 @@ $("#sources").onclick = (event) => {
   if (!button) {
     return;
   }
-  source = button.dataset.source;
-  if (
-    typeof resetSavedViewState === "function" &&
-    typeof currentSavedViewState === "function" &&
-    currentSavedViewState()?.id
-  ) {
-    resetSavedViewState();
-  }
-  if (source === "linear") {
-    scopePrefs.linear = "";
-  }
-  if (typeof savedViewUsePage === "function") {
-    savedViewUsePage(source);
-  }
-  if (source === "agents") {
-    showAgentWorkspace();
-    return;
-  }
-  persist();
-  render();
+  openPage(button.dataset.source);
 };
 $("#search").oninput = () => {
   if (typeof savedViewCapturePresentation === "function") {

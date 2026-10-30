@@ -179,9 +179,7 @@ if (typeof document !== "undefined") {
         open = false;
         update();
         if (state.demo) {
-          source = "sessions";
-          persist();
-          render();
+          navigate("sessions", { savedView: "keep" });
           toast(
             `Preview saved with ${
               frozen.itemIds.length

@@ -509,10 +509,10 @@ function observeAgentNavigation() {
     markAgentNavigation();
   }
 }
-function chooseDefaultAgentSelection() {
+function chooseDefaultAgentSelection(page = source) {
   if (
     !state ||
-    source !== "agents" ||
+    page !== "agents" ||
     pendingSessionResumes.size ||
     document.querySelector("dialog[open]")
   ) {
@@ -535,11 +535,9 @@ function chooseDefaultAgentSelection() {
   return true;
 }
 function showAgentWorkspace() {
-  source = "agents";
   markAgentNavigation();
-  chooseDefaultAgentSelection();
-  persist();
-  render();
+  chooseDefaultAgentSelection("agents");
+  navigate("agents", { savedView: "keep" });
 }
 async function bootstrapAgentWorkspace() {
   observeAgentNavigation();
@@ -564,10 +562,8 @@ function selectAgent(record, candidate) {
   selectedAgentKey = candidate
     ? candidateKey(candidate)
     : `record:${record.id}`;
-  source = "agents";
   markAgentNavigation();
-  persist();
-  render();
+  navigate("agents", { savedView: "keep" });
   $("#live-agent-bar .selected")?.scrollIntoView({
     block: "nearest",
     inline: "nearest",
@@ -1544,11 +1540,7 @@ function renderAgentWorkspace() {
     conversation.append(
       featureButton(
         "History",
-        () => {
-          source = "sessions";
-          persist();
-          render();
-        },
+        () => navigate("sessions", { savedView: "keep" }),
         "text-button",
       ),
     );
@@ -2470,9 +2462,7 @@ $("#skills-inbox").onclick = (() => {
   let pending = false;
   return async () => {
     try {
-      source = "skills";
-      persist();
-      render();
+      navigate("skills", { savedView: "keep" });
       if (pending) {
         return;
       }
@@ -2650,13 +2640,9 @@ function renderSourceSubmenus(items) {
           el("b", "", counts.get(project) || 0),
         );
         button.onclick = () => {
-          source = "linear";
           scopePrefs.linear = scopePrefs.linear === project ? "" : project;
-          if (typeof setSavedViewScope === "function") {
-            setSavedViewScope(scopePrefs.linear, "linear");
-          }
-          persist();
-          render();
+          setSavedViewScope(scopePrefs.linear, "linear");
+          navigate("linear", { savedView: "keep" });
         };
         return button;
       }),
@@ -2943,21 +2929,7 @@ document.addEventListener(
       const chord = (event.shiftKey ? "shift+" : "") + key;
       if (sidebarKeys[chord] && !document.querySelector("dialog[open]")) {
         consume();
-        source = sidebarKeys[chord];
-        if (
-          typeof currentSavedViewState === "function" &&
-          currentSavedViewState()?.id
-        ) {
-          resetSavedViewState();
-        }
-        if (source === "linear") {
-          scopePrefs.linear = "";
-        }
-        if (typeof savedViewUsePage === "function") {
-          savedViewUsePage(source);
-        }
-        persist();
-        render();
+        openPage(sidebarKeys[chord]);
         return;
       }
       if (event.shiftKey) {

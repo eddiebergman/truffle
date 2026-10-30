@@ -13,6 +13,7 @@ const scripts = [
   "static/features.js",
   "static/workspace.js",
   "static/product-tools.js",
+  "static/views.js",
 ];
 // Stubs replace these after load; tests that need the real owners put them back.
 const realNames = [
@@ -232,7 +233,8 @@ function fixture({ api, embedded = true, empty = false } = {}) {
       Object.assign(new Node("button", cls, text), { onclick }),
     setting: () => ({}),
     shortcutLabel: () => "",
-    window: {},
+    window: new EventTarget(),
+    CustomEvent,
     requestAnimationFrame: (callback) => frames.push(callback),
     visibleAgentCandidates: () => candidates,
     candidateKey: (candidate) => `embedded:${candidate.recordId}`,

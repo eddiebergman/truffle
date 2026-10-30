@@ -38,10 +38,8 @@ function showChatResults(command) {
   if (command) {
     rememberChatResults(command);
   }
-  source = "chat-results";
   $("#search").value = chatSearchPage?.command.query || "";
-  persist();
-  render();
+  navigate("chat-results", { savedView: "keep" });
 }
 async function openChatSearchTarget(id) {
   const intent = ++chatResultIntent,

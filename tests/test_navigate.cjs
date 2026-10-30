@@ -29,6 +29,44 @@ function navigation({ savedViewId = "" } = {}) {
   const stored = () => JSON.parse(localStorage.getItem("truffle-view"));
   return { c, calls, stored };
 }
+test("navigate resets an active saved view, persists, renders and then reports the page change", () => {
+  const f = navigation({ savedViewId: "standup" });
+  f.c.navigate("github", { savedView: "reset" });
+  assert.deepEqual(f.calls, [
+    ["state", "github"],
+    ["reset", "github"],
+    ["use", "github"],
+    ["render", "github"],
+    ["event", "agents", "github"],
+  ]);
+  assert.equal(f.stored().source, "github");
+});
+test("navigate keeps the saved view unless asked to reset it and rejects unknown policies", () => {
+  const f = navigation({ savedViewId: "standup" });
+  f.c.navigate("linear", { savedView: "keep" });
+  assert.deepEqual(f.calls, [
+    ["use", "linear"],
+    ["render", "linear"],
+    ["event", "agents", "linear"],
+  ]);
+  f.calls.length = 0;
+  assert.throws(
+    () => f.c.navigate("github", { savedView: "clear" }),
+    /Unknown saved view policy: clear/,
+  );
+  assert.equal(f.c.source, "linear");
+  assert.deepEqual(f.calls, []);
+});
+test("reset leaves a page without an active saved view untouched", () => {
+  const f = navigation();
+  f.c.navigate("all", { savedView: "reset" });
+  assert.deepEqual(f.calls, [
+    ["state", "all"],
+    ["use", "all"],
+    ["render", "all"],
+    ["event", "agents", "all"],
+  ]);
+});
 test("persist stores the preferences that each owner registers", () => {
   const f = navigation();
   let collapsed = true;

@@ -56,10 +56,12 @@ test("keyboard chords match saved command syntax across modifiers", () => {
     "",
   );
 });
-test("configured navigation changes the view and clears provider scopes consistently", () => {
-  let renders = 0,
-    saved = 0;
+test("configured navigation opens a page on its plain view, as the sidebar does", () => {
+  let renders = 0;
   const c = browserContext({
+    window: new EventTarget(),
+    CustomEvent,
+    TextEncoder,
     settingsDirty: false,
     settingsSaving: false,
     document: {
@@ -67,19 +69,31 @@ test("configured navigation changes the view and clears provider scopes consiste
         selector === "dialog[open]" ? null : { open: false },
     },
     source: "agents",
-    githubView: "mine",
-    persist: () => saved++,
+    persist() {},
     render: () => renders++,
   });
-  loadScripts(c, settingsScripts);
+  loadScripts(c, [...settingsScripts, "static/views.js"]);
+  c.savedViewPageStates.linear = {
+    id: "view-1",
+    draft: {
+      parent: "linear",
+      lifecycle: "active",
+      filter: {
+        op: "all",
+        conditions: [{ op: "in", field: "scope", values: ["old"] }],
+      },
+      query: "",
+      groupBy: "status",
+    },
+  };
   c.scopePrefs.linear = "old";
   c.runConfiguredCommand("view-linear");
   assert.equal(c.source, "linear");
+  assert.equal(c.savedViewPageStates.linear.id, "");
   assert.equal(c.scopePrefs.linear, "");
   c.runConfiguredCommand("view-github");
-  assert.equal(c.githubView, "all");
+  assert.equal(c.source, "github");
   assert.equal(renders, 2);
-  assert.equal(saved, 2);
 });
 test("unsaved preferences block configured commands without discarding edits", () => {
   let opens = 0;

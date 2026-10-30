@@ -193,11 +193,8 @@ function positionAgentMenu(menu) {
 let activityView = ["sessions", "changes", "logs"].includes(source)
   ? source
   : "sessions";
-$("#activity-open").onclick = () => {
-  source = activityView;
-  persist();
-  render();
-};
+$("#activity-open").onclick = () =>
+  navigate(activityView, { savedView: "keep" });
 function renderSharedUX() {
   syncActiveDiff();
   void syncActiveChatCI();
@@ -223,11 +220,7 @@ function renderSharedUX() {
     ]) {
       const button = featureButton(
         label,
-        () => {
-          source = view;
-          persist();
-          render();
-        },
+        () => navigate(view, { savedView: "keep" }),
         "text-button",
       );
       button.setAttribute("aria-pressed", String(view === source));

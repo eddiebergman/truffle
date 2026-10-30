@@ -649,19 +649,7 @@ function runConfiguredCommand(id) {
     return;
   }
   if (id.startsWith("view-")) {
-    source = id.slice(5);
-    if (typeof savedViewUsePage === "function") {
-      savedViewUsePage(source);
-    } else {
-      if (source === "github") {
-        githubView = "all";
-      }
-      if (source === "linear") {
-        scopePrefs.linear = "";
-      }
-    }
-    persist();
-    render();
+    openPage(id.slice(5));
   }
 }
 document.addEventListener(

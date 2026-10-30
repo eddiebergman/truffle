@@ -170,6 +170,8 @@ function fixture({ prefs = {}, responses = [] } = {}) {
   document.activeElement = document.body;
   const c = browserContext({
     Event,
+    CustomEvent,
+    window: new EventTarget(),
     TextEncoder,
     console,
     crypto: { randomUUID: () => String(calls.length) },

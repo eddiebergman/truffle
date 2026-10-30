@@ -9,6 +9,8 @@ function fixture(items = []) {
   const rendered = [],
     hooks = [];
   const c = browserContext({
+    CustomEvent,
+    window: new EventTarget(),
     source: "chat-results",
     selectedAgentKey: "",
     state: { sessions: [] },
@@ -23,7 +25,7 @@ function fixture(items = []) {
     },
   });
   loadScripts(c, ["static/client.js", "static/documents.js", "static/app.js"]);
-  loadScripts(c, "static/chat-results.js");
+  loadScripts(c, ["static/views.js", "static/chat-results.js"]);
   return {
     c,
     rendered,

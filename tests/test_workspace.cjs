@@ -10,6 +10,7 @@ const workspaceScripts = [
   "static/sessions.js",
   "static/features.js",
   "static/workspace.js",
+  "static/views.js",
 ];
 function load(globals = {}, options) {
   const c = browserContext(globals);
@@ -425,6 +426,8 @@ test("selecting an agent through a work link restores its snoozed tab", () => {
   let saved = 0,
     rendered = 0;
   const c = workspace({
+    window: new EventTarget(),
+    CustomEvent,
     source: "agents",
     selectedAgentKey: "",
     agentRename: null,

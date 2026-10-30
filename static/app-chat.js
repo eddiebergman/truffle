@@ -251,12 +251,8 @@ async function appChatNavigate(value) {
     case "skills":
     case "artifacts":
     case "logs":
-      if (typeof savedViewCapturePresentation === "function") {
-        savedViewCapturePresentation(source);
-      }
-      source = command.destination;
-      persist();
-      render();
+      savedViewCapturePresentation(source);
+      navigate(command.destination, { savedView: "keep" });
       return;
     case "setup": {
       const host = $("#app-chat-setup");
@@ -891,20 +887,16 @@ if (typeof document !== "undefined") {
         }
         return;
       }
-      source = command.source;
       $("#search").value = command.query;
       statusFilter.value = command.status;
-      if (typeof applyAgentWorkView === "function") {
-        applyAgentWorkView(command);
+      applyAgentWorkView(command);
+      if (["linear", "github", "sentry"].includes(command.source)) {
+        scopePrefs[command.source] = "";
       }
-      if (["linear", "github", "sentry"].includes(source)) {
-        scopePrefs[source] = "";
-      }
-      if (source === "github") {
+      if (command.source === "github") {
         githubView = "all";
       }
-      persist();
-      render();
+      navigate(command.source, { savedView: "keep" });
       update();
       deferred = [];
       renderDeferred();

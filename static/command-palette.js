@@ -225,30 +225,9 @@ function commandEntries() {
     ["skills", "skills"],
     ["sessions", "activity"],
   ]) {
-    add(
-      "go",
-      label,
-      "Dashboard view",
-      () => {
-        source = view;
-        if (
-          typeof currentSavedViewState === "function" &&
-          currentSavedViewState()?.id
-        ) {
-          resetSavedViewState();
-        }
-        if (typeof savedViewUsePage === "function") {
-          savedViewUsePage(view);
-        }
-        if (view === "agents") {
-          showAgentWorkspace();
-          return;
-        }
-        persist();
-        render();
-      },
-      { shortcut: shortcutLabel(setting("keybindings", {})[`view-${view}`]) },
-    );
+    add("go", label, "Dashboard view", () => openPage(view), {
+      shortcut: shortcutLabel(setting("keybindings", {})[`view-${view}`]),
+    });
   }
   for (const view of typeof savedViewsDocument !== "undefined"
     ? savedViewsDocument?.views || []

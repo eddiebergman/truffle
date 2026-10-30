@@ -81,6 +81,8 @@ function keyboard() {
   search.oninput = () => {};
   search.closest = () => search;
   const c = browserContext({
+    window: new EventTarget(),
+    CustomEvent,
     navigator: { platform: "MacIntel" },
     terminalFocus: false,
     source: "github",
@@ -121,6 +123,7 @@ function keyboard() {
   const host = loadScripts(c, "static/workspace.js", {
     elements: { "#search": search },
   });
+  loadScripts(c, "static/views.js");
   const key = (value, target = rows[0], flags = {}) => {
     let consumed = false;
     dispatch(host.document.listeners.keydown, {
@@ -181,6 +184,14 @@ test("sidebar shortcuts use noun initials and preserve standard editing keys", (
   for (const key of ["a", "c", "v"]) {
     assert.equal(f.key(key, f.rows[0], { metaKey: true }), false);
   }
+});
+
+test("the Agents sidebar shortcut opens the workspace through its owner, as the sidebar does", () => {
+  const f = keyboard();
+  f.c.showAgentWorkspace = () => f.moves.push("agents");
+  f.key("a", f.rows[0], { metaKey: true, shiftKey: true });
+  assert.deepEqual(f.moves, ["agents"]);
+  assert.equal(f.c.source, "github");
 });
 
 test("browser tab keys and All work use the expected modifiers", () => {

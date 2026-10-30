@@ -593,10 +593,12 @@ test("an allowed child dismissal still aborts palette opening when its parent ve
   assert.equal(f.entryBuilds, 1);
 });
 
-test("go Agents uses the explicit workspace owner after saved-view handling while other pages retain their navigation", () => {
+test("go Agents uses the explicit workspace owner while other pages reset their saved view", () => {
   const events = [],
     state = { id: "captured-view" },
     c = browserContext({
+      window: new EventTarget(),
+      CustomEvent,
       source: "github",
       selectedAgentKey: "",
       chatPreparationContext: () => ({ availability: "available", total: 0 }),
@@ -618,8 +620,6 @@ test("go Agents uses the explicit workspace owner after saved-view handling whil
       },
       savedViewUsePage: (view) => events.push(`page:${view}`),
       showAgentWorkspace: () => {
-        assert.equal(c.source, "agents");
-        assert.equal(state.id, null);
         events.push("workspace-owner");
         c.selectedAgentKey = "embedded:first-live";
       },
@@ -630,7 +630,7 @@ test("go Agents uses the explicit workspace owner after saved-view handling whil
   c.commandEntries()
     .find((entry) => entry.title === "go: agents")
     .run();
-  assert.deepEqual(events, ["reset", "page:agents", "workspace-owner"]);
+  assert.deepEqual(events, ["workspace-owner"]);
   assert.equal(c.selectedAgentKey, "embedded:first-live");
   events.length = 0;
   state.id = "another-view";

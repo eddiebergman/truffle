@@ -593,9 +593,8 @@ function activateSavedView(id) {
     draft: cloneSavedView(view),
     base: cloneSavedView(view),
   };
-  source = view.parent;
-  applySavedViewPresentation(view);
-  savedViewRefresh();
+  persistSavedViewState();
+  navigate(view.parent, { savedView: "keep" });
 }
 function savedViewUsePage(page) {
   const viewState = currentSavedViewState(page);

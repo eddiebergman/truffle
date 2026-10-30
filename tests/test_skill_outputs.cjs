@@ -13,6 +13,7 @@ function helpers(globals = {}, options) {
       "static/sessions.js",
       "static/newsletters.js",
       "static/workspace.js",
+      "static/views.js",
     ],
     options,
   );
@@ -120,6 +121,8 @@ function inboxFixture({ disabled = false } = {}) {
   };
   const ctx = helpers(
     {
+      window: new EventTarget(),
+      CustomEvent,
       state,
       source: "all",
       document: { querySelector: () => button },

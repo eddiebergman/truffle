@@ -111,7 +111,11 @@ function fixture(handler = async () => ({ pending: [], receipts: [] })) {
     document,
     $: (key) => nodes.get(key) || null,
     el: (...args) => new Node(...args),
-    window: { addEventListener: (type, fn) => (events[type] = fn) },
+    window: {
+      addEventListener: (type, fn) => (events[type] = fn),
+      dispatchEvent() {},
+    },
+    CustomEvent,
     registerRenderHook: (name, run, options) =>
       hooks.push({ name, run, options }),
     api: async (path, payload) => {
@@ -551,9 +555,16 @@ test("an actual display owner paint failure remains unacknowledged and can be ex
       }
     },
   });
-  loadMore(f, [...appFiles, "static/features.js", "static/chat-results.js"], {
-    drop: [...appStubs, "showChatResults"],
-  });
+  loadMore(
+    f,
+    [
+      ...appFiles,
+      "static/features.js",
+      "static/chat-results.js",
+      "static/views.js",
+    ],
+    { drop: [...appStubs, "showChatResults"] },
+  );
   await f.c.refreshPresentations({ force: true });
   await f.ui().show.onclick();
   assert.equal(f.c.source, "chat-results");
@@ -581,9 +592,16 @@ test("shared display-items application retains existing results owner Back and f
     persist() {},
     render() {},
   });
-  loadMore(f, [...appFiles, "static/features.js", "static/chat-results.js"], {
-    drop: [...appStubs, "showChatResults"],
-  });
+  loadMore(
+    f,
+    [
+      ...appFiles,
+      "static/features.js",
+      "static/chat-results.js",
+      "static/views.js",
+    ],
+    { drop: [...appStubs, "showChatResults"] },
+  );
   await f.c.applyResultPresentation(mixed);
   assert.equal(f.c.source, "chat-results");
   assert.equal(evaluate(f.c, "chatSearchPage.command.title"), "Investigation");

@@ -50,6 +50,8 @@ function fixture() {
     return nodes.get(id);
   };
   const c = browserContext({
+    window: new EventTarget(),
+    CustomEvent,
     document,
     state: {
       sources: {
@@ -84,6 +86,7 @@ function fixture() {
     "static/documents.js",
     "static/app.js",
     "static/page-settings.js",
+    "static/views.js",
   ]);
   return {
     c,

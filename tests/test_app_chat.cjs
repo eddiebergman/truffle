@@ -236,6 +236,10 @@ function navigationFixture(options) {
     $: (selector) => nodes.get(selector),
     persist: () => calls.push("persist"),
     render: () => calls.push("render"),
+    navigate: (page, { savedView }) => {
+      c.source = page;
+      calls.push(["navigate", page, savedView]);
+    },
     savedViewCapturePresentation: (page) => calls.push(["capture", page]),
     openPreferences: async ({ category } = {}) => {
       if (!nodes.get("#settings-dialog").open) {
@@ -302,7 +306,10 @@ test("auxiliary page navigation captures work presentation and preserves every w
     const { c, calls, nodes } = navigationFixture();
     await c.appChatNavigate({ type: "navigate", destination });
     assert.equal(c.source, destination);
-    assert.deepEqual(calls, [["capture", "github"], "persist", "render"]);
+    assert.deepEqual(calls, [
+      ["capture", "github"],
+      ["navigate", destination, "keep"],
+    ]);
     assert.equal(nodes.get("#search").value, "retained work query");
     assert.equal(c.statusFilter.value, "blocked");
     assert.equal(c.scopePrefs.github, "retained-scope");
@@ -1191,6 +1198,8 @@ test("named render hook refreshes App chat visible context on results, saved cha
   nodes.set("#chat-results-back", {});
   const c = browserContext({
     persist() {},
+    window: new EventTarget(),
+    CustomEvent,
     state: { sessions: [record] },
     document: {
       querySelector: (selector) => nodes.get(selector),
@@ -1217,6 +1226,7 @@ test("named render hook refreshes App chat visible context on results, saved cha
     "static/app.js",
     "static/app-chat.js",
     "static/chat-results.js",
+    "static/views.js",
   ]);
   assert.ok(c.renderHooks.after.has("app-chat:context"));
   Object.assign(c, { source: "github", githubView: "review" });

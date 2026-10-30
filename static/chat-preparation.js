@@ -554,9 +554,7 @@ function preparationUI(attempt, context, options) {
     }
     context.closed.add(dialog);
     dialog.close();
-    source = "sessions";
-    persist();
-    render();
+    navigate("sessions", { savedView: "keep" });
   };
   const open = featureButton(
     "Open prepared chat",
