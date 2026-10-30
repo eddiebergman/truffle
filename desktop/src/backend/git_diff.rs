@@ -209,9 +209,11 @@ pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value
     drop(cache);
     Ok(value)
 }
-pub fn review_version(repo: &Repository, id: &str, requested: &str) -> Result<Value> {
-    let cwd = session_directory(repo, id, requested)?;
-    let identity = git(Path::new(&cwd), &["rev-parse", "--show-toplevel", "HEAD"])?;
+pub fn review_version(checkout: &str) -> Result<Value> {
+    let identity = git(
+        Path::new(checkout),
+        &["rev-parse", "--show-toplevel", "HEAD"],
+    )?;
     let root = PathBuf::from(
         identity
             .lines()

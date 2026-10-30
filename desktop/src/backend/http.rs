@@ -439,7 +439,7 @@ fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
                 super::session_context::read(repo, text(payload, "id"))?
             }
         }
-        "/api/session/review-draft" => super::reviews::action(repo, payload)?,
+        "/api/session/review-draft" => super::reviews::action(repo, &super::reviews::Git, payload)?,
         "/api/session/ci-investigation" => super::session_ci::investigation(repo, payload)?,
         "/api/session/ci-refresh" => browser(
             repo,

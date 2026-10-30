@@ -46,31 +46,35 @@ fn fixture() -> (
     (temp, repo, text(&record, "id").to_owned(), root)
 }
 fn append(repo: &Repository, id: &str, key: &str, author: &str) -> Value {
-    action(repo,&json!({"id":id,"action":"append","comments":[{"id":key,"author":author,"path":"code.txt","side":"additions","start":1,"end":2,"text":"Check this"}]})).unwrap()
+    action(repo,&Git,&json!({"id":id,"action":"append","comments":[{"id":key,"author":author,"path":"code.txt","side":"additions","start":1,"end":2,"text":"Check this"}]})).unwrap()
 }
 #[test]
 fn new_review_preserves_history_and_rejects_stale_or_active_resets() {
     let (_tmp, repo, id, _root) = fixture();
     let first = append(&repo, &id, "one", "You");
-    assert!(action(&repo, &json!({"id":id,"action":"new","revision":0})).is_err());
+    assert!(action(&repo, &Git, &json!({"id":id,"action":"new","revision":0})).is_err());
     let request = uuid();
     let active = action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request}),
     )
     .unwrap();
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"new","revision":active["review"]["revision"]})
     )
     .is_err());
     let done = action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":request,"state":"complete"}),
     )
     .unwrap();
     let fresh = action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"new","revision":done["review"]["revision"]}),
     )
     .unwrap();
@@ -80,7 +84,7 @@ fn new_review_preserves_history_and_rejects_stale_or_active_resets() {
         fresh["review"]["revision"].as_u64().unwrap(),
         done["review"]["revision"].as_u64().unwrap() + 1
     );
-    let history = action(&repo, &json!({"id":id,"action":"history"})).unwrap();
+    let history = action(&repo, &Git, &json!({"id":id,"action":"history"})).unwrap();
     assert_eq!(history["reviews"][0]["review"], done["review"]);
     assert_eq!(
         history["reviews"][0]["review"]["comments"][0]["text"],
@@ -88,24 +92,27 @@ fn new_review_preserves_history_and_rejects_stale_or_active_resets() {
     );
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":request,"state":"complete"})
     )
     .is_err());
-    let retained = action(&repo, &json!({"id":id,"action":"history"})).unwrap();
+    let retained = action(&repo, &Git, &json!({"id":id,"action":"history"})).unwrap();
     assert_eq!(retained, history);
     for n in 0..22 {
         let note = action(
             &repo,
+            &Git,
             &json!({"id":id,"action":"note","previousNote":"","note":format!("Round {n}")}),
         )
         .unwrap();
         action(
             &repo,
+            &Git,
             &json!({"id":id,"action":"new","revision":note["review"]["revision"]}),
         )
         .unwrap();
     }
-    let history = action(&repo, &json!({"id":id,"action":"history"})).unwrap();
+    let history = action(&repo, &Git, &json!({"id":id,"action":"history"})).unwrap();
     assert_eq!(arr(&history["reviews"]).len(), 20);
     assert_eq!(history["reviews"][0]["review"]["note"], "Round 21");
 }
@@ -126,6 +133,7 @@ fn multiple_sources_append_idempotently_and_ack_preserves_later_comments() {
     append(&repo, &id, "two", "Background agent");
     let result = action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"ack","commentIds":["one"],"note":""}),
     )
     .unwrap();
@@ -142,29 +150,32 @@ fn bad_batch_rolls_back_and_note_edit_is_guarded() {
     let (_tmp, repo, id, root) = fixture();
     let first = append(&repo, &id, "one", "You");
     let bad = json!({"id":id,"action":"append","comments":[{"id":"two","path":"code.txt","side":"additions","start":1,"text":"Valid"},{"path":"../outside","side":"additions","start":1,"text":"Invalid"}]});
-    assert!(action(&repo, &bad).is_err());
+    assert!(action(&repo, &Git, &bad).is_err());
     assert_eq!(
-        action(&repo, &json!({"id":id,"action":"read"})).unwrap(),
+        action(&repo, &Git, &json!({"id":id,"action":"read"})).unwrap(),
         first
     );
-    assert!(action(&repo,&json!({"id":id,"action":"append","comments":[{"path":"code.txt","root":root,"side":"additions","start":1,"fingerprint":"outdated","text":"Check"}]})).is_err());
+    assert!(action(&repo,&Git,&json!({"id":id,"action":"append","comments":[{"path":"code.txt","root":root,"side":"additions","start":1,"fingerprint":"outdated","text":"Check"}]})).is_err());
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"note","note":"first","previousNote":""}),
     )
     .unwrap();
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"note","note":"stale edit","previousNote":""})
     )
     .is_err());
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"ack","commentIds":[],"note":"old"}),
     )
     .unwrap();
     assert_eq!(
-        action(&repo, &json!({"id":id,"action":"read"})).unwrap()["review"]["note"],
+        action(&repo, &Git, &json!({"id":id,"action":"read"})).unwrap()["review"]["note"],
         "first"
     );
 }
@@ -174,11 +185,13 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     let request = uuid();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request,"root":root}),
     )
     .unwrap();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"note","note":"My summary","previousNote":""}),
     )
     .unwrap();
@@ -200,7 +213,7 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     second["pass"] = json!("performance");
     second["report"]["overall"]["author"] = json!("Agent B");
     workflows::register(&repo, &second).unwrap();
-    let result=action(&repo,&json!({"id":id,"action":"ack","commentIds":[],"assessmentIds":[first["review"]["assessments"][0]["id"]],"note":"old summary"})).unwrap();
+    let result=action(&repo,&Git,&json!({"id":id,"action":"ack","commentIds":[],"assessmentIds":[first["review"]["assessments"][0]["id"]],"note":"old summary"})).unwrap();
     assert_eq!(arr(&result["review"]["assessments"]).len(), 2);
     assert!(result["review"]["assessments"][0]["sentAt"].is_number());
     assert!(result["review"]["assessments"][1]["sentAt"].is_null());
@@ -218,27 +231,30 @@ fn completion_consumes_only_verified_feedback_and_keeps_later_comments_pending()
     let previous = uuid();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":previous}),
     )
     .unwrap();
-    action(&repo,&json!({"id":id,"action":"append","requestId":previous,"pass":"correctness","overall":{"author":"Claude","text":"Earlier review"}})).unwrap();
+    action(&repo,&Git,&json!({"id":id,"action":"append","requestId":previous,"pass":"correctness","overall":{"author":"Claude","text":"Earlier review"}})).unwrap();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":previous,"state":"cancelled"}),
     )
     .unwrap();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request}),
     )
     .unwrap();
     append(&repo, &id, "during", "You");
-    let read = action(&repo, &json!({"id":id,"action":"read"})).unwrap();
+    let read = action(&repo, &Git, &json!({"id":id,"action":"read"})).unwrap();
     let revision = read["review"]["revision"].clone();
     append(&repo, &id, "late", "You");
-    assert!(action(&repo,&json!({"id":id,"action":"status","requestId":request,"state":"complete","reviewedRevision":revision})).is_err());
-    let current = action(&repo, &json!({"id":id,"action":"read"})).unwrap();
-    let done=action(&repo,&json!({"id":id,"action":"status","requestId":request,"state":"complete","reviewedRevision":current["review"]["revision"]})).unwrap();
+    assert!(action(&repo,&Git,&json!({"id":id,"action":"status","requestId":request,"state":"complete","reviewedRevision":revision})).is_err());
+    let current = action(&repo, &Git, &json!({"id":id,"action":"read"})).unwrap();
+    let done=action(&repo,&Git,&json!({"id":id,"action":"status","requestId":request,"state":"complete","reviewedRevision":current["review"]["revision"]})).unwrap();
     assert_eq!(arr(&done["review"]["comments"]).len(), 3);
     assert!(arr(&done["review"]["comments"])
         .iter()
@@ -262,6 +278,7 @@ fn conversation_review_accepts_new_roots_and_marks_changed_versions_without_writ
     let request = uuid();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request}),
     )
     .unwrap();
@@ -272,16 +289,17 @@ fn conversation_review_accepts_new_roots_and_marks_changed_versions_without_writ
     .unwrap();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":request,"state":"reviewing"}),
     )
     .unwrap();
-    action(&repo,&json!({"id":id,"action":"append","requestId":request,"pass":"cross-repo","overall":{"author":"Agent","text":"Checked both repositories."},"comments":[{"id":"other-comment","root":other,"path":"code.txt","side":"additions","start":1,"end":1,"text":"Check the other repository."}]})).unwrap();
+    action(&repo,&Git,&json!({"id":id,"action":"append","requestId":request,"pass":"cross-repo","overall":{"author":"Agent","text":"Checked both repositories."},"comments":[{"id":"other-comment","root":other,"path":"code.txt","side":"additions","start":1,"end":1,"text":"Check the other repository."}]})).unwrap();
     let revision = repo.snapshot(false)["revision"].clone();
-    let checked = action(&repo, &json!({"id":id,"action":"check"})).unwrap();
+    let checked = action(&repo, &Git, &json!({"id":id,"action":"check"})).unwrap();
     assert_eq!(checked["review"]["freshness"], "current");
     assert_eq!(checked["review"]["comments"][0]["freshness"], "current");
     std::fs::write(other.join("code.txt"), "changed in second repository\n").unwrap();
-    let checked = action(&repo, &json!({"id":id,"action":"check"})).unwrap();
+    let checked = action(&repo, &Git, &json!({"id":id,"action":"check"})).unwrap();
     assert_eq!(checked["review"]["freshness"], "outdated");
     assert_eq!(checked["review"]["assessments"][0]["freshness"], "outdated");
     assert_eq!(checked["review"]["comments"][0]["freshness"], "outdated");
@@ -302,17 +320,20 @@ fn review_progress_accepts_dynamic_reviewers_and_parent_completion() {
     .is_err());
     let start = action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request,"root":root}),
     )
     .unwrap();
     assert_eq!(start["review"]["run"]["state"], "requested");
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":uuid(),"root":root})
     )
     .is_err());
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":uuid(),"state":"complete"})
     )
     .is_err());
@@ -331,11 +352,13 @@ fn review_progress_accepts_dynamic_reviewers_and_parent_completion() {
     assert_eq!(end["review"]["run"]["state"], "complete");
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"status","requestId":request,"state":"reviewing"})
     )
     .is_err());
     assert!(action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":uuid(),"root":root})
     )
     .is_ok());
@@ -347,10 +370,11 @@ fn review_check_command_summary_is_read_only_fresh_and_excludes_private_draft_pa
     let request = uuid();
     action(
         &repo,
+        &Git,
         &json!({"id":id,"action":"request","requestId":request}),
     )
     .unwrap();
-    action(&repo,&json!({"id":id,"action":"append","requestId":request,"pass":"correctness","overall":{"author":"Agent","text":"Private assessment text"}})).unwrap();
+    action(&repo,&Git,&json!({"id":id,"action":"append","requestId":request,"pass":"correctness","overall":{"author":"Agent","text":"Private assessment text"}})).unwrap();
     repo.transaction(|s| {
         let review = &mut s["sessions"][0]["reviewDraft"];
         review["privateNs"] = json!("private-summary-canary");

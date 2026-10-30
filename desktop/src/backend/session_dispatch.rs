@@ -1,4 +1,5 @@
 //! Conservative tracked submission over the existing, generation-unfenced PTY transport.
+use super::reviews::Versions;
 use super::terminals::Presence;
 use super::{
     arr, checked, domain, json, now, sessions, sid, text, uuid, Error, Repository, Result, Value,
@@ -628,12 +629,12 @@ fn prepare_with(
         Value::Null
     };
     let baseline = if kind == Kind::ReviewRequest {
-        super::reviews::versions(repo, &id)?
+        super::reviews::Git.of(&chat)
     } else {
         Value::Null
     };
     let checked = if kind == Kind::ReviewFeedback {
-        super::reviews::action(repo, &json!({"id":id,"action":"check"}))?["review"].clone()
+        super::reviews::check(repo, &super::reviews::Git, &id)?
     } else {
         Value::Null
     };

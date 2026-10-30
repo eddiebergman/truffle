@@ -306,9 +306,12 @@ fn routine_snapshots_omit_review_bodies_without_changing_exports_or_history() {
         export["sessions"][0]["reviewHistory"]["entries"][0]["review"]["note"],
         "Previous review"
     );
-    let history =
-        super::super::reviews::action(&repo, &json!({"id":record["id"],"action":"history"}))
-            .unwrap();
+    let history = super::super::reviews::action(
+        &repo,
+        &super::super::reviews::Git,
+        &json!({"id":record["id"],"action":"history"}),
+    )
+    .unwrap();
     assert_eq!(
         history["reviews"],
         export["sessions"][0]["reviewHistory"]["entries"]

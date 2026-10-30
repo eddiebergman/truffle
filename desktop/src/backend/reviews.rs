@@ -18,27 +18,28 @@ fn valid_pass(pass: &str) -> bool {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
 }
-pub(super) fn versions(repo: &Repository, id: &str) -> Result<Value> {
-    let record = {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        sessions::get(&state, id)?.clone()
-    };
-    let roots = std::iter::once(text(&record, "cwd").to_owned())
-        .chain(
-            arr(&record["worktrees"])
-                .iter()
-                .map(|t| text(t, "path").to_owned()),
-        )
-        .filter(|r| !r.is_empty())
-        .collect::<std::collections::BTreeSet<_>>();
-    let mut result = json!({});
-    for root in roots {
-        match super::git_diff::review_version(repo, id, &root) {
-            Ok(v) => result[text(&v, "root")] = v["version"].clone(),
-            Err(_) => result[&root] = Value::Null,
+/// Supplies the checkout versions a review covers, keyed by Git root.
+pub(super) trait Versions {
+    /// Null marks a root whose version cannot be verified.
+    fn of(&self, chat: &Value) -> Value;
+}
+pub(super) struct Git;
+impl Versions for Git {
+    fn of(&self, chat: &Value) -> Value {
+        let roots = std::iter::once(text(chat, "cwd"))
+            .chain(arr(&chat["worktrees"]).iter().map(|t| text(t, "path")))
+            .filter(|r| !r.is_empty())
+            .map(str::to_owned)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut result = json!({});
+        for root in roots {
+            match super::git_diff::review_version(&root) {
+                Ok(v) => result[text(&v, "root")] = v["version"].clone(),
+                Err(_) => result[&root] = Value::Null,
+            }
         }
+        result
     }
-    Ok(result)
 }
 fn freshness(before: &Value, current: &Value) -> &'static str {
     let Some(before) = before.as_object().filter(|m| !m.is_empty()) else {
@@ -62,8 +63,14 @@ fn freshness(before: &Value, current: &Value) -> &'static str {
     }
     "current"
 }
-fn check(repo: &Repository, id: &str, mut review: Value) -> Result<Value> {
-    let current = versions(repo, id)?;
+/// Mark each part of the draft current, outdated or unverified against the checkouts. Writes nothing.
+pub(super) fn check(repo: &Repository, versions: &impl Versions, id: &str) -> Result<Value> {
+    let chat = {
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        sessions::get(&state, id)?.clone()
+    };
+    let current = versions.of(&chat);
+    let mut review = draft(&chat);
     let mut assessments = arr(&review["assessments"]);
     for assessment in &mut assessments {
         assessment["freshness"] = json!(freshness(&assessment["versions"], &current));
@@ -82,7 +89,7 @@ fn check(repo: &Repository, id: &str, mut review: Value) -> Result<Value> {
     review["comments"] = json!(comments);
     review["freshness"] = json!(freshness(&review["run"]["versions"], &current));
     review["freshnessCheckedAt"] = json!(now());
-    Ok(json!({"id":id,"review":review}))
+    Ok(review)
 }
 fn summary_identity(repo: &Repository, value: &Value, max: usize) -> Result<Value> {
     let text = value
@@ -131,8 +138,7 @@ pub fn check_summary(repo: &Repository, args: &Value) -> Result<Value> {
             "Review freshness summaries support up to 100 comments and 100 assessments.",
         ));
     }
-    let checked = action(repo, &json!({"id":id,"action":"check"}))?;
-    let review = &checked["review"];
+    let review = &check(repo, &Git, &id)?;
     let revision = review["revision"]
         .as_u64()
         .filter(|value| *value <= 9_007_199_254_740_991)
@@ -523,7 +529,7 @@ fn complete_guidance(state: &mut Value, operation: &str, p: &Value, review: &Val
         super::guidance::complete(state, "review.pending-comments");
     }
 }
-pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
+pub(super) fn action(repo: &Repository, versions: &impl Versions, p: &Value) -> Result<Value> {
     let id = text(p, "id");
     let operation = text(p, "action");
     if operation == "history" {
@@ -536,20 +542,18 @@ pub fn action(repo: &Repository, p: &Value) -> Result<Value> {
         }
         return Ok(json!({"id":id,"reviews":arr(&history["entries"]),"limit":20}));
     }
-    if operation == "read" || operation == "check" {
+    if operation == "check" {
+        return Ok(json!({"id":id,"review":check(repo, versions, id)?}));
+    }
+    if operation == "read" {
         let state = repo.state.lock().map_err(|_| Error::io())?;
-        let review = draft(sessions::get(&state, id)?);
-        drop(state);
-        return if operation == "check" {
-            check(repo, id, review)
-        } else {
-            Ok(json!({"id":id,"review":review}))
-        };
+        return Ok(json!({"id":id,"review":draft(sessions::get(&state, id)?)}));
     }
     let baseline = if operation == "request"
         || operation == "status" && p["state"] == "reviewing" && text(p, "pass").is_empty()
     {
-        Some(versions(repo, id)?)
+        let state = repo.state.lock().map_err(|_| Error::io())?;
+        Some(versions.of(sessions::get(&state, id)?))
     } else {
         None
     };

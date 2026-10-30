@@ -773,7 +773,7 @@ fn register_review(repo: &Repository, p: &Value) -> Result<Value> {
     if let Some(overall) = p["report"].get("overall") {
         request["overall"] = overall.clone();
     }
-    super::reviews::action(repo, &request)
+    super::reviews::action(repo, &super::reviews::Git, &request)
 }
 fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
     let path = directory(text(p, "path"))?;
