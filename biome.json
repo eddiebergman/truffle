@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": { "includes": ["static/*.css"] },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "complexity": { "noImportantStyles": "off" },
+      "nursery": { "noDuplicateSelectors": "error" },
+      "style": {
+        "noDescendingSpecificity": "error",
+        "noHexColors": "error",
+        "noValueAtRule": "error"
+      },
+      "suspicious": { "noEmptySource": "error" }
+    }
+  }
+}
