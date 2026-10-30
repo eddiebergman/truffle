@@ -43,7 +43,6 @@ function openSkillEditor({
   current.onSaved = onSaved;
   current.acceptedText = "Skill saved.";
   current.ui.inspect.textContent = returnLabel;
-  current.ui.refresh.onclick = () => refreshSkillEditor(current);
   dialog.showModal();
   return current;
 }
@@ -93,7 +92,7 @@ async function readSkillSchedule(current) {
     current.conflict = false;
     current.ui.message.textContent = "";
     current.ui.refresh.textContent = "Refresh view";
-    current.ui.refresh.onclick = () => refreshSkillEditor(current);
+    current.ui.refresh.onclick = () => refreshFeatureForm(current);
     current.ui.refresh.hidden = true;
   } catch (error) {
     if (current.isCurrent()) {
@@ -128,63 +127,8 @@ function openSkillSchedule(preset) {
   const current = createFeatureForm(dialog, form, preset.id);
   current.kind = "schedule";
   current.acceptedText = "Schedule saved.";
-  current.ui.refresh.onclick = () => refreshSkillEditor(current);
   dialog.showModal();
   return readSkillSchedule(current);
-}
-async function refreshSkillEditor(current) {
-  if (
-    !current.isCurrent() ||
-    current.pending ||
-    current.refreshing ||
-    !["accepted", "unknown"].includes(current.result?.kind)
-  ) {
-    return;
-  }
-  current.refreshing = true;
-  holdFormFocus(current.host, current);
-  freezeFeatureForm(current, true);
-  current.ui.refresh.disabled = true;
-  try {
-    const reads = [loadStateSnapshot({ attempts: 2 })];
-    if (current.kind === "preset") {
-      reads.push(loadArtifactLibrary(true));
-    }
-    const results = await Promise.all(reads);
-    if (results.some((result) => !result.accepted)) {
-      throw new Error("The Skills view could not refresh.");
-    }
-    if (!current.isCurrent()) {
-      return;
-    }
-    render();
-    if (current.result.kind === "accepted") {
-      current.dialog.close();
-      toast(current.acceptedText);
-    } else {
-      current.ui.message.textContent =
-        "The save outcome is unknown. Skills were refreshed. Inspect them before saving again; this draft was not resubmitted.";
-    }
-  } catch {
-    if (current.isCurrent()) {
-      current.ui.message.textContent = localWriteMessage(
-        current.result,
-        current.acceptedText,
-      );
-    }
-  } finally {
-    current.refreshing = false;
-    if (current.isCurrent()) {
-      freezeFeatureForm(current, true);
-      current.ui.refresh.disabled = false;
-      restoreFormFocus(
-        current,
-        current.result.kind === "unknown"
-          ? current.ui.inspect
-          : current.ui.refresh,
-      );
-    }
-  }
 }
 async function saveSkillEditor(current, name, args) {
   let invalidated = false,
@@ -226,8 +170,11 @@ async function saveSkillEditor(current, name, args) {
     },
     acceptedText: current.acceptedText,
     afterReady: async () => {
-      if (savedError) {
-        throw savedError;
+      // The caller's failure is reported once; Refresh view then closes normally.
+      if (savedError !== null) {
+        const error = savedError;
+        savedError = null;
+        throw error;
       }
       if (current.kind === "preset") {
         const library = await loadArtifactLibrary(true);
@@ -237,6 +184,8 @@ async function saveSkillEditor(current, name, args) {
       }
       current.dialog.close();
     },
+    reloadUnknown:
+      current.kind === "preset" ? () => loadArtifactLibrary(true) : null,
     onConflict:
       current.kind === "schedule"
         ? (result) => {

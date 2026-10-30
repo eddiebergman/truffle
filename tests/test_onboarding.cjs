@@ -12,7 +12,6 @@ function installSkillEditorInitializer(c) {
     c.lastSkillEditor = current;
     return current;
   };
-  c.refreshSkillEditor = () => {};
   loadScripts(c, [
     "static/client.js",
     "static/documents.js",

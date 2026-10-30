@@ -225,7 +225,9 @@ test("unknown Add remains locked after state and library refresh and never guess
   f.open({ onSaved: (id) => ids.push(id) });
   fillAdd(f);
   await f.send(f.add);
+  assert.equal(f.libraries, 0);
   await f.ui(f.add).button("Refresh view").onclick();
+  assert.equal(f.libraries, 1);
   await f.send(f.add);
   assert.deepEqual(ids, []);
   assert.equal(f.add.save.disabled, true);
@@ -236,10 +238,12 @@ test("unknown Add remains locked after state and library refresh and never guess
     1,
   );
 });
-test("local accepted-ID callback failure stays accepted pending instead of transport unknown", async () => {
+test("local accepted-ID callback failure stays accepted pending instead of transport unknown, and Refresh view closes", async () => {
+  let callbacks = 0;
   const f = fixture();
   const current = f.open({
     onSaved: () => {
+      callbacks++;
       throw Error("Return UI unavailable");
     },
   });
@@ -252,6 +256,9 @@ test("local accepted-ID callback failure stays accepted pending instead of trans
     f.ui(f.add).message.textContent,
     /Skill saved.*could not refresh/,
   );
+  await f.ui(f.add).button("Refresh view").onclick();
+  assert.equal(f.add.dialog.open, false);
+  assert.equal(callbacks, 1);
 });
 test("pending Add blocks duplicate/cancel and holds focused Close before native disabling", async () => {
   const saved = deferred(),
@@ -373,6 +380,7 @@ test("unknown schedule stays locked after successful read-only refresh; pending 
   await f.ui(f.schedule).button("Refresh view").onclick();
   assert.equal(f.schedule.save.disabled, true);
   assert.match(f.ui(f.schedule).message.textContent, /outcome is unknown/);
+  assert.equal(f.libraries, 0);
   assert.equal(
     f.calls.filter((call) => call.payload?.name === "skills.schedule").length,
     1,
