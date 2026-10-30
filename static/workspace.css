@@ -462,7 +462,20 @@ main {
 }
 
 .artifact-row {
+  display: grid;
+  grid-template-columns: 65px 45px minmax(120px, 1fr) minmax(0, 220px) 28px;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 4px 0;
   min-height: 34px;
+}
+
+@media (max-width: 800px) {
+  .artifact-row {
+    grid-template-columns: 45px 35px minmax(0, 1fr) 28px;
+    gap: 6px;
+  }
 }
 
 .agent-results-section .artifact-row {
@@ -475,8 +488,14 @@ main {
   padding-right: 20px;
 }
 
+/* Changes: time, state transition, then the source-linked title. */
+
 /* Changes are a scan list: one compact line, with timestamps first. */
 .change-row {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  align-items: center;
+  flex-wrap: nowrap;
   grid-template-columns: 94px minmax(0, 1fr) minmax(0, max-content) 20px;
   gap: 8px;
   min-height: 27px;
@@ -484,6 +503,11 @@ main {
 }
 
 .change-row time.change-timestamp {
+  margin: 0;
+  display: flex;
+  color: color-mix(in srgb, var(--bg) 30%, var(--text));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   flex-direction: row;
   align-items: center;
   gap: 6px;
@@ -557,12 +581,37 @@ textarea {
 }
 
 input,
-textarea,
-.performance-panel,
-.log-details {
+textarea {
   background: var(--panel);
   color: var(--text);
   border-color: var(--line);
+}
+
+.performance-panel {
+  margin: 12px 0 20px;
+  padding: 12px 15px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.log-details {
+  margin: 0 0 14px 102px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+@media (max-width: 760px) {
+  .log-details {
+    margin-left: 0;
+    padding: 10px;
+  }
 }
 
 .button {
@@ -683,8 +732,6 @@ dialog label select,
     11.5px/1.6 ui-monospace,
     SFMono-Regular,
     monospace;
-  background: var(--panel);
-  color: var(--text);
   border-radius: 4px;
   padding: 2px 5px;
 }
@@ -760,14 +807,29 @@ dialog label select,
 .history-time,
 .history-work,
 .artifact-time,
-.artifact-format,
 .skill-timing,
 .agent-type,
-.change-ref,
-.change-arrow,
 .nav-item b,
 .skill-name small,
 .change-timestamp small {
+  color: var(--muted);
+}
+
+.artifact-format {
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.change-ref {
+  font-size: 10px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.change-arrow {
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -2570,6 +2632,7 @@ summary::-webkit-details-marker {
 }
 
 #command-query {
+  width: 100%;
   padding: 10px 12px;
   border-radius: 7px;
   font-size: 14px;
@@ -2582,6 +2645,7 @@ summary::-webkit-details-marker {
 }
 
 #command-results {
+  overflow: auto;
   max-height: 42dvh;
   margin-top: 0;
   display: flex;
