@@ -5,6 +5,7 @@ pub mod chat_edit;
 pub mod chat_preparation;
 pub mod chat_search;
 pub mod chat_terminal;
+mod checkouts;
 pub mod commands;
 pub mod config;
 pub mod config_status;

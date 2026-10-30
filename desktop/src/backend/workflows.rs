@@ -4,7 +4,7 @@ use super::{
     arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
     Error, PathBuf, Repository, Result, Value,
 };
-use super::{artifacts, domain, reviews, sessions, terminal};
+use super::{artifacts, checkouts, domain, reviews, sessions, terminal};
 use crate::backend::operations::{self, Caller};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
@@ -607,33 +607,6 @@ impl Recipe for Recover<'_> {
         })
     }
 }
-/// Git metadata is read only during explicit registration, never during UI reads.
-pub(super) fn worktree_metadata(cwd: &str) -> Option<Value> {
-    let output = super::git::run(
-        std::path::Path::new(cwd),
-        &[
-            "rev-parse",
-            "--path-format=absolute",
-            "--show-toplevel",
-            "--git-common-dir",
-            "--abbrev-ref",
-            "HEAD",
-        ],
-    )
-    .ok()?;
-    let mut lines = output.lines();
-    let path = directory(lines.next()?).ok()?;
-    let common = PathBuf::from(lines.next()?);
-    let branch = lines.next()?.to_owned();
-    let repo_path = if common.file_name()?.to_str()? == ".git" {
-        directory(common.parent()?.to_str()?).ok()?
-    } else {
-        path.clone()
-    };
-    Some(
-        json!({"path":path,"repoPath":repo_path,"branch":branch,"isWorktree":path!=repo_path,"updatedAt":now()}),
-    )
-}
 #[derive(Clone, Copy, PartialEq)]
 enum FolderIntent {
     Replace,
@@ -775,7 +748,7 @@ fn register_review(repo: &Repository, p: &Value) -> Result<Value> {
 }
 fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
     let path = directory(text(p, "path"))?;
-    let metadata = worktree_metadata(&path).ok_or_else(|| {
+    let metadata = checkouts::metadata(&path).ok_or_else(|| {
         Error::new("Choose an existing Git repository or worktree with a commit.")
     })?;
     let record = sessions::get(&repo.state.lock().unwrap(), text(p, "id"))?.clone();
@@ -1015,7 +988,7 @@ fn register_resolving(
     p["sessionId"] = json!(sid(text(&p, "sessionId"))?);
     let imported = resolve_urls(repo, &p, resolve)?;
     let record = repo.transaction(|s| save_linked(s, &p, &imported, SaveIntent::Register))?;
-    let metadata = worktree_metadata(text(&record, "cwd"));
+    let metadata = checkouts::metadata(text(&record, "cwd"));
     finish_registration(
         repo,
         &record,

@@ -24,19 +24,7 @@ pub(super) trait Versions {
 pub(super) struct Git;
 impl Versions for Git {
     fn of(&self, chat: &Value) -> Value {
-        let roots = std::iter::once(text(chat, "cwd"))
-            .chain(arr(&chat["worktrees"]).iter().map(|t| text(t, "path")))
-            .filter(|r| !r.is_empty())
-            .map(str::to_owned)
-            .collect::<std::collections::BTreeSet<_>>();
-        let mut result = json!({});
-        for root in roots {
-            match super::git_diff::review_version(&root) {
-                Ok(v) => result[text(&v, "root")] = v["version"].clone(),
-                Err(_) => result[&root] = Value::Null,
-            }
-        }
-        result
+        super::checkouts::versions(chat)
     }
 }
 #[cfg(test)]
@@ -81,8 +69,7 @@ pub(super) fn check(repo: &Repository, versions: &impl Versions, id: &str) -> Re
     review["assessments"] = json!(assessments);
     let mut comments = arr(&review["comments"]);
     for comment in &mut comments {
-        let stamp =
-            super::git_diff::review_file_stamp(text(comment, "root"), text(comment, "path"));
+        let stamp = super::checkouts::file_version(text(comment, "root"), text(comment, "path"));
         comment["freshness"] = json!(match (comment["fileStamp"].as_str(), stamp.as_deref()) {
             (Some(a), Some(b)) if a == b => "current",
             (Some(_), Some(_)) => "outdated",
@@ -154,7 +141,7 @@ fn anchor_comments(repo: &Repository, id: &str, p: &Value, comments: &mut [Value
         if author.len() > 120 {
             return Err(Error::new("Comment author exceeds 120 bytes."));
         }
-        let stamp = super::git_diff::review_file_stamp(text(file, "root"), text(file, "path"));
+        let stamp = super::checkouts::file_version(text(file, "root"), text(file, "path"));
         *comment = json!({"id":if key.is_empty(){uuid()}else{key},"author":if author.is_empty(){"You"}else{author},"createdAt":now(),"fileStamp":stamp,"requestId":p["requestId"],"path":file["path"],"root":file["root"],"side":side,"start":start,"end":end,"text":text(comment,"text").trim(),"baseCommit":file["baseCommit"],"fingerprint":file["fingerprint"],"excerpt":content.split('\n').skip(first-1).take((last-first+1).min(20)).collect::<Vec<_>>().join("\n")});
     }
     Ok(())

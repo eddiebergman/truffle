@@ -1,10 +1,10 @@
 //! Loopback API and authenticated agent inbox. No UI-specific persistence.
 use super::chat_preparation::{self, Kind};
+use super::{artifacts, workflows};
 use super::{
-    arr, checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
+    checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
     Result, Value,
 };
-use super::{artifacts, workflows};
 use crate::backend::operations::Caller;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -383,12 +383,8 @@ fn skills_catalog(repo: &Repository, payload: &Value) -> Result<Value> {
     }
     let records = sessions::all(&*repo.state.lock().map_err(|_| Error::io())?).to_vec();
     for row in records {
-        let p = PathBuf::from(text(&row, "cwd"));
-        if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
-            projects.push(p);
-        }
-        for tree in arr(&row["worktrees"]) {
-            let p = PathBuf::from(text(&tree, "path"));
+        for path in super::checkouts::of(&row) {
+            let p = PathBuf::from(path);
             if p.is_absolute() && p.is_dir() && !projects.contains(&p) {
                 projects.push(p);
             }

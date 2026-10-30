@@ -499,12 +499,10 @@ fn request_prompt(
         text(record, "id"),
         text(run, "id")
     );
-    let mut roots = vec![record["cwd"].clone()];
-    roots.extend(
-        arr(&record["worktrees"])
-            .iter()
-            .map(|tree| tree["path"].clone()),
-    );
+    let mut roots = super::checkouts::of(record)
+        .into_iter()
+        .map(|path| json!(path))
+        .collect::<Vec<_>>();
     roots.extend(
         run["versions"]
             .as_object()

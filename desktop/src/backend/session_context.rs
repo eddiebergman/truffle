@@ -176,7 +176,7 @@ fn worktrees(trees: &[Value]) -> Result<Vec<Worktree>> {
         .iter()
         .map(|tree| {
             let path = directory(text(tree, "path"))?;
-            let metadata = workflows::worktree_metadata(&path)
+            let metadata = super::checkouts::metadata(&path)
                 .ok_or_else(|| Error::new("Choose an existing Git checkout with a commit."))?;
             if tree.get("primary").is_some_and(|v| !v.is_boolean()) {
                 return Err(Error::new("Worktree primary must be true or false."));

@@ -1,10 +1,10 @@
-use super::{arr, git, json, sessions, text, Error, PathBuf, Repository, Result, Value};
+use super::{arr, checkouts, git, json, sessions, text, Error, PathBuf, Repository, Result, Value};
 use serde::Serialize;
 use std::{
     fs,
     io::Read,
     os::unix::fs::{DirBuilderExt, OpenOptionsExt},
-    path::{Component, Path},
+    path::Path,
     time::{Duration, Instant},
 };
 
@@ -26,22 +26,11 @@ struct FileChange {
 struct Comparison {
     root: PathBuf,
     base: String,
-    base_ref: String,
+    base_ref: &'static str,
     branch: String,
     files: Vec<FileChange>,
 }
 
-fn valid_path(path: &str) -> Result<PathBuf> {
-    let path = PathBuf::from(path);
-    if path.as_os_str().is_empty()
-        || path
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_)))
-    {
-        return Err(Error::new("Git returned an invalid file path."));
-    }
-    Ok(path)
-}
 fn parse_numstat(output: &str) -> Result<Vec<FileChange>> {
     output
         .split('\0')
@@ -53,7 +42,7 @@ fn parse_numstat(output: &str) -> Result<Vec<FileChange>> {
             let path = parts
                 .next()
                 .ok_or_else(|| Error::new("Invalid Git diff statistics."))?;
-            valid_path(path)?;
+            checkouts::valid_path(path)?;
             let number = |s: &str| {
                 if s == "-" {
                     Ok(None)
@@ -96,19 +85,8 @@ fn compare(cwd: &Path) -> Result<Comparison> {
             .map_err(|_| Error::new("This agent's working directory is not a Git checkout."))?
             .trim_end_matches('\n'),
     );
-    let base_ref = ["refs/remotes/origin/main", "refs/heads/main"]
-        .into_iter()
-        .find(|name| {
-            git::run(
-                &root,
-                &["rev-parse", "--verify", &format!("{name}^{{commit}}")],
-            )
-            .is_ok()
-        })
-        .ok_or_else(|| {
-            Error::new("No main branch is available locally. Fetch main, then retry.")
-        })?;
-    let base = git::run(&root, &["merge-base", base_ref, "HEAD"])
+    let base = checkouts::base(&root)?;
+    let base_commit = git::run(&root, &["merge-base", &base.commit, "HEAD"])
         .map_err(|_| Error::new("This branch has no shared ancestor with main."))?
         .trim()
         .to_owned();
@@ -126,14 +104,14 @@ fn compare(cwd: &Path) -> Result<Comparison> {
             "--no-renames",
             "--no-ext-diff",
             "--no-textconv",
-            &base,
+            &base_commit,
             "--",
         ],
     )?)?;
     let untracked = git::run(&root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
     let mut budget = 20 * 1024 * 1024;
     for name in untracked.split('\0').filter(|s| !s.is_empty()) {
-        let path = valid_path(name)?;
+        let path = checkouts::valid_path(name)?;
         // A symlink is reported, but its target is never read as an untracked file.
         let additions = untracked_lines(&root.join(path), &mut budget)?;
         files.push(FileChange {
@@ -149,12 +127,8 @@ fn compare(cwd: &Path) -> Result<Comparison> {
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Comparison {
         root,
-        base,
-        base_ref: base_ref
-            .trim_start_matches("refs/")
-            .trim_start_matches("remotes/")
-            .trim_start_matches("heads/")
-            .into(),
+        base: base_commit,
+        base_ref: base.name,
         branch,
         files,
     })
@@ -169,23 +143,13 @@ fn overview(cwd: &Path) -> Result<Value> {
 }
 fn session_directory(repo: &Repository, id: &str, requested: &str) -> Result<String> {
     let record = sessions::get(&*repo.state.lock().map_err(|_| Error::io())?, id)?.clone();
-    if requested.is_empty() {
-        return Ok(text(&record, "cwd").to_owned());
-    }
-    let canonical = Path::new(requested).canonicalize().ok();
-    let same_checkout = |path: &str| {
-        !path.is_empty() && canonical.is_some() && Path::new(path).canonicalize().ok() == canonical
+    let directory = if requested.is_empty() {
+        text(&record, "cwd")
+    } else {
+        checkouts::find(&record, requested)
+            .ok_or_else(|| Error::new("This checkout is not linked to the agent session."))?
     };
-    if same_checkout(text(&record, "cwd"))
-        || arr(&record["worktrees"])
-            .iter()
-            .any(|t| same_checkout(text(t, "path")))
-    {
-        return Ok(requested.to_owned());
-    }
-    Err(Error::new(
-        "This checkout is not linked to the agent session.",
-    ))
+    Ok(directory.to_owned())
 }
 pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value> {
     let cwd = session_directory(repo, id, requested)?;
@@ -200,68 +164,6 @@ pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value
     drop(cache);
     Ok(value)
 }
-pub fn review_version(checkout: &str) -> Result<Value> {
-    let identity = git::run(
-        Path::new(checkout),
-        &["rev-parse", "--show-toplevel", "HEAD"],
-    )?;
-    let root = PathBuf::from(
-        identity
-            .lines()
-            .next()
-            .ok_or_else(|| Error::new("Git root unavailable."))?,
-    );
-    let status = git::run(
-        &root,
-        &["status", "--porcelain=v1", "--untracked-files=all", "-z"],
-    )?;
-    let main = git::run(
-        &root,
-        &["rev-parse", "--verify", "refs/remotes/origin/main"],
-    )
-    .or_else(|_| git::run(&root, &["rev-parse", "--verify", "refs/heads/main"]))?;
-    let mut stamp = identity + &main + &status;
-    let mut entries = status.split('\0').filter(|s| !s.is_empty());
-    let mut count = 0;
-    while let Some(entry) = entries.next() {
-        count += 1;
-        if count > MAX_FILES {
-            return Err(Error::new("Too many files to verify review freshness."));
-        }
-        let path = entry
-            .get(3..)
-            .ok_or_else(|| Error::new("Invalid Git status."))?;
-        match fs::symlink_metadata(root.join(valid_path(path)?)) {
-            Ok(meta) => stamp.push_str(&metadata_stamp(&meta)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => stamp.push_str("deleted"),
-            Err(error) => return Err(error.into()),
-        }
-        if entry[..2].contains(['R', 'C']) {
-            entries.next();
-        }
-    }
-    Ok(json!({"root":root,"version":context_kit::sha256(stamp.as_bytes())}))
-}
-fn metadata_stamp(m: &fs::Metadata) -> String {
-    use std::os::unix::fs::MetadataExt;
-    format!(
-        "{}:{}:{}:{}:{}:{}",
-        m.ino(),
-        m.len(),
-        m.mtime(),
-        m.mtime_nsec(),
-        m.ctime(),
-        m.ctime_nsec()
-    )
-}
-pub fn review_file_stamp(root: &str, path: &str) -> Option<String> {
-    let target = Path::new(root).join(valid_path(path).ok()?);
-    match fs::symlink_metadata(target) {
-        Ok(m) => Some(metadata_stamp(&m)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some("deleted".into()),
-        Err(_) => None,
-    }
-}
 pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str) -> Result<Value> {
     let cwd = session_directory(repo, id, requested)?;
     let comparison = compare(Path::new(&cwd))?;
@@ -270,7 +172,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
         .iter()
         .find(|f| f.path == path)
         .ok_or_else(|| Error::new("This file is no longer in the diff. Refresh the file list."))?;
-    let relative = valid_path(path)?;
+    let relative = checkouts::valid_path(path)?;
     let target = comparison.root.join(&relative);
     let spec = format!("{}:{}", comparison.base, path);
     let limit = 512 * 1024;
@@ -481,7 +383,7 @@ pub fn zed_arguments(cwd: &Path, snapshots: &Path) -> Result<Vec<String>> {
         let mut args = vec![];
         let mut total = 0;
         for file in &comparison.files {
-            let relative = valid_path(&file.path)?;
+            let relative = checkouts::valid_path(&file.path)?;
             let target = comparison.root.join(&relative);
             let spec = format!("{}:{}", comparison.base, file.path);
             let bytes = if file.untracked

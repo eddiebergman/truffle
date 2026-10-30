@@ -1794,12 +1794,8 @@ fn strip_code_fence(t: &str) -> &str {
 fn source_roots(record: &Value) -> Vec<PathBuf> {
     let cwd = expand(text(record, "cwd"));
     let mut roots = vec![cwd.clone()];
-    if let Ok(list) = super::git::run(&cwd, &["worktree", "list", "--porcelain"]) {
-        for line in list.lines() {
-            if let Some(path) = line.strip_prefix("worktree ") {
-                roots.push(PathBuf::from(path));
-            }
-        }
+    if let Ok(trees) = super::checkouts::worktrees(&cwd) {
+        roots.extend(trees.into_iter().map(|tree| tree.path));
     }
     roots
         .into_iter()
@@ -2351,18 +2347,12 @@ fn recommended_directory(raw: &Value) -> Option<String> {
         }
         let branch = text(&item["data"], "branch");
         if !branch.is_empty() {
-            if let Ok(list) = super::git::run(&root, &["worktree", "list", "--porcelain"]) {
-                let mut path = None;
-                for line in list.lines() {
-                    if let Some(p) = line.strip_prefix("worktree ") {
-                        path = Some(PathBuf::from(p));
-                    }
-                    if line == format!("branch refs/heads/{branch}") {
-                        if let Some(path) = path.as_ref().filter(|p| p.is_dir()) {
-                            return Some(path.to_string_lossy().into());
-                        }
-                    }
-                }
+            let trees = super::checkouts::worktrees(&root).unwrap_or_default();
+            if let Some(tree) = trees
+                .into_iter()
+                .find(|tree| tree.branch.as_deref() == Some(branch) && tree.path.is_dir())
+            {
+                return Some(tree.path.to_string_lossy().into());
             }
         }
         return Some(root.to_string_lossy().into());

@@ -332,11 +332,9 @@ fn context(repo: &Repository, p: &Value) -> Result<BTreeMap<String, String>> {
     let cwd = if text(p, "cwd").is_empty() {
         text(&record, "cwd")
     } else {
-        text(p, "cwd")
+        super::checkouts::find(&record, text(p, "cwd"))
+            .ok_or_else(|| Error::new("Choose a worktree linked to this chat."))?
     };
-    if cwd != text(&record, "cwd") && !arr(&record["worktrees"]).iter().any(|t| t["path"] == cwd) {
-        return Err(Error::new("Choose a worktree linked to this chat."));
-    }
     result.insert("WORKTREE_PATH".into(), cwd.into());
     for (field, source, prefix) in [("prId", "github", "PR"), ("ticketId", "linear", "TICKET")] {
         if text(p, field).is_empty() {
