@@ -15,6 +15,7 @@ mod document;
 pub mod feedback;
 mod field_edit;
 pub mod guidance;
+mod headless;
 mod local_files;
 pub mod onboarding;
 pub mod operations;
