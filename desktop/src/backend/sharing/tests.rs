@@ -876,3 +876,20 @@ fn folder_configuration_cas_and_profiles_preserve_existing_gcs_configuration() {
     external["version"] = json!(2);
     assert!(parse_config(&external).is_err());
 }
+#[test]
+fn first_configuration_creates_the_private_sharing_folder() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("truffle");
+    fs::create_dir(&root).unwrap();
+    let repo = Repository::open(root, None, true).unwrap();
+    assert!(!base(&repo).exists());
+    let current = config_view(&repo).unwrap();
+    let folder = temp.path().canonicalize().unwrap();
+    action(&repo, Action::Configure, &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":"eddie","transport":{"kind":"folder","root":folder}})).unwrap();
+    assert_eq!(
+        fs::metadata(base(&repo)).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    assert_eq!(config_view(&repo).unwrap()["handle"], "eddie");
+}

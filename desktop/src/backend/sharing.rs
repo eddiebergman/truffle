@@ -1,4 +1,5 @@
 //! App adapter for the portable Context Bundle / Inbox protocol. No UI layout in storage.
+use super::document::{Document, Format, Version};
 use super::local_files::{directory as folder_directory, read as folder_read};
 use super::{
     arr, artifacts, checked, directory, expand, home, json, now, sessions, sid, text, uuid,
@@ -7,7 +8,6 @@ use super::{
 use context_kit::{Bundle, MAX_MANIFEST, MAX_RESOURCE, MAX_TOTAL};
 use reqwest::{blocking::Client, Url};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
@@ -20,7 +20,6 @@ const MAX_RECORD: u64 = 64 * 1024;
 const RECENT_LIMIT: usize = 20;
 const MAX_CONFIG: u64 = 16 * 1024;
 const MAX_STATE: u64 = 16 * 1024 * 1024;
-static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum Transport {
@@ -37,10 +36,7 @@ struct SharingConfig {
 }
 impl SharingConfig {
     fn validate(&self) -> Result<()> {
-        if self.version != 1
-            || self.revision > 9_007_199_254_740_991
-            || handle(&self.handle)? != self.handle
-        {
+        if self.version != 1 || handle(&self.handle)? != self.handle {
             return Err(Error::new("Unsupported sharing configuration."));
         }
         match &self.transport {
@@ -97,20 +93,24 @@ fn parse_config(value: &Value) -> Result<Option<SharingConfig>> {
 fn config_path(repo: &Repository) -> PathBuf {
     base(repo).join("config.json")
 }
-fn config_snapshot(repo: &Repository) -> Result<(Option<SharingConfig>, String)> {
-    let path = config_path(repo);
-    let bytes = if path.is_file() {
-        kit(context_kit::read_bounded(&path, MAX_CONFIG))?
-    } else {
-        serde_json::to_vec(&repo.sharing.lock().map_err(|_| Error::io())?["config"])?
-    };
-    Ok((
-        parse_config(&serde_json::from_slice(&bytes)?)?,
-        context_kit::sha256(&bytes),
-    ))
+impl Format for Option<SharingConfig> {
+    const NAME: &'static str = "sharing configuration";
+    const MAX_BYTES: usize = 16 * 1024;
+    const CONFLICT: &'static str = "Sharing settings changed. Reload them before saving.";
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        parse_config(&serde_json::from_slice(bytes)?)
+    }
+    fn revision(&self) -> u64 {
+        self.as_ref().map_or(0, |config| config.revision)
+    }
+}
+fn config_document(repo: &Repository) -> Result<Document<Option<SharingConfig>>> {
+    // Older installs kept the configuration inside the sharing state.
+    let legacy = serde_json::to_vec(&repo.sharing.lock().map_err(|_| Error::io())?["config"])?;
+    Ok(Document::new(config_path(repo)).or_missing(legacy))
 }
 fn config_view(repo: &Repository) -> Result<Value> {
-    let (config, hash) = config_snapshot(repo)?;
+    let (config, version) = config_document(repo)?.read()?;
     let mut value = match config {
         Some(config) => {
             let mut value = serde_json::to_value(&config)?;
@@ -119,7 +119,7 @@ fn config_view(repo: &Repository) -> Result<Value> {
         }
         None => json!({"revision":0,"handle":"","root":"","transport":Value::Null}),
     };
-    value["contentHash"] = json!(hash);
+    value["contentHash"] = json!(version.content_hash);
     Ok(value)
 }
 fn kit<T>(value: context_kit::Result<T>) -> Result<T> {
@@ -129,12 +129,14 @@ fn base(repo: &Repository) -> PathBuf {
     repo.data.parent().unwrap().join("sharing")
 }
 fn write(path: &Path, bytes: &[u8]) -> Result<()> {
+    private_parent(path)?;
+    super::http::private_write(path, bytes)
+}
+fn private_parent(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::create_dir_all(path.parent().ok_or_else(Error::io)?)?;
-    fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o700))?;
-    let temp = path.with_extension(format!("{}.tmp", uuid()));
-    super::http::private_write(&temp, bytes)?;
-    fs::rename(temp, path)?;
+    let parent = path.parent().ok_or_else(Error::io)?;
+    fs::create_dir_all(parent)?;
+    fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
     Ok(())
 }
 pub fn load(data: &Path) -> Result<Value> {
@@ -1033,16 +1035,13 @@ fn configure(repo: &Repository, p: &Value) -> Result<()> {
     let request: Request = serde_json::from_value(p.clone()).map_err(|_| {
         Error::new("Load sharing settings, then send revision, contentHash, handle and transport.")
     })?;
-    let _guard = CONFIG_WRITE_LOCK.lock().map_err(|_| Error::io())?;
     with_idle_configuration(repo, || {
-        let (previous, hash) = config_snapshot(repo)?;
-        if request.revision != previous.as_ref().map_or(0, |config| config.revision)
-            || request.content_hash != hash
-        {
-            let mut error = Error::new("Sharing settings changed. Reload them before saving.");
-            error.status = 409;
-            return Err(error);
-        }
+        let document = config_document(repo)?;
+        let expected = Version {
+            revision: request.revision,
+            content_hash: request.content_hash,
+        };
+        let previous = document.read_at(&expected)?;
         let name = handle(&request.handle)?;
         let transport = match request.transport {
             Transport::Gcs { root } => {
@@ -1066,23 +1065,16 @@ fn configure(repo: &Repository, p: &Value) -> Result<()> {
         };
         let next = SharingConfig {
             version: 1,
-            revision: request
-                .revision
-                .checked_add(1)
-                .ok_or_else(|| Error::new("Sharing revision exhausted."))?,
+            revision: expected.revision,
             handle: name.clone(),
             transport,
         };
-        next.validate()?;
-        let bytes = serde_json::to_vec_pretty(&next)?;
-        if bytes.len() as u64 > MAX_CONFIG {
-            return Err(Error::new("Sharing configuration exceeds 16 KiB."));
-        }
         let root = next.root_uri()?;
         let reset = previous.as_ref().is_none_or(|previous| {
             previous.root_uri().ok().as_deref() != Some(root.as_str()) || previous.handle != name
         });
-        write(&config_path(repo), &bytes)?;
+        private_parent(&config_path(repo))?;
+        let (next, _) = document.replace(&expected, Some(next))?;
         change(repo, |s| {
             if reset {
                 s["entries"] = json!({});
