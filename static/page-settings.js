@@ -1,5 +1,13 @@
 "use strict";
 let pageSettingsDocument = null;
+const pageSettingsStore = documentStore({
+  get: () => pageSettingsDocument,
+  set: (next) => {
+    pageSettingsDocument = next;
+  },
+  read: () => api("/api/page-settings"),
+  write: (body) => api("/api/page-settings", body),
+});
 const pageSettingsCatalog = {
   linear: {
     label: "Linear",
@@ -114,11 +122,10 @@ function pageSettingsAllows(item, page = source) {
 }
 async function loadPageSettings({ canApply = () => true } = {}) {
   try {
-    const next = await api("/api/page-settings");
-    if (!canApply()) {
+    const next = await pageSettingsStore.load({ canApply });
+    if (!next) {
       return null;
     }
-    pageSettingsDocument = next;
     render();
     return next;
   } catch (error) {
@@ -277,9 +284,8 @@ async function openPageVisibilitySettings(page) {
   };
   const actions = pageSettingsActions(`${definition.label} visibility actions`);
   try {
-    pageSettingsDocument = await api("/api/page-settings");
-    const revision = pageSettingsDocument.revision,
-      contentHash = pageSettingsDocument.contentHash,
+    await pageSettingsStore.load();
+    const baseline = pageSettingsStore.baseline(),
       selected = pageSettingsDocument.pages[page].scopes;
     const choices = [
       ...new Set([
@@ -412,14 +418,15 @@ async function openPageVisibilitySettings(page) {
       current.controls.clear();
       freezeFeatureForm(current, true);
       try {
-        pageSettingsDocument = await api("/api/page-settings", {
-          revision,
-          contentHash,
+        const result = await pageSettingsStore.save(baseline, {
           page,
           scopes: all.checked
             ? null
             : inputs.filter((i) => i.checked).map((i) => i.value),
         });
+        if (result.kind !== "accepted") {
+          throw Object.assign(new Error(result.error), { kind: result.kind });
+        }
         accepted = true;
         if (dialog.open) {
           try {
@@ -434,7 +441,7 @@ async function openPageVisibilitySettings(page) {
         }
       } catch (e) {
         error.dataset.tone = "error";
-        if (e.status === 409) {
+        if (e.kind === "conflict") {
           conflicted = true;
           error.textContent =
             "Page visibility changed elsewhere. Your selection is kept. Discard it and reload before saving.";
