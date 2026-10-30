@@ -592,6 +592,39 @@ window.addEventListener(
   true,
 );
 window.addEventListener("blur", () => void finishShortcutRecording());
+// A press moves the target; one save loop writes it on the latest accepted
+// document, so fast presses neither drop steps nor conflict with each other.
+let uiScaleTarget = null,
+  uiScaleSaving = false;
+function stepUiScale(direction) {
+  const { min, max } = appSettings.fields.find(
+    (field) => field.key === "uiScale",
+  );
+  uiScaleTarget = Math.min(
+    max,
+    Math.max(min, (uiScaleTarget ?? setting("uiScale", 100)) + 5 * direction),
+  );
+  if (!uiScaleSaving) {
+    void saveUiScale();
+  }
+}
+async function saveUiScale() {
+  uiScaleSaving = true;
+  try {
+    while (uiScaleTarget !== setting("uiScale", 100)) {
+      const result = await saveAppSettings(settingsStore.baseline(), {
+        patch: { uiScale: uiScaleTarget },
+      });
+      if (result.kind !== "accepted" || result.error) {
+        toast(`Could not change the interface scale: ${result.error}`);
+        break;
+      }
+    }
+  } finally {
+    uiScaleTarget = null;
+    uiScaleSaving = false;
+  }
+}
 function runConfiguredCommand(id) {
   if (
     $("#settings-dialog").open &&
@@ -644,6 +677,10 @@ function runConfiguredCommand(id) {
     if (source === "agents") {
       void toggleChatTerminal();
     }
+    return;
+  }
+  if (id === "ui-scale-increase" || id === "ui-scale-decrease") {
+    stepUiScale(id === "ui-scale-increase" ? 1 : -1);
     return;
   }
   if (id === "terminal-focus") {

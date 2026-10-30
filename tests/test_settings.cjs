@@ -1723,3 +1723,107 @@ test("queued old native close event cannot retire a reopened review skill picker
   assert.equal(f.c.settingsDraft.claudeReviewCommand, "");
   assert.deepEqual(f.counts(), { paints: 0, disposals: 0 });
 });
+// Settings whose service accepts a uiScale patch only on the current revision.
+function scaleHarness(uiScale) {
+  const writes = [],
+    pending = [],
+    toasts = [];
+  let revision = 1,
+    paints = 0;
+  const document = (scale) => ({
+    revision,
+    contentHash: String(revision).padStart(64, "0"),
+    fields: [{ key: "uiScale", min: 85, max: 130 }],
+    values: { uiScale: scale, keybindings: {} },
+  });
+  const c = browserContext({
+    appSettings: document(uiScale),
+    settingsDirty: false,
+    settingsSaving: false,
+    navigator: { platform: "MacIntel" },
+    document: {
+      querySelector: (selector) =>
+        selector === "#settings-dialog" ? { open: false } : null,
+    },
+    applyAppSettings: () => paints++,
+    toast: (message) => toasts.push(message),
+    api: (path, body) =>
+      new Promise((resolve, reject) => {
+        writes.push(body);
+        pending.push(() => {
+          if (body.revision !== revision) {
+            reject(Object.assign(new Error("Conflict"), { status: 409 }));
+            return;
+          }
+          revision++;
+          resolve(document(body.patch.uiScale));
+        });
+      }),
+  });
+  const host = loadScripts(c, settingsScripts);
+  const settle = async () => {
+    while (pending.length) {
+      pending.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+  return { c, host, writes, toasts, settle, paints: () => paints };
+}
+test("scale shortcuts step by 5 points, clamp to the field range and persist", async () => {
+  const { c, writes, settle } = scaleHarness(100);
+  c.runConfiguredCommand("ui-scale-increase");
+  await settle();
+  assert.equal(c.appSettings.values.uiScale, 105);
+  c.runConfiguredCommand("ui-scale-decrease");
+  await settle();
+  assert.equal(c.appSettings.values.uiScale, 100);
+  assert.deepEqual(
+    writes.map((body) => body.patch.uiScale),
+    [105, 100],
+  );
+  const top = scaleHarness(130);
+  top.c.runConfiguredCommand("ui-scale-increase");
+  await top.settle();
+  assert.equal(top.writes.length, 0);
+  const near = scaleHarness(87);
+  near.c.runConfiguredCommand("ui-scale-decrease");
+  await near.settle();
+  assert.equal(near.writes[0].patch.uiScale, 85);
+});
+test("rapid scale presses keep every step and save on the latest accepted revision", async () => {
+  const { c, writes, toasts, settle, paints } = scaleHarness(100);
+  for (let press = 0; press < 3; press++) {
+    c.runConfiguredCommand("ui-scale-increase");
+  }
+  c.runConfiguredCommand("ui-scale-decrease");
+  c.runConfiguredCommand("ui-scale-increase");
+  await settle();
+  assert.equal(c.appSettings.values.uiScale, 115);
+  assert.deepEqual(toasts, []);
+  assert.ok(writes.length <= 2, `${writes.length} writes`);
+  assert.deepEqual(
+    writes.map((body) => body.revision),
+    writes.map((_, index) => index + 1),
+  );
+  assert.equal(paints(), writes.length);
+});
+test("the default scale shortcuts reach the scale command from a focused terminal", async () => {
+  const { c, host, settle } = scaleHarness(100);
+  c.appSettings.values.keybindings = {
+    "ui-scale-increase": "Primary+=",
+    "ui-scale-decrease": "Primary+-",
+  };
+  let stopped = 0;
+  dispatch(host.document.listeners.keydown, {
+    metaKey: true,
+    shiftKey: true,
+    key: "+",
+    code: "Equal",
+    target: { closest: (selector) => (selector === ".xterm" ? {} : null) },
+    preventDefault() {},
+    stopImmediatePropagation: () => stopped++,
+  });
+  await settle();
+  assert.equal(stopped, 1);
+  assert.equal(c.appSettings.values.uiScale, 105);
+});

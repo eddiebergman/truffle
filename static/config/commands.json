@@ -110,6 +110,16 @@
       "id": "page-search",
       "label": "Search current page",
       "defaultBinding": "Primary+F"
+    },
+    {
+      "id": "ui-scale-increase",
+      "label": "Increase interface scale",
+      "defaultBinding": "Primary+="
+    },
+    {
+      "id": "ui-scale-decrease",
+      "label": "Decrease interface scale",
+      "defaultBinding": "Primary+-"
     }
   ]
 }

@@ -331,6 +331,8 @@ fn apply_native_settings(app: tauri::AppHandle, values: Value, light: bool) -> R
             "agent-reopen",
             "agent-rename",
             "chat-terminal",
+            "ui-scale-increase",
+            "ui-scale-decrease",
         ];
         for id in ids {
             if let Some(item) = menu.get(id) {
@@ -600,6 +602,16 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
                     ("find-work", "Find Work…", "CmdOrCtrl+P"),
                     ("page-search", "Search Current Page…", "CmdOrCtrl+F"),
                     ("chat-terminal", "Toggle Chat Terminal", "CmdOrCtrl+J"),
+                    (
+                        "ui-scale-increase",
+                        "Increase Interface Scale",
+                        "CmdOrCtrl+=",
+                    ),
+                    (
+                        "ui-scale-decrease",
+                        "Decrease Interface Scale",
+                        "CmdOrCtrl+-",
+                    ),
                 ] {
                     submenu.append(&tauri::menu::MenuItem::with_id(
                         app.handle(),
@@ -646,6 +658,8 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             "page-search",
             "settings",
             "chat-terminal",
+            "ui-scale-increase",
+            "ui-scale-decrease",
         ]
         .contains(&id)
         {
