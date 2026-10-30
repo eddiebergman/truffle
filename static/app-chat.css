@@ -50,10 +50,6 @@
   overflow: hidden;
 }
 
-.app-chat-panel[hidden] {
-  display: none;
-}
-
 .app-chat-heading {
   display: flex;
   align-items: center;
@@ -204,10 +200,6 @@
   gap: 5px;
 }
 
-.app-chat-activity[hidden] {
-  display: none;
-}
-
 .app-chat-activity::before,
 .app-chat-launcher.is-working::after {
   content: "";
@@ -334,10 +326,6 @@
   font-size: 11px;
 }
 
-.app-chat-diagnostics[hidden] {
-  display: none;
-}
-
 .app-chat-diagnostics dl {
   display: grid;
   grid-template-columns: minmax(85px, auto) minmax(0, 1fr);
@@ -364,10 +352,6 @@
   min-height: 0;
   flex-shrink: 1;
   overflow: auto;
-}
-
-.app-chat-failure-slot[hidden] {
-  display: none;
 }
 
 .settings-proposal-dialog {
@@ -411,10 +395,6 @@
   border-radius: 10px;
   background: var(--overlay);
   overflow: clip;
-}
-
-.app-chat-setup[hidden] {
-  display: none;
 }
 
 .app-chat-setup .onboarding-shell {

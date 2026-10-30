@@ -262,11 +262,6 @@ html[data-density="comfortable"] :is(.git-file-row, .work-row, .nav-item) {
   width: min(520px, calc(100vw - 32px));
 }
 
-#settings-import[hidden],
-#gcp-login[hidden] {
-  display: none !important;
-}
-
 @media (max-width: 800px) {
   .preference-row {
     flex-direction: column;

@@ -355,10 +355,6 @@
   border-radius: 6px;
 }
 
-.saved-view-delete-confirmation[hidden] {
-  display: none;
-}
-
 .saved-view-delete-confirmation p {
   margin: 0 0 10px;
   font-size: 12px;
