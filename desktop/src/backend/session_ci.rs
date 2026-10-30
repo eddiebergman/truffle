@@ -9,9 +9,7 @@ fn linked_prs(state: &Value, id: &str) -> Result<Vec<Value>> {
         .collect::<std::collections::BTreeSet<_>>();
     Ok(domain::catalog(state)
         .into_values()
-        .filter(|i| {
-            ids.contains(text(i, "id")) && i["source"] == "github" && i["kind"] == "Pull request"
-        })
+        .filter(|i| ids.contains(text(i, "id")) && domain::is_pull_request(i))
         .collect())
 }
 const CI_FIELDS: [&str; 8] = [

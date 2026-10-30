@@ -81,6 +81,9 @@ pub fn initialize(s: &mut Value) -> Result<()> {
     }
     Ok(())
 }
+pub fn is_pull_request(item: &Value) -> bool {
+    item["source"] == "github" && item["kind"] == "Pull request"
+}
 pub fn item_ref(item: &Value) -> Value {
     let mut v = json!({});
     for key in [

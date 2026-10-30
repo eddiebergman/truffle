@@ -1,8 +1,7 @@
 //! Explicit PR mutations and durable review-request notification cycles.
 use super::{arr, checked, json, now, sid, text, uuid, Error, Repository, Result, Value};
 pub fn review_ready(item: &Value) -> bool {
-    item["source"] == "github"
-        && item["kind"] == "Pull request"
+    super::domain::is_pull_request(item)
         && item["status"] != "done"
         && item["isDraft"] != true
         && item["status"] != "draft"
@@ -142,7 +141,7 @@ fn action_with(
     }
     let old = arr(&repo.state.lock().unwrap()["items"])
         .into_iter()
-        .find(|i| i["id"] == id && i["source"] == "github" && i["kind"] == "Pull request")
+        .find(|i| i["id"] == id && super::domain::is_pull_request(i))
         .ok_or_else(|| Error::new("Choose a cached GitHub pull request."))?;
     let node_id = id
         .strip_prefix("github:")

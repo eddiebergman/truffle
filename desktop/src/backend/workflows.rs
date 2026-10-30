@@ -330,7 +330,7 @@ impl<'a> Quick<'a> {
                 .find(|i| i["source"] == "github" && repo_name(i) == text(p, "scope"))
                 .unwrap_or(Value::Null);
         }
-        if self.review && (item["source"] != "github" || item["kind"] != "Pull request") {
+        if self.review && !domain::is_pull_request(&item) {
             return Err(Error::new("Choose a GitHub PR."));
         }
         Ok(item)

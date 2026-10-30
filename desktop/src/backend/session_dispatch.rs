@@ -634,7 +634,7 @@ fn prepare_with(
             let (prompt,ack)=match kind{
                 Kind::ReviewRequest=>{let review=super::reviews::request(state,&id,&operation,expected_revision.unwrap(),&baseline)?;(request_prompt(repo,&record,&review["run"],&settings)?,Value::Null)},
                 Kind::ReviewFeedback=>feedback(&record,&draft,&checked)?,
-                Kind::CiInvestigation=>{let work=domain::catalog(state).remove(&item).filter(|item|item["source"]=="github"&&item["kind"]=="Pull request").ok_or_else(|| Error::new("Choose a linked GitHub pull request."))?;super::session_ci::investigation_in_state(state,&json!({"id":id,"itemId":item,"requestId":operation,"state":"queued"}))?;(ci_prompt(repo,&record,&work,&operation),Value::Null)},
+                Kind::CiInvestigation=>{let work=domain::catalog(state).remove(&item).filter(domain::is_pull_request).ok_or_else(|| Error::new("Choose a linked GitHub pull request."))?;super::session_ci::investigation_in_state(state,&json!({"id":id,"itemId":item,"requestId":operation,"state":"queued"}))?;(ci_prompt(repo,&record,&work,&operation),Value::Null)},
             };
             let payload=format!("\u{1b}[200~{prompt}\u{1b}[201~\r");if payload.len()>65536{return Err(Error::new("This request exceeds 64 KiB. Shorten it before submitting."));}
             let entry=json!({"operationId":operation,"ticket":ticket.to_string(),"recordId":id,"kind":kind.name(),"itemId":item,"generation":generation,"payloadHash":context_kit::sha256(payload.as_bytes()),"payload":payload,"ack":ack,"sourceRevision":expected_revision,"status":"prepared","finalized":false,"createdAt":now()});all.push(entry.clone());state[JOURNAL]["nextTicket"]=json!(next.to_string());store_entries(state,all,!migrated)?;Ok(entry)
