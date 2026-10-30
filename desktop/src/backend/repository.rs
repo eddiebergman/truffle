@@ -376,6 +376,7 @@ impl Repository {
                 super::sessions::save(s, p)?;
                 Ok(())
             }
+            "save-note" => super::projects::save_in_state(self, s, p).map(drop),
             "save-artifact" => {
                 if p.get("id").is_some() {
                     super::artifacts::legacy_metadata_update(self, s, p)?;

@@ -150,26 +150,19 @@ fn projects_same_field_race_has_one_winner_and_unrelated_field_races_both_commit
     }
 }
 #[test]
-fn projects_validate_exact_patch_tokens_and_fail_without_any_canonical_change() {
+fn projects_validate_patched_fields_and_fail_without_any_canonical_change() {
     let (_temp, repo, baseline) = fixture();
     let id = &baseline["project"]["id"];
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let token = baseline["expected"]["title"].clone();
     for (patch, expected) in [
-        (json!({}), json!({})),
-        (json!({"title":"New"}), json!({})),
-        (
-            json!({"title":"New"}),
-            json!({"title":token,"detail":baseline["expected"]["detail"]}),
-        ),
-        (json!({"title":"New"}), json!({"title":"bad"})),
         (json!({"title":"  "}), json!({"title":token})),
         (json!({"title":7}), json!({"title":token})),
         (json!({"title":"x".repeat(301)}), json!({"title":token})),
         (
-            json!({"instruction":"run command"}),
-            json!({"instruction":"0".repeat(64)}),
+            json!({"status":"someday"}),
+            json!({"status":baseline["expected"]["status"]}),
         ),
         (
             json!({"url":"https://secret:token@example.invalid"}),

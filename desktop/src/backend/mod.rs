@@ -12,6 +12,7 @@ pub mod config_status;
 pub mod connections;
 mod document;
 pub mod feedback;
+mod field_edit;
 pub mod guidance;
 mod local_files;
 pub mod onboarding;

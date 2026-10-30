@@ -183,7 +183,13 @@ enum SaveIntent {
     Register,
 }
 /// Save `p` with its imported items and named project linked.
-fn save_linked(s: &mut Value, p: &Value, imported: &[Value], intent: SaveIntent) -> Result<Value> {
+fn save_linked(
+    repo: &Repository,
+    s: &mut Value,
+    p: &Value,
+    imported: &[Value],
+    intent: SaveIntent,
+) -> Result<Value> {
     let mut payload = p.clone();
     let mut ids = arr(&p["itemIds"]);
     for item in imported {
@@ -208,7 +214,8 @@ fn save_linked(s: &mut Value, p: &Value, imported: &[Value], intent: SaveIntent)
         let id = if let Some(project) = project {
             text(&project, "id").to_owned()
         } else {
-            domain::edit(
+            super::projects::save_in_state(
+                repo,
                 s,
                 &json!({"action":"save-note","title":name,"status":"todo","cwd":p["cwd"]}),
             )?;
@@ -285,8 +292,8 @@ impl Recipe for NewChat<'_> {
         super::chat_edit::reject_unchecked_association(s, self.intent)?;
         Ok(None)
     }
-    fn build(&self, _: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
-        save_linked(s, self.intent, &self.imported, SaveIntent::Save)
+    fn build(&self, repo: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
+        save_linked(repo, s, self.intent, &self.imported, SaveIntent::Save)
     }
 }
 /// A chat for one work item or folder, or with `review`, a review of one GitHub PR.
@@ -916,7 +923,7 @@ fn register_resolving(
     p["preserveItemFolders"] = json!(true);
     p["sessionId"] = json!(sid(text(&p, "sessionId"))?);
     let imported = resolve_urls(repo, &p, resolve)?;
-    let record = repo.transaction(|s| save_linked(s, &p, &imported, SaveIntent::Register))?;
+    let record = repo.transaction(|s| save_linked(repo, s, &p, &imported, SaveIntent::Register))?;
     let metadata = checkouts::metadata(text(&record, "cwd"));
     finish_registration(
         repo,

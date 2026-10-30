@@ -414,9 +414,6 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             row["title"] = json!(title);
             row["updatedAt"] = json!(now());
         }
-        "save-note" => {
-            super::projects::save_in_state(s, p)?;
-        }
         "delete-note" | "unlink-session" | "delete-sentry-view" => {
             let collection = match action {
                 "delete-note" => "notes",

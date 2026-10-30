@@ -1,4 +1,5 @@
 //! Local project metadata. No launch, provider, shell, or trust-setting effects.
+use super::field_edit::{self, Edit, Record};
 use super::{
     arr, checked, directory, domain, json, now, safe_url, text, uuid, Error, Repository, Result,
     Value,
@@ -27,15 +28,48 @@ fn position(state: &Value, id: &str) -> Result<usize> {
         .position(|row| row["id"] == id && row["source"] == "notes")
         .ok_or_else(|| Error::new("Local project no longer exists."))
 }
-fn field_token(state: &Value, project: &Value, field: &str) -> Result<String> {
-    let value = if field == "status" {
-        json!({"status":project["status"],"override":state["overrides"][text(project,"id")]["status"]})
-    } else {
-        project[field].clone()
-    };
-    Ok(context_kit::sha256(&serde_json::to_vec(&value)?))
+struct Project<'a> {
+    row: &'a Value,
+    status_override: &'a Value,
 }
-fn view(state: &Value, index: usize) -> Result<Value> {
+impl Record for Project<'_> {
+    const NAME: &'static str = "project";
+    const FIELDS: &'static [&'static str] = &FIELDS;
+    fn id(&self) -> &str {
+        text(self.row, "id")
+    }
+    fn projection(&self, field: &str) -> Result<Value> {
+        Ok(if field == "status" {
+            json!({"status":self.row["status"],"override":self.status_override})
+        } else {
+            self.row[field].clone()
+        })
+    }
+    fn normalize(_: &Repository, field: &str, value: &Value) -> Result<Value> {
+        if !value.is_string() {
+            return Err(Error::new(format!("Invalid project {field}.")));
+        }
+        let limit = match field {
+            "title" => 300,
+            "detail" => 10000,
+            "status" => 32,
+            _ => 4096,
+        };
+        let value = checked(&json!({field:value}), field, limit, field == "title")?;
+        Ok(json!(match field {
+            "url" => safe_url(&value)?,
+            "cwd" if !value.is_empty() => directory(&value)?,
+            "status" => {
+                if !domain::STATUSES.contains(&value.as_str()) {
+                    return Err(Error::new("Invalid project status."));
+                }
+                value
+            }
+            _ => value,
+        }))
+    }
+}
+fn view(repo: &Repository, state: &Value, index: usize) -> Result<Value> {
     let row = &state["notes"][index];
     let id = text(row, "id");
     let mut project = json!({"id":id,"source":"notes","kind":"Project"});
@@ -70,81 +104,35 @@ fn view(state: &Value, index: usize) -> Result<Value> {
             .filter(|time| time.is_finite() && *time >= 0.0)
             .map_or(Value::Null, |time| json!(time));
     }
-    let mut expected = json!({});
-    for field in FIELDS {
-        expected[field] = json!(field_token(state, row, field)?);
-    }
+    let expected = field_edit::tokens(
+        repo,
+        &Project {
+            row,
+            status_override: &state["overrides"][id]["status"],
+        },
+    )?;
     Ok(json!({"project":project,"expected":expected,"scope":"local"}))
 }
-fn normalize(fields: &Value, create: bool) -> Result<Value> {
+fn create_fields(repo: &Repository, fields: &Value) -> Result<Value> {
     object_keys(fields, &FIELDS)?;
     let mut result = json!({});
-    for field in FIELDS {
-        let Some(value) = fields.get(field) else {
-            continue;
-        };
-        if !value.is_string() {
-            return Err(Error::new(format!("Invalid project {field}.")));
-        }
-        let limit = match field {
-            "title" => 300,
-            "detail" => 10000,
-            "status" => 32,
-            _ => 4096,
-        };
-        let value = checked(fields, field, limit, field == "title")?;
-        result[field] = json!(match field {
-            "url" => safe_url(&value)?,
-            "cwd" if !value.is_empty() => directory(&value)?,
-            "status" => {
-                if !domain::STATUSES.contains(&value.as_str()) {
-                    return Err(Error::new("Invalid project status."));
-                }
-                value
-            }
-            _ => value,
-        });
+    for (field, value) in fields.as_object().unwrap() {
+        result[field] = Project::normalize(repo, field, value)?;
     }
-    if create {
-        if result.get("title").is_none() {
-            return Err(Error::new("Supply a project title."));
+    if result.get("title").is_none() {
+        return Err(Error::new("Supply a project title."));
+    }
+    for field in ["detail", "url", "cwd"] {
+        if result.get(field).is_none() {
+            result[field] = json!("");
         }
-        for field in ["detail", "url", "cwd"] {
-            if result.get(field).is_none() {
-                result[field] = json!("");
-            }
-        }
-        if result.get("status").is_none() {
-            result["status"] = json!("todo");
-        }
-    } else if result.as_object().unwrap().is_empty() {
-        return Err(Error::new("Supply at least one project change."));
+    }
+    if result.get("status").is_none() {
+        result["status"] = json!("todo");
     }
     Ok(result)
 }
-fn expected_keys(patch: &Value, expected: &Value) -> Result<()> {
-    let expected = expected.as_object().ok_or_else(|| {
-        Error::new("Supply captured tokens for exactly the changed project fields.")
-    })?;
-    if expected.len() != patch.as_object().unwrap().len()
-        || patch
-            .as_object()
-            .unwrap()
-            .keys()
-            .any(|key| !expected.contains_key(key))
-        || expected.values().any(|value| {
-            !value.as_str().is_some_and(|hash| {
-                hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
-            })
-        })
-    {
-        return Err(Error::new(
-            "Supply captured tokens for exactly the changed project fields.",
-        ));
-    }
-    Ok(())
-}
-fn create_normalized(state: &mut Value, fields: &Value) -> Result<Value> {
+fn create_normalized(repo: &Repository, state: &mut Value, fields: &Value) -> Result<Value> {
     let mut row = fields.clone();
     row["id"] = json!(format!("note:{}", uuid()));
     row["source"] = json!("notes");
@@ -159,44 +147,40 @@ fn create_normalized(state: &mut Value, fields: &Value) -> Result<Value> {
         .ok_or_else(|| Error::new("Invalid local project storage."))?;
     rows.push(row);
     let index = rows.len() - 1;
-    let mut result = view(state, index)?;
+    let mut result = view(repo, state, index)?;
     result["saved"] = json!(true);
     result["created"] = json!(true);
     result["changedFields"] = json!(FIELDS);
     Ok(result)
 }
 fn update_normalized(
+    repo: &Repository,
     state: &mut Value,
     id: &str,
-    patch: &Value,
-    expected: &Value,
+    edit: &Edit<Project>,
 ) -> Result<Value> {
-    expected_keys(patch, expected)?;
     let index = position(state, id)?;
-    for field in patch.as_object().unwrap().keys() {
-        if expected[field] != field_token(state, &state["notes"][index], field)? {
-            let mut error=Error::new("This project field changed. Read the project again and reapply only your intended changes.");
-            error.status = 409;
-            return Err(error);
-        }
-    }
-    let mut changed = vec![];
-    for (field, value) in patch.as_object().unwrap() {
+    let row = state["notes"][index].clone();
+    let status_override = state["overrides"][id]["status"].clone();
+    let current = Project {
+        row: &row,
+        status_override: &status_override,
+    };
+    let changed = edit.apply(&current, |field, value| {
         let cleared_override = field == "status" && state["overrides"][id].get("status").is_some();
-        if state["notes"][index][field] != *value || cleared_override {
-            changed.push(field.clone());
-            state["notes"][index][field] = value.clone();
-        }
         if field == "status" {
             if let Some(overrides) = state["overrides"][id].as_object_mut() {
                 overrides.remove("status");
             }
         }
-    }
+        let differs = state["notes"][index][field] != *value;
+        state["notes"][index][field] = value.clone();
+        Ok(differs || cleared_override)
+    })?;
     if !changed.is_empty() {
         state["notes"][index]["updatedAt"] = json!(now());
     }
-    let mut result = view(state, index)?;
+    let mut result = view(repo, state, index)?;
     result["saved"] = json!(true);
     result["changedFields"] = json!(changed);
     Ok(result)
@@ -205,7 +189,7 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
     object_keys(args, &["id"])?;
     let id = project_id(&args["id"])?;
     let state = repo.state.lock().map_err(|_| Error::io())?;
-    view(&state, position(&state, id)?)
+    view(repo, &state, position(&state, id)?)
 }
 pub fn folder(repo: &Repository, args: &Value) -> Result<Value> {
     folder_with(repo, args, &super::workflows::work_root())
@@ -223,19 +207,18 @@ fn folder_inputs(state: &Value, id: &str) -> Result<(Value, Value)> {
     Ok((project, context))
 }
 pub fn create(repo: &Repository, args: &Value) -> Result<Value> {
-    let fields = normalize(args, true)?;
-    repo.transaction(|state| create_normalized(state, &fields))
+    let fields = create_fields(repo, args)?;
+    repo.transaction(|state| create_normalized(repo, state, &fields))
 }
 pub fn update(repo: &Repository, args: &Value) -> Result<Value> {
     object_keys(args, &["id", "patch", "expected"])?;
     let id = project_id(&args["id"])?;
-    let patch = normalize(&args["patch"], false)?;
-    expected_keys(&patch, &args["expected"])?;
-    repo.transaction_if_changed(|state| update_normalized(state, id, &patch, &args["expected"]))
+    let edit = Edit::new(repo, &args["patch"], &args["expected"])?;
+    repo.transaction_if_changed(|state| update_normalized(repo, state, id, &edit))
 }
 /// Compatibility transport only; existing legacy updates must carry the same captured tokens.
 /// Creation from workflows uses this same validator and canonical record owner.
-pub(super) fn save_in_state(state: &mut Value, args: &Value) -> Result<Value> {
+pub(super) fn save_in_state(repo: &Repository, state: &mut Value, args: &Value) -> Result<Value> {
     object_keys(
         args,
         &[
@@ -261,8 +244,8 @@ pub(super) fn save_in_state(state: &mut Value, args: &Value) -> Result<Value> {
                 "New projects accept fields, not an update patch or captured tokens.",
             ));
         }
-        let fields = normalize(&fields, true)?;
-        return create_normalized(state, &fields);
+        let fields = create_fields(repo, &fields)?;
+        return create_normalized(repo, state, &fields);
     }
     project_id(&args["id"])?;
     let patch = if let Some(patch) = args.get("patch") {
@@ -275,8 +258,8 @@ pub(super) fn save_in_state(state: &mut Value, args: &Value) -> Result<Value> {
     } else {
         &fields
     };
-    let patch = normalize(patch, false)?;
-    update_normalized(state, id, &patch, &args["expected"])
+    let edit = Edit::new(repo, patch, &args["expected"])?;
+    update_normalized(repo, state, id, &edit)
 }
 
 #[cfg(test)]
