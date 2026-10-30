@@ -40,7 +40,10 @@ fn changes_list_is_bounded_read_only_whitelisted_and_stable_under_arrivals() {
             .status,
         409
     );
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]

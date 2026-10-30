@@ -67,7 +67,10 @@ fn page_scopes_command_exposes_exact_cached_and_configured_choices_without_effec
     assert_eq!(std::fs::read(&repo.data).unwrap(), core);
     assert_eq!(std::fs::read(&path).unwrap(), disk);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     let spec = specifications()
         .into_iter()
         .find(|entry| entry.id == CommandId::PagesScopesRead)
@@ -403,7 +406,10 @@ fn external_presentation_commands_queue_and_acknowledge_without_opening_chats() 
     let mut after = repo.state.lock().unwrap().clone();
     after.as_object_mut().unwrap().remove("uiPresentations");
     assert_eq!(after, before);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
@@ -593,7 +599,10 @@ fn skills_editor_commands_are_strict_user_writes_with_bounded_read_and_exact_rec
     assert_eq!(scheduled["saved"], true);
     assert_eq!(scheduled["schedule"]["enabled"], false);
     assert_eq!(scheduled.as_object().unwrap().len(), 5);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -637,7 +646,10 @@ fn saved_chat_open_command_is_strict_user_action_and_returns_only_bounded_receip
     assert_eq!(receipt.as_object().unwrap().len(), 6);
     assert!(!receipt.to_string().contains("private-open-marker"));
     assert!(!receipt.to_string().contains("Private title marker"));
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn artifact_metadata_commands_share_cas_owner_and_deny_discovery_registration_to_app_chat() {
@@ -743,7 +755,10 @@ fn changes_commands_are_strict_cached_routine_owners() {
         repo.state.lock().unwrap()["changes"][0]["privateNs"],
         "private-change-marker"
     );
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -785,7 +800,10 @@ fn project_folder_command_is_strict_read_only_and_available_to_the_assistant() {
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn projects_commands_are_strict_routine_metadata_with_bounded_owner_receipts() {
@@ -1523,7 +1541,10 @@ fn preparation_commands_enforce_policy_and_exact_argument_shapes_before_effects(
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn preparation_command_receipts_are_local_only_and_recoverable_without_effects() {
@@ -1593,7 +1614,10 @@ fn preparation_command_receipts_are_local_only_and_recoverable_without_effects()
     .is_err());
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[test]
@@ -1665,7 +1689,10 @@ fn chat_metadata_commands_validate_and_enforce_the_user_action_boundary() {
     }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
@@ -1723,7 +1750,10 @@ fn chat_metadata_command_merges_current_unpatched_fields_and_conflicts_on_a_stal
     );
     assert_eq!(*repo.state.lock().unwrap(), state);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[test]
@@ -1783,7 +1813,10 @@ fn every_preparation_command_delegates_its_owner_without_opening_an_agent() {
         );
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-        assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+        assert_eq!(
+            repo.terminals.inventory().unwrap().rows(),
+            [] as [serde_json::Value; 0]
+        );
     }
 }
 
@@ -1912,8 +1945,14 @@ fn chat_metadata_commands_are_reversible_allowed_and_return_only_updated_metadat
             assert_eq!(&state[key], value);
         }
     }
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
-    assert_eq!(repo.shells.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        repo.shells.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn chat_metadata_commands_reject_bad_targets_and_unknown_fields_without_writes() {
@@ -2066,7 +2105,10 @@ fn skill_commands_return_saved_identities_and_truthful_demo_receipts() {
             && record["newsletterId"] == preset_id
             && record.get("runReceipt").is_none()));
     drop(state);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[test]

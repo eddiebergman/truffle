@@ -1,12 +1,12 @@
 use super::*;
-struct DemoCleanup {
-    host: Arc<super::super::terminal_daemon::Host>,
+struct DemoCleanup<'a> {
+    terminals: &'a super::super::terminals::Terminals,
     id: String,
     generation: String,
 }
-impl Drop for DemoCleanup {
+impl Drop for DemoCleanup<'_> {
     fn drop(&mut self) {
-        let _ = self.host.close(&self.id, &self.generation);
+        let _ = self.terminals.close(&self.id, &self.generation);
     }
 }
 #[test]
@@ -62,10 +62,10 @@ fn saved_chat_open_observes_unregistered_live_terminal_without_launch_packet_or_
         Ok(())
     })
     .unwrap();
-    repo.embedded.open_demo(&record).unwrap();
-    let generation = text(&repo.embedded.inventory()[0], "generation").to_owned();
+    repo.terminals.open_demo(&record).unwrap();
+    let generation = text(&repo.terminals.inventory().unwrap().rows()[0], "generation").to_owned();
     let _cleanup = DemoCleanup {
-        host: repo.embedded.clone(),
+        terminals: &repo.terminals,
         id: id.clone(),
         generation: generation.clone(),
     };
@@ -85,7 +85,7 @@ fn saved_chat_open_observes_unregistered_live_terminal_without_launch_packet_or_
         assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
         assert!(!repo.data.parent().unwrap().join("contexts").exists());
         assert_eq!(
-            text(&repo.embedded.inventory()[0], "generation"),
+            text(&repo.terminals.inventory().unwrap().rows()[0], "generation"),
             generation
         );
         repo.transaction(|s| {
@@ -100,7 +100,7 @@ fn saved_chat_open_observes_unregistered_live_terminal_without_launch_packet_or_
         );
         Ok(())
     })();
-    let close = repo.embedded.close(&id, &generation);
+    let close = repo.terminals.close(&id, &generation);
     result.unwrap();
     close.unwrap();
     assert!(open_chat_with(

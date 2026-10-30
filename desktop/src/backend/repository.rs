@@ -74,8 +74,8 @@ pub struct Repository {
     pub data: PathBuf,
     pub state: Mutex<Value>,
     pub providers: ProviderHost,
-    pub embedded: Arc<super::terminal_daemon::Host>,
-    pub shells: Arc<super::terminal_daemon::Host>,
+    pub terminals: super::terminals::Terminals,
+    pub shells: super::terminals::Terminals,
     pub demo: bool,
     pub git_diff_cache: Mutex<super::git_diff::Cache>,
     pub gcp_auth: Arc<super::gcp_auth::LoginHost>,
@@ -84,7 +84,7 @@ pub struct Repository {
     pub opening: Mutex<BTreeSet<String>>,
     pub sharing: Mutex<Value>,
     pub sharing_busy: Mutex<BTreeSet<String>>,
-    inventory_cache: Mutex<Option<(f64, Value)>>,
+    folders_cache: Mutex<Option<(f64, Value)>>,
     revision: AtomicU64,
     generation: String,
     snapshot_cache: Mutex<Option<(u64, f64, Value)>>,
@@ -118,7 +118,9 @@ impl Repository {
         let providers = ProviderHost::new(&root, data.parent().unwrap())?;
         state["sources"]["sentry"]["disabled"] = json!(!providers.sentry_configured());
         let sharing = super::sharing::load(data.parent().unwrap())?;
-        let embedded = Arc::new(super::terminal_daemon::Host::new(&root, &data, demo)?);
+        let terminals = super::terminals::Terminals::new(super::terminal_daemon::Host::new(
+            &root, &data, demo,
+        )?);
         let settings = super::settings::Store::load(data.parent().unwrap().join("settings.json"))?;
         let repo = Arc::new(Self {
             settings,
@@ -126,7 +128,7 @@ impl Repository {
             quick_actions: std::sync::Arc::new(super::quick_actions::Host::load(
                 data.parent().unwrap().join("quick-actions.json"),
             )?),
-            shells: Arc::new(super::terminal_daemon::Host::new(
+            shells: super::terminals::Terminals::new(super::terminal_daemon::Host::new(
                 &root,
                 &data.parent().unwrap().join("shell-terminals.json"),
                 demo,
@@ -136,7 +138,7 @@ impl Repository {
             data,
             state: Mutex::new(state),
             providers,
-            embedded,
+            terminals,
             demo,
             git_diff_cache: Mutex::new(super::git_diff::Cache::default()),
             gcp_auth: Arc::new(super::gcp_auth::LoginHost::default()),
@@ -145,7 +147,7 @@ impl Repository {
             opening: Mutex::new(BTreeSet::new()),
             sharing: Mutex::new(sharing),
             sharing_busy: Mutex::new(BTreeSet::new()),
-            inventory_cache: Mutex::new(None),
+            folders_cache: Mutex::new(None),
             revision: AtomicU64::new(1),
             generation: uuid(),
             snapshot_cache: Mutex::new(None),
@@ -670,23 +672,24 @@ impl Repository {
         }
         json!({"entries":events,"limit":500,"path":"data/logs/sync.jsonl"})
     }
+    /// The live terminal list for the UI. A daemon failure becomes a warning.
     pub fn inventory(&self) -> Value {
-        let mut cache = self.inventory_cache.lock().unwrap();
-        if let Some((until, value)) = &*cache {
-            if *until > now() {
-                let mut value = value.clone();
-                let mut candidates = arr(&value["candidates"]);
-                candidates.retain(|x| x["host"] != "embedded");
-                candidates.extend(self.embedded.inventory());
-                value["candidates"] = json!(candidates);
-                value["warning"] = json!(self.embedded.warning());
-                return value;
+        let (candidates, warning) = match self.terminals.inventory() {
+            Ok(inventory) => (inventory.rows().to_vec(), None),
+            Err(error) => (vec![], Some(error.message)),
+        };
+        let folders = {
+            let mut cache = self.folders_cache.lock().unwrap();
+            match &*cache {
+                Some((until, folders)) if *until > now() => folders.clone(),
+                _ => {
+                    let folders = super::workflows::folders();
+                    *cache = Some((now() + 4.0, folders.clone()));
+                    folders
+                }
             }
-        }
-        let folders = super::workflows::folders();
-        let value = json!({"candidates":self.embedded.inventory(),"folders":folders,"directories":arr(&folders).iter().map(|x|x["path"].clone()).collect::<Vec<_>>(),"workRoot":super::workflows::work_root(),"warning":self.embedded.warning(),"demo":self.demo});
-        *cache = Some((now() + 4.0, value.clone()));
-        value
+        };
+        json!({"candidates":candidates,"directories":arr(&folders).iter().map(|x|x["path"].clone()).collect::<Vec<_>>(),"folders":folders,"workRoot":super::workflows::work_root(),"warning":warning,"demo":self.demo})
     }
 }
 fn sentry_environment_summary(

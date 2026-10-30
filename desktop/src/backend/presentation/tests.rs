@@ -53,7 +53,10 @@ fn presentation_canonical_builder_is_shared_bounded_and_strips_private_extension
         result["pending"][0]["presentation"]["items"][1]["item"]["items"][0]["title"],
         "Linked"
     );
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]

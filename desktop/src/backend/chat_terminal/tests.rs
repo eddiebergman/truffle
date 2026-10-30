@@ -10,7 +10,7 @@ fn shell_identity_and_working_directory_survive_reopen() {
         .transaction(|s| Ok(sessions::fixture(s, root.path(), |_| {})))
         .unwrap();
     let first = open(&repo, &json!({"recordId":chat})).unwrap();
-    repo.shells.input(text(&first,"id"),"export TRUFFLE_SHELL_TEST=retained\nprintf 'shell-check:%s\\n' \"$TRUFFLE_SHELL_TEST\"\n").unwrap();
+    repo.shells.send(text(&first,"id"),"export TRUFFLE_SHELL_TEST=retained\nprintf 'shell-check:%s\\n' \"$TRUFFLE_SHELL_TEST\"\n").unwrap();
     let second = open(&repo, &json!({"recordId":chat})).unwrap();
     assert_eq!(first["id"], second["id"]);
     assert_eq!(

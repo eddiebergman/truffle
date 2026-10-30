@@ -612,8 +612,14 @@ fn scope(all: &[Value], id: &str, kind: Kind, item: &str) -> Option<Value> {
         })
         .cloned()
 }
+fn lossy_inventory(repo: &Repository) -> Vec<Value> {
+    repo.terminals
+        .inventory()
+        .map(|inventory| inventory.rows().to_vec())
+        .unwrap_or_default()
+}
 pub fn prepare(repo: &Repository, kind: Kind, args: &Value) -> Result<Value> {
-    prepare_with(repo, kind, args, || Ok(repo.embedded.inventory()), uuid)
+    prepare_with(repo, kind, args, || Ok(lossy_inventory(repo)), uuid)
 }
 fn prepare_with(
     repo: &Repository,
@@ -690,8 +696,8 @@ pub fn submit(repo: &Repository, args: &Value) -> Result<Value> {
     submit_with(
         repo,
         args,
-        || Ok(repo.embedded.inventory()),
-        |id, data| repo.embedded.input(id, data),
+        || Ok(lossy_inventory(repo)),
+        |id, data| repo.terminals.send(id, data),
         || Ok(()),
     )
 }

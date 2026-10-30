@@ -53,7 +53,10 @@ fn quick_folder_canonical_failure_removes_only_created_leaf_and_immediate_retry_
         record["cwd"],
         json!(root.join("owned-project").canonicalize().unwrap())
     );
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn quick_folder_review_validation_precedes_creation_for_missing_or_malformed_template() {

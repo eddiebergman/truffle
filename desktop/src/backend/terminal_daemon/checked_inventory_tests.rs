@@ -1,25 +1,20 @@
 use super::*;
 use crate::backend::uuid;
 #[test]
-fn runtime_inventory_failure_is_per_call_even_when_shared_warning_is_clear() {
+fn inventory_without_a_socket_is_empty_and_a_stale_socket_fails() {
     let temp = tempfile::tempdir().unwrap();
-    let remote = Remote {
+    let host = Host::Remote(Remote {
         root: temp.path().into(),
         data: temp.path().join("state.json"),
         dir: temp.path().into(),
         opening: Mutex::new(()),
-        warning: Mutex::new(None),
-    };
-    let host = Host::Remote(remote);
-    let failure = host.inventory_checked();
-    assert!(failure.is_err());
-    assert!(host.warning().is_none());
-    assert_eq!(host.inventory(), [] as [serde_json::Value; 0]);
-    assert!(failure.is_err());
-    assert!(!temp.path().join("terminal.sock").exists());
+    });
+    assert_eq!(host.inventory().unwrap(), [] as [serde_json::Value; 0]);
+    drop(UnixListener::bind(temp.path().join("terminal.sock")).unwrap());
+    assert!(host.inventory().is_err());
 }
 #[test]
-fn runtime_inventory_checked_rejects_invalid_reply_and_preserves_exact_generation() {
+fn runtime_inventory_rejects_invalid_reply_and_preserves_exact_generation() {
     for value in [
         json!({"bad":"shape"}),
         json!([{"host":"embedded","recordId":uuid(),"agent":"codex","sessionId":null,"generation":uuid(),"live":true}]),
@@ -42,9 +37,8 @@ fn runtime_inventory_checked_rejects_invalid_reply_and_preserves_exact_generatio
             data: temp.path().join("state.json"),
             dir: temp.path().into(),
             opening: Mutex::new(()),
-            warning: Mutex::new(None),
         });
-        let result = host.inventory_checked();
+        let result = host.inventory();
         server.join().unwrap();
         if expected.is_array() {
             assert_eq!(json!(result.unwrap()), expected);

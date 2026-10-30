@@ -46,6 +46,7 @@ pub mod sharing;
 pub mod skill_presets;
 pub mod terminal;
 pub mod terminal_daemon;
+pub mod terminals;
 pub mod view_context;
 pub mod workflows;
 pub use repository::Repository;

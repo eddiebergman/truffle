@@ -26,7 +26,10 @@ fn registration_resolution_merges_latest_links_and_omitted_title_without_overwri
     assert_eq!(state["itemSettings"]["note:old"]["cwd"], "existing folder");
     assert!(state["itemSettings"].get("note:concurrent").is_none());
     drop(state);
-    assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
+    assert_eq!(
+        repo.terminals.inventory().unwrap().rows(),
+        [] as [serde_json::Value; 0]
+    );
 }
 #[test]
 fn registration_explicit_title_is_intentional_and_repeated_association_keeps_exact_record() {

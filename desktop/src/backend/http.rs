@@ -459,34 +459,24 @@ fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
 fn terminal_post(repo: &Repository, path: &str, payload: &Value) -> Result<Value> {
     let id = sid(text(payload, "id"))?;
     Ok(match path {
-        "/api/terminal/poll" => repo.embedded.poll(
+        "/api/terminal/poll" => repo.terminals.poll(
             &id,
             payload["cursor"].as_u64().unwrap_or(0),
             text(payload, "generation"),
         )?,
         "/api/terminal/close" => {
-            repo.embedded.close(&id, text(payload, "generation"))?;
+            repo.terminals.close(&id, text(payload, "generation"))?;
             json!({"message":"Terminal closed. The saved conversation remains in History."})
         }
         "/api/terminal/input" => {
             let data = payload["data"]
                 .as_str()
                 .ok_or_else(|| Error::new("Expected terminal input."))?;
-            repo.embedded.input(&id, data)?;
+            repo.terminals.send(&id, data)?;
             json!({})
         }
         "/api/terminal/resize" => {
-            let cols = payload["cols"]
-                .as_u64()
-                .filter(|n| *n <= 500)
-                .and_then(|n| u16::try_from(n).ok())
-                .ok_or_else(|| Error::new("Invalid columns."))?;
-            let rows = payload["rows"]
-                .as_u64()
-                .filter(|n| *n <= 200)
-                .and_then(|n| u16::try_from(n).ok())
-                .ok_or_else(|| Error::new("Invalid rows."))?;
-            repo.embedded.resize(&id, cols, rows)?;
+            repo.terminals.resize(&id, payload)?;
             json!({})
         }
         _ => return Err(Error::new("Terminal operation unavailable.")),
@@ -764,7 +754,7 @@ pub fn serve(
         }
         for id in id.split(',') {
             let record = sessions::get(&repo.state.lock().unwrap(), id)?.clone();
-            repo.embedded.open_demo(&record)?;
+            repo.terminals.open_demo(&record)?;
         }
     }
     let server = tiny_http::Server::http(("127.0.0.1", port))

@@ -32,11 +32,11 @@ fn companion_shell_action_preserves_whitespace_input_and_validates_payloads() {
     // No interactive shell, login scripts, model, or persistent daemon.
     let mut command = CommandBuilder::new("/bin/cat");
     command.cwd(root.path());
-    let super::super::terminal_daemon::Host::Local(host) = repo.shells.as_ref() else {
+    let super::super::terminal_daemon::Host::Local(host) = repo.shells.host() else {
         panic!("Demo repository must use an isolated in-memory terminal host");
     };
     host.spawn(&json!({"id":id}), command).unwrap();
-    let generation = text(&repo.shells.inventory()[0], "generation").to_owned();
+    let generation = text(&repo.shells.inventory().unwrap().rows()[0], "generation").to_owned();
     let outcome = (|| -> Result<()> {
         let input = |data: Value| {
             super::super::chat_terminal::action(

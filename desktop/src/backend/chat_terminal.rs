@@ -38,21 +38,11 @@ pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
             let data = p["data"]
                 .as_str()
                 .ok_or_else(|| Error::new("Expected terminal input."))?;
-            repo.shells.input(&id, data)?;
+            repo.shells.send(&id, data)?;
             Ok(json!({}))
         }
         "resize" => {
-            let cols = p["cols"]
-                .as_u64()
-                .filter(|n| (10..=500).contains(n))
-                .and_then(|n| u16::try_from(n).ok())
-                .ok_or_else(|| Error::new("Invalid columns."))?;
-            let rows = p["rows"]
-                .as_u64()
-                .filter(|n| (2..=200).contains(n))
-                .and_then(|n| u16::try_from(n).ok())
-                .ok_or_else(|| Error::new("Invalid rows."))?;
-            repo.shells.resize(&id, cols, rows)?;
+            repo.shells.resize(&id, p)?;
             Ok(json!({}))
         }
         "close" => {

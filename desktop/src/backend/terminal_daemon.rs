@@ -149,7 +149,6 @@ pub struct Remote {
     data: PathBuf,
     dir: PathBuf,
     opening: Mutex<()>,
-    warning: Mutex<Option<String>>,
 }
 impl Host {
     pub fn new(root: &Path, data: &Path, demo: bool) -> Result<Self> {
@@ -163,45 +162,19 @@ impl Host {
             data: data.to_owned(),
             dir,
             opening: Mutex::new(()),
-            warning: Mutex::new(None),
         }))
     }
-    pub fn warning(&self) -> Option<String> {
-        match self {
-            Self::Local(_) => None,
-            Self::Remote(r) => r.warning.lock().unwrap().clone(),
-        }
-    }
-    /// Per-call inventory outcome; does not start or repair a daemon.
-    pub(super) fn inventory_checked(&self) -> Result<Vec<Value>> {
+    /// Per-call inventory; does not start or repair a daemon.
+    pub fn inventory(&self) -> Result<Vec<Value>> {
         match self {
             Self::Local(host) => Ok(host.inventory()),
+            // A daemon that never started has no terminals. A stale socket still fails.
+            Self::Remote(remote) if !remote.dir.join("terminal.sock").exists() => Ok(vec![]),
             Self::Remote(remote) => remote
                 .request(&json!({"op":"inventory"}))?
                 .as_array()
                 .cloned()
                 .ok_or_else(|| Error::new("Terminal inventory response is invalid.")),
-        }
-    }
-    pub fn inventory(&self) -> Vec<Value> {
-        if let Self::Remote(remote) = self {
-            if !remote.dir.join("terminal.sock").exists() {
-                return vec![];
-            }
-        }
-        match self.inventory_checked() {
-            Ok(rows) => {
-                if let Self::Remote(remote) = self {
-                    *remote.warning.lock().unwrap() = None;
-                }
-                rows
-            }
-            Err(error) => {
-                if let Self::Remote(remote) = self {
-                    *remote.warning.lock().unwrap() = Some(error.message);
-                }
-                vec![]
-            }
         }
     }
     pub fn open(

@@ -1239,7 +1239,7 @@ pub fn open_chat(repo: &Repository, args: &Value) -> Result<Value> {
         if record["destination"] == "desktop" {
             terminal::open_desktop(record, &packet.to_string_lossy())
         } else {
-            repo.embedded.open(
+            repo.terminals.open(
                 record,
                 &packet.to_string_lossy(),
                 record["launchNew"] == true,
@@ -1254,10 +1254,10 @@ fn open_chat_with(
     launch: impl FnOnce(&Value, &std::path::Path) -> Result<terminal::OpenOutcome>,
 ) -> Result<Value> {
     open_chat_observing(repo, args, launch, |record| {
-        repo.embedded
-            .inventory_checked()
+        repo.terminals
+            .inventory()
             .map_or(terminal::RuntimeObservation::Unavailable, |inventory| {
-                terminal::existing_codex_runtime(record, &inventory, false)
+                terminal::existing_codex_runtime(record, inventory.rows(), false)
             })
     })
 }
