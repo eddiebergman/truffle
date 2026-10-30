@@ -218,11 +218,9 @@ struct ProviderRemote {
 impl ProviderRemote {
     fn new() -> Self {
         Self {
-            client: ureq::Agent::config_builder()
+            client: super::http_config()
                 .user_agent("truffle-connections/1")
                 .proxy(None)
-                .max_redirects(0)
-                .http_status_as_error(false)
                 .timeout_global(Some(Duration::from_secs(20)))
                 .build()
                 .into(),

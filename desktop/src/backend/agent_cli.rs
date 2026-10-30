@@ -492,10 +492,8 @@ fn wait_inbox(inbox: &Path, nonce: &str) -> Result<Value> {
 }
 fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Result<Value> {
     if !inbox_only {
-        let client: ureq::Agent = ureq::Agent::config_builder()
+        let client: ureq::Agent = super::http_config()
             .proxy(None)
-            .max_redirects(0)
-            .http_status_as_error(false)
             .user_agent("")
             .timeout_global(Some(Duration::from_millis(if hook {
                 1500

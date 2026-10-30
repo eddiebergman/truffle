@@ -123,10 +123,8 @@ impl LocalHttpService {
                     .into(),
             );
         }
-        let client = ureq::Agent::config_builder()
+        let client = crate::backend::http_config()
             .proxy(None)
-            .max_redirects(0)
-            .http_status_as_error(false)
             .user_agent("")
             .timeout_connect(Some(Duration::from_secs(2)))
             .timeout_global(Some(Duration::from_secs(120)))

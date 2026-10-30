@@ -526,10 +526,8 @@ impl Gcs {
         ))
     }
     fn new(api: Url, bucket: String, prefix: String, token: String) -> Self {
-        let client = ureq::Agent::config_builder()
+        let client = super::http_config()
             .proxy(None)
-            .max_redirects(0)
-            .http_status_as_error(false)
             .user_agent("")
             .timeout_connect(Some(Duration::from_secs(5)))
             .timeout_global(Some(Duration::from_secs(30)))

@@ -104,6 +104,21 @@ impl From<serde_json::Error> for Error {
     }
 }
 pub type Result<T> = std::result::Result<T, Error>;
+/// Settings every HTTP client shares: no redirects, HTTP statuses as values, and
+/// the operating system's certificate verifier.
+pub fn http_config() -> ureq::config::ConfigBuilder<ureq::typestate::AgentScope> {
+    ureq::Agent::config_builder()
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .unversioned_rustls_crypto_provider(std::sync::Arc::new(
+                    rustls::crypto::ring::default_provider(),
+                ))
+                .build(),
+        )
+}
 pub fn now() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

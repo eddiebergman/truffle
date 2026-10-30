@@ -10,7 +10,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
 // check fails once an entry is old enough, so remove it then.
 const EXEMPT = {
   "crates.io:rustls-webpki@0.103.16": "RUSTSEC-2026-0382",
-  "crates.io:webpki-roots@1.0.10": "RUSTSEC-2026-0381",
+  "crates.io:webpki-root-certs@1.0.10": "RUSTSEC-2026-0383",
 };
 const cacheDirectory = `${homedir()}/.cache/truffle`;
 const cachePath = `${cacheDirectory}/release-times.json`;

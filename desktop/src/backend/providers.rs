@@ -170,11 +170,9 @@ impl Providers {
         redaction_secrets.dedup();
         redaction_secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
         Ok(Self {
-            client: ureq::Agent::config_builder()
+            client: super::http_config()
                 .user_agent("truffle-local/1")
                 .proxy(https_proxy())
-                .max_redirects(0)
-                .http_status_as_error(false)
                 .timeout_global(Some(std::time::Duration::from_secs(25)))
                 .build()
                 .into(),
