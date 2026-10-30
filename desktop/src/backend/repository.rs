@@ -1,7 +1,6 @@
 //! Sole writer of the canonical JSON state. UI projections never write layout into records.
 use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
 use super::{connections::ProviderHost, domain, sessions, source_sync::SourceSync};
-use fs2::FileExt;
 use std::{
     collections::BTreeSet,
     fs::{File, OpenOptions},
@@ -16,14 +15,14 @@ use std::{
 struct DataFileLock(File);
 impl DataFileLock {
     fn acquire(file: File) -> Result<Self> {
-        file.try_lock_exclusive()
+        file.try_lock()
             .map_err(|_| Error::new("Another truffle service is using this data file."))?;
         Ok(Self(file))
     }
 }
 impl Drop for DataFileLock {
     fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.0);
+        let _ = self.0.unlock();
     }
 }
 

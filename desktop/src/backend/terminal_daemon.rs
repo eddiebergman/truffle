@@ -1,6 +1,5 @@
 //! A same-user Unix socket separates PTY lifetime from the replaceable HTTP/UI process.
 use super::{json, sid, text, Error, PathBuf, Result, Value};
-use fs2::FileExt;
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
@@ -272,13 +271,13 @@ impl Remote {
     fn ensure(&self) -> Result<()> {
         let _guard = self.opening.lock().unwrap();
         let launch = lockfile(&self.dir.join("launch.lock"))?;
-        launch.lock_exclusive()?;
+        launch.lock()?;
         if self.dir.join("terminal.sock").exists() {
             match self.request(&json!({"op":"health"})) {
                 Ok(v) => return self.validate(&v),
                 Err(e) => {
                     let owner = lockfile(&self.dir.join("daemon.lock"))?;
-                    if owner.try_lock_exclusive().is_err() {
+                    if owner.try_lock().is_err() {
                         return Err(e);
                     }
                     // A crashed daemon left a stale socket. Only the new owner may replace it.
@@ -411,7 +410,7 @@ pub fn serve(root: &Path, data: &Path, allow_demo: bool) -> Result<()> {
     let dir = socket_directory(data)?;
     private_directory(&dir)?;
     let lock = lockfile(&dir.join("daemon.lock"))?;
-    lock.try_lock_exclusive()
+    lock.try_lock()
         .map_err(|_| Error::new("A terminal daemon already owns this data path."))?;
     let socket = dir.join("terminal.sock");
     if socket.exists() {

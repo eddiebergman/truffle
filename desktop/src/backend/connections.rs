@@ -1,7 +1,6 @@
 //! Native credential setup. Public projections contain no credentials.
 use super::source_sync::ProviderSource;
 use super::{json, now, text, uuid, Error, PathBuf, Repository, Result, Value};
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -519,7 +518,7 @@ impl SetupHost {
             .truncate(false)
             .mode(0o600)
             .open(directory.join("connections.lock"))?;
-        lock.lock_exclusive()?;
+        lock.lock()?;
         let mut config = load_config(&self.profile)?;
         if config.revision != current.revision {
             return Err(Error::new(

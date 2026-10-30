@@ -4,7 +4,6 @@ use crate::{
     backend::{self, arr, text},
     service::{DashboardService, LocalHttpService},
 };
-use fs2::FileExt;
 use serde_json::{json, Value};
 use std::{
     fs::{File, OpenOptions},
@@ -66,7 +65,7 @@ fn lock(path: &Path) -> Result<File> {
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
         .open(path))?;
-    file.try_lock_exclusive()
+    file.try_lock()
         .map_err(|_| "Another restart is already running.".to_owned())?;
     Ok(file)
 }
@@ -188,7 +187,7 @@ fn daemon(root: &Path) -> Result<Option<Value>> {
                 .read(true)
                 .write(true)
                 .open(dir.join("daemon.lock")))?;
-            if file.try_lock_exclusive().is_ok() {
+            if file.try_lock().is_ok() {
                 Ok(None)
             } else {
                 Err(e.message)
