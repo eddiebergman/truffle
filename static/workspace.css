@@ -3567,23 +3567,6 @@ button.git-file-row {
   height: 16px;
 }
 
-#action-palette {
-  width: min(780px, calc(100vw - 32px));
-  padding: 16px;
-  max-height: 82dvh;
-}
-
-.action-palette-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.action-palette-header h2 {
-  font-size: 14px;
-  margin: 0;
-}
-
 .terminal-focused .agent-heading h2 {
   font-size: 11px;
   color: var(--muted);
@@ -3591,54 +3574,6 @@ button.git-file-row {
 
 #folder-dialog h2 {
   font-size: 13px;
-}
-
-#action-context {
-  display: block;
-  color: var(--muted);
-  font-size: 10px;
-  margin: 3px 0 10px;
-}
-
-#action-query {
-  width: 100%;
-  font-size: 14px;
-  margin: 0 0 10px;
-  padding: 9px;
-}
-
-#action-results {
-  overflow: auto;
-  max-height: 58dvh;
-}
-
-.action-command {
-  display: block;
-  text-align: left;
-  width: 100%;
-  background: transparent;
-  color: var(--text);
-  border: 0;
-  border-radius: 5px;
-  padding: 9px 10px;
-  cursor: pointer;
-}
-
-.action-command:hover,
-.action-command.selected {
-  background: var(--overlay);
-}
-
-.action-command-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.action-command-heading strong {
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .agent-tab .live-agent-words strong {
@@ -3653,29 +3588,6 @@ button.git-file-row {
 
 .agent-tab:has(.selected) .live-agent-words strong {
   max-width: 420px;
-}
-
-.action-command-heading kbd {
-  font-size: 10px;
-}
-
-.action-command > small {
-  display: block;
-  color: var(--muted);
-  font-size: 10px;
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-}
-
-.action-command .palette-result-meta {
-  margin-top: 6px;
-}
-
-.action-hint {
-  display: block;
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 10px;
 }
 
 .git-file-list {

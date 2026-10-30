@@ -1,14 +1,127 @@
-#action-results .action-command[aria-selected="true"] {
-  background: var(--overlay);
-  box-shadow: inset 3px 0 0 var(--accent);
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
+#action-palette {
+  width: min(640px, calc(100vw - 32px));
+  max-height: 82dvh;
+  margin: 12dvh auto auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 25%, transparent);
+  font-size: 13px;
 }
 
-#action-results
-  .action-command[aria-selected="true"]
-  .action-command-heading
-  strong {
-  color: var(--accent);
-  font-weight: 600;
+#action-palette::backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.action-query-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+#action-step {
+  flex: none;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+#action-step::after {
+  content: " ›";
+}
+
+#action-query {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  outline: none;
+}
+
+#action-results {
+  overflow: auto;
+  max-height: 58dvh;
+  padding: 4px;
+}
+
+#action-results .form-hint {
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.action-command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.action-command:hover,
+.action-command.selected {
+  background: var(--overlay);
+}
+
+.action-command:active {
+  transform: none;
+}
+
+.action-command-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-command-suffix {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-command kbd {
+  flex: none;
+  margin-left: auto;
+}
+
+.action-command-suffix + kbd {
+  margin-left: 0;
+}
+
+.action-hint {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.action-hint:empty {
+  display: none;
+}
+
+.action-hint kbd {
+  margin-left: 6px;
 }
