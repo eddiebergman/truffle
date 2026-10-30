@@ -1798,8 +1798,7 @@ function renderSync() {
   }
 }
 const projectEditableFields = ["title", "detail", "url", "status", "cwd"];
-let projectEditor = null,
-  projectStatusAction = null;
+let projectStatusAction = null;
 function projectNotice(host, label = "Project recovery actions") {
   host.querySelector("[data-project-notice]")?.remove();
   const region = el("div");
@@ -1859,12 +1858,6 @@ function restoreFormFocus(current, target) {
   }
   target.focus({ preventScroll: true });
 }
-function projectCorrectionTarget(current, form) {
-  return current.focusReturn?.matches("input,textarea,select") &&
-    !current.focusReturn.disabled
-    ? current.focusReturn
-    : form.elements.title;
-}
 function projectControls(host, current, locked) {
   current.host = host;
   current.controls ??= new Map();
@@ -1915,29 +1908,19 @@ function inspectProjects(dialog, isCurrent) {
 }
 async function openNote(item = null) {
   const dialog = $("#note-dialog");
-  if (projectEditor?.pending && dialog.open) {
+  if (featureForms.get(dialog)?.pending && dialog.open) {
     return;
   }
   if (!requestDialogNavigation()) {
     return false;
   }
-  releaseProjectControls(projectEditor);
+  disposeFeatureForm(dialog);
   const form = $("#note-form");
   form.reset();
-  const current = (projectEditor = {
-    id: item?.id || "",
-    page: source,
-    baseline: null,
-    pending: false,
-    loading: Boolean(item),
-    accepted: null,
-    unknown: false,
-    conflicted: false,
-  });
-  const isCurrent = () =>
-    projectEditor === current && dialog.open && source === current.page;
-  current.isCurrent = isCurrent;
-  form.elements.id.value = current.id;
+  const current = createFeatureForm(dialog, form, item?.id || "");
+  current.baseline = null;
+  current.loading = Boolean(item);
+  form.elements.id.value = current.target;
   for (const key of projectEditableFields) {
     form.elements[key].value = key === "status" ? "todo" : "";
   }
@@ -1946,16 +1929,24 @@ async function openNote(item = null) {
   remove.hidden = !item;
   remove.textContent = "Delete project";
   remove.dataset.confirm = "";
-  current.ui = projectNotice(form);
-  current.ui.inspect.onclick = () => inspectProjects(dialog, isCurrent);
-  current.ui.refresh.onclick = () => refreshProjectEditor(current);
-  current.ui.reload.onclick = () => {
-    if (isCurrent() && !current.pending) {
-      void openNote(current.id ? { id: current.id } : null);
-    }
-  };
+  current.ui.inspect.textContent = "Close and inspect Projects";
+  current.ui.inspect.onclick = () => inspectProjects(dialog, current.isCurrent);
+  const reload = featureButton(
+    "Discard draft and reload",
+    () => {
+      if (current.isCurrent() && !current.pending) {
+        void openNote(current.target ? { id: current.target } : null);
+      }
+    },
+    "ui-control",
+  );
+  reload.dataset.variant = "secondary";
+  reload.dataset.featureRecovery = "true";
+  reload.hidden = true;
+  current.ui.refresh.parentElement.append(reload);
+  current.ui.reload = reload;
   current.ui.message.textContent = item ? "Loading current project…" : "";
-  projectControls(form, current, Boolean(item));
+  freezeFeatureForm(current, Boolean(item));
   dialog.showModal();
   if (!item) {
     form.elements.title.focus();
@@ -1965,9 +1956,9 @@ async function openNote(item = null) {
   try {
     const baseline = await api("/api/commands/invoke", {
       name: "projects.read",
-      args: { id: current.id },
+      args: { id: current.target },
     });
-    if (!isCurrent()) {
+    if (!current.isCurrent()) {
       return;
     }
     current.baseline = baseline;
@@ -1976,180 +1967,70 @@ async function openNote(item = null) {
     }
     current.ui.message.textContent = "";
   } catch (error) {
-    if (isCurrent()) {
+    if (current.isCurrent()) {
       current.ui.message.textContent = `${error.message} Reload the project before editing.`;
-      current.ui.reload.textContent = "Reload project";
-      current.ui.reload.hidden = false;
+      reload.textContent = "Reload project";
+      reload.hidden = false;
     }
   } finally {
     current.loading = false;
-    if (isCurrent()) {
-      projectControls(form, current, !current.baseline);
+    if (current.isCurrent()) {
+      freezeFeatureForm(current, !current.baseline);
       restoreFormFocus(
         current,
-        current.baseline ? form.elements.title : current.ui.reload,
+        current.baseline ? form.elements.title : reload,
       );
     }
   }
 }
-async function refreshProjectEditor(current) {
-  if (!current.isCurrent() || current.pending || current.refreshing) {
-    return;
-  }
-  holdFormFocus($("#note-form"), current);
-  current.refreshing = true;
-  projectControls($("#note-form"), current, true);
-  current.ui.refresh.disabled = true;
-  try {
-    const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted) {
-      throw new Error("The dashboard changed while refreshing.");
-    }
-    if (!current.isCurrent()) {
-      return;
-    }
-    render();
-    if (current.unknown) {
-      current.ui.message.textContent =
-        "The save outcome is unknown. The dashboard data was refreshed. Inspect it before creating or saving again; this draft has not been resubmitted.";
-      return;
-    }
-    $("#note-dialog").close();
-    toast(
-      current.accepted
-        ? current.acceptedText || "Project saved on this computer."
-        : "No project changes.",
-    );
-  } catch {
-    if (current.isCurrent()) {
-      current.ui.message.textContent = current.localWriteResult
-        ? localWriteMessage(current.localWriteResult, current.acceptedText)
-        : current.unknown
-          ? "The save outcome is unknown. Inspect Projects before creating or saving again."
-          : "Project saved on this computer. The dashboard could not refresh. Use Refresh view; do not save again.";
-      current.ui.refresh.hidden = false;
-      current.ui.inspect.hidden = false;
-    }
-  } finally {
-    current.refreshing = false;
-    if (current.isCurrent()) {
-      projectControls($("#note-form"), current, true);
-      current.ui.refresh.disabled = false;
-      restoreFormFocus(
-        current,
-        current.unknown ? current.ui.inspect : current.ui.refresh,
-      );
-    }
-  }
+function projectEditorMutable(current) {
+  return (
+    featureFormMutable(current) &&
+    !current.loading &&
+    (!current.target || Boolean(current.baseline))
+  );
 }
 async function saveProjectEditor(event) {
   event.preventDefault();
-  const current = projectEditor;
-  if (
-    !current ||
-    !current.isCurrent() ||
-    current.pending ||
-    current.loading ||
-    current.accepted ||
-    current.unknown ||
-    current.conflicted ||
-    (current.id && !current.baseline)
-  ) {
+  const current = featureForms.get($("#note-dialog"));
+  if (!projectEditorMutable(current)) {
     return;
   }
   const form = $("#note-form"),
     values = Object.fromEntries(
       projectEditableFields.map((key) => [key, form.elements[key].value]),
     );
-  const patch = current.id
-    ? Object.fromEntries(
-        Object.entries(values).filter(
-          ([key, value]) => value !== current.baseline.project[key],
-        ),
-      )
-    : values;
-  if (current.id && !Object.keys(patch).length) {
-    $("#note-dialog").close();
-    toast("No project changes.");
-    return;
+  let name = "projects.create",
+    args = values;
+  if (current.target) {
+    const { patch, expected } = checkedPatch(
+      {
+        values: current.baseline.project,
+        expected: current.baseline.expected,
+      },
+      values,
+      projectEditableFields,
+    );
+    if (!Object.keys(patch).length) {
+      $("#note-dialog").close();
+      toast("No project changes.");
+      return;
+    }
+    name = "projects.update";
+    args = { id: current.target, patch, expected };
   }
-  current.pending = true;
-  holdFormFocus(form, current);
-  projectControls(form, current, true);
-  current.ui.message.textContent = "Saving project…";
-  try {
-    const args = current.id
-      ? {
-          id: current.id,
-          patch,
-          expected: Object.fromEntries(
-            Object.keys(patch).map((key) => [
-              key,
-              current.baseline.expected[key],
-            ]),
-          ),
-        }
-      : values;
-    current.accepted = await api("/api/commands/invoke", {
-      name: current.id ? "projects.update" : "projects.create",
-      args,
-    });
-    if (!current.isCurrent()) {
-      toast(
-        "Project saved on this computer. Refresh Projects to see it; do not save again.",
-      );
-      return;
-    }
-  } catch (error) {
-    if (!current.isCurrent()) {
-      toast(
-        projectUnknown(error)
-          ? "The project save outcome is unknown. Inspect Projects before saving again."
-          : error.message,
-      );
-      return;
-    }
-    if (error.status === 409) {
-      current.conflicted = true;
+  await submitFeatureForm(current, {
+    write: () => api("/api/commands/invoke", { name, args }),
+    acceptedText: "Project saved on this computer.",
+    afterReady: () => $("#note-dialog").close(),
+    onConflict: () => {
       current.ui.message.textContent =
         "This project changed. Your draft is kept. Discard draft and reload before reapplying your changes.";
       current.ui.reload.hidden = false;
-    } else if (projectUnknown(error)) {
-      current.unknown = true;
-      current.ui.message.textContent =
-        "The project save outcome is unknown. Inspect Projects before creating or saving again. This draft will not be resubmitted.";
-      current.ui.refresh.hidden = false;
-      current.ui.inspect.hidden = false;
-    } else {
-      current.ui.message.textContent = error.message;
-    }
-  } finally {
-    current.pending = false;
-    if (projectEditor === current && $("#note-dialog").open) {
-      projectControls(
-        form,
-        current,
-        Boolean(current.accepted || current.unknown || !current.isCurrent()),
-      );
-      if (current.conflicted) {
-        $("#note-form button[type=submit]").disabled = true;
-        $("#delete-note").disabled = true;
-      }
-      if (!current.accepted) {
-        restoreFormFocus(
-          current,
-          current.conflicted
-            ? current.ui.reload
-            : current.unknown
-              ? current.ui.inspect
-              : projectCorrectionTarget(current, form),
-        );
-      }
-    }
-  }
-  if (current.accepted && current.isCurrent()) {
-    await refreshProjectEditor(current);
-  }
+      $("#delete-note").disabled = true;
+      restoreFormFocus(current, current.ui.reload);
+    },
+  });
 }
 async function changeProjectStatus(item, status, { close = false } = {}) {
   const dialog = $("#item-dialog");
@@ -2818,17 +2699,6 @@ for (const dialog of document.querySelectorAll("dialog")) {
   });
 }
 $("#note-form").onsubmit = saveProjectEditor;
-$("#note-dialog").addEventListener("cancel", (event) => {
-  if (projectEditor?.pending) {
-    event.preventDefault();
-  }
-});
-$("#note-dialog").addEventListener("close", () => {
-  if (!$("#note-dialog").open) {
-    releaseProjectControls(projectEditor);
-    projectEditor = null;
-  }
-});
 $("#item-dialog").addEventListener("cancel", (event) => {
   if (projectStatusAction?.pending) {
     event.preventDefault();
@@ -2841,16 +2711,8 @@ $("#item-dialog").addEventListener("close", () => {
 });
 $("#delete-note").onclick = async () => {
   const button = $("#delete-note"),
-    current = projectEditor;
-  if (
-    !current ||
-    !current.isCurrent() ||
-    current.pending ||
-    current.loading ||
-    current.accepted ||
-    current.unknown ||
-    current.conflicted
-  ) {
+    current = featureForms.get($("#note-dialog"));
+  if (!projectEditorMutable(current)) {
     return;
   }
   if (!button.dataset.confirm) {
@@ -2858,49 +2720,12 @@ $("#delete-note").onclick = async () => {
     button.textContent = "Click again to delete";
     return;
   }
-  current.pending = true;
-  holdFormFocus($("#note-form"), current);
-  projectControls($("#note-form"), current, true);
-  try {
-    const result = await mutate({ action: "delete-note", id: current.id });
-    current.localWriteResult = result;
-    current.acceptedText = "Project deleted.";
-    if (result.kind === "accepted") {
-      current.accepted = result;
-    } else if (result.kind === "unknown") {
-      current.unknown = true;
-    }
-    if (!current.isCurrent()) {
-      toast(localWriteMessage(result, current.acceptedText));
-      return;
-    }
-    if (result.kind === "accepted" && result.presentation === "ready") {
-      $("#note-dialog").close();
-      toast(localWriteMessage(result, current.acceptedText));
-    } else {
-      current.ui.message.textContent = localWriteMessage(
-        result,
-        current.acceptedText,
-      );
-      if (result.kind !== "rejected") {
-        current.ui.refresh.hidden = false;
-        current.ui.inspect.hidden = false;
-      }
-    }
-  } finally {
-    current.pending = false;
-    if (current.isCurrent()) {
-      projectControls(
-        $("#note-form"),
-        current,
-        Boolean(current.accepted || current.unknown),
-      );
-      restoreFormFocus(
-        current,
-        current.accepted || current.unknown ? current.ui.refresh : button,
-      );
-    }
-  }
+  await submitFeatureForm(current, {
+    write: () =>
+      api("/api/edit", { action: "delete-note", id: current.target }),
+    acceptedText: "Project deleted.",
+    afterReady: () => $("#note-dialog").close(),
+  });
 };
 async function changeLocalItemStatus(item, status) {
   const dialog = $("#item-dialog");

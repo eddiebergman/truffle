@@ -105,13 +105,22 @@ function fixture({ handler } = {}) {
           .some((part) =>
             part === "[data-project-notice]"
               ? node.dataset.projectNotice
-              : part === "dialog[open]"
-                ? node.tagName === "dialog" && node.open
-                : part === "button[type=submit]"
-                  ? node.tagName === "button" && node.type === "submit"
+              : part === "[data-feature-write]"
+                ? node.dataset.featureWrite
+                : part === "dialog[open]"
+                  ? node.tagName === "dialog" && node.open
                   : part.startsWith(".")
                     ? node.className.split(" ").includes(part.slice(1))
-                    : node.tagName === part,
+                    : node.tagName === part.match(/^\w+/)[0] &&
+                      !(part.includes(":not(:disabled)") && node.disabled) &&
+                      !(
+                        part.includes(':not([type="hidden"])') &&
+                        node.type === "hidden"
+                      ) &&
+                      !(
+                        /\[type="?submit"?\]/.test(part) &&
+                        node.type !== "submit"
+                      ),
           )
           ? [node]
           : []),
@@ -164,6 +173,9 @@ function fixture({ handler } = {}) {
       field === "detail" ? "textarea" : field === "status" ? "select" : "input",
     );
     input.name = field;
+    if (field === "id") {
+      input.type = "hidden";
+    }
     form.elements[field] = input;
     form.append(input);
   }
@@ -187,9 +199,6 @@ function fixture({ handler } = {}) {
     itemClose = new Node("button", "close-dialog");
   itemDialog.append(itemStatus, complete, edit, archive, itemClose);
   const $ = (selector) => {
-    if (selector === "#note-form button[type=submit]") {
-      return save;
-    }
     if (!ids.has(selector)) {
       node(selector);
     }
@@ -272,7 +281,12 @@ function fixture({ handler } = {}) {
   // Load-time code fills the status select with options, which this fake does not model, so its handler is copied over.
   const host = loadScripts(
     c,
-    ["static/client.js", "static/documents.js", "static/app.js"],
+    [
+      "static/client.js",
+      "static/documents.js",
+      "static/app.js",
+      "static/features.js",
+    ],
     {
       elements: Object.fromEntries(
         [
@@ -309,7 +323,9 @@ function fixture({ handler } = {}) {
       return renders;
     },
     notice: (target) => {
-      const region = (target || form).querySelector("[data-project-notice]");
+      const region = target
+        ? target.querySelector("[data-project-notice]")
+        : form.querySelector("[data-feature-write]");
       return {
         message: region.querySelector("p"),
         buttons: region.querySelectorAll("button"),
@@ -452,7 +468,7 @@ test("accepted create with failed presentation offers reads only and never repea
   assert.equal(f.save.disabled, true);
   assert.match(
     f.notice().message.textContent,
-    /saved.*Refresh view.*do not save again/,
+    /saved.*Refresh the view.*do not repeat/,
   );
   await f.submit();
   await f.notice().button("Refresh view").onclick();
@@ -731,25 +747,27 @@ test("status read-only recovery success clears the old recovery actions and busy
 });
 test("existing two-click delete stays separate and blocks Save or dismissal while deletion is pending", async () => {
   const pendingDelete = deferred(),
-    f = fixture();
-  let deleted;
-  f.c.mutate = async (args) => {
-    deleted = args;
-    return pendingDelete.promise;
-  };
+    f = fixture({
+      handler: async (path, _args, owner) =>
+        path === "/api/edit"
+          ? pendingDelete.promise
+          : path === "/api/state"
+            ? { revision: 2, items: [] }
+            : owner.read(),
+    }),
+    deletes = () => f.calls.filter((call) => call.path === "/api/edit");
   await f.c.openNote({ id: "note:one" });
   await f.remove.onclick();
-  assert.equal(deleted, undefined);
+  assert.equal(deletes().length, 0);
   const pending = f.remove.onclick();
-  assert.deepEqual(JSON.parse(JSON.stringify(deleted)), {
-    action: "delete-note",
-    id: "note:one",
-  });
+  assert.deepEqual(JSON.parse(JSON.stringify(deletes())), [
+    { path: "/api/edit", action: "delete-note", id: "note:one" },
+  ]);
   f.c.requestDialogClose(f.note);
   assert.equal(f.note.open, true);
   await f.submit();
   assert.ok(!f.calls.some((call) => call.name === "projects.update"));
-  pendingDelete.resolve({ kind: "accepted", presentation: "ready" });
+  pendingDelete.resolve({});
   await pending;
   assert.equal(f.note.open, false);
 });

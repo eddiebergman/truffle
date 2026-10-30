@@ -1022,7 +1022,6 @@ test("feature opener admission precedes owner disposal, form reset and lifetime 
     const pending = f.submit(f.sentry),
       before = f.recovery(f.sentry).region;
     Object.assign(f.c, {
-      projectEditor: null,
       rememberReviewUI() {
         throw Error("Premature review disposal");
       },
