@@ -1,8 +1,8 @@
 //! UI-independent service port. No Tauri, DOM, layout, or persisted view state.
-use reqwest::{blocking::Client, redirect::Policy, Url};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{io::Read, sync::Mutex, time::Duration};
+use url::Url;
 
 const READ_ROUTES: &[&str] = &[
     "/api/config-status",
@@ -104,7 +104,7 @@ pub trait DashboardService: Send + Sync {
 
 pub struct LocalHttpService {
     base: Url,
-    client: Client,
+    client: ureq::Agent,
     csrf: Mutex<String>,
 }
 impl LocalHttpService {
@@ -123,13 +123,15 @@ impl LocalHttpService {
                     .into(),
             );
         }
-        let client = Client::builder()
-            .no_proxy()
-            .redirect(Policy::none())
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(120))
+        let client = ureq::Agent::config_builder()
+            .proxy(None)
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .user_agent("")
+            .timeout_connect(Some(Duration::from_secs(2)))
+            .timeout_global(Some(Duration::from_secs(120)))
             .build()
-            .map_err(|_| "Cannot initialize the service adapter.")?;
+            .into();
         Ok(Self {
             base,
             client,
@@ -198,21 +200,21 @@ impl DashboardService for LocalHttpService {
             return Err("Unsupported dashboard operation.".into());
         }
         for attempt in 0..2 {
-            let request = match &payload {
+            let response = match &payload {
                 Some(body) => self
                     .client
                     .post(self.url(path))
                     .header("Origin", self.origin())
                     .header("X-CSRF-Token", self.token()?)
-                    .json(body),
-                None => self.client.get(self.url(path)),
-            };
-            let response = request.send().map_err(|_| {
+                    .header("Content-Type", "application/json")
+                    .send(&serde_json::to_vec(body).map_err(|_| "Cannot encode the request.")?),
+                None => self.client.get(self.url(path)).call(),
+            }
+            .map_err(|_| {
                 "Cannot reach the local truffle service. Start ~/code/mydash/start.command in Terminal and retry."
             })?;
             let status = response.status().as_u16();
-            let mut body: Value = response
-                .json()
+            let mut body: Value = read_json(response)
                 .map_err(|_| "The local service returned an invalid response.")?;
             self.capture_token(&mut body);
             // A restarted service rejects the old CSRF token before performing any mutation.
@@ -228,13 +230,15 @@ impl DashboardService for LocalHttpService {
         let response = self
             .client
             .get(self.url("/api/health"))
-            .timeout(Duration::from_secs(3))
-            .send()
+            .config()
+            .timeout_global(Some(Duration::from_secs(3)))
+            .build()
+            .call()
             .map_err(|_| "The truffle service is not reachable.")?;
         if !response.status().is_success() {
             return Err("The service needs an update. Restart truffle inside cmux.".into());
         }
-        let body: Value = response.json().map_err(|_| "Invalid service identity.")?;
+        let body: Value = read_json(response).map_err(|_| "Invalid service identity.")?;
         if body["service"] != "truffle" || body["apiVersion"] != 1 {
             return Err("Unsupported local service. Expected truffle API version 1.".into());
         }
@@ -244,8 +248,10 @@ impl DashboardService for LocalHttpService {
         let response = self
             .client
             .get(self.artifact_url(id)?)
-            .timeout(Duration::from_secs(10))
-            .send()
+            .config()
+            .timeout_global(Some(Duration::from_secs(10)))
+            .build()
+            .call()
             .map_err(|_| "Artifact unavailable.")?;
         if !response.status().is_success() {
             return Err("Artifact unavailable. Its file may have moved.".into());
@@ -256,11 +262,13 @@ impl DashboardService for LocalHttpService {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("application/octet-stream")
             .to_owned();
-        if response.content_length().unwrap_or(0) > 10 * 1024 * 1024 {
+        if response.body().content_length().unwrap_or(0) > 10 * 1024 * 1024 {
             return Err("Artifact exceeds 10 MiB.".into());
         }
         let mut bytes = Vec::new();
         response
+            .into_body()
+            .into_reader()
             .take(10 * 1024 * 1024 + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| "Cannot read artifact.")?;
@@ -272,6 +280,11 @@ impl DashboardService for LocalHttpService {
             content_type,
         })
     }
+}
+fn read_json(response: ureq::http::Response<ureq::Body>) -> std::io::Result<Value> {
+    let mut bytes = Vec::new();
+    response.into_body().into_reader().read_to_end(&mut bytes)?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 pub fn validate_artifact_id(id: &str) -> Result<(), String> {
     if id.len() == 24 && id.bytes().all(|x| x.is_ascii_hexdigit()) {

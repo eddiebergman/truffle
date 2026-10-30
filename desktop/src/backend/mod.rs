@@ -158,7 +158,7 @@ pub fn safe_url(value: &str) -> Result<String> {
     if value.is_empty() {
         return Ok(String::new());
     }
-    let u = reqwest::Url::parse(value).map_err(|_| Error::new("Use an HTTP or HTTPS URL."))?;
+    let u = url::Url::parse(value).map_err(|_| Error::new("Use an HTTP or HTTPS URL."))?;
     if !["http", "https"].contains(&u.scheme())
         || u.host_str().is_none()
         || !u.username().is_empty()

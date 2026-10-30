@@ -96,21 +96,26 @@ fn backend(root: &Path, data: &Path, port: u16) -> Owned {
             .unwrap(),
     )
 }
-fn client(timeout: Duration) -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
-        .timeout(timeout)
+fn client(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .proxy(None)
+        .timeout_global(Some(timeout))
         .build()
-        .unwrap()
+        .into()
 }
-fn get(client: &reqwest::blocking::Client, base: &str, path: &str) -> Value {
-    client
-        .get(format!("{base}{path}"))
-        .send()
-        .unwrap()
-        .error_for_status()
-        .unwrap()
-        .json()
-        .unwrap()
+fn get(client: &ureq::Agent, base: &str, path: &str) -> Value {
+    let response = client.get(format!("{base}{path}")).call().unwrap();
+    serde_json::from_reader(response.into_body().into_reader()).unwrap()
+}
+fn post(client: &ureq::Agent, base: &str, path: &str, csrf: &str, body: &Value) -> Value {
+    let response = client
+        .post(format!("{base}{path}"))
+        .header("Origin", base)
+        .header("X-CSRF-Token", csrf)
+        .header("Content-Type", "application/json")
+        .send(&serde_json::to_vec(body).unwrap())
+        .unwrap();
+    serde_json::from_reader(response.into_body().into_reader()).unwrap()
 }
 #[test]
 fn terminal_and_buffer_survive_backend_replacement() {
@@ -139,7 +144,7 @@ fn terminal_and_buffer_survive_backend_replacement() {
     let base = format!("http://127.0.0.1:{port}");
     let client = client(Duration::from_secs(3));
     let mut first = backend(root.path(), &data, port);
-    wait_for(|| client.get(format!("{base}/api/health")).send().is_ok());
+    wait_for(|| client.get(format!("{base}/api/health")).call().is_ok());
     assert_eq!(
         get(&client, &base, "/api/agents")["candidates"][0]["generation"],
         generation
@@ -148,25 +153,13 @@ fn terminal_and_buffer_survive_backend_replacement() {
     first.0.wait().unwrap();
     assert!(daemon.0.try_wait().unwrap().is_none());
     let replacement = backend(root.path(), &data, port);
-    wait_for(|| client.get(format!("{base}/api/health")).send().is_ok());
+    wait_for(|| client.get(format!("{base}/api/health")).call().is_ok());
     let agents = get(&client, &base, "/api/agents");
     assert_eq!(agents["candidates"][0]["generation"], generation);
     assert_eq!(agents["candidates"][0]["live"], true);
     let state = get(&client, &base, "/api/state");
     let csrf = state["csrf"].as_str().unwrap();
-    let api = |path: &str, p: Value| -> Value {
-        client
-            .post(format!("{base}{path}"))
-            .header("Origin", &base)
-            .header("X-CSRF-Token", csrf)
-            .json(&p)
-            .send()
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .unwrap()
-    };
+    let api = |path: &str, p: Value| -> Value { post(&client, &base, path, csrf, &p) };
     api(
         "/api/terminal/input",
         json!({"id":id,"data":"printf 'PROOF:%s\\n' \"$TRUFFLE_RESTART_PROOF\"\n"}),
@@ -253,7 +246,7 @@ fn normal_launch_lazily_starts_detached_daemon_and_reuses_it() {
             .unwrap(),
     );
     let client = client(Duration::from_secs(10));
-    wait_for(|| client.get(format!("{base}/api/health")).send().is_ok());
+    wait_for(|| client.get(format!("{base}/api/health")).call().is_ok());
     assert_eq!(
         get(&client, &base, "/api/agents")["candidates"]
             .as_array()
@@ -262,17 +255,13 @@ fn normal_launch_lazily_starts_detached_daemon_and_reuses_it() {
         [] as [Value; 0]
     );
     let state = get(&client, &base, "/api/state");
-    let response: Value = client
-        .post(format!("{base}/api/session/open"))
-        .header("Origin", &base)
-        .header("X-CSRF-Token", state["csrf"].as_str().unwrap())
-        .json(&json!({"id":id}))
-        .send()
-        .unwrap()
-        .error_for_status()
-        .unwrap()
-        .json()
-        .unwrap();
+    let response = post(
+        &client,
+        &base,
+        "/api/session/open",
+        state["csrf"].as_str().unwrap(),
+        &json!({"id":id}),
+    );
     assert_eq!(response["openReceipt"]["status"], "accepted", "{response}");
     assert_eq!(response["openReceipt"]["target"], "embedded");
     assert_eq!(response["openReceipt"]["terminal"]["state"], "acknowledged");

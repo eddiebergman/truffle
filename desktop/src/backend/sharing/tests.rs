@@ -722,7 +722,7 @@ fn fake_gcs(replies: Vec<(u16, &'static [u8])>) -> (Gcs, std::thread::JoinHandle
             })
             .collect()
     });
-    let gcs = Gcs::new(api, "bucket".into(), "team/v1".into(), "test-token".into()).unwrap();
+    let gcs = Gcs::new(api, "bucket".into(), "team/v1".into(), "test-token".into());
     (gcs, handle)
 }
 #[test]

@@ -103,7 +103,7 @@ fn link_work_url_with(
     if url.len() > 4096 {
         return Err(Error::new("Work URL is too long."));
     }
-    let parsed = reqwest::Url::parse(&url).map_err(|_| Error::new("Use a provider work URL."))?;
+    let parsed = url::Url::parse(&url).map_err(|_| Error::new("Use a provider work URL."))?;
     let host = parsed.host_str().unwrap_or("");
     let parts = parsed
         .path()

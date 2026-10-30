@@ -213,39 +213,50 @@ trait Remote: Send + Sync {
     fn preview(&self, provider: &str, token: &str, org: &str, base: &str) -> Result<Value>;
 }
 struct ProviderRemote {
-    client: reqwest::blocking::Client,
+    client: ureq::Agent,
 }
 impl ProviderRemote {
-    fn new() -> Result<Self> {
-        Ok(Self {
-            client: reqwest::blocking::Client::builder()
+    fn new() -> Self {
+        Self {
+            client: ureq::Agent::config_builder()
                 .user_agent("truffle-connections/1")
-                .no_proxy()
-                .redirect(reqwest::redirect::Policy::none())
-                .timeout(Duration::from_secs(20))
+                .proxy(None)
+                .max_redirects(0)
+                .http_status_as_error(false)
+                .timeout_global(Some(Duration::from_secs(20)))
                 .build()
-                .map_err(|_| Error::io())?,
-        })
+                .into(),
+        }
     }
     fn json(&self, url: &str, token: &str, query: Option<&str>) -> Result<Value> {
-        let mut auth = reqwest::header::HeaderValue::from_str(token)
+        let mut auth = ureq::http::HeaderValue::from_str(token)
             .map_err(|_| Error::new("Invalid token format."))?;
         auth.set_sensitive(true);
-        let request = query.map_or_else(
-            || self.client.get(url),
-            |query| self.client.post(url).json(&json!({"query":query})),
-        );
-        let response = request
-            .header(reqwest::header::AUTHORIZATION, auth)
-            .send()
-            .map_err(|_| {
-                Error::new("Connection validation failed. Check your network and try again.")
-            })?;
+        let response = match query {
+            None => self
+                .client
+                .get(url)
+                .header(ureq::http::header::AUTHORIZATION, auth)
+                .call(),
+            Some(query) => self
+                .client
+                .post(url)
+                .header(ureq::http::header::AUTHORIZATION, auth)
+                .header("Content-Type", "application/json")
+                .send(&serde_json::to_vec(&json!({"query":query}))?),
+        }
+        .map_err(|_| {
+            Error::new("Connection validation failed. Check your network and try again.")
+        })?;
         if !response.status().is_success() {
             return Err(Error::new(format!("The provider returned HTTP {}. Check token permissions, expiration and organization approval.", response.status().as_u16())));
         }
         let mut bytes = Zeroizing::new(Vec::new());
-        response.take(524_289).read_to_end(&mut bytes)?;
+        response
+            .into_body()
+            .into_reader()
+            .take(524_289)
+            .read_to_end(&mut bytes)?;
         if bytes.len() > 524_288 {
             return Err(Error::new("The provider preview exceeded its size limit."));
         }
@@ -338,11 +349,7 @@ pub struct SetupHost {
 }
 impl SetupHost {
     pub fn new(profile: &Path) -> Result<Self> {
-        Self::with_adapters(
-            profile,
-            Arc::new(Keychain),
-            Arc::new(ProviderRemote::new()?),
-        )
+        Self::with_adapters(profile, Arc::new(Keychain), Arc::new(ProviderRemote::new()))
     }
     fn with_adapters(
         profile: &Path,
@@ -712,7 +719,7 @@ impl ProviderHost {
         self.snapshot(source)?.refresh(source, refs)
     }
     pub fn resolve(&self, url: &str) -> Result<Value> {
-        let parsed = reqwest::Url::parse(url).map_err(|_| Error::new("Invalid provider URL."))?;
+        let parsed = url::Url::parse(url).map_err(|_| Error::new("Invalid provider URL."))?;
         let host = parsed.host_str().unwrap_or("");
         let source = if host == "linear.app" {
             "linear"

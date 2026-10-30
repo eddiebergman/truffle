@@ -148,7 +148,7 @@ pub fn open_desktop(s: &Value, packet: &str) -> Result<OpenOutcome> {
     let cwd = directory(text(s, "cwd"))?;
     if s["destination"] == "desktop" && agent == "codex" {
         let url = if id.is_empty() {
-            let mut u = reqwest::Url::parse("codex://new").unwrap();
+            let mut u = url::Url::parse("codex://new").unwrap();
             u.query_pairs_mut().append_pair("path", &cwd).append_pair(
                 "prompt",
                 &format!("Read the work context at {packet}. Follow the assigned instruction."),

@@ -262,7 +262,7 @@ fn provider_response_cannot_echo_the_secret_into_the_preview() {
 }
 #[test]
 fn remote_http_errors_redirects_and_graphql_errors_never_return_response_bodies() {
-    let remote = ProviderRemote::new().unwrap();
+    let remote = ProviderRemote::new();
     for (status, body) in [
         (401, "benign-provider-echo"),
         (302, "benign-provider-echo"),

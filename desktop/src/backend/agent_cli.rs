@@ -398,7 +398,7 @@ fn report_payload(command: &str, o: &Options, id: String) -> Result<Operation> {
 }
 fn runtime(root: &Path) -> Result<Value> {
     let value: Value = serde_json::from_slice(&read(&root.join("data/runtime.json"), 16384)?)?;
-    let url = reqwest::Url::parse(text(&value, "url"))
+    let url = url::Url::parse(text(&value, "url"))
         .map_err(|_| Error::new("Invalid local runtime address."))?;
     if url.scheme() != "http"
         || url.host_str() != Some("127.0.0.1")
@@ -492,25 +492,38 @@ fn wait_inbox(inbox: &Path, nonce: &str) -> Result<Value> {
 }
 fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Result<Value> {
     if !inbox_only {
-        let client = reqwest::blocking::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_millis(if hook { 1500 } else { 120_000 }))
+        let client: ureq::Agent = ureq::Agent::config_builder()
+            .proxy(None)
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .user_agent("")
+            .timeout_global(Some(Duration::from_millis(if hook {
+                1500
+            } else {
+                120_000
+            })))
             .build()
-            .map_err(|_| Error::io())?;
+            .into();
         match client
             .post(format!(
                 "{}/api/agent/register",
                 text(runtime, "url").trim_end_matches('/')
             ))
-            .bearer_auth(text(runtime, "token"))
-            .json(payload)
-            .send()
+            .header(
+                "Authorization",
+                format!("Bearer {}", text(runtime, "token")),
+            )
+            .header("Content-Type", "application/json")
+            .send(&serde_json::to_vec(payload)?)
         {
             Ok(response) => {
                 let status = response.status();
                 let mut bytes = Vec::new();
-                response.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+                response
+                    .into_body()
+                    .into_reader()
+                    .take(1024 * 1024 + 1)
+                    .read_to_end(&mut bytes)?;
                 if bytes.len() > 1024 * 1024 {
                     return Err(Error::new("Local response exceeds 1 MiB."));
                 }
@@ -522,7 +535,7 @@ fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Resul
                 }
                 return Ok(value);
             }
-            Err(error) if error.is_connect() => {}
+            Err(error) if is_connect(&error) => {}
             Err(_) => {
                 return Err(Error::new(
                     "The request was not acknowledged. Read the current state before retrying.",
@@ -535,6 +548,20 @@ fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Resul
         Ok(json!({}))
     } else {
         wait_inbox(&inbox, &nonce)
+    }
+}
+fn is_connect(error: &ureq::Error) -> bool {
+    use std::io::ErrorKind;
+    match error {
+        ureq::Error::HostNotFound | ureq::Error::ConnectionFailed => true,
+        ureq::Error::Io(error) => matches!(
+            error.kind(),
+            ErrorKind::ConnectionRefused
+                | ErrorKind::AddrNotAvailable
+                | ErrorKind::NetworkUnreachable
+                | ErrorKind::HostUnreachable
+        ),
+        _ => false,
     }
 }
 pub fn activity_snapshot(data: &Value) -> Background {

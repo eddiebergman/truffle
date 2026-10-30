@@ -79,7 +79,7 @@ fn api(url: &str, path: &str, payload: Option<Value>) -> Result<Value> {
 }
 fn port(url: &str) -> Result<u16> {
     LocalHttpService::new(url)?;
-    reqwest::Url::parse(url)
+    url::Url::parse(url)
         .map_err(|_| "Invalid local service URL.")?
         .port_or_known_default()
         .ok_or_else(|| "Missing service port.".into())

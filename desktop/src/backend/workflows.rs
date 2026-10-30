@@ -33,7 +33,7 @@ fn folders_in(root: &std::path::Path) -> Value {
     json!(result)
 }
 fn repo_name(item: &Value) -> String {
-    reqwest::Url::parse(text(item, "url"))
+    url::Url::parse(text(item, "url"))
         .ok()
         .map(|u| {
             u.path()

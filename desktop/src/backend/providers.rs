@@ -1,7 +1,7 @@
 //! Provider adapters. Explicit PR actions are fixed mutations against cached identities.
 use super::{arr, home, json, safe_url, text, Error, Result, Value};
-use reqwest::{blocking::Client, redirect::Policy};
 use std::collections::BTreeMap;
+use std::io::Read;
 // Snapshot redaction for a single output stream. Never publish a possible secret
 // prefix: the next read can complete it. Overlarge sensitive prefixes fail closed.
 pub(super) struct StreamRedactor {
@@ -68,9 +68,22 @@ impl StreamRedactor {
         }
     }
 }
+/// The proxy for HTTPS targets comes from `HTTPS_PROXY` or `ALL_PROXY`, never from `HTTP_PROXY` alone.
+fn https_proxy() -> Option<ureq::Proxy> {
+    ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+        .then(ureq::Proxy::try_from_env)
+        .flatten()
+}
+fn read_json(response: ureq::http::Response<ureq::Body>) -> Result<Value> {
+    let mut bytes = Vec::new();
+    response.into_body().into_reader().read_to_end(&mut bytes)?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
 #[derive(Clone)]
 pub struct Providers {
-    client: Client,
+    client: ureq::Agent,
     pub sentry_org: String,
     pub sentry_period: String,
     sentry_base: String,
@@ -157,12 +170,14 @@ impl Providers {
         redaction_secrets.dedup();
         redaction_secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
         Ok(Self {
-            client: Client::builder()
+            client: ureq::Agent::config_builder()
                 .user_agent("truffle-local/1")
-                .redirect(Policy::none())
-                .timeout(std::time::Duration::from_secs(25))
+                .proxy(https_proxy())
+                .max_redirects(0)
+                .http_status_as_error(false)
+                .timeout_global(Some(std::time::Duration::from_secs(25)))
                 .build()
-                .map_err(|_| Error::io())?,
+                .into(),
             sentry_org: org,
             sentry_period: period,
             sentry_base: base,
@@ -221,7 +236,7 @@ impl Providers {
     pub const fn sentry_configured(&self) -> bool {
         !self.sentry_org.is_empty() && !self.sentry_token.is_empty()
     }
-    fn remote_error(source: &str, response: &reqwest::blocking::Response) -> Error {
+    fn remote_error(source: &str, response: &ureq::http::Response<ureq::Body>) -> Error {
         let status = response.status().as_u16();
         let mut e=Error::new(format!("{source} returned HTTP {status}. Check network access and account permissions. Cached data remains available."));
         e.retry = response
@@ -235,12 +250,25 @@ impl Providers {
         e
     }
     fn graphql(&self, url: &str, token: &str, query: &str, source: &str) -> Result<Value> {
-        let response=self.client.post(url).header("Authorization",token).json(&json!({"query":query})).send().map_err(|e|{let mut error=Error::new(format!("{source} {}. Cached data remains available.",if e.is_timeout(){"timed out"}else{"connection failed"}));error.data=json!({"kind":if e.is_timeout(){"timeout"}else{"network"},"transport":"http","timeoutSeconds":25});error})?;
+        let response = self
+            .client
+            .post(url)
+            .header("Authorization", token)
+            .header("Content-Type", "application/json")
+            .send(&serde_json::to_vec(&json!({"query":query}))?)
+            .map_err(|e| {
+                let timeout = matches!(e, ureq::Error::Timeout(_));
+                let mut error = Error::new(format!(
+                    "{source} {}. Cached data remains available.",
+                    if timeout { "timed out" } else { "connection failed" }
+                ));
+                error.data = json!({"kind":if timeout{"timeout"}else{"network"},"transport":"http","timeoutSeconds":25});
+                error
+            })?;
         if !response.status().is_success() {
             return Err(Self::remote_error(source, &response));
         }
-        let body: Value = response
-            .json()
+        let body: Value = read_json(response)
             .map_err(|_| Error::new(format!("{source} returned invalid JSON.")))?;
         if body.get("errors").is_some() {
             return Err(Error::new(format!(
@@ -347,7 +375,7 @@ impl Providers {
     pub fn linear_url(&self, id: &str) -> Result<String> {
         let data = self.linear(&format!("query{{issue(id:{}){{url}}}}", json!(id)))?;
         let url = safe_url(text(&data["issue"], "url"))?;
-        if reqwest::Url::parse(&url)
+        if url::Url::parse(&url)
             .ok()
             .and_then(|u| u.host_str().map(str::to_owned))
             .as_deref()
@@ -455,22 +483,26 @@ impl Providers {
                 "Configure SENTRY_ORG and a read-only Sentry token.",
             ));
         }
+        let failure = |timeout: bool| {
+            let mut x = Error::new(if timeout {
+                "Sentry timed out. Cached issues remain available."
+            } else {
+                "Sentry connection failed. Cached issues remain available."
+            });
+            x.data = json!({"kind":if timeout{"timeout"}else{"network"},"timeoutSeconds":25});
+            x
+        };
+        let mut url =
+            url::Url::parse(&format!("{}{path}", self.sentry_base)).map_err(|_| failure(false))?;
+        if !params.is_empty() {
+            url.query_pairs_mut().extend_pairs(params);
+        }
         let response = self
             .client
-            .get(format!("{}{path}", self.sentry_base))
-            .bearer_auth(&self.sentry_token)
-            .query(params)
-            .send()
-            .map_err(|e| {
-                let mut x = Error::new(if e.is_timeout() {
-                    "Sentry timed out. Cached issues remain available."
-                } else {
-                    "Sentry connection failed. Cached issues remain available."
-                });
-                x.data =
-                    json!({"kind":if e.is_timeout(){"timeout"}else{"network"},"timeoutSeconds":25});
-                x
-            })?;
+            .get(url.as_str())
+            .header("Authorization", format!("Bearer {}", self.sentry_token))
+            .call()
+            .map_err(|e| failure(matches!(e, ureq::Error::Timeout(_))))?;
         if response.status().as_u16() == 404 {
             return Ok((Value::Null, String::new()));
         }
@@ -484,9 +516,7 @@ impl Providers {
             .unwrap_or("")
             .to_string();
         Ok((
-            response
-                .json()
-                .map_err(|_| Error::new("Sentry returned invalid JSON."))?,
+            read_json(response).map_err(|_| Error::new("Sentry returned invalid JSON."))?,
             links,
         ))
     }
@@ -536,7 +566,7 @@ impl Providers {
     pub fn resolve(&self, url: &str) -> Result<Value> {
         let url = safe_url(url)?;
         let parsed =
-            reqwest::Url::parse(&url).map_err(|_| Error::new("Use a nonempty HTTPS work URL."))?;
+            url::Url::parse(&url).map_err(|_| Error::new("Use a nonempty HTTPS work URL."))?;
         if parsed.scheme() != "https" || parsed.port().is_some_and(|p| p != 443) {
             return Err(Error::new("Use an HTTPS work URL."));
         }
@@ -794,7 +824,7 @@ pub fn linear_item(n: &Value) -> Result<Value> {
         .into_iter()
         .filter(|x| {
             x["sourceType"] == "sentry"
-                && reqwest::Url::parse(text(x, "url")).is_ok_and(|u| {
+                && url::Url::parse(text(x, "url")).is_ok_and(|u| {
                     u.host_str()
                         .is_some_and(|h| h == "sentry.io" || h.ends_with(".sentry.io"))
                 })

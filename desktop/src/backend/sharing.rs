@@ -8,7 +8,6 @@ use super::{
     Error, PathBuf, Repository, Result, Value,
 };
 use context_kit::{Bundle, MAX_MANIFEST, MAX_RESOURCE, MAX_TOTAL};
-use reqwest::{blocking::Client, Url};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -18,6 +17,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
+use url::Url;
 const MAX_RECORD: u64 = 64 * 1024;
 const RECENT_LIMIT: usize = 20;
 const MAX_CONFIG: u64 = 16 * 1024;
@@ -496,7 +496,7 @@ struct Gcs {
     api: Url,
     bucket: String,
     prefix: String,
-    client: Client,
+    client: ureq::Agent,
     token: String,
 }
 impl Gcs {
@@ -518,28 +518,33 @@ impl Gcs {
         if token.is_empty() {
             return Err(Error::new("GCP returned no access token."));
         }
-        Self::new(
+        Ok(Self::new(
             Url::parse("https://storage.googleapis.com/").unwrap(),
             bucket,
             prefix,
             token,
-        )
+        ))
     }
-    fn new(api: Url, bucket: String, prefix: String, token: String) -> Result<Self> {
-        let client = Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(30))
+    fn new(api: Url, bucket: String, prefix: String, token: String) -> Self {
+        let client = ureq::Agent::config_builder()
+            .proxy(None)
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .user_agent("")
+            .timeout_connect(Some(Duration::from_secs(5)))
+            .timeout_global(Some(Duration::from_secs(30)))
             .build()
-            .map_err(|_| Error::new("Cannot initialize GCS transport."))?;
-        Ok(Self {
+            .into();
+        Self {
             api,
             bucket,
             prefix,
             client,
             token,
-        })
+        }
+    }
+    fn authorization(&self) -> String {
+        format!("Bearer {}", self.token)
     }
     fn name(&self, key: &str) -> String {
         if self.prefix.is_empty() {
@@ -575,9 +580,9 @@ impl Gcs {
         }
         let response = self
             .client
-            .get(url)
-            .bearer_auth(&self.token)
-            .send()
+            .get(url.as_str())
+            .header("Authorization", self.authorization())
+            .call()
             .map_err(|_| {
                 Error::new("GCS download failed or timed out. Cached context remains available.")
             })?;
@@ -590,11 +595,15 @@ impl Gcs {
                 response.status().as_u16()
             )));
         }
-        if response.content_length().is_some_and(|n| n > limit) {
+        if response.body().content_length().is_some_and(|n| n > limit) {
             return Err(Error::new("Remote object exceeds the allowed size."));
         }
         let mut bytes = vec![];
-        response.take(limit + 1).read_to_end(&mut bytes)?;
+        response
+            .into_body()
+            .into_reader()
+            .take(limit + 1)
+            .read_to_end(&mut bytes)?;
         if bytes.len() as u64 > limit {
             return Err(Error::new("Remote object exceeded the download limit."));
         }
@@ -606,7 +615,17 @@ impl Gcs {
             .append_pair("uploadType", "media")
             .append_pair("name", &self.name(key))
             .append_pair("ifGenerationMatch", "0");
-        let response=self.client.post(url).bearer_auth(&self.token).header("Content-Type","application/octet-stream").body(bytes.to_vec()).send().map_err(|_|Error::new("GCS upload failed or timed out. Retry this send to keep the same delivery IDs."))?;
+        let response = self
+            .client
+            .post(url.as_str())
+            .header("Authorization", self.authorization())
+            .header("Content-Type", "application/octet-stream")
+            .send(bytes)
+            .map_err(|_| {
+                Error::new(
+                    "GCS upload failed or timed out. Retry this send to keep the same delivery IDs.",
+                )
+            })?;
         if response.status().as_u16() == 412 {
             if self.read(key, bytes.len() as u64, None)?.as_deref() == Some(bytes) {
                 return Ok(());
@@ -644,9 +663,9 @@ impl Gcs {
         }
         let response = self
             .client
-            .get(url)
-            .bearer_auth(&self.token)
-            .send()
+            .get(url.as_str())
+            .header("Authorization", self.authorization())
+            .call()
             .map_err(|_| Error::new("GCS inbox listing failed or timed out."))?;
         if !response.status().is_success() {
             return Err(Error::new(format!(
@@ -655,7 +674,11 @@ impl Gcs {
             )));
         }
         let mut bytes = vec![];
-        response.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        response
+            .into_body()
+            .into_reader()
+            .take(1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
         if bytes.len() > 1024 * 1024 {
             return Err(Error::new("Inbox page is too large."));
         }
@@ -1770,7 +1793,7 @@ fn git_facts(record: &Value) -> serde_json::Map<String, Value> {
                 if let Some(path) = value.strip_prefix("git@github.com:") {
                     value = format!("https://github.com/{}", path.trim_end_matches(".git"));
                 }
-                let Ok(url) = reqwest::Url::parse(&value) else {
+                let Ok(url) = url::Url::parse(&value) else {
                     continue;
                 };
                 if url.scheme() != "https"

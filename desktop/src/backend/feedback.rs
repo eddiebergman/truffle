@@ -8,7 +8,7 @@ fn progress(v: &Value) -> Value {
 }
 pub fn view(repo: &Repository) -> Result<Value> {
     let config = super::config::read(&repo.data.parent().unwrap().join("config/feedback.json"))?;
-    let url = reqwest::Url::parse(text(&config, "repository"))
+    let url = url::Url::parse(text(&config, "repository"))
         .map_err(|_| Error::new("Invalid feedback repository."))?;
     if config["version"] != 1
         || url.scheme() != "https"
