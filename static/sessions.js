@@ -32,6 +32,15 @@ function sessionWorkState(session) {
     ? "done"
     : "active";
 }
+// A candidate with a recordId belongs to that record only. Two records can
+// share an agent and sessionId, so that pair joins only candidates without one.
+function candidateMatchesRecord(candidate, record) {
+  return candidate.recordId
+    ? candidate.recordId === record.id
+    : Boolean(record.sessionId) &&
+        record.agent === candidate.agent &&
+        record.sessionId === candidate.sessionId;
+}
 function sessionRuntime(session) {
   const exact =
     typeof session.id === "string" && session.id
@@ -44,12 +53,8 @@ function sessionRuntime(session) {
     : attachableSessionCandidate(session)
       ? inventory.candidates.filter(
           (candidate) =>
-            (candidate.recordId === undefined ||
-              candidate.recordId === null ||
-              candidate.recordId === "") &&
-            candidate.agent === session.agent &&
             attachableSessionCandidate(candidate) &&
-            candidate.sessionId === session.sessionId,
+            candidateMatchesRecord(candidate, session),
         )
       : [];
   const labels = {

@@ -50,21 +50,15 @@ function liveCandidates() {
   );
 }
 function recordForCandidate(candidate) {
-  return (state?.sessions || []).find(
-    (s) =>
-      candidate.recordId === s.id ||
-      (s.sessionId &&
-        s.agent === candidate.agent &&
-        s.sessionId === candidate.sessionId),
+  return (state?.sessions || []).find((s) =>
+    candidateMatchesRecord(candidate, s),
   );
 }
 function candidateForRecord(record) {
-  return liveCandidates().find(
-    (c) =>
-      c.recordId === record.id ||
-      (record.sessionId &&
-        record.agent === c.agent &&
-        record.sessionId === c.sessionId),
+  const live = liveCandidates();
+  return (
+    live.find((c) => c.recordId === record.id) ||
+    live.find((c) => candidateMatchesRecord(c, record))
   );
 }
 function isAgentSnoozed(candidate) {
