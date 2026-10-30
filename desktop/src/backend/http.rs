@@ -6,7 +6,6 @@ use super::{
 };
 use super::{artifacts, workflows};
 use crate::backend::operations::Caller;
-use crate::backend::settings::Approval;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::{
@@ -207,9 +206,11 @@ fn get_route(repo: &Arc<Repository>, path: &str, csrf: &str) -> Result<Reply> {
         "/api/app-chat" => json_response(200, &repo.app_chat.view(repo)),
         "/api/app-chat/skill" => json_response(200, &super::app_chat::guide()),
         "/api/themes" => json_response(200, &repo.settings.themes()?),
-        "/api/settings" => json_response(200, &repo.settings.view()),
+        "/api/settings" => json_response(200, &browser(repo, "settings.read", &json!({}))?),
         "/api/config-status" => json_response(200, &super::config_status::view(repo)),
-        "/api/quick-actions" => json_response(200, &repo.quick_actions.view()),
+        "/api/quick-actions" => {
+            json_response(200, &browser(repo, "quick-actions.list", &json!({}))?)
+        }
         "/api/export" => json_response(200, &repo.snapshot(true)),
         "/api/agents" => json_response(200, &repo.inventory()),
         "/api/gcp-auth" => json_response(200, &repo.gcp_auth.view()),
@@ -220,7 +221,7 @@ fn get_route(repo: &Arc<Repository>, path: &str, csrf: &str) -> Result<Reply> {
         "/api/onboarding" => json_response(200, &super::onboarding::view(repo)),
         "/api/commands" => json_response(200, &super::commands::catalog()),
         "/api/logs" => json_response(200, &repo.logs()),
-        "/api/sharing" => json_response(200, &super::sharing::view(repo)),
+        "/api/sharing" => json_response(200, &browser(repo, "sharing.state", &json!({}))?),
         "/api/library" => {
             let s = repo.state.lock().unwrap();
             json_response(200, &artifacts::catalog(repo, &s)?)
@@ -379,11 +380,7 @@ pub(super) fn post_route(repo: &Arc<Repository>, path: &str, payload: &Value) ->
 }
 fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Option<Value>> {
     Ok(Some(match path {
-        "/api/connections/reload" => super::commands::invoke(
-            repo,
-            &json!({"name":"connections.reload","args":payload}),
-            Caller::Browser,
-        )?,
+        "/api/connections/reload" => browser(repo, "connections.reload", payload)?,
         "/api/views" => super::views::update(repo, payload)?,
         "/api/page-settings" => super::page_settings::update(repo, payload)?,
         "/api/feedback" => super::feedback::update(repo, payload)?,
@@ -396,9 +393,9 @@ fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         "/api/app-chat/send" => repo.app_chat.start(repo, payload)?,
         "/api/app-chat/new" => repo.app_chat.new_chat(repo)?,
         "/api/app-chat/cancel" => repo.app_chat.cancel(),
-        "/api/settings/preview" => repo.settings.preview(payload, Approval::User)?,
-        "/api/settings" => repo.settings.apply(payload, Approval::User)?,
-        "/api/quick-actions/run" => repo.quick_actions.start(repo, payload)?,
+        "/api/settings/preview" => browser(repo, "settings.preview", payload)?,
+        "/api/settings" => browser(repo, "settings.apply", payload)?,
+        "/api/quick-actions/run" => browser(repo, "quick-actions.run", payload)?,
         _ => return Ok(None),
     }))
 }
@@ -444,7 +441,11 @@ fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         }
         "/api/session/review-draft" => super::reviews::action(repo, payload)?,
         "/api/session/ci-investigation" => super::session_ci::investigation(repo, payload)?,
-        "/api/session/ci-refresh" => super::session_ci::refresh(repo, text(payload, "id"))?,
+        "/api/session/ci-refresh" => browser(
+            repo,
+            "chats.ci.refresh",
+            &json!({"recordId": payload["id"]}),
+        )?,
         "/api/session/git-file" => super::git_diff::file_for_session(
             repo,
             text(payload, "id"),
@@ -469,19 +470,21 @@ fn shell_terminal(repo: &Repository, path: &str, payload: &Value) -> Result<Valu
     action(repo, operation, payload)
 }
 fn sharing(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Value> {
-    use super::sharing::{action, Action};
-    let operation = match path {
-        "/api/sharing/job" => Action::Job,
-        "/api/sharing/config" => Action::Configure,
-        "/api/sharing/refresh" => Action::Refresh,
-        "/api/sharing/dismiss" => Action::Dismiss,
-        "/api/sharing/prepare" => Action::Prepare,
-        "/api/sharing/send" => Action::Send,
-        "/api/sharing/preview" => Action::Preview,
-        "/api/sharing/import" => Action::Import,
+    let name = match path {
+        "/api/sharing/job" => "sharing.job",
+        "/api/sharing/config" => "sharing.configure",
+        "/api/sharing/refresh" => "sharing.refresh",
+        "/api/sharing/dismiss" => "sharing.dismiss",
+        "/api/sharing/prepare" => "sharing.prepare",
+        "/api/sharing/send" => "sharing.send",
+        "/api/sharing/preview" => "sharing.preview",
+        "/api/sharing/import" => "sharing.import",
         _ => return Err(Error::new("Sharing operation unavailable.")),
     };
-    action(repo, operation, payload)
+    browser(repo, name, payload)
+}
+fn browser(repo: &Arc<Repository>, name: &str, args: &Value) -> Result<Value> {
+    super::operations::run(repo, Caller::Browser, name, args)
 }
 fn terminal_post(repo: &Repository, path: &str, payload: &Value) -> Result<Value> {
     let id = sid(text(payload, "id"))?;
@@ -573,7 +576,11 @@ fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Rep
         "/api/gcp-auth/start" => return Ok(json_response(200, &repo.gcp_auth.start(repo.demo)?)),
         "/api/gcp-auth/cancel" => return Ok(json_response(200, &repo.gcp_auth.cancel())),
         "/api/sync" => {
-            let receipt = repo.refresh_sources(payload["force"] == true)?;
+            let receipt = browser(
+                repo,
+                "sources.refresh",
+                &json!({"force": payload["force"] == true}),
+            )?;
             extra["message"] = receipt["message"].clone();
             extra["refreshReceipt"] = receipt;
             None
@@ -609,7 +616,7 @@ fn open_session(repo: &Arc<Repository>, payload: &Value, extra: &mut Value) -> R
     if let Some(target) = payload.get("target") {
         args["target"] = target.clone();
     }
-    let receipt = workflows::open_chat(repo, &args)?;
+    let receipt = browser(repo, "chats.open", &args)?;
     extra["message"] = receipt["message"].clone();
     if receipt["status"] == "accepted" && receipt["target"] == "embedded" {
         extra["embedded"] = json!(true);

@@ -309,20 +309,6 @@ mod tests {
         );
     }
     #[test]
-    fn routes_cannot_escape_to_remote_or_credential_bridge() {
-        let service = LocalHttpService::new("http://127.0.0.1:1").unwrap();
-        for path in [
-            "https://example.com",
-            "//example.com",
-            "/api/agent/register",
-            "/api/state?x=secret",
-            "/../.env",
-        ] {
-            assert!(service.request(path, None).is_err());
-            assert!(service.request(path, Some(json!({}))).is_err());
-        }
-    }
-    #[test]
     fn artifact_paths_are_opaque_ids() {
         assert!(validate_artifact_id("d82f1f3d3b8f1abc330d8205").is_ok());
         for path in [
@@ -370,6 +356,29 @@ mod transport_tests {
             requests
         });
         (address, handle)
+    }
+    #[test]
+    fn routes_outside_the_allowlist_never_reach_the_service() {
+        let (address, server) = mock_server(vec![(200, json!({"items":[]}))]);
+        let service = LocalHttpService::new(&address).unwrap();
+        for path in [
+            "https://example.com",
+            "//example.com",
+            "/api/agent/register",
+            "/api/settings/preview",
+            "/api/state?x=secret",
+            "/../.env",
+        ] {
+            for payload in [None, Some(json!({}))] {
+                let error = service.request(path, payload).err();
+                assert_eq!(error.as_deref(), Some("Unsupported dashboard operation."));
+            }
+        }
+        assert!(service.request("/api/commands/invoke", None).is_err());
+        service.request("/api/config-status", None).unwrap();
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /api/config-status HTTP/1.1"));
     }
     #[test]
     fn service_authorization_is_rotated_after_restart_and_not_returned_to_ui() {
