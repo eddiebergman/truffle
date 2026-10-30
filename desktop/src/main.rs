@@ -681,7 +681,8 @@ fn main() {
     }
     if let Some(index) = args.iter().position(|x| x == "--check-agent-storage") {
         let agent = args.get(index + 1).map_or("claude", String::as_str);
-        match backend::embedded::check_agent_storage(agent) {
+        match backend::agents::Agent::parse(agent).and_then(backend::embedded::check_agent_storage)
+        {
             Ok(()) => println!("Agent storage is writable."),
             Err(error) => {
                 eprintln!("{}", error.message);

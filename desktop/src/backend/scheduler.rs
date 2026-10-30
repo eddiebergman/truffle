@@ -1,4 +1,5 @@
 //! Persisted skill schedules. Claim a due occurrence before launching it; never replay a backlog.
+use super::agents::Agent;
 use super::{
     arr, checked, directory, expand, json, now, sessions, text, uuid, Error, Repository, Result,
     Value,
@@ -109,12 +110,7 @@ impl Record for Preset<'_> {
         let text = checked(&json!({field:value}), field, max, field != "description")?;
         Ok(json!(match field {
             "cwd" => directory(&text)?,
-            "agent" => {
-                if !["claude", "codex"].contains(&text.as_str()) {
-                    return Err(Error::new("Choose Claude or Codex."));
-                }
-                text
-            }
+            "agent" => Agent::parse(&text)?.name().to_owned(),
             "command" => {
                 if !text.starts_with('/') && !text.starts_with('$') {
                     return Err(Error::new(

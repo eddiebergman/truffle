@@ -1,4 +1,5 @@
 //! Durable, bounded reference snapshots for an explicitly requested agent task.
+use super::agents::Agent;
 use super::chat_preparation::{self, Created, Recipe};
 use super::{
     arr, checked, directory, http, json, repository, sessions, sid, text, uuid, workflows, Error,
@@ -12,7 +13,7 @@ pub(super) struct View<'a> {
     /// The request has a preparation identity, so a legacy view with the same
     /// ID cannot prove it saved the same intent.
     identified: bool,
-    agent: &'a str,
+    agent: Agent,
     source: &'a str,
     question: String,
     ids: &'a [Value],
@@ -23,7 +24,7 @@ pub(super) struct View<'a> {
 impl<'a> View<'a> {
     pub(super) fn schema() -> Value {
         chat_preparation::schema(
-            json!({"agent":{"type":"string","enum":["claude","codex"]},"source":{"type":"string","enum":["all","linear","github","sentry"]},"question":{"type":"string","maxLength":4000},"itemIds":{"type":"array","minItems":1,"maxItems":4096,"items":{"type":"string","maxLength":160}},"folderPath":{"type":"string","maxLength":4096},"filters":{"type":"object","additionalProperties":true}}),
+            json!({"agent":Agent::schema(),"source":{"type":"string","enum":["all","linear","github","sentry"]},"question":{"type":"string","maxLength":4000},"itemIds":{"type":"array","minItems":1,"maxItems":4096,"items":{"type":"string","maxLength":160}},"folderPath":{"type":"string","maxLength":4096},"filters":{"type":"object","additionalProperties":true}}),
             &["agent", "source", "question", "itemIds", "filters"],
         )
     }
@@ -38,10 +39,7 @@ impl<'a> View<'a> {
             Some(id) => id.to_owned(),
             None => sid(text(p, "requestId"))?,
         };
-        let agent = text(p, "agent");
-        if !["claude", "codex"].contains(&agent) {
-            return Err(Error::new("Choose Claude or Codex."));
-        }
+        let agent = Agent::parse(text(p, "agent"))?;
         let source = text(p, "source");
         if !["all", "linear", "github", "sentry"].contains(&source) {
             return Err(Error::new("Choose a work-list page."));
@@ -190,7 +188,7 @@ impl Recipe for View<'_> {
         http::private_write(file, &bytes)?;
         sessions::save_with(
             s,
-            &json!({"agent":self.agent,"title":title,"cwd":self.cwd,"destination":"embedded","instruction":instruction,"itemIds":[]}),
+            &json!({"agent":self.agent.name(),"title":title,"cwd":self.cwd,"destination":"embedded","instruction":instruction,"itemIds":[]}),
             |record| {
                 record["workflow"] = json!("view-context");
                 record["viewRequestId"] = json!(self.request_id);

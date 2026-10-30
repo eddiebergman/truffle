@@ -1,4 +1,5 @@
 //! Captured-field edits of an existing saved chat; never opens an agent.
+use super::agents::Agent;
 use super::field_edit::{self, Edit, Record};
 use super::{
     arr, checked, commands, directory, domain, json, now, redaction, safe_url, sessions, sid, text,
@@ -100,7 +101,7 @@ impl Record for Chat<'_> {
         }
     }
 }
-fn identity(repo: &Repository, row: &Value) -> Result<()> {
+fn identity(repo: &Repository, row: &Value) -> Result<Agent> {
     let id = text(row, "id");
     if sid(id)? != id {
         return Err(Error::new("Invalid saved chat identity."));
@@ -115,15 +116,12 @@ fn identity(repo: &Repository, row: &Value) -> Result<()> {
     for id in ids(row)? {
         field_edit::exact(repo, &id)?;
     }
-    if !["claude", "codex"].contains(&text(row, "agent")) {
-        return Err(Error::new("Invalid saved assistant identity."));
-    }
-    Ok(())
+    Agent::parse(text(row, "agent")).map_err(|_| Error::new("Invalid saved assistant identity."))
 }
 fn view(repo: &Repository, row: &Value) -> Result<Value> {
-    identity(repo, row)?;
+    let agent = identity(repo, row)?;
     if !["embedded", "desktop", "cmux"].contains(&text(row, "destination"))
-        || (row["agent"] == "claude" && row["destination"] == "desktop")
+        || !agent.supports(text(row, "destination"))
     {
         return Err(Error::new("Invalid saved launch destination."));
     }
@@ -182,7 +180,13 @@ fn validate<'a>(repo: &Repository, args: &Value) -> Result<Edit<Chat<'a>>> {
     }
     Ok(edit)
 }
-fn association(state: &Value, current: &Value, edit: &Edit<Chat>, repo: &Repository) -> Result<()> {
+fn association(
+    state: &Value,
+    current: &Value,
+    agent: Agent,
+    edit: &Edit<Chat>,
+    repo: &Repository,
+) -> Result<()> {
     if let Some(value) = edit.get("sessionId") {
         let old = text(current, "sessionId");
         if !old.is_empty() && value.as_str() != Some(old) {
@@ -205,9 +209,11 @@ fn association(state: &Value, current: &Value, edit: &Edit<Chat>, repo: &Reposit
     }
     let destination = edit
         .get("destination")
-        .unwrap_or_else(|| &current["destination"]);
-    field_edit::exact(repo, destination.as_str().unwrap_or(""))?;
-    if current["agent"] == "claude" && destination == "desktop" {
+        .unwrap_or_else(|| &current["destination"])
+        .as_str()
+        .unwrap_or("");
+    field_edit::exact(repo, destination)?;
+    if !agent.supports(destination) {
         return Err(Error::new("Claude chats require the embedded terminal."));
     }
     Ok(())
@@ -262,7 +268,7 @@ fn apply(
     imported: &[Value],
 ) -> Result<Value> {
     let current = sessions::get(state, text(args, "recordId"))?.clone();
-    identity(repo, &current)?;
+    let agent = identity(repo, &current)?;
     let mut next = current.clone();
     let changed = edit.apply(&Chat(&current), |field, value| {
         if field == "itemIds" {
@@ -287,7 +293,7 @@ fn apply(
         }
         Ok(true)
     })?;
-    association(state, &current, edit, repo)?;
+    association(state, &current, agent, edit, repo)?;
     if !changed.is_empty() {
         next["updatedAt"] = json!(now());
     }
@@ -338,9 +344,9 @@ fn update_with(
 }
 fn check_current(repo: &Repository, state: &Value, args: &Value, edit: &Edit<Chat>) -> Result<()> {
     let row = sessions::get(state, text(args, "recordId"))?;
-    identity(repo, row)?;
+    let agent = identity(repo, row)?;
     edit.check(&Chat(row))?;
-    association(state, row, edit, repo)
+    association(state, row, agent, edit, repo)
 }
 pub(super) fn reject_unchecked_association(state: &Value, args: &Value) -> Result<()> {
     if args.get("id").is_some_and(|value| !value.is_string()) {

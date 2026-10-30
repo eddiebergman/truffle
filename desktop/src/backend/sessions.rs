@@ -3,6 +3,7 @@
 //! This module is the only code that indexes the stored list. Callers reach a
 //! record by its ID or by a predicate, never by position. Records stay JSON
 //! objects, so fields this module does not know are kept unchanged.
+use super::agents::Agent;
 use super::checkouts::item_folders::{self, Strength};
 use super::checkouts::Remember;
 use super::{arr, checked, directory, domain, json, now, sid, text, uuid, Error, Result, Value};
@@ -113,26 +114,21 @@ fn merge(
             old["title"].clone()
         };
     }
-    let agent = text(&merged, "agent");
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
-    }
+    let agent = Agent::parse(text(&merged, "agent"))?;
     let (title, instruction) = validate_text(&merged)?;
     let cwd = directory(text(&merged, "cwd"))?;
     let destination = match merged["destination"].as_str().unwrap_or("embedded") {
         "cmux" => "embedded",
         other => other,
     };
-    if !["embedded", "desktop"].contains(&destination)
-        || (agent == "claude" && destination == "desktop")
-    {
+    if !["embedded", "desktop"].contains(&destination) || !agent.supports(destination) {
         return Err(Error::new("Choose the embedded terminal or Codex desktop."));
     }
     let items = link_items(s, p, &old, intent, &cwd)?;
     let (sid_value, launch) = identity(&merged, &old, agent, is_new)?;
     let id = old["id"].as_str().map_or_else(uuid, str::to_owned);
     let mut session = old.clone();
-    for(k,v)in json!({"id":id,"agent":agent,"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
+    for(k,v)in json!({"id":id,"agent":agent.name(),"title":title,"cwd":cwd,"sessionId":sid_value,"destination":destination,"instruction":instruction,"items":items,"launchNew":launch,"hidden":old["hidden"].as_bool().unwrap_or(false),"archivedAt":old["archivedAt"],"createdAt":old["createdAt"].as_f64().unwrap_or_else(now),"updatedAt":now()}).as_object().unwrap(){session[k]=v.clone();}
     extend(&mut session);
     let mut sessions = arr(&s["sessions"]);
     sessions.retain(|x| x["id"] != id);
@@ -188,7 +184,7 @@ fn link_items(
 fn identity(
     merged: &Value,
     old: &Value,
-    agent: &str,
+    agent: Agent,
     is_new: bool,
 ) -> Result<(Option<String>, bool)> {
     let mut sid_value = merged["sessionId"]
@@ -197,7 +193,7 @@ fn identity(
         .map(sid)
         .transpose()?;
     if !text(old, "sessionId").is_empty()
-        && (sid_value.as_deref() != Some(text(old, "sessionId")) || old["agent"] != agent)
+        && (sid_value.as_deref() != Some(text(old, "sessionId")) || old["agent"] != agent.name())
     {
         return Err(Error::new(
             "Remove the association before changing its conversation identity.",
@@ -212,7 +208,7 @@ fn identity(
     };
     if is_new && sid_value.is_none() {
         launch = true;
-        if agent == "claude" {
+        if agent.takes_session_id() {
             sid_value = Some(uuid());
         }
     }

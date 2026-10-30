@@ -44,15 +44,15 @@ fn codex_parser_requires_completed_strict_wrapper_and_never_returns_intermediate
 #[test]
 fn assistant_selection_prefers_installed_default_and_missing_cli_leaves_no_message_or_job() {
     for (preferred, installed, expected) in [
-        ("codex", [true, true], Some(Assistant::Codex)),
-        ("claude", [true, true], Some(Assistant::Claude)),
-        ("codex", [true, false], Some(Assistant::Claude)),
-        ("claude", [false, true], Some(Assistant::Codex)),
+        ("codex", [true, true], Some(Agent::Codex)),
+        ("claude", [true, true], Some(Agent::Claude)),
+        ("codex", [true, false], Some(Agent::Claude)),
+        ("claude", [false, true], Some(Agent::Codex)),
         ("codex", [false, false], None),
     ] {
         assert_eq!(
             choose_assistant(preferred, |agent| installed
-                [usize::from(agent != Assistant::Claude)]),
+                [usize::from(agent != Agent::Claude)]),
             expected
         );
     }
@@ -67,14 +67,14 @@ fn assistant_selection_prefers_installed_default_and_missing_cli_leaves_no_messa
 }
 fn captured_codex_fixture(
     repo: &Repository,
-    assistant: Assistant,
+    assistant: Agent,
     prompt: &str,
     _: &[Value],
     _: &AtomicBool,
     _: Instant,
     _: &mut Value,
 ) -> Result<String> {
-    assert_eq!(assistant, Assistant::Codex);
+    assert_eq!(assistant, Agent::Codex);
     let transcript: Value = serde_json::from_str(prompt)?;
     if arr(&transcript["steps"]).is_empty() {
         let baseline = repo.settings.view();
@@ -92,13 +92,13 @@ fn assistant_is_captured_for_entire_reply_even_when_default_changes_between_tool
     repo.settings.apply(&json!({"revision":baseline["revision"],"contentHash":baseline["contentHash"],"patch":{"defaultAgent":"codex"}}),Approval::User).unwrap();
     let host = Arc::new(Host::default());
     let job=host.start_with(&repo,&json!({"message":"fixture","requestId":uuid(),"context":{"source":"agents","filters":{}}}),|_|true,captured_codex_fixture).unwrap();
-    assert_eq!(job["assistant"], Assistant::Codex.metadata());
+    assert_eq!(job["assistant"], metadata(Agent::Codex));
     let until = Instant::now() + Duration::from_secs(3);
     loop {
         let job = host.job.lock().unwrap().clone().unwrap();
         if job["state"] != "running" {
             assert_eq!(job["state"], "succeeded", "{job}");
-            assert_eq!(job["assistant"], Assistant::Codex.metadata());
+            assert_eq!(job["assistant"], metadata(Agent::Codex));
             break;
         }
         assert!(Instant::now() < until);
@@ -106,7 +106,7 @@ fn assistant_is_captured_for_entire_reply_even_when_default_changes_between_tool
     }
     assert_eq!(repo.settings.view()["values"]["defaultAgent"], "claude");
     let view = host.view(&repo);
-    assert_eq!(view["job"]["assistant"], Assistant::Codex.metadata());
+    assert_eq!(view["job"]["assistant"], metadata(Agent::Codex));
     assert_eq!(arr(&view["assistants"]).len(), 2);
     for choice in arr(&view["assistants"]) {
         assert!(choice["installed"].is_boolean());
@@ -115,14 +115,14 @@ fn assistant_is_captured_for_entire_reply_even_when_default_changes_between_tool
 }
 fn unavailable_codex_fixture(
     repo: &Repository,
-    assistant: Assistant,
+    assistant: Agent,
     _: &str,
     _: &[Value],
     _: &AtomicBool,
     _: Instant,
     _: &mut Value,
 ) -> Result<String> {
-    assert_eq!(assistant, Assistant::Codex);
+    assert_eq!(assistant, Agent::Codex);
     repo.transaction(|state| {
         let calls = state["fixtureModelCalls"].as_u64().unwrap_or(0);
         state["fixtureModelCalls"] = json!(calls + 1);
@@ -149,7 +149,7 @@ fn failed_selected_assistant_does_not_retry_with_another_installed_provider() {
         let job = host.job.lock().unwrap().clone().unwrap();
         if job["state"] != "running" {
             assert_eq!(job["state"], "failed");
-            assert_eq!(job["assistant"], Assistant::Codex.metadata());
+            assert_eq!(job["assistant"], metadata(Agent::Codex));
             assert!(text(&job, "error").contains("Codex fixture unavailable"));
             break;
         }
@@ -175,7 +175,7 @@ fn codex_environment_keeps_only_the_native_auth_allowlist() {
         "PATH",
     ]
     .map(|key| (key.to_owned(), "benign-private-env".to_owned()));
-    let allowed = assistant_environment(Assistant::Codex, values)
+    let allowed = assistant_environment(Agent::Codex, values)
         .into_iter()
         .map(|(key, _)| key)
         .collect::<Vec<_>>();
@@ -183,7 +183,7 @@ fn codex_environment_keeps_only_the_native_auth_allowlist() {
     let mut environment_command = Command::new("/usr/bin/env");
     configure_assistant_environment(
         &mut environment_command,
-        Assistant::Codex,
+        Agent::Codex,
         [
             ("CODEX_API_KEY".into(), "native-fixture".into()),
             ("GITHUB_TOKEN".into(), "integration-fixture".into()),
@@ -317,7 +317,7 @@ fn codex_contract_is_explicit_developer_argument_and_reference_context_stays_on_
         &[],
         &AtomicBool::new(false),
         Instant::now() + Duration::from_secs(3),
-        &mut json!({"assistant":Assistant::Codex.metadata()}),
+        &mut json!({"assistant":metadata(Agent::Codex)}),
         fixture.to_str().unwrap(),
     )
     .unwrap();
@@ -362,7 +362,7 @@ fn codex_invocation_files_drop_after_process_cancellation_and_errors() {
         files.write("image-0.png", b"fixture-image").unwrap();
         let mut command = Command::new("/bin/sh");
         command.args(["-c", "sleep 30 & wait"]);
-        let mut diagnostics = json!({"assistant":Assistant::Codex.metadata()});
+        let mut diagnostics = json!({"assistant":metadata(Agent::Codex)});
         assert!(execute_diagnosed(
             command,
             "",
@@ -385,7 +385,7 @@ fn codex_invocation_files_drop_after_process_cancellation_and_errors() {
             "",
             &AtomicBool::new(false),
             Instant::now() + Duration::from_secs(1),
-            &mut json!({"assistant":Assistant::Codex.metadata()}),
+            &mut json!({"assistant":metadata(Agent::Codex)}),
         )?;
         Ok(())
     })();

@@ -1,4 +1,5 @@
 //! Conservative tracked submission over the existing, generation-unfenced PTY transport.
+use super::agents::Agent;
 use super::reviews::Versions;
 use super::terminals::Presence;
 use super::{
@@ -479,20 +480,8 @@ fn request_prompt(
             "Settings configuration could not be loaded. No review was submitted.",
         ));
     }
-    let agent = text(record, "agent");
-    let skill = text(
-        &settings["values"],
-        if agent == "codex" {
-            "codexReviewCommand"
-        } else {
-            "claudeReviewCommand"
-        },
-    );
-    if skill.is_empty() {
-        return Err(Error::new(
-            "Choose a review skill in Settings → Agents & workflows.",
-        ));
-    }
+    let agent = Agent::parse(text(record, "agent"))?;
+    let skill = agent.review_command(&settings["values"])?;
     let helper = format!(
         "{} review --record {} --request {}",
         repo.agent_helper,
@@ -513,7 +502,7 @@ fn request_prompt(
     roots.sort_by_key(Value::to_string);
     roots.dedup();
     let context = json!({"goal":record["title"],"checkouts":roots,"work":arr(&record["items"]).iter().map(|item|json!({"reference":item["reference"],"title":item["title"],"url":item["url"]})).collect::<Vec<_>>()});
-    if settings["reviewSkill"]["commands"][agent] == skill {
+    if settings["reviewSkill"]["commands"][agent.name()] == skill {
         if settings["reviewSkill"]["available"] != true
             || text(&settings["reviewSkill"], "path").is_empty()
         {

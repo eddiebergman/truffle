@@ -1,5 +1,6 @@
 mod agent_access;
 pub mod agent_cli;
+pub mod agents;
 pub mod app_chat;
 pub mod chat_edit;
 pub mod chat_preparation;

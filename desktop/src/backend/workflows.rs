@@ -1,3 +1,4 @@
+use super::agents::Agent;
 use super::chat_preparation::{self, Created, Recipe};
 use super::checkouts::item_folders::{self, Strength};
 use super::checkouts::{Link, Remember};
@@ -142,16 +143,6 @@ fn choose_with(
     error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').next_back().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
     Err(error)
 }
-fn agent_schema() -> Value {
-    json!({"type":"string","enum":["claude","codex"]})
-}
-fn checked_agent(p: &Value) -> Result<&str> {
-    let agent = text(p, "agent");
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
-    }
-    Ok(agent)
-}
 fn resolve_urls(
     repo: &Repository,
     p: &Value,
@@ -247,7 +238,7 @@ pub(super) struct NewChat<'a> {
 impl<'a> NewChat<'a> {
     pub(super) fn schema() -> Value {
         chat_preparation::schema(
-            json!({"agent":agent_schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"instruction":{"type":"string","maxLength":8000},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}},"urls":{"type":"array","maxItems":10,"items":{"type":"string","maxLength":4096}},"projectName":{"type":"string","maxLength":180}}),
+            json!({"agent":Agent::schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"instruction":{"type":"string","maxLength":8000},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}},"urls":{"type":"array","maxItems":10,"items":{"type":"string","maxLength":4096}},"projectName":{"type":"string","maxLength":180}}),
             &[
                 "agent",
                 "title",
@@ -260,7 +251,7 @@ impl<'a> NewChat<'a> {
     }
     pub(super) fn attach_schema() -> Value {
         chat_preparation::schema(
-            json!({"agent":agent_schema(),"sessionId":chat_preparation::uuid_schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}}}),
+            json!({"agent":Agent::schema(),"sessionId":chat_preparation::uuid_schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}}}),
             &["agent", "sessionId", "title", "cwd", "destination"],
         )
     }
@@ -299,33 +290,24 @@ impl Recipe for NewChat<'_> {
 /// A chat for one work item or folder, or with `review`, a review of one GitHub PR.
 pub(super) struct Quick<'a> {
     intent: &'a Value,
-    agent: &'a str,
+    agent: Agent,
     review: bool,
     review_command: String,
 }
 impl<'a> Quick<'a> {
     pub(super) fn schema() -> Value {
         chat_preparation::schema(
-            json!({"agent":agent_schema(),"itemId":{"type":"string","maxLength":200},"scopeSource":{"type":"string","maxLength":80},"scope":{"type":"string","maxLength":1000},"folderPath":{"type":"string","maxLength":4096},"newFolder":{"type":"string","maxLength":80},"rememberKey":{"type":"string","maxLength":1000},"chooseFolder":{"type":"boolean"}}),
+            json!({"agent":Agent::schema(),"itemId":{"type":"string","maxLength":200},"scopeSource":{"type":"string","maxLength":80},"scope":{"type":"string","maxLength":1000},"folderPath":{"type":"string","maxLength":4096},"newFolder":{"type":"string","maxLength":80},"rememberKey":{"type":"string","maxLength":1000},"chooseFolder":{"type":"boolean"}}),
             &["agent"],
         )
     }
     pub(super) fn validate(repo: &Repository, intent: &'a Value, review: bool) -> Result<Self> {
-        let agent = checked_agent(intent)?;
-        let review_command = text(
-            &repo.settings.values(),
-            if agent == "claude" {
-                "claudeReviewCommand"
-            } else {
-                "codexReviewCommand"
-            },
-        )
-        .to_owned();
-        if review && review_command.is_empty() {
-            return Err(Error::new(
-                "Choose a review skill in Settings → Agents & workflows.",
-            ));
-        }
+        let agent = Agent::parse(text(intent, "agent"))?;
+        let review_command = if review {
+            agent.review_command(&repo.settings.values())?.to_owned()
+        } else {
+            String::new()
+        };
         Ok(Self {
             intent,
             agent,
@@ -359,7 +341,7 @@ impl<'a> Quick<'a> {
         item: &Value,
         pr_label: &str,
     ) -> Result<String> {
-        let (agent, review_command) = (self.agent, self.review_command.as_str());
+        let (agent, review_command) = (self.agent.name(), self.review_command.as_str());
         let builtin = super::skills_catalog::review_skill(repo.settings.config_directory());
         if builtin["commands"][agent] == review_command {
             if builtin["available"] != true {
@@ -408,7 +390,7 @@ impl Recipe for Quick<'_> {
         Ok(sessions::latest(s, |x| {
             x["workflow"] == "pr-review"
                 && x["reviewItemId"] == item["id"]
-                && x["agent"] == self.agent
+                && x["agent"] == self.agent.name()
                 && x["archivedAt"].is_null()
         })
         .cloned())
@@ -419,7 +401,7 @@ impl Recipe for Quick<'_> {
         s: &mut Value,
         created: &mut Option<Created>,
     ) -> Result<Value> {
-        let (p, agent) = (self.intent, self.agent);
+        let (p, agent) = (self.intent, self.agent.name());
         let item = self.item(s)?;
         let root = work_root();
         let (cwd, new) = choose_with(s, &item, p, &root, &folders_in(&root))?;
@@ -485,20 +467,20 @@ impl Recipe for Quick<'_> {
     }
 }
 /// A chat that reviews all work.
-pub(super) struct WorkReview<'a> {
-    agent: &'a str,
+pub(super) struct WorkReview {
+    agent: Agent,
 }
-impl<'a> WorkReview<'a> {
+impl WorkReview {
     pub(super) fn schema() -> Value {
-        chat_preparation::schema(json!({"agent":agent_schema()}), &["agent"])
+        chat_preparation::schema(json!({"agent":Agent::schema()}), &["agent"])
     }
-    pub(super) fn validate(intent: &'a Value) -> Result<Self> {
+    pub(super) fn validate(intent: &Value) -> Result<Self> {
         Ok(Self {
-            agent: checked_agent(intent)?,
+            agent: Agent::parse(text(intent, "agent"))?,
         })
     }
 }
-impl Recipe for WorkReview<'_> {
+impl Recipe for WorkReview {
     fn admission(&self) -> Option<(String, f64)> {
         Some(("work-review".into(), 30.0))
     }
@@ -506,7 +488,7 @@ impl Recipe for WorkReview<'_> {
     fn reusable(&self, s: &Value) -> Result<Option<Value>> {
         Ok(sessions::latest(s, |x| {
             x["workflow"] == "work-review"
-                && x["agent"] == self.agent
+                && x["agent"] == self.agent.name()
                 && x["launchNew"] == true
                 && x["archivedAt"].is_null()
         })
@@ -519,7 +501,7 @@ impl Recipe for WorkReview<'_> {
         }
         sessions::save_with(
             s,
-            &json!({"agent":self.agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}),
+            &json!({"agent":self.agent.name(),"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}),
             |record| {
                 record["workflow"] = json!("work-review");
                 record["reviewSourceTimes"] = times;
@@ -1251,12 +1233,12 @@ pub fn open_chat(repo: &Repository, args: &Value) -> Result<Value> {
         return Ok(open_receipt(&id, target, "unknown", false));
     }
 
-    let agent = text(&record, "agent");
-    if !["claude", "codex"].contains(&agent) || (target == "desktop" && agent != "codex") {
-        return Err(Error::new("Choose a valid saved agent and destination."));
-    }
+    let agent = Agent::parse(text(&record, "agent"))
+        .ok()
+        .filter(|agent| agent.supports(target))
+        .ok_or_else(|| Error::new("Choose a valid saved agent and destination."))?;
     directory(text(&record, "cwd"))?;
-    if record["launchNew"] != true || agent == "claude" {
+    if record["launchNew"] != true || agent.takes_session_id() {
         sid(text(&record, "sessionId"))?;
     }
     let path = write_open_packet(repo, &id, &record, &snapshot, public)?;

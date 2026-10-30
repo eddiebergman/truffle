@@ -1,3 +1,4 @@
+use super::agents::Agent;
 use super::{json, text, PathBuf, Value};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -22,18 +23,14 @@ pub fn review_skill(configuration: &Path) -> Value {
 
 /// Read available skill metadata without importing or running the skill.
 pub fn discover(user_home: &Path, projects: &[PathBuf], application_skills: &Path) -> Value {
-    let claude = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map_or_else(|| user_home.join(".claude"), PathBuf::from);
-    let codex =
-        std::env::var_os("CODEX_HOME").map_or_else(|| user_home.join(".codex"), PathBuf::from);
     let mut roots = vec![
         Root {
-            path: claude.join("skills"),
+            path: Agent::Claude.home_under(user_home).join("skills"),
             agent: "claude",
             scope: "user",
         },
         Root {
-            path: codex.join("skills"),
+            path: Agent::Codex.home_under(user_home).join("skills"),
             agent: "codex",
             scope: "user",
         },
@@ -60,10 +57,10 @@ pub fn discover(user_home: &Path, projects: &[PathBuf], application_skills: &Pat
             });
         }
     }
-    for agent in ["claude", "codex"] {
+    for agent in Agent::ALL {
         roots.push(Root {
             path: application_skills.to_path_buf(),
-            agent,
+            agent: agent.name(),
             scope: "application",
         });
     }

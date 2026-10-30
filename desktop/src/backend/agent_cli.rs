@@ -1,4 +1,5 @@
 //! Native registration and lifecycle client for the local agent bridge.
+use super::agents::Agent;
 use super::{expand, home, json, now, safe_url, sid, terminal, text, uuid, Error, Result, Value};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -220,17 +221,9 @@ fn register_payload(o: &Options) -> Result<Value> {
         "project",
         "destination",
     ])?;
-    let agent = o.required("agent")?;
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
-    }
-    let variable = if agent == "claude" {
-        "CLAUDE_CODE_SESSION_ID"
-    } else {
-        "CODEX_THREAD_ID"
-    };
+    let agent = Agent::parse(o.required("agent")?)?;
     let session = if o.get("session").is_empty() {
-        std::env::var(variable).unwrap_or_default()
+        std::env::var(agent.session_env_var()).unwrap_or_default()
     } else {
         o.get("session").into()
     };
@@ -239,7 +232,7 @@ fn register_payload(o: &Options) -> Result<Value> {
     } else {
         path(o.get("cwd"))?
     };
-    let mut p = json!({"agent":agent,"sessionId":sid(&session)?,"cwd":cwd,"urls":o.many("url"),"itemIds":o.many("item")});
+    let mut p = json!({"agent":agent.name(),"sessionId":sid(&session)?,"cwd":cwd,"urls":o.many("url"),"itemIds":o.many("item")});
     for (key, field) in [
         ("record", "id"),
         ("title", "title"),

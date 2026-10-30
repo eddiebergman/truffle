@@ -1,3 +1,4 @@
+use super::agents::Agent;
 use super::document::{Document, Format, Version};
 use super::{arr, json, now, text, Error, PathBuf, Result, Value};
 use std::{collections::BTreeSet, sync::Mutex};
@@ -84,7 +85,7 @@ pub fn validate(values: &Value) -> Result<()> {
         ("density", vec!["compact", "comfortable"]),
         ("diffLayout", vec!["unified", "split"]),
         ("fileDiffLayout", vec!["unified", "split"]),
-        ("defaultAgent", vec!["claude", "codex"]),
+        ("defaultAgent", Agent::ALL.map(Agent::name).to_vec()),
         ("editor", vec!["zed", "code", "cursor"]),
     ] {
         if !allowed.contains(&text(values, key)) {

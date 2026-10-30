@@ -1,3 +1,4 @@
+use super::agents::Agent;
 use super::field_edit::{self, Edit, Record};
 use super::{
     arr, checked, expand, json, now, redaction, safe_url, sessions, sid, text, Error, PathBuf,
@@ -31,10 +32,7 @@ pub fn presets(repo: &Repository, state: &Value) -> Result<Vec<Value>> {
         v["cwd"] = json!(cwd);
         v["skill"] = json!(skill);
         v["reports"] = json!(reports);
-        v["agent"] = json!(entry["agent"].as_str().unwrap_or("claude"));
-        if !["claude", "codex"].contains(&text(&v, "agent")) {
-            return Err(Error::new("Choose Claude or Codex."));
-        }
+        v["agent"] = json!(Agent::parse(entry["agent"].as_str().unwrap_or("claude"))?.name());
         v["available"] = json!(cwd.is_dir() && skill.is_file());
         result.push(v);
     }

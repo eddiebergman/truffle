@@ -1,4 +1,5 @@
 //! Backend-owned PTYs. Bounded output, exact record identity, no shell-command API.
+use super::agents::Agent;
 use super::{directory, home, json, now, sid, text, uuid, Error, PathBuf, Result, Value};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::{
@@ -31,17 +32,8 @@ fn terminal_environment(command: &mut CommandBuilder) {
 }
 /// Check the service's actual filesystem access before an agent can lose transcripts.
 /// This does not change permissions, sandbox configuration, HOME, or agent settings.
-pub fn check_agent_storage(agent: &str) -> Result<()> {
-    let name = match agent {
-        "claude" => ".claude",
-        "codex" => ".codex",
-        _ => return Err(Error::new("Choose Claude or Codex.")),
-    };
-    let storage = if agent == "codex" {
-        std::env::var_os("CODEX_HOME").map_or_else(|| home().join(name), PathBuf::from)
-    } else {
-        home().join(name)
-    };
+pub fn check_agent_storage(agent: Agent) -> Result<()> {
+    let storage = agent.home();
     let directory = if storage.is_dir() {
         storage.clone()
     } else {
@@ -123,13 +115,13 @@ impl EmbeddedHost {
         root: &std::path::Path,
     ) -> Result<Value> {
         let cwd = directory(text(record, "cwd"))?;
-        let agent = text(record, "agent");
+        let agent = Agent::parse(text(record, "agent"))?;
         check_agent_storage(agent)?;
-        let mut command = CommandBuilder::new(super::terminal::executable(agent));
+        let mut command = CommandBuilder::new(super::terminal::executable(agent.name()));
         command.cwd(&cwd);
         let prompt=format!("Read the private work context at {packet}. Follow the instruction and register this conversation with truffle before your first reply.");
         match (agent, new) {
-            ("claude", true) => {
+            (Agent::Claude, true) => {
                 command.args([
                     "--session-id",
                     &sid(text(record, "sessionId"))?,
@@ -138,16 +130,15 @@ impl EmbeddedHost {
                     &prompt,
                 ]);
             }
-            ("codex", true) => {
+            (Agent::Codex, true) => {
                 command.args(["-C", &cwd, &prompt]);
             }
-            ("claude", false) => {
+            (Agent::Claude, false) => {
                 command.args(["--resume", &sid(text(record, "sessionId"))?]);
             }
-            ("codex", false) => {
+            (Agent::Codex, false) => {
                 command.args(["resume", &sid(text(record, "sessionId"))?, "-C", &cwd]);
             }
-            _ => return Err(Error::new("Choose Claude or Codex.")),
         }
         let mut hooks = json!({});
         for event in [
@@ -165,7 +156,7 @@ impl EmbeddedHost {
                 event
             );
             hooks[event] = json!([{"hooks":[{"type":"command","command":callback,"timeout":3}]}]);
-            if agent == "codex" {
+            if agent == Agent::Codex {
                 command.args([
                     "-c",
                     &format!(
@@ -175,7 +166,7 @@ impl EmbeddedHost {
                 ]);
             }
         }
-        if agent == "claude" {
+        if agent == Agent::Claude {
             let path = PathBuf::from(packet).with_extension("hooks.json");
             super::http::private_write(&path, &serde_json::to_vec(&json!({"hooks":hooks}))?)?;
             command.args(["--settings", &path.to_string_lossy()]);

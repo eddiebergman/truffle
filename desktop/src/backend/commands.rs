@@ -1,3 +1,4 @@
+use super::agents::Agent;
 use super::chat_preparation::Kind;
 use super::operations::{Access, Caller, Effect, Operation, Output};
 use super::redaction::{redact, redact_text, sensitive_environment_values};
@@ -21,7 +22,7 @@ View context: parent is "all", "github", "linear", "sentry", or "notes"; a provi
 Every view requires id, name, parent, lifecycle, filter, query and groupBy. id is unique and uses only letters/digits/hyphen/underscore (1..80 UTF-8 bytes); name is nonblank (at most 120 UTF-8 bytes); query is text (at most 1000 UTF-8 bytes). views.apply replaces the complete view list: preserve unrelated views from views.read, and pass its exact revision/contentHash. At most 64 views and a 64 KiB document are supported."#;
 
 fn skill_preset_properties() -> Value {
-    json!({"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"skill":{"type":"string","maxLength":500},"command":{"type":"string","maxLength":180},"agent":{"type":"string","enum":["claude","codex"]},"description":{"type":"string","maxLength":1000}})
+    json!({"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"skill":{"type":"string","maxLength":500},"command":{"type":"string","maxLength":180},"agent":Agent::schema(),"description":{"type":"string","maxLength":1000}})
 }
 fn skill_token_properties(fields: &[&str]) -> Value {
     let properties = fields
@@ -561,7 +562,7 @@ fn sharing_specifications() -> Vec<Operation> {
             description: "Import a received handover and its verified attachments into a saved local chat for the selected assistant and working folder. Does not start the assistant.",
             effect: Effect::Write,
             access: Access::UserAction, output: Output::Redacted,
-            args: json!({"type":"object","properties":{"deliveryId":{"type":"string","maxLength":80,"pattern":".*\\S.*"},"agent":{"type":"string","enum":["claude","codex"]},"cwd":{"type":"string","maxLength":2000,"pattern":".*\\S.*"}},"additionalProperties":false,"required":["deliveryId","agent","cwd"]}),
+            args: json!({"type":"object","properties":{"deliveryId":{"type":"string","maxLength":80,"pattern":".*\\S.*"},"agent":Agent::schema(),"cwd":{"type":"string","maxLength":2000,"pattern":".*\\S.*"}},"additionalProperties":false,"required":["deliveryId","agent","cwd"]}),
         },
         Operation {
             run: |repo, args, caller| {
