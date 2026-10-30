@@ -151,6 +151,7 @@ small {
   margin-left: auto;
   font-weight: 400;
   font-size: 11px;
+  color: var(--muted);
 }
 
 .local-note {
@@ -772,6 +773,8 @@ a.ci-check-name:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--overlay);
+  color: var(--muted);
 }
 
 .runtime-pill {
@@ -889,6 +892,9 @@ a.ci-check-name:hover {
   border: 1px solid color-mix(in srgb, var(--love) 35%, var(--bg));
   border-radius: 6px;
   font-size: 12px;
+  background: color-mix(in srgb, var(--love) 15%, var(--bg));
+  color: var(--love);
+  border-color: color-mix(in srgb, var(--love) 40%, var(--bg));
 }
 
 .section-heading {
@@ -1053,10 +1059,6 @@ a.ci-check-name:hover {
   }
 }
 
-.page-heading h1 {
-  margin: 5px 0;
-}
-
 .page-heading p,
 .page-heading .eyebrow {
   display: none;
@@ -1161,9 +1163,7 @@ a.ci-check-name:hover {
 
 .item-agent-action {
   font-size: 17px;
-  color: var(--green);
   border: 0;
-  background: transparent;
   padding: 0 3px;
   min-width: 23px;
   height: 25px;
@@ -2086,14 +2086,6 @@ a.ci-check-name:hover {
   margin-block: 6px;
 }
 
-.briefing-body pre {
-  overflow: auto;
-  max-width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-
 .briefing-body pre code {
   background: none;
   padding: 0;
@@ -2621,10 +2613,6 @@ a.ci-check-name:hover {
   gap: 3px;
 }
 
-.pr-review-action {
-  color: var(--review);
-}
-
 @media (max-width: 760px) {
   .row-bar .row-actions.has-pr-review {
     grid-template-columns: 49px 80px 23px 20px;
@@ -2687,7 +2675,6 @@ a.ci-check-name:hover {
 }
 
 /* Immediate hover feedback, without layout changes or animated effects. */
-.row:hover .row-bar,
 .row:focus-within .row-bar {
   background: color-mix(in srgb, var(--bg) 90%, var(--text));
   border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));

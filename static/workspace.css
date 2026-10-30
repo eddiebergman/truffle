@@ -164,6 +164,7 @@
 }
 
 .page-heading h1 {
+  margin: 5px 0;
   font-size: 23px;
 }
 
@@ -686,6 +687,11 @@ dialog {
 }
 
 .briefing-body pre {
+  overflow: auto;
+  max-width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   background: var(--bg);
   color: var(--text);
 }
@@ -780,7 +786,6 @@ dialog {
 .history-work,
 .skill-timing,
 .agent-type,
-.nav-item b,
 .skill-name small,
 .change-timestamp small {
   color: var(--muted);
@@ -995,16 +1000,19 @@ dialog {
   overflow: hidden;
 }
 
+.row:hover .row-bar {
+  border-color: color-mix(in srgb, var(--foam) 60%, var(--bg));
+  background: var(--overlay);
+}
+
 .session-card:hover,
 .session-card:focus-within,
 .history-row:hover,
 .skill-row:hover,
-.result-table tr:hover,
-.row:hover .row-bar {
+.result-table tr:hover {
   background: var(--overlay);
 }
 
-.agent-link,
 .briefing-body code,
 .agent-icon.claude,
 .agent-icon.codex {
@@ -2739,7 +2747,6 @@ button.git-file-row {
   color: var(--iris);
 }
 
-.inline-error,
 .status-pill.blocked,
 .log-outcome.failure {
   background: color-mix(in srgb, var(--love) 15%, var(--bg));
