@@ -56,6 +56,39 @@ test("keyboard chords match saved command syntax across modifiers", () => {
     "",
   );
 });
+test("= and - parse as shortcut keys, and + on any layout means =", () => {
+  const c = browserContext({});
+  loadScripts(c, settingsScripts);
+  assert.equal(c.canonicalShortcut("primary+="), "Primary+=");
+  assert.equal(c.canonicalShortcut("Primary+-"), "Primary+-");
+  assert.equal(
+    c.chordFromEvent({ metaKey: true, key: "=", code: "Equal" }),
+    "Primary+=",
+  );
+  assert.equal(
+    c.chordFromEvent({ metaKey: true, key: "-", code: "Minus" }),
+    "Primary+-",
+  );
+  // US layout: Command-Shift-= types "+".
+  assert.equal(
+    c.chordFromEvent({
+      metaKey: true,
+      shiftKey: true,
+      key: "+",
+      code: "Equal",
+    }),
+    "Primary+=",
+  );
+  // German layout: "+" has its own unshifted key.
+  assert.equal(
+    c.chordFromEvent({ ctrlKey: true, key: "+", code: "BracketRight" }),
+    "Primary+=",
+  );
+  assert.equal(
+    c.recordedShortcut({ metaKey: true, key: "-", code: "Minus" }),
+    "Primary+-",
+  );
+});
 test("configured navigation opens a page on its plain view, as the sidebar does", () => {
   let renders = 0;
   const c = browserContext({

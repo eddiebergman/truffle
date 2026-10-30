@@ -69,7 +69,7 @@ fn valid_chord(value: &str) -> bool {
             || key.len() == 1
                 && key
                     .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b',' || b == b'.' || b == b'/'))
+                    .all(|b| b.is_ascii_alphanumeric() || b",./=-".contains(&b)))
 }
 pub fn validate(values: &Value) -> Result<()> {
     let base = defaults();
@@ -154,7 +154,7 @@ fn validate_keybindings(values: &Value) -> Result<()> {
             .as_str()
             .ok_or_else(|| Error::new("Shortcut must be text."))?;
         if !valid_chord(chord) {
-            return Err(Error::new("Use Primary, optional Shift/Alt, and a letter, number, comma, period, slash or Enter."));
+            return Err(Error::new("Use Primary, optional Shift/Alt, and a letter, number, comma, period, slash, =, - or Enter."));
         }
         if !chord.is_empty() && !seen.insert(chord.to_ascii_uppercase()) {
             return Err(Error::new("Two commands cannot use the same shortcut."));

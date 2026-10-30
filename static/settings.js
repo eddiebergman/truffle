@@ -396,14 +396,19 @@ function chordFromEvent(event) {
   if (event.altKey && /^Key[A-Z]$/.test(event.code || "")) {
     key = event.code.slice(3);
   }
-  if (event.shiftKey) {
+  // "+" is Shift+= on US layouts and an unshifted key on others; both mean =.
+  const plus = key === "+";
+  if (plus) {
+    key = "=";
+  }
+  if (event.shiftKey && !plus) {
     if (/^Digit[0-9]$/.test(event.code || "")) {
       key = event.code.slice(5);
     } else if (["Comma", "Period", "Slash"].includes(event.code)) {
       key = { Comma: ",", Period: ".", Slash: "/" }[event.code];
     }
   }
-  return `Primary+${event.shiftKey ? "Shift+" : ""}${
+  return `Primary+${event.shiftKey && !plus ? "Shift+" : ""}${
     event.altKey ? "Alt+" : ""
   }${key}`;
 }
@@ -423,7 +428,7 @@ function canonicalShortcut(value) {
   }
   const normalizedKey =
     key.toLowerCase() === "enter" ? "Enter" : key.toUpperCase();
-  if (!/^(?:[A-Z0-9,./]|Enter)$/.test(normalizedKey)) {
+  if (!/^(?:[A-Z0-9,./=-]|Enter)$/.test(normalizedKey)) {
     return null;
   }
   return `Primary+${modifiers.includes("shift") ? "Shift+" : ""}${
@@ -433,7 +438,7 @@ function canonicalShortcut(value) {
 function shortcutValidationMessage(value, id) {
   const chord = canonicalShortcut(value);
   if (chord === null) {
-    return "Use Primary, optional Shift/Alt, and a letter, number, Enter, comma, period or slash.";
+    return "Use Primary, optional Shift/Alt, and a letter, number, Enter, comma, period, slash, = or -.";
   }
   if (
     [
@@ -471,7 +476,7 @@ function recordedShortcut(event) {
   const chord = chordFromEvent(event);
   if (!chord || canonicalShortcut(chord) === null) {
     throw new Error(
-      "Use Command/Control with a letter, number, Enter, comma, period or slash.",
+      "Use Command/Control with a letter, number, Enter, comma, period, slash, = or -.",
     );
   }
   if (

@@ -283,3 +283,12 @@ fn settings_persist_reject_conflicts_and_gate_agent_commands() {
             .is_err());
     assert_eq!(store.view()["revision"], 1);
 }
+#[test]
+fn equals_and_minus_are_valid_shortcut_keys() {
+    for chord in ["Primary+=", "Primary+-", "Primary+Shift+-", "Primary+Alt+="] {
+        assert!(valid_chord(chord), "{chord}");
+    }
+    for chord in ["Primary++", "Primary+_", "Primary+=+"] {
+        assert!(!valid_chord(chord), "{chord}");
+    }
+}
