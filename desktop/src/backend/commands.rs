@@ -104,7 +104,7 @@ fn ui_specifications() -> Vec<Operation> {
             args: json!({"type":"object","properties":{},"additionalProperties":false}),
         },
         Operation {
-            run: |repo, _, _| Ok(repo.sources_status()),
+            run: |repo, _, _| Ok(super::source_sync::status(repo)),
             name: "sources.status",
             description: "Read cached synchronization metadata for GitHub, Linear and Sentry: enabled/running state, redacted error, historical lastSuccess, nextAttempt/backoff and cached counts. Does not validate credentials or make provider requests; cached success does not prove current connection health.",
             effect: Effect::Read,
@@ -112,7 +112,7 @@ fn ui_specifications() -> Vec<Operation> {
             args: json!({"type":"object","properties":{},"additionalProperties":false}),
         },
         Operation {
-            run: |repo, args, _| repo.sentry_environments_read(args),
+            run: |repo, args, _| super::source_sync::environments(repo, args),
             name: "sentry.environments.read",
             description: "Read up to 20 locally cached Sentry environment summaries. Optional environment returns a page of at most 100 exact cached member item IDs; use nextOffset for more. Unknown names return cached:false without requesting data. membershipKnown:false means no membership snapshot, not zero matches. Cached members may be absent from current work.query results. Omit environment for summaries; empty names are not accepted. Membership and lastSuccess are historical snapshots, not all remote environments or current credential health. Pausing prevents new requests but may coexist with refreshing. This command never starts synchronization. Use sources.status for source errors.",
             effect: Effect::Read,
@@ -120,7 +120,7 @@ fn ui_specifications() -> Vec<Operation> {
             args: json!({"type":"object","properties":{"environment":{"type":"string","maxLength":100,"pattern":"^[A-Za-z0-9_.-]+$"},"offset":{"type":"integer","minimum":0,"maximum":2000}},"additionalProperties":false}),
         },
         Operation {
-            run: |repo, args, _| repo.refresh_sources(args["force"].as_bool().unwrap_or(false)),
+            run: |repo, args, _| Ok(json!(super::source_sync::request(repo, args["force"].as_bool().unwrap_or(false))?)),
             name: "sources.refresh",
             description: "Request synchronization using the configured sources. force defaults to false; forced requests still respect failures/backoff and their own cooldown. Returns which sources started or were skipped, not completed synchronization. Demo requests are skipped without external requests. Requires a user action.",
             effect: Effect::Write,

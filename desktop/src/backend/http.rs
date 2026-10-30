@@ -4,7 +4,7 @@ use super::{
     arr, checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
     Result, Value,
 };
-use super::{artifacts, workflows};
+use super::{artifacts, source_sync::ProviderSource, workflows};
 use crate::backend::operations::Caller;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -813,7 +813,7 @@ pub fn serve(
     )?;
     let sync_repo = repo.clone();
     std::thread::spawn(move || loop {
-        let _ = sync_repo.schedule(false);
+        let _ = super::source_sync::request(&sync_repo, false);
         std::thread::sleep(std::time::Duration::from_secs(10));
     });
     let scheduler_repo = repo.clone();

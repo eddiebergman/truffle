@@ -46,6 +46,7 @@ pub mod session_dispatch;
 pub mod sessions;
 pub mod sharing;
 pub mod skill_presets;
+pub mod source_sync;
 pub mod terminal;
 pub mod terminal_daemon;
 pub mod terminals;

@@ -61,7 +61,7 @@ fn work_links_commands_are_exact_idempotent_and_share_the_legacy_owner() {
         repo.state.lock().unwrap()["privateFixture"],
         json!({"preserve":17})
     );
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 

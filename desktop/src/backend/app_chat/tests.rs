@@ -468,7 +468,7 @@ fn manual_work_links_tool_loop_discovers_reads_and_changes_only_the_exact_pair()
         repo.state.lock().unwrap()["workLinks"],
         json!([["github:b", "sentry:c"]])
     );
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 
@@ -512,7 +512,7 @@ fn page_visibility_choice_workflow_preserves_unmatched_saved_scopes() {
     for page in ["github", "sentry"] {
         assert_eq!(saved["pages"][page], before["pages"][page]);
     }
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]

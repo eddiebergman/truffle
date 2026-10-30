@@ -300,7 +300,7 @@ fn project_folder_read_uses_launch_selector_without_metadata_cooldown_or_termina
     let revision = repo.snapshot(false)["revision"].clone();
     let cooldown = repo.cooldown.lock().unwrap().clone();
     let opening = repo.opening.lock().unwrap().clone();
-    let running = repo.running.lock().unwrap().clone();
+    let running = repo.sync.running.lock().unwrap().clone();
     let inventory = repo.terminals.inventory().unwrap().rows().to_vec();
     let result = folder_with(&repo, &json!({"id":id}), &root).unwrap();
     assert_eq!(
@@ -315,7 +315,7 @@ fn project_folder_read_uses_launch_selector_without_metadata_cooldown_or_termina
     assert_eq!(repo.snapshot(false)["revision"], revision);
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
     assert_eq!(*repo.opening.lock().unwrap(), opening);
-    assert_eq!(*repo.running.lock().unwrap(), running);
+    assert_eq!(*repo.sync.running.lock().unwrap(), running);
     assert_eq!(repo.terminals.inventory().unwrap().rows(), inventory);
     std::fs::remove_dir(&configured).unwrap();
     let fallback = folder_with(&repo, &json!({"id":id}), &root).unwrap();

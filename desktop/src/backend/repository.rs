@@ -1,9 +1,9 @@
 //! Sole writer of the canonical JSON state. UI projections never write layout into records.
 use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
-use super::{connections::ProviderHost, domain, sessions};
+use super::{connections::ProviderHost, domain, sessions, source_sync::SourceSync};
 use fs2::FileExt;
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::BTreeSet,
     fs::{File, OpenOptions},
     io::{Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
@@ -27,44 +27,6 @@ impl Drop for DataFileLock {
     }
 }
 
-fn source_time(value: &Value) -> Value {
-    value
-        .as_f64()
-        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 9_007_199_254_740_991.0)
-        .map_or(Value::Null, |value| json!(value))
-}
-fn source_failures(info: &Value) -> u64 {
-    info["failures"]
-        .as_u64()
-        .filter(|value| *value <= 9_007_199_254_740_991)
-        .unwrap_or(0)
-}
-pub(super) fn source_skip(
-    info: &Value,
-    running: bool,
-    force: bool,
-    time: f64,
-) -> Option<(&'static str, Option<f64>)> {
-    if info["disabled"] == true {
-        return Some(("disabled", None));
-    }
-    if running {
-        return Some(("already-running", None));
-    }
-    if let Some(next) = source_time(&info["nextAttempt"])
-        .as_f64()
-        .filter(|next| *next > time)
-    {
-        if info["failures"].as_u64().unwrap_or(0) > 0 {
-            return Some(("backoff", Some(next)));
-        }
-        if !force {
-            return Some(("interval", Some(next)));
-        }
-    }
-    None
-}
-
 pub struct Repository {
     pub settings: super::settings::Store,
     pub app_chat: Arc<super::app_chat::Host>,
@@ -73,13 +35,13 @@ pub struct Repository {
     pub agent_helper: String,
     pub data: PathBuf,
     pub state: Mutex<Value>,
-    pub providers: ProviderHost,
+    pub providers: Arc<ProviderHost>,
+    pub sync: SourceSync,
     pub terminals: super::terminals::Terminals,
     pub shells: super::terminals::Terminals,
     pub demo: bool,
     pub git_diff_cache: Mutex<super::git_diff::Cache>,
     pub gcp_auth: Arc<super::gcp_auth::LoginHost>,
-    pub running: Mutex<BTreeSet<String>>,
     pub cooldown: Mutex<std::collections::BTreeMap<String, f64>>,
     pub opening: Mutex<BTreeSet<String>>,
     pub sharing: Mutex<Value>,
@@ -115,7 +77,7 @@ impl Repository {
             &docs.join("truffle.md"),
             include_bytes!("../../../skill/SKILL.md"),
         )?;
-        let providers = ProviderHost::new(&root, data.parent().unwrap())?;
+        let providers = Arc::new(ProviderHost::new(&root, data.parent().unwrap())?);
         state["sources"]["sentry"]["disabled"] = json!(!providers.sentry_configured());
         let sharing = super::sharing::load(data.parent().unwrap())?;
         let terminals = super::terminals::Terminals::new(super::terminal_daemon::Host::new(
@@ -137,12 +99,12 @@ impl Repository {
             agent_helper,
             data,
             state: Mutex::new(state),
+            sync: SourceSync::new(providers.clone()),
             providers,
             terminals,
             demo,
             git_diff_cache: Mutex::new(super::git_diff::Cache::default()),
             gcp_auth: Arc::new(super::gcp_auth::LoginHost::default()),
-            running: Mutex::new(BTreeSet::new()),
             cooldown: Mutex::new(std::collections::BTreeMap::new()),
             opening: Mutex::new(BTreeSet::new()),
             sharing: Mutex::new(sharing),
@@ -297,6 +259,10 @@ impl Repository {
         }
         Ok(result)
     }
+    /// Publish a change that lives outside the canonical state, such as sync progress.
+    pub(super) fn bump_revision(&self) {
+        self.revision.fetch_add(1, Ordering::Relaxed);
+    }
     pub fn invalidate_snapshot(&self) {
         *self.snapshot_cache.lock().unwrap() = None;
     }
@@ -379,13 +345,8 @@ impl Repository {
             v.as_object_mut().unwrap().remove("changeBaselines");
             v.as_object_mut().unwrap().remove("onboardingRecovery");
         }
-        v["syncing"] = json!(self.running.lock().unwrap().iter().collect::<Vec<_>>());
-        v["forceRefreshAfter"] = json!(self
-            .cooldown
-            .lock()
-            .unwrap()
-            .get("force-refresh")
-            .unwrap_or(&0.0));
+        v["syncing"] = json!(self.sync.syncing());
+        v["forceRefreshAfter"] = json!(self.sync.force_after());
         v["revision"] = json!(format!("{}:{revision}:{expired_snoozes}", self.generation));
         v["demo"] = json!(self.demo);
         v["agentHelper"] = json!(self.agent_helper);
@@ -425,216 +386,6 @@ impl Repository {
             }
             _ => domain::edit(s, p),
         })
-    }
-    /// Bounded sync metadata. Never expose provider configuration or arbitrary source fields.
-    pub fn sources_status(&self) -> Value {
-        let mut sources = {
-            let state = self.state.lock().unwrap();
-            ["github", "linear", "sentry"].into_iter().map(|id| {
-                let info = &state["sources"][id];
-                json!({"id":id,"syncEnabled":info["disabled"]!=true,
-                    "lastSuccess":source_time(&info["lastSuccess"]),"nextAttempt":source_time(&info["nextAttempt"]),
-                    "failures":source_failures(info),"hasError":info["error"].is_string(),
-                    "error":info["error"].as_str(),
-                    "cachedItemCount":state["items"].as_array().map_or(0,|items|items.iter().filter(|item|item["source"]==id).count())})
-            }).collect::<Vec<_>>()
-        };
-        let running = self.running.lock().unwrap().clone();
-        let force_after = self
-            .cooldown
-            .lock()
-            .unwrap()
-            .get("force-refresh")
-            .copied()
-            .unwrap_or(0.0);
-        for row in &mut sources {
-            row["refreshing"] = json!(running.contains(text(row, "id")));
-            if let Some(error) = row["error"].as_str() {
-                let mut error = error.to_owned();
-                super::redaction::redact_text(self, &mut error);
-                row["error"] = json!(error.chars().take(2000).collect::<String>());
-            }
-        }
-        json!({"observedAt":now(),"demo":self.demo,"forceRefreshAfter":source_time(&json!(force_after)),"sources":sources})
-    }
-    pub fn sentry_environments_read(&self, args: &Value) -> Result<Value> {
-        let requested = args["environment"].as_str();
-        let offset = usize::try_from(args["offset"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX);
-        if requested.is_none() && args.get("offset").is_some() {
-            return Err(Error::new(
-                "An environment is required for membership pagination.",
-            ));
-        }
-        let observed_at = now();
-        let mut result = sentry_environment_summary(
-            &*self.state.lock().map_err(|_| Error::io())?,
-            requested,
-            offset,
-            observed_at,
-            self.demo,
-        )?;
-        let original = result.clone();
-        super::redaction::redact(self, &mut result);
-        if result != original {
-            return Err(Error::new(
-                "Environment identifiers cannot be returned safely.",
-            ));
-        }
-        Ok(result)
-    }
-    pub fn schedule(self: &Arc<Self>, force: bool) -> Result<Vec<String>> {
-        let receipt = self.refresh_sources(force)?;
-        Ok(arr(&receipt["results"])
-            .into_iter()
-            .filter(|row| row["status"] == "started")
-            .map(|row| text(&row, "id").to_owned())
-            .collect())
-    }
-    pub fn refresh_sources(self: &Arc<Self>, force: bool) -> Result<Value> {
-        self.refresh_sources_with(force, |repo, source| {
-            std::thread::spawn(move || repo.sync(source));
-        })
-    }
-    fn refresh_sources_with(
-        self: &Arc<Self>,
-        force: bool,
-        launch: impl Fn(Arc<Self>, &'static str),
-    ) -> Result<Value> {
-        if !self.demo && force {
-            self.cooldown("force-refresh", 15.0)?;
-            // A no-op force request still changes its cooldown and must invalidate cached snapshots.
-            self.revision.fetch_add(1, Ordering::Relaxed);
-        }
-        let time = now();
-        let mut results = vec![];
-        let mut started = vec![];
-        if self.demo {
-            for id in ["github", "linear", "sentry"] {
-                results.push(json!({"id":id,"status":"skipped","reason":"demo"}));
-            }
-        } else {
-            let mut state = self.state.lock().unwrap();
-            let mut running = self.running.lock().unwrap();
-            for source in ["github", "linear", "sentry"] {
-                let info = &mut state["sources"][source];
-                if let Some((reason, retry_at)) =
-                    source_skip(info, running.contains(source), force, time)
-                {
-                    let mut row = json!({"id":source,"status":"skipped","reason":reason});
-                    if let Some(at) = retry_at {
-                        row["retryAt"] = json!(at);
-                    }
-                    results.push(row);
-                    continue;
-                }
-                running.insert(source.into());
-                info["nextAttempt"] = json!(time + 300.0);
-                started.push(source);
-                results.push(json!({"id":source,"status":"started"}));
-            }
-            if !started.is_empty() {
-                self.revision.fetch_add(1, Ordering::Relaxed);
-            }
-            drop(running);
-            drop(state);
-        }
-        // Reservations are complete before workers start; never hold state locks across provider I/O.
-        for source in started.iter().copied() {
-            launch(self.clone(), source);
-        }
-        let message = if self.demo {
-            "Sample workspace: no external requests were started.".to_owned()
-        } else if started.is_empty() {
-            "Nothing started: sources are disabled, already refreshing, or waiting for their retry window.".to_owned()
-        } else {
-            format!("Refreshing {}…", started.join(" & "))
-        };
-        let force_after = self
-            .cooldown
-            .lock()
-            .unwrap()
-            .get("force-refresh")
-            .copied()
-            .unwrap_or(0.0);
-        Ok(
-            json!({"status":if started.is_empty(){"skipped"}else{"started"},"force":force,
-            "forceRefreshAfter":source_time(&json!(force_after)),"results":results,"message":message}),
-        )
-    }
-    fn sync(self: Arc<Self>, source: &str) {
-        let start = now();
-        let result: Result<usize> = (|| {
-            let mut items = self.providers.fetch(source, None)?;
-            let refs = {
-                let state = self.state.lock().unwrap();
-                let catalog = domain::catalog(&state);
-                let mut ids = BTreeSet::new();
-                for session in sessions::all(&state) {
-                    if session["archivedAt"].is_null() {
-                        for i in arr(&session["items"]) {
-                            if i["source"] == source {
-                                ids.insert(text(&i, "id").to_string());
-                            }
-                        }
-                    }
-                }
-                let current = state["items"]
-                    .as_array()
-                    .map(|items| items.iter().map(|x| text(x, "id")).collect::<HashSet<_>>())
-                    .unwrap_or_default();
-                for (id, item) in &catalog {
-                    if item["source"] == source
-                        && (state["overrides"][id]["hidden"] == true
-                            || ["github", "linear"].contains(&source)
-                                && item["status"] != "done"
-                                && current.contains(id.as_str()))
-                    {
-                        ids.insert(id.clone());
-                    }
-                }
-                let fetched = items.iter().map(|x| text(x, "id")).collect::<HashSet<_>>();
-                ids.into_iter()
-                    .filter(|id| !fetched.contains(id.as_str()))
-                    .filter_map(|id| catalog.get(&id).cloned())
-                    .collect::<Vec<_>>()
-            };
-            if !refs.is_empty() {
-                items.extend(self.providers.refresh(source, &refs)?);
-            }
-            self.transaction(|s|{let mut by_id=items.iter().map(|x|(text(x,"id").to_string(),x.clone())).collect::<std::collections::BTreeMap<_,_>>();for item in arr(&s["items"]){if item["source"]==source&&s["overrides"][text(&item,"id")]["hidden"]==true{by_id.entry(text(&item,"id").into()).or_insert(item);}}items=by_id.into_values().collect();for session in sessions::all_mut(s){for item in session["items"].as_array_mut().unwrap(){if let Some(new)=items.iter().find(|x|x["id"]==item["id"]){*item=domain::item_ref(new);}}}for item in &items{if refs.iter().any(|x|x["id"]==item["id"]){s["itemArchive"][text(item,"id")]=item.clone();}}let mut all=arr(&s["items"]);all.retain(|x|x["source"]!=source);all.extend(items.clone());s["items"]=json!(all);domain::observe(s,source,&items);if source=="github"{super::github::observe(s);}s["sources"][source]=json!({"lastSuccess":now(),"nextAttempt":now()+300.0,"error":null,"failures":0,"disabled":false});Ok(())})?;
-            Ok(items.len())
-        })();
-        let mut event = json!({"time":iso_time(),"source":source,"operation":"sync","elapsedMs":((now()-start)*1000.0).round()});
-        match result {
-            Ok(count) => {
-                event["outcome"] = json!("success");
-                event["itemCount"] = json!(count);
-            }
-            Err(error) => {
-                let mut retry = 300.0;
-                let _ = self.transaction(|s| {
-                    let info = &mut s["sources"][source];
-                    let n = info["failures"].as_u64().unwrap_or(0) + 1;
-                    retry = (300.0 * 2.0f64.powi((n - 1).min(4) as i32))
-                        .min(3600.0)
-                        .max(error.retry);
-                    info["failures"] = json!(n);
-                    info["error"] = json!(error.message);
-                    info["nextAttempt"] = json!(now() + retry);
-                    Ok(())
-                });
-                event["outcome"] = json!("failure");
-                event["retrySeconds"] = json!(retry);
-                if let Some(fields) = error.data.as_object() {
-                    for (k, v) in fields {
-                        event[k] = v.clone();
-                    }
-                }
-            }
-        }
-        let _ = self.log(&event);
-        self.running.lock().unwrap().remove(source);
-        self.revision.fetch_add(1, Ordering::Relaxed);
     }
     pub fn log(&self, event: &Value) -> Result<()> {
         let root = self.data.parent().unwrap().join("logs");
@@ -691,60 +442,6 @@ impl Repository {
         };
         json!({"candidates":candidates,"directories":arr(&folders).iter().map(|x|x["path"].clone()).collect::<Vec<_>>(),"folders":folders,"workRoot":super::workflows::work_root(),"warning":warning,"demo":self.demo})
     }
-}
-fn sentry_environment_summary(
-    state: &Value,
-    requested: Option<&str>,
-    offset: usize,
-    observed_at: f64,
-    demo: bool,
-) -> Result<Value> {
-    let caches = state["sentryEnvironments"]
-        .as_object()
-        .ok_or_else(|| Error::new("Invalid stored environment caches."))?;
-    if caches.len() > 20 {
-        return Err(Error::new("Too many stored environment caches."));
-    }
-    let mut summaries = Vec::new();
-    let mut selected = requested.map(|name| json!({"environment":name,"cached":false,"membershipKnown":false,"itemIds":[],"total":null,"offset":offset,"nextOffset":null}));
-    for (name, cache) in caches {
-        if name.is_empty()
-            || name.len() > 100
-            || !name
-                .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
-            || !cache.is_object()
-        {
-            return Err(Error::new("Invalid stored environment cache."));
-        }
-        let ids = match cache.get("itemIds") {
-            None => &[][..],
-            Some(Value::Array(ids)) if ids.len() <= 2000 => ids.as_slice(),
-            _ => return Err(Error::new("Invalid stored environment membership.")),
-        };
-        if ids.iter().any(|id| {
-            !id.as_str().is_some_and(|id| {
-                id.starts_with("sentry:") && id.len() <= 200 && !id.chars().any(char::is_control)
-            })
-        }) {
-            return Err(Error::new("Invalid stored environment member ID."));
-        }
-        summaries.push(json!({"environment":name,"cached":true,"refreshing":cache["running"]==true,
-            "lastSuccess":source_time(&cache["lastSuccess"]),"nextAttempt":source_time(&cache["nextAttempt"]),
-            "failures":source_failures(cache),"hasError":cache["error"].is_string(),"membershipKnown":cache.get("itemIds").is_some(),"cachedMemberCount":cache.get("itemIds").map(|_| ids.len())}));
-        if requested == Some(name.as_str()) {
-            selected = Some(
-                json!({"environment":name,"cached":true,"membershipKnown":cache.get("itemIds").is_some(),"itemIds":ids.iter().skip(offset).take(100).collect::<Vec<_>>(),
-                "total":cache.get("itemIds").map(|_| ids.len()),"offset":offset,"nextOffset":(offset+100 < ids.len()).then_some(offset+100)}),
-            );
-        }
-    }
-    let source = &state["sources"]["sentry"];
-    Ok(
-        json!({"version":1,"scope":"cached","observedAt":observed_at,"demo":demo,
-        "source":{"syncEnabled":source["disabled"]!=true,"hasError":source["error"].is_string(),"failures":source_failures(source),"lastSuccess":source_time(&source["lastSuccess"]),"nextAttempt":source_time(&source["nextAttempt"])},
-        "environmentRequestsAfter":source_time(&state["sentryEnvNextAttempt"]),"environments":summaries,"selection":selected}),
-    )
 }
 pub fn iso_time() -> String {
     let secs = SystemTime::now()

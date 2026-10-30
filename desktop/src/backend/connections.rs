@@ -1,4 +1,5 @@
 //! Native credential setup. Public projections contain no credentials.
+use super::source_sync::ProviderSource;
 use super::{json, now, text, uuid, Error, PathBuf, Repository, Result, Value};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
@@ -708,9 +709,6 @@ impl ProviderHost {
     pub fn redact_text(&self, value: &mut String) {
         self.current.read().unwrap().provider.redact_text(value);
     }
-    pub fn fetch(&self, source: &str, environment: Option<&str>) -> Result<Vec<Value>> {
-        self.snapshot(source)?.fetch(source, environment)
-    }
     pub fn refresh(&self, source: &str, refs: &[Value]) -> Result<Vec<Value>> {
         self.snapshot(source)?.refresh(source, refs)
     }
@@ -731,6 +729,15 @@ impl ProviderHost {
     }
     pub fn github_pr_action(&self, id: &str, action: &str, login: &str) -> Result<(Value, String)> {
         self.snapshot("github")?.github_pr_action(id, action, login)
+    }
+}
+
+impl ProviderSource for ProviderHost {
+    fn fetch(&self, source: &str, environment: Option<&str>) -> Result<Vec<Value>> {
+        self.snapshot(source)?.fetch(source, environment)
+    }
+    fn refresh(&self, source: &str, refs: &[Value]) -> Result<Vec<Value>> {
+        Self::refresh(self, source, refs)
     }
 }
 
@@ -771,7 +778,7 @@ pub fn reload(repo: &Arc<Repository>, payload: &Value) -> Result<Value> {
             state["sources"][provider]["nextAttempt"] = json!(0);
             Ok(())
         })?;
-        repo.schedule(false)?;
+        super::source_sync::request(repo, false)?;
     }
     Ok(result)
 }

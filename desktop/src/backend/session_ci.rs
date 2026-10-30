@@ -1,3 +1,4 @@
+use super::source_sync::Skip;
 use super::{arr, domain, json, now, sessions, sid, text, Error, Repository, Result, Value};
 
 fn linked_prs(state: &Value, id: &str) -> Result<Vec<Value>> {
@@ -189,19 +190,18 @@ fn refresh_with(
         if repo.demo {
             return skipped(&id, ids, SkipReason::Demo, None);
         }
-        let running = repo.running.lock().map_err(|_| Error::io())?;
         let time = now();
-        if let Some((reason, retry_at)) = super::repository::source_skip(
-            &state["sources"]["github"],
-            running.contains("github"),
-            true,
-            time,
-        ) {
-            let reason = match reason {
-                "disabled" => SkipReason::Disabled,
-                "backoff" => SkipReason::Backoff,
-                "already-running" => SkipReason::AlreadyRunning,
-                _ => return Err(Error::new("Unsupported CI source admission result.")),
+        if let Some(skip) = repo
+            .sync
+            .forced_skip("github", &state["sources"]["github"], time)?
+        {
+            let (reason, retry_at) = match skip {
+                Skip::Disabled => (SkipReason::Disabled, None),
+                Skip::Backoff(at) => (SkipReason::Backoff, Some(at)),
+                Skip::AlreadyRunning => (SkipReason::AlreadyRunning, None),
+                Skip::Interval(_) => {
+                    return Err(Error::new("Unsupported CI source admission result."))
+                }
             };
             return skipped(&id, ids, reason, retry_at);
         }
@@ -224,7 +224,6 @@ fn refresh_with(
         cooldown.insert(key.clone(), time + 25.0);
         drop(opening);
         drop(cooldown);
-        drop(running);
         drop(state);
         (refs, ids)
     };

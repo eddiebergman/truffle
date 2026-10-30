@@ -113,7 +113,7 @@ fn ci_admission_skips_preserve_cache_and_all_reservations_without_provider_reads
                 .unwrap();
             }
             "already-running" => {
-                repo.running.lock().unwrap().insert("github".into());
+                repo.sync.running.lock().unwrap().insert("github".into());
             }
             "ci-backoff" => {
                 repo.cooldown
@@ -133,7 +133,7 @@ fn ci_admission_skips_preserve_cache_and_all_reservations_without_provider_reads
         let disk = std::fs::read(&repo.data).unwrap();
         let cooldown = repo.cooldown.lock().unwrap().clone();
         let opening = repo.opening.lock().unwrap().clone();
-        let running = repo.running.lock().unwrap().clone();
+        let running = repo.sync.running.lock().unwrap().clone();
         let result = refresh_with(&repo, &id, |_| {
             panic!("blocked admission must not read GitHub")
         })
@@ -160,7 +160,7 @@ fn ci_admission_skips_preserve_cache_and_all_reservations_without_provider_reads
         assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
         assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
         assert_eq!(*repo.opening.lock().unwrap(), opening);
-        assert_eq!(*repo.running.lock().unwrap(), running);
+        assert_eq!(*repo.sync.running.lock().unwrap(), running);
     }
 }
 #[test]
@@ -170,7 +170,7 @@ fn ci_admission_bypasses_healthy_interval_releases_locks_and_returns_real_check_
     let before = repo.snapshot(false)["revision"].clone();
     let receipt = refresh_with(&repo, &id, |refs| {
         assert!(repo.state.try_lock().is_ok());
-        assert!(repo.running.try_lock().is_ok());
+        assert!(repo.sync.running.try_lock().is_ok());
         assert!(repo.cooldown.try_lock().is_ok());
         assert!(repo.opening.try_lock().is_ok());
         let times = repo.cooldown.lock().unwrap().clone();

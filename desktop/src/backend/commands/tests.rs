@@ -1361,7 +1361,7 @@ fn source_commands_publish_strict_policies_and_read_only_redacted_status() {
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
 }
 #[test]
 fn sentry_environment_read_is_cached_bounded_and_preserves_unknown_membership() {
@@ -1440,7 +1440,7 @@ fn sentry_environment_read_is_cached_bounded_and_preserves_unknown_membership() 
     assert_eq!(entry["appChat"], true);
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
     assert!(repo.cooldown.lock().unwrap().is_empty());
 }
 #[test]
@@ -1847,7 +1847,7 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert!(repo.cooldown.lock().unwrap().is_empty());
-    assert!(repo.running.lock().unwrap().is_empty());
+    assert!(repo.sync.running.lock().unwrap().is_empty());
     for (name, args) in [
         ("sources.status", json!({"force":true})),
         ("sources.refresh", json!({"force":"true"})),
@@ -1866,7 +1866,7 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
         );
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert!(repo.cooldown.lock().unwrap().is_empty());
-        assert!(repo.running.lock().unwrap().is_empty());
+        assert!(repo.sync.running.lock().unwrap().is_empty());
     }
     let demo_temp = tempfile::tempdir().unwrap();
     let demo = Repository::open(demo_temp.path().into(), None, true).unwrap();
@@ -1887,7 +1887,7 @@ fn source_refresh_denial_and_argument_validation_precede_owner_mutations() {
         assert!(text(&receipt, "message").contains("no external requests"));
         assert_eq!(*demo.state.lock().unwrap(), before);
         assert!(demo.cooldown.lock().unwrap().is_empty());
-        assert!(demo.running.lock().unwrap().is_empty());
+        assert!(demo.sync.running.lock().unwrap().is_empty());
     }
 }
 
