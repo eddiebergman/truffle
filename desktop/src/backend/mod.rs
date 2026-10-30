@@ -46,6 +46,7 @@ pub mod providers;
 pub mod repository;
 pub mod resources;
 pub mod reviews;
+pub mod runtime;
 pub mod scheduler;
 mod schema;
 pub mod session_ci;

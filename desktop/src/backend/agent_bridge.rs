@@ -4,13 +4,13 @@
 //! strings must not change. Fields a request does not declare are ignored.
 use super::agents::Agent;
 use super::operations::{self, Caller};
+use super::runtime::{self, Background, Hook};
 use super::{
-    arr, checkouts, commands, json, resources, reviews, session_ci, session_context, sessions,
-    workflows, Error, Repository, Result, Value,
+    arr, checkouts, commands, json, resources, reviews, scheduler, session_ci, session_context,
+    sessions, workflows, Error, Repository, Result, Value,
 };
 use super::{now, sid, text};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// One agent CLI call. Registration predates operations and carries no `operation` field.
@@ -167,23 +167,13 @@ pub struct WorktreeReport {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeEvent {
     pub id: String,
-    pub event: String,
+    pub event: Hook,
     #[serde(default)]
     pub session_id: String,
     #[serde(default)]
     pub subagent_id: String,
     #[serde(flatten)]
     pub background: Background,
-}
-
-/// The background work a turn-end hook saw. `None` means unknown, not zero.
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Background {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub background_counts: Option<BTreeMap<String, u64>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scheduled_wakeups: Option<u64>,
 }
 
 /// The agent's own report of its state, for agents without hooks.
@@ -237,6 +227,9 @@ pub fn receive(repo: &Arc<Repository>, payload: &Value) -> Result<Value> {
         Request::Operation(operation) => run(repo, &operation),
     }
 }
+/// Only `command` and the settings operations go through the operation table, which logs agent
+/// writes in the chat. The others report the chat's own status and outputs, which the chat already
+/// shows, and some fire on every turn.
 fn run(repo: &Arc<Repository>, operation: &Operation) -> Result<Value> {
     match operation {
         Operation::Command(command) => {
@@ -265,8 +258,8 @@ fn run(repo: &Arc<Repository>, operation: &Operation) -> Result<Value> {
         }
         Operation::Resources(report) => resources::apply(repo, &report.id, &report.report),
         Operation::Worktree(report) => checkouts::link_reported(repo, report),
-        Operation::RuntimeEvent(event) => repo.transaction(|s| apply_runtime_event(s, event)),
-        Operation::Runtime(report) => register_runtime(repo, report),
+        Operation::RuntimeEvent(event) => repo.transaction(|s| apply_hook(s, event)),
+        Operation::Runtime(report) => apply_report(repo, report),
         Operation::Checkpoint(checkpoint) => {
             save_output(repo, &checkpoint.id, "checkpoint", checkpoint)
         }
@@ -303,137 +296,36 @@ fn save_output(
     repo.edit(&edit)?;
     Ok(record)
 }
-fn apply_background_activity(
-    runtime: &mut Value,
-    old: &Value,
-    event: &RuntimeEvent,
-    has_subagents: bool,
-) -> Result<()> {
-    // Turn-end hooks carry an authoritative snapshot of background work.
-    // Omitted snapshots mean unknown, not zero; unrelated events retain it.
-    if event.event != "SessionStart" {
-        for field in ["backgroundCounts", "scheduledWakeups", "activityAt"] {
-            if !old[field].is_null() {
-                runtime[field] = old[field].clone();
-            }
-        }
-    }
-    if let Some(counts) = &event.background.background_counts {
-        if counts.len() > 100
-            || counts
-                .iter()
-                .any(|(kind, count)| kind.is_empty() || kind.chars().count() > 40 || *count > 1000)
-        {
-            return Err(Error::new("Invalid background activity counts."));
-        }
-        runtime["backgroundCounts"] = json!(counts);
-        runtime["activityAt"] = json!(now());
-    }
-    if let Some(count) = event.background.scheduled_wakeups {
-        if count > 1000 {
-            return Err(Error::new("Invalid scheduled wakeup count."));
-        }
-        runtime["scheduledWakeups"] = json!(count);
-        runtime["activityAt"] = json!(now());
-    }
-    let background = runtime["backgroundCounts"]
-        .as_object()
-        .map_or(0, |v| v.values().filter_map(Value::as_u64).sum::<u64>());
-    if runtime["state"] == "waiting"
-        && (background > 0
-            || has_subagents
-            || runtime["scheduledWakeups"].as_u64().unwrap_or(0) > 0)
-    {
-        runtime["state"] = json!("background");
-    } else if runtime["state"] == "background"
-        && background == 0
-        && !has_subagents
-        && runtime["scheduledWakeups"].as_u64().unwrap_or(0) == 0
-    {
-        runtime["state"] = json!("waiting");
-    }
-    Ok(())
-}
-fn complete_skill_runs(s: &mut Value, session_id: &Value) {
-    for run in s["skillRuns"].as_array_mut().unwrap() {
-        if run["sessionId"] == *session_id
-            && ["starting", "launched"].contains(&text(run, "outcome"))
-        {
-            run["outcome"] = json!("completed");
-            run["finishedAt"] = json!(now());
-            run["message"] = json!("Agent finished its turn. Registered results appear below.");
-        }
-    }
-}
-fn apply_runtime_event(s: &mut Value, event: &RuntimeEvent) -> Result<Value> {
+/// Apply a hook to the chat's runtime. An idle agent at a turn end has finished its skill runs.
+fn apply_hook(s: &mut Value, event: &RuntimeEvent) -> Result<Value> {
     let row = sessions::get_mut(s, &event.id)?;
-    if event.event == "SessionStart" && !event.session_id.is_empty() {
+    if event.event == Hook::SessionStart && !event.session_id.is_empty() {
         let id = sid(&event.session_id)?;
         if text(row, "sessionId").is_empty() {
             row["sessionId"] = json!(id);
         }
     }
-    let old = row["runtime"].clone();
-    let mut ids = arr(&old["subagentIds"]);
-    if event.event == "SessionStart" {
-        ids.clear();
-    }
-    if event.subagent_id.chars().count() > 200 || event.subagent_id.contains('\0') {
-        return Err(Error::new("Invalid subagentId."));
-    }
-    let sub = event.subagent_id.trim();
-    let state = match event.event.as_str() {
-        "SessionStart" | "Stop" => "waiting",
-        "UserPromptSubmit" => "working",
-        "PermissionRequest" => "needs-input",
-        "SubagentStart" => {
-            if !sub.is_empty() && !ids.contains(&json!(sub)) && ids.len() < 1000 {
-                ids.push(json!(sub));
-            }
-            old["state"].as_str().unwrap_or("working")
-        }
-        "SubagentStop" => {
-            ids.retain(|x| x != &json!(sub));
-            old["state"].as_str().unwrap_or("working")
-        }
-        _ => return Err(Error::new("Unsupported runtime event.")),
+    let hook = runtime::Event::Hook {
+        hook: event.event,
+        subagent: &event.subagent_id,
+        background: &event.background,
     };
-    let reason = match event.event.as_str() {
-        "PermissionRequest" => "approval",
-        "Stop" => "finished",
-        "SessionStart" => "ready",
-        "UserPromptSubmit" => "",
-        _ => text(&old, "reason"),
-    };
-    let mut runtime =
-        json!({"reason":reason,"state":state,"subagents":ids.len(),"subagentIds":ids,"at":now()});
-    apply_background_activity(&mut runtime, &old, event, !ids.is_empty())?;
-    row["runtime"] = runtime;
+    row["runtime"] = runtime::next(&row["runtime"], &hook, now())?;
     let record = row.clone();
-    if ["Stop", "SubagentStop"].contains(&event.event.as_str())
-        && record["runtime"]["state"] == "waiting"
-        && record["runtime"]["subagents"] == 0
-    {
-        complete_skill_runs(s, &record["id"]);
+    if event.event.ends_turn() && runtime::is_idle(&record["runtime"]) {
+        scheduler::finish_runs(s, &event.id);
     }
     Ok(record)
 }
-fn register_runtime(repo: &Repository, report: &StatusReport) -> Result<Value> {
-    let state = report.state.trim();
-    if !["working", "waiting", "needs-input"].contains(&state) {
-        return Err(Error::new("Choose working, waiting, or needs-input."));
-    }
-    if report.subagents.is_some_and(|count| count > 1000) {
-        return Err(Error::new("Subagent count must be 0–1000."));
-    }
-    let reason = report.reason.as_deref().unwrap_or("").trim();
-    if !["", "ready", "finished", "question", "approval", "failed"].contains(&reason) {
-        return Err(Error::new("Invalid attention reason."));
-    }
+fn apply_report(repo: &Repository, report: &StatusReport) -> Result<Value> {
+    let event = runtime::Event::Report {
+        state: &report.state,
+        reason: report.reason.as_deref().unwrap_or(""),
+        subagents: report.subagents,
+    };
     repo.transaction(|s| {
         let row = sessions::get_mut(s, &report.id)?;
-        row["runtime"] =
-            json!({"state":state,"reason":reason,"subagents":report.subagents,"at":now()});
+        row["runtime"] = runtime::next(&row["runtime"], &event, now())?;
         Ok(row.clone())
     })
 }

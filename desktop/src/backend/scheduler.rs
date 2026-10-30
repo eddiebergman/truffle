@@ -4,7 +4,7 @@ use super::{
     arr, checked, directory, expand, json, now, sessions, text, uuid, Error, Repository, Result,
     Value,
 };
-use super::{artifacts, workflows};
+use super::{artifacts, runtime, workflows};
 use std::time::Duration;
 fn next_due(schedule: &Value, after: f64) -> Result<f64> {
     match text(schedule, "mode") {
@@ -509,6 +509,16 @@ fn add_run(s: &mut Value, run: Value) {
     runs.truncate(100);
     s["skillRuns"] = json!(runs);
 }
+/// Mark the chat's unfinished skill runs completed, once its agent has finished its turn.
+pub fn finish_runs(s: &mut Value, chat: &str) {
+    for run in s["skillRuns"].as_array_mut().unwrap() {
+        if run["sessionId"] == chat && ["starting", "launched"].contains(&text(run, "outcome")) {
+            run["outcome"] = json!("completed");
+            run["finishedAt"] = json!(now());
+            run["message"] = json!("Agent finished its turn. Registered results appear below.");
+        }
+    }
+}
 fn run_receipt(preset: &str, record: &Value, run: Option<&Value>, status: &str) -> Value {
     json!({"presetId":preset,"recordId":record["id"],"runId":run.map(|run|run["id"].clone()),"status":status})
 }
@@ -529,11 +539,9 @@ pub fn execute(
     repo.cooldown(&format!("skill-run:{preset}"), 30.0)?;
     // Do not overlap a previous skill run while its agent terminal remains alive.
     if let Some(existing) = sessions::latest(&state, |x| {
-        let waiting = x["runtime"]["state"] == "waiting"
-            && x["runtime"]["subagents"].as_u64().unwrap_or(0) == 0;
         x["newsletterId"] == preset
             && x["archivedAt"].is_null()
-            && !waiting
+            && !runtime::is_idle(&x["runtime"])
             && inventory.live(x).is_some()
     }) {
         if !scheduled {

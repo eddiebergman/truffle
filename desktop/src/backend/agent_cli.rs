@@ -1,10 +1,11 @@
 //! Native registration and lifecycle client for the local agent bridge.
 use super::agent_bridge::{
-    ArtifactAttachment, Background, Briefing, Checkpoint, CiInvestigation, Command, ContextRead,
+    ArtifactAttachment, Briefing, Checkpoint, CiInvestigation, Command, ContextRead,
     ContextReplace, Operation, Registration, Request, ResourceReport, ReviewUpdate, RuntimeEvent,
     SettingsApply, SettingsRead, StatusReport, WorktreeReport,
 };
 use super::agents::Agent;
+use super::runtime::{Background, Hook};
 use super::{expand, home, json, now, safe_url, sid, terminal, text, uuid, Error, Result, Value};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -589,15 +590,19 @@ fn hook(o: &Options, root: &Path) -> Result<()> {
 }
 /// The runtime event for hook input `data`, or `None` for a subagent's own turn events.
 fn hook_payload(o: &Options, data: &Value) -> Result<Option<Value>> {
-    let event = o.required("event")?;
+    let event: Hook = serde_json::from_value(json!(o.required("event")?))
+        .map_err(|_| Error::new("Unsupported runtime event."))?;
     if !text(data, "agent_id").is_empty()
-        && ["SessionStart", "Stop", "UserPromptSubmit"].contains(&event)
+        && matches!(
+            event,
+            Hook::SessionStart | Hook::Stop | Hook::UserPromptSubmit
+        )
     {
         return Ok(None);
     }
     let event = RuntimeEvent {
         id: sid(o.required("record")?)?,
-        event: event.into(),
+        event,
         session_id: text(data, "session_id").into(),
         subagent_id: if text(data, "agent_id").is_empty() {
             text(data, "subagent_id")
@@ -605,7 +610,7 @@ fn hook_payload(o: &Options, data: &Value) -> Result<Option<Value>> {
             text(data, "agent_id")
         }
         .into(),
-        background: if ["Stop", "SubagentStop"].contains(&event) {
+        background: if event.ends_turn() {
             activity_snapshot(data)
         } else {
             Background::default()
