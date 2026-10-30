@@ -40,9 +40,16 @@ fn read(path: &Path) -> Result<Value> {
     let bytes = context_kit::read_bounded(path, 1024 * 1024)?;
     serde_json::from_slice(&bytes).map_err(|_| "Invalid restart metadata.".into())
 }
-fn read_state(root: &Path) -> Result<Value> {
+fn service_chats(url: &str) -> Result<Vec<Value>> {
+    Ok(arr(&api(url, "/api/state", None)?["sessions"]))
+}
+// Read-only fallback: with the service stopped there is no writer to ask, and
+// restart must still list the chats of terminals that outlived it.
+fn stored_chats(root: &Path) -> Result<Vec<Value>> {
     let bytes = context_kit::read_bounded(&data(root), 64 * 1024 * 1024)?;
-    serde_json::from_slice(&bytes).map_err(|_| "Invalid dashboard state.".into())
+    let state: Value =
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid dashboard state.".to_owned())?;
+    Ok(arr(&state["sessions"]))
 }
 fn write(path: &Path, value: &Value) -> Result<()> {
     let temp = path.with_extension(format!("{}.tmp", backend::uuid()));
@@ -224,8 +231,10 @@ fn inspect(root: &Path, url: &str) -> Result<Value> {
                     && d["live"] == true
             })
         });
-    let state = read_state(root)?;
-    let sessions = arr(&state["sessions"]);
+    let sessions = match pid {
+        Some(_) => service_chats(url)?,
+        None => stored_chats(root)?,
+    };
     let mut records = vec![];
     let mut problems = vec![];
     for candidate in &live {
@@ -464,10 +473,9 @@ fn start_service(root: &Path, url: &str) -> Result<()> {
     });
     Err("The replacement service is still starting. See data/logs/service.log.".into())
 }
-fn resume(root: &Path, url: &str, records: &[Value]) -> Vec<String> {
+fn resume(url: &str, records: &[Value]) -> Vec<String> {
     let mut failures = vec![];
-    let current = read_state(root).unwrap_or_else(|_| json!({}));
-    let sessions = arr(&current["sessions"]);
+    let sessions = service_chats(url).unwrap_or_default();
     for record in records {
         if !sessions.iter().any(|s| {
             s["id"] == record["id"]
@@ -588,7 +596,7 @@ pub fn run(root: &Path, id: &str) -> Result<()> {
                 "resuming",
                 "Resuming saved conversations in their original folders…",
             )?;
-            Ok(resume(&root, url, &records))
+            Ok(resume(url, &records))
         }
     })();
     let update = match result {
@@ -602,7 +610,7 @@ pub fn run(root: &Path, id: &str) -> Result<()> {
                 if let Err(e) = start_service(&root, url) {
                     errors.push(e);
                 } else if interrupted {
-                    errors.extend(resume(&root, url, &records));
+                    errors.extend(resume(url, &records));
                 }
             }
             json!({"status":"failed","phase":"finished","finishedAt":backend::now(),"errors":errors,"message":error})
