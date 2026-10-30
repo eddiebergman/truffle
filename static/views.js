@@ -2,6 +2,15 @@
 let savedViewsDocument = null,
   savedViewsError = "",
   savedViewEditor = null;
+const savedViewsStore = documentStore({
+  get: () => savedViewsDocument,
+  set: (next) => {
+    savedViewsDocument = next;
+  },
+  read: () => api("/api/views"),
+  write: (body) => api("/api/views", body),
+  validate: validateSavedViewsDocument,
+});
 const savedViewPages = ["all", "github", "linear", "sentry", "notes"];
 const savedViewScalarFields = [
   "source",
@@ -240,12 +249,9 @@ function validateSavedViewsDocument(doc) {
   if (
     !doc ||
     doc.version !== 1 ||
-    !Number.isSafeInteger(doc.revision) ||
-    doc.revision < 0 ||
+    !validDocumentIdentity(doc) ||
     !Array.isArray(doc.views) ||
     doc.views.length > 64 ||
-    typeof doc.contentHash !== "string" ||
-    !/^[a-f0-9]{64}$/.test(doc.contentHash) ||
     Object.keys(doc).some(
       (key) => !["version", "revision", "contentHash", "views"].includes(key),
     )
@@ -640,11 +646,10 @@ function sameSavedViewDefinition(left, right) {
 async function loadSavedViews({ canApply = () => true } = {}) {
   try {
     const previous = savedViewsDocument?.views || [],
-      next = validateSavedViewsDocument(await api("/api/views"));
-    if (!canApply()) {
+      next = await savedViewsStore.load({ canApply });
+    if (!next) {
       return null;
     }
-    savedViewsDocument = next;
     savedViewsError = "";
     for (const page of savedViewPages) {
       const viewState = currentSavedViewState(page);
@@ -1508,15 +1513,15 @@ async function saveSavedViewDefinition(
     views.push(definition);
   }
   const next = validateSavedViewsDocument({ ...baseline, views });
-  savedViewsDocument = validateSavedViewsDocument(
-    await api("/api/views", {
-      revision: next.revision,
-      contentHash: next.contentHash,
-      views: next.views,
-    }),
-  );
+  return saveSavedViews(next, next.views);
+}
+async function saveSavedViews(baseline, views) {
+  const result = await savedViewsStore.save(baseline, { views });
+  if (result.kind !== "accepted") {
+    throw new Error(result.error);
+  }
   savedViewsError = "";
-  return savedViewsDocument;
+  return result.document;
 }
 async function deleteSavedViewDefinition(id, baseline) {
   if (!baseline || !id || !baseline.views.some((view) => view.id === id)) {
@@ -1524,16 +1529,10 @@ async function deleteSavedViewDefinition(id, baseline) {
       "This saved view is unavailable. Reload views before deleting.",
     );
   }
-  const views = baseline.views.filter((view) => view.id !== id);
-  savedViewsDocument = validateSavedViewsDocument(
-    await api("/api/views", {
-      revision: baseline.revision,
-      contentHash: baseline.contentHash,
-      views,
-    }),
+  return saveSavedViews(
+    baseline,
+    baseline.views.filter((view) => view.id !== id),
   );
-  savedViewsError = "";
-  return savedViewsDocument;
 }
 function openSavedViewEditor() {
   const viewState = currentSavedViewState();

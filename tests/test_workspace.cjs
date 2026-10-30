@@ -236,10 +236,12 @@ test("saved GitHub subviews retain independent authored/review PR roles", () => 
     localStorage: { getItem: () => null },
     prefs: {},
   });
-  vm.runInContext(
-    fs.readFileSync(require.resolve("../static/views.js"), "utf8"),
-    c,
-  );
+  for (const file of ["documents.js", "views.js"]) {
+    vm.runInContext(
+      fs.readFileSync(require.resolve(`../static/${file}`), "utf8"),
+      c,
+    );
+  }
   const views = JSON.parse(
       fs.readFileSync(require.resolve("../static/config/views.json"), "utf8"),
     ).views,
