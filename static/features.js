@@ -89,6 +89,7 @@ function createFeatureForm(dialog, form, target) {
       controls: new Map(),
       afterReady: null,
       acceptedText: "",
+      conflict: false,
     };
   current.isCurrent = () =>
     featureForms.get(dialog) === current &&
@@ -148,6 +149,7 @@ function featureFormMutable(current) {
     current?.isCurrent() &&
     !current.pending &&
     !current.refreshing &&
+    !current.conflict &&
     !["accepted", "unknown"].includes(current.result?.kind)
   );
 }
@@ -272,7 +274,11 @@ async function refreshFeatureForm(current) {
     }
   }
 }
-async function submitFeatureForm(current, payload, acceptedText, afterReady) {
+// A refused checked write keeps the draft; `onConflict` offers the editor's reload.
+async function submitFeatureForm(
+  current,
+  { write, acceptedText, afterReady, onConflict },
+) {
   if (!featureFormMutable(current)) {
     return;
   }
@@ -282,7 +288,15 @@ async function submitFeatureForm(current, payload, acceptedText, afterReady) {
   holdFormFocus(current.host, current);
   freezeFeatureForm(current, true);
   current.ui.message.textContent = "Saving…";
-  let result = await mutate(payload);
+  let conflict = false;
+  let result = await presentLocalWrite(async () => {
+    try {
+      await write();
+    } catch (error) {
+      conflict = writeFailureKind(error) === "conflict";
+      throw error;
+    }
+  });
   current.pending = false;
   current.result = result;
   if (!current.isCurrent()) {
@@ -305,10 +319,19 @@ async function submitFeatureForm(current, payload, acceptedText, afterReady) {
       };
     }
   }
-  if (current.isCurrent()) {
-    presentFeatureFormResult(current);
-  } else {
+  if (!current.isCurrent()) {
     toast(localWriteMessage(result, acceptedText));
+  } else if (conflict && onConflict) {
+    current.conflict = true;
+    freezeFeatureForm(current, false);
+    for (const button of current.host.querySelectorAll(
+      'button[type="submit"]',
+    )) {
+      button.disabled = true;
+    }
+    onConflict(result);
+  } else {
+    presentFeatureFormResult(current);
   }
 }
 async function featureWrite(
@@ -482,12 +505,11 @@ $("#snooze-form").onsubmit = async (event) => {
       return;
     }
   }
-  await submitFeatureForm(
-    current,
-    payload,
-    "Snoozed. Restore it from the bottom of the work view.",
-    () => $("#snooze-dialog").close(),
-  );
+  await submitFeatureForm(current, {
+    write: () => api("/api/edit", payload),
+    acceptedText: "Snoozed. Restore it from the bottom of the work view.",
+    afterReady: () => $("#snooze-dialog").close(),
+  });
 };
 function renderSnoozed(items) {
   const section = $("#snoozed-items"),
@@ -876,12 +898,12 @@ $("#sentry-filter-form").onsubmit = async (event) => {
     $("#sentry-filter-dialog").close();
   };
   if (name) {
-    await submitFeatureForm(
-      current,
-      { action: "save-sentry-view", id, name, filters },
-      "Sentry filter saved.",
-      apply,
-    );
+    await submitFeatureForm(current, {
+      write: () =>
+        api("/api/edit", { action: "save-sentry-view", id, name, filters }),
+      acceptedText: "Sentry filter saved.",
+      afterReady: apply,
+    });
   } else {
     apply();
   }
@@ -903,18 +925,17 @@ $("#sentry-delete").onclick = async () => {
     return;
   }
   const id = current.target;
-  await submitFeatureForm(
-    current,
-    { action: "delete-sentry-view", id },
-    "Sentry filter deleted.",
-    () => {
+  await submitFeatureForm(current, {
+    write: () => api("/api/edit", { action: "delete-sentry-view", id }),
+    acceptedText: "Sentry filter deleted.",
+    afterReady: () => {
       sentryFilters = {};
       current.selection = sentryView = "";
       persist();
       render();
       $("#sentry-filter-dialog").close();
     },
-  );
+  });
 };
 function changePill(value) {
   const lower = value.toLowerCase();
@@ -1243,12 +1264,11 @@ $("#briefing-form").onsubmit = async (event) => {
     body = form.elements.body.value;
   current.target = id;
   current.targetCurrent = () => form.elements.record.value === id;
-  await submitFeatureForm(
-    current,
-    { action: "save-briefing", id, body },
-    "Briefing saved.",
-    () => $("#briefing-dialog").close(),
-  );
+  await submitFeatureForm(current, {
+    write: () => api("/api/edit", { action: "save-briefing", id, body }),
+    acceptedText: "Briefing saved.",
+    afterReady: () => $("#briefing-dialog").close(),
+  });
 };
 function openCheckpoint(session) {
   if (!requestDialogNavigation()) {
@@ -1322,13 +1342,17 @@ $("#checkpoint-form").onsubmit = async (event) => {
   for (const key of ["done", "blocked", "next"]) {
     payload[key] = form.elements[key].value;
   }
-  await submitFeatureForm(current, payload, "Checkpoint saved.", () => {
-    const session = state.sessions.find((row) => row.id === id);
-    if (!session) {
-      throw new Error("The saved chat is unavailable in this view.");
-    }
-    $("#checkpoint-dialog").close();
-    return showSession(session);
+  await submitFeatureForm(current, {
+    write: () => api("/api/edit", payload),
+    acceptedText: "Checkpoint saved.",
+    afterReady: () => {
+      const session = state.sessions.find((row) => row.id === id);
+      if (!session) {
+        throw new Error("The saved chat is unavailable in this view.");
+      }
+      $("#checkpoint-dialog").close();
+      return showSession(session);
+    },
   });
 };
 let paletteAnchor = null,
