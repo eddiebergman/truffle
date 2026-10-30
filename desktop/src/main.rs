@@ -1,5 +1,6 @@
 mod backend;
 mod clipboard;
+mod dialog;
 mod restart;
 mod service;
 use serde_json::Value;
@@ -13,7 +14,6 @@ use std::{
     },
 };
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
 type ConnectionCache = Mutex<Option<(PathBuf, Arc<backend::connections::SetupHost>)>>;
 struct NativeState {
@@ -89,7 +89,6 @@ async fn connection_setup_cancel(state: State<'_, NativeState>) -> Result<Value,
 }
 #[tauri::command]
 async fn connection_setup_preview(
-    app: tauri::AppHandle,
     state: State<'_, NativeState>,
     payload: Value,
 ) -> Result<Value, String> {
@@ -99,7 +98,7 @@ async fn connection_setup_preview(
         let host=connection_host(&service,&cached)?;
         let ticket=host.begin_preview();
         if payload["source"]=="github-cli" {
-            let approved=app.dialog().message("Read your GitHub CLI token to validate its account and repository access? The token stays outside chat and is saved only after a separate approval.").title("Use GitHub CLI login").buttons(MessageDialogButtons::OkCancelCustom("Read token".into(),"Cancel".into())).blocking_show();
+            let approved=dialog::confirm(&dialog::Confirmation{title:"Use GitHub CLI login",message:"Read your GitHub CLI token to validate its account and repository access? The token stays outside chat and is saved only after a separate approval.",accept:"Read token"});
             if !approved { host.cancel();return Err("GitHub CLI access cancelled.".into()); }
         }
         let current=connection_host(&service,&cached)?;
@@ -109,7 +108,6 @@ async fn connection_setup_preview(
 }
 #[tauri::command]
 async fn connection_setup_commit(
-    app: tauri::AppHandle,
     state: State<'_, NativeState>,
     payload: Value,
 ) -> Result<Value, String> {
@@ -119,7 +117,7 @@ async fn connection_setup_commit(
         let host=connection_host(&service,&cached)?;
         let confirmation=host.confirmation(&payload).map_err(|error|error.message)?;
         let message=format!("Save the {} connection for {} in macOS Keychain?\n\nActive profile: {}\n\nThis replaces this profile's saved connection for this provider. Existing synchronization settings still apply.",backend::text(&confirmation,"provider"),backend::text(&confirmation,"identity"),backend::text(&confirmation,"profile"));
-        let approved=app.dialog().message(message).title("Save connection").buttons(MessageDialogButtons::OkCancelCustom("Save connection".into(),"Cancel".into())).blocking_show();
+        let approved=dialog::confirm(&dialog::Confirmation{title:"Save connection",message:&message,accept:"Save connection"});
         if !approved {host.cancel();return Err("Connection save cancelled.".into());}
         let current=connection_host(&service,&cached)?;
         if !Arc::ptr_eq(&host,&current){host.cancel();return Err("The active service profile changed. Validate this connection again.".into());}
@@ -725,7 +723,6 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .plugin(tauri_plugin_dialog::init())
         .manage(NativeState {
             service: service.clone(),
             verified: Arc::new(AtomicBool::new(false)),
