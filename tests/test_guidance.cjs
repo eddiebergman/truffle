@@ -53,6 +53,7 @@ async function loadGuidance(globals, data) {
       module: mod,
       $: () => null,
       api: async () => data,
+      source: "agents",
       ...globals,
     }),
     host = loadScripts(c, "static/guidance.js");
@@ -251,6 +252,47 @@ test("keyboard focus keeps a tip alive during the idle pause and dismissal retur
   assert.equal(c.document.activeElement, anchor);
 });
 
+test("guidance removes a tip as soon as truffle-navigate reports a page change", async () => {
+  let now = 20000;
+  const checks = new Map([["run", { at: now / 1000 }]]);
+  const {
+    context: c,
+    tip,
+    host,
+    anchor,
+  } = await guidanceFixture({
+    globals: {
+      Date: { now: () => now },
+      window: { getSelection: () => null },
+      source: "agents",
+      selectedAgentKey: "one",
+      selectedChat: () => ({ key: "one", candidate: null, record: {} }),
+      candidateForRecord: () => ({ host: "embedded" }),
+      chatCIChecks: checks,
+    },
+    data: { progress: { enabled: true, tips: {} } },
+  });
+  anchor.closest = (selector) =>
+    selector === ".context-work-ci"
+      ? { querySelector: () => ({ dataset: { chatCi: "run" } }) }
+      : null;
+  Object.assign(c.document, {
+    querySelector: () => null,
+    querySelectorAll: (selector) =>
+      selector === ".investigate-ci" ? [anchor] : [],
+  });
+  tip.tick();
+  now = 30000;
+  tip.tick();
+  const node = tip.active.node;
+  c.source = "github";
+  host.window.dispatchEvent({
+    type: "truffle-navigate",
+    detail: { from: "agents", to: "github" },
+  });
+  assert.equal(tip.active, null);
+  assert.equal(node.removed, true);
+});
 test("Escape dismisses guidance before Review and honors Review cancellation before closing", () => {
   let active = true,
     closed = 0,

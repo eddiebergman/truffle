@@ -34,6 +34,7 @@ if (typeof document !== "undefined") {
     let data = null,
       active = null,
       lastInput = Date.now(),
+      page = source,
       epoch = "",
       shownEpoch = "",
       pausedUntil = 0,
@@ -456,7 +457,7 @@ if (typeof document !== "undefined") {
       }
       const reviewOpen = $("#diff-review-dialog")?.open,
         newEpoch = [
-          source,
+          page,
           typeof selectedAgentKey === "undefined" ? "" : selectedAgentKey,
           reviewOpen ? "review" : "page",
         ].join("|");
@@ -525,6 +526,10 @@ if (typeof document !== "undefined") {
     $("#app-chat-toggle")?.addEventListener("click", () =>
       window.truffleGuidance.complete("assistant.after-setup"),
     );
+    window.addEventListener("truffle-navigate", (event) => {
+      page = event.detail.to;
+      tick();
+    });
     window.addEventListener("resize", position);
     document.addEventListener("scroll", position, true);
     setInterval(tick, 500);
