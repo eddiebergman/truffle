@@ -151,7 +151,7 @@ pub fn list(repo: &Repository, args: &Value) -> Result<Value> {
     };
     Ok(json!({"changes":page,"total":total,"nextAfterId":next,"scope":"cached"}))
 }
-pub(super) fn mark_in_state(state: &mut Value, args: &Value) -> Result<Value> {
+fn mark_in_state(state: &mut Value, args: &Value) -> Result<Value> {
     keys(args, &["ids"])?;
     let requested = ids(&args["ids"])?;
     rows(state)?;

@@ -1,6 +1,6 @@
 //! Explicit PR mutations and durable review-request notification cycles.
 use super::{arr, checked, json, now, sid, text, uuid, Error, Repository, Result, Value};
-pub fn review_ready(item: &Value) -> bool {
+fn review_ready(item: &Value) -> bool {
     super::domain::is_pull_request(item)
         && item["status"] != "done"
         && item["isDraft"] != true

@@ -6,7 +6,7 @@ use super::{
 };
 use super::{artifacts, workflows};
 use std::time::Duration;
-pub fn next_due(schedule: &Value, after: f64) -> Result<f64> {
+fn next_due(schedule: &Value, after: f64) -> Result<f64> {
     match text(schedule, "mode") {
         "interval" => {
             let minutes = schedule["everyMinutes"]

@@ -284,7 +284,7 @@ impl Providers {
             "Linear",
         )
     }
-    pub fn github_pr(&self, id: &str) -> Result<(Value, String)> {
+    fn github_pr(&self, id: &str) -> Result<(Value, String)> {
         let query = "query{viewer{login} node(id:__ID__){... on PullRequest{__FIELDS__}}}"
             .replace("__ID__", &json!(id).to_string())
             .replace("__FIELDS__", text(&self.fields, "pr"));
@@ -805,7 +805,7 @@ pub fn linear_item(n: &Value) -> Result<Value> {
         json!({"id":format!("linear:{}",text(n,"id")),"source":"linear","title":n["title"],"detail":text(n,"description").chars().take(10000).collect::<String>(),"url":safe_url(text(n,"url"))?,"reference":n["identifier"],"project":n["project"]["name"].as_str().unwrap_or("No project"),"projectId":n["project"]["id"],"projectIsTeam":n["project"].is_null(),"teamKey":n["team"]["key"],"teamName":n["team"]["name"],"status":status(text(&n["state"],"name"),text(&n["state"],"type"),&arr(&n["labels"]["nodes"])),"sourceStatus":if n["archivedAt"].is_null(){n["state"]["name"].clone()}else{json!("Archived")},"archivedAt":n["archivedAt"],"kind":"Issue","relations":["linked"],"createdAt":n["createdAt"],"updatedAt":n["updatedAt"],"parent":parent(&n["parent"],0),"sentryLinks":links,"children":arr(&n["children"]["nodes"]).iter().map(|x|json!({"id":format!("linear:{}",text(x,"id")),"reference":x["identifier"],"title":x["title"],"url":x["url"],"archivedAt":x["archivedAt"],"status":status(text(&x["state"],"name"),text(&x["state"],"type"),&[])})).collect::<Vec<_>>(),"moreChildren":n["children"]["pageInfo"]["hasNextPage"]==true}),
     )
 }
-pub fn sentry_item(n: &Value, org: &str) -> Result<Value> {
+fn sentry_item(n: &Value, org: &str) -> Result<Value> {
     let id = n["id"]
         .as_str()
         .map_or_else(|| n["id"].to_string(), str::to_owned);

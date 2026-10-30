@@ -114,7 +114,7 @@ pub fn call(dir: &Path, payload: &Value) -> Result<Value> {
 }
 // Legacy open has no durable operation acknowledgement. Once any frame bytes
 // may be transmitted, rejection, malformed replies and disconnects are unknown.
-pub(super) fn open_request(dir: &Path, payload: &Value) -> Result<super::terminal::OpenOutcome> {
+fn open_request(dir: &Path, payload: &Value) -> Result<super::terminal::OpenOutcome> {
     let frame = serde_json::to_vec(&json!({"protocol":PROTOCOL,"request":payload}))?;
     if frame.len() > FRAME_LIMIT {
         return Err(Error::new("Terminal message exceeds 512 KiB."));

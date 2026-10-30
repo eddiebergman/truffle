@@ -55,7 +55,7 @@ pub struct Operation {
 }
 impl Operation {
     /// Whether an agent running this operation must leave a notice in its chat.
-    pub fn shown_to_user(&self) -> bool {
+    fn shown_to_user(&self) -> bool {
         self.effect == Effect::Write || self.access == Access::UserAction
     }
     fn execute(&self, repo: &Arc<Repository>, args: &Value, caller: Caller<'_>) -> Result<Value> {

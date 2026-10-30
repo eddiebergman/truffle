@@ -48,7 +48,7 @@ pub fn defaults() -> Value {
         .collect::<serde_json::Map<_, _>>());
     values
 }
-pub fn valid_chord(value: &str) -> bool {
+fn valid_chord(value: &str) -> bool {
     if value.is_empty() {
         return true;
     }
