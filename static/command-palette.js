@@ -279,6 +279,20 @@ function commandEntries() {
   add("change", "theme", "Choose a light or dark theme", () =>
     openThemeChooser(),
   );
+  add(
+    "increase",
+    "interface scale",
+    "Make everything larger",
+    () => stepUiScale(1),
+    { shortcut: "⌘=" },
+  );
+  add(
+    "decrease",
+    "interface scale",
+    "Make everything smaller",
+    () => stepUiScale(-1),
+    { shortcut: "⌘-" },
+  );
   if (source === "agents" && record) {
     add(
       "toggle",
