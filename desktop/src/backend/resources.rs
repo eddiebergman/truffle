@@ -109,9 +109,9 @@ fn save_mode(s: &mut Value, id: &str, report: &Value, mode: SaveMode) -> Result<
         // Complete replacement restores captured metadata, including its report
         // time. A new additive report always receives the host's current time.
         let captured_time = match mode {
-            SaveMode::Replace => entry["reportedAt"].as_str().filter(|value| {
-                value.len() <= 100 && chrono::DateTime::parse_from_rfc3339(value).is_ok()
-            }),
+            SaveMode::Replace => entry["reportedAt"]
+                .as_str()
+                .filter(|value| value.len() <= 100 && value.parse::<jiff::Timestamp>().is_ok()),
             SaveMode::Merge => None,
         };
         row["reportedAt"] = json!(captured_time.map_or_else(repository::iso_time, str::to_owned));

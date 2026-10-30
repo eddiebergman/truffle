@@ -110,9 +110,9 @@ fn resource_replacement_preserves_only_valid_bounded_rfc3339_report_times() {
         json!("2001-02-03T04:05:06.123+02:00"),
     ] {
         let before = super::super::session_context::read(&repo, &id).unwrap()["context"].clone();
-        let valid = time.as_str().is_some_and(|value| {
-            value.len() <= 100 && chrono::DateTime::parse_from_rfc3339(value).is_ok()
-        });
+        let valid = time
+            .as_str()
+            .is_some_and(|value| value.len() <= 100 && value.parse::<jiff::Timestamp>().is_ok());
         apply(&repo,&id,&json!({"replace":true,"revision":before["revision"],"resources":[{"id":"A","provider":"local","kind":"monitor","reportedAt":time}]})).unwrap();
         let current = super::super::session_context::read(&repo, &id).unwrap()["context"]
             ["resources"][0]["reportedAt"]
@@ -121,7 +121,7 @@ fn resource_replacement_preserves_only_valid_bounded_rfc3339_report_times() {
             assert_eq!(current, time);
         } else {
             assert_ne!(current, time);
-            assert!(chrono::DateTime::parse_from_rfc3339(current.as_str().unwrap()).is_ok());
+            assert!(current.as_str().unwrap().parse::<jiff::Timestamp>().is_ok());
         }
     }
 }

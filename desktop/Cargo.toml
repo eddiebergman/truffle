@@ -10,8 +10,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 context-kit = { path = "../../context-kit/crates/context-kit" }
 base64 = "0.22"
-chrono = { version = "0.4.45", default-features = false, features = ["std"] }
-chrono-tz = "0.10.4"
+# Reads the macOS time zone database instead of bundling one.
+jiff = { version = "0.2.38", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
 # The default features without `compression`, which adds four brotli crates to
 # shrink the embedded frontend.
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus"] }

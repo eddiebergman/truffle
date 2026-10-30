@@ -150,8 +150,9 @@ fn date_boundary(date: &str) -> Option<f64> {
     {
         return None;
     }
-    let day = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
-    Some(exact_f64(day.and_hms_opt(0, 0, 0)?.and_utc().timestamp()))
+    let day = date.parse::<jiff::civil::Date>().ok()?;
+    let midnight = day.to_zoned(jiff::tz::TimeZone::UTC).ok()?;
+    Some(exact_f64(midnight.timestamp().as_second()))
 }
 // Same value as an `as f64` cast: the high half scales exactly, so the sum rounds once.
 fn exact_f64(value: i64) -> f64 {
@@ -167,13 +168,10 @@ fn item_time(item: &Value, field: DateField) -> Option<f64> {
     if let Some(value) = value.as_f64() {
         return value.is_finite().then_some(value);
     }
-    let date = chrono::DateTime::parse_from_rfc3339(value.as_str()?).ok()?;
-    if date.timestamp_subsec_nanos() >= 1_000_000_000 {
-        return None;
-    }
-    Some(exact_f64(date.timestamp_millis()) / 1000.0)
+    let date = value.as_str()?.parse::<jiff::Timestamp>().ok()?;
+    Some(exact_f64(date.as_millisecond()) / 1000.0)
 }
-fn calendar_date(time: f64, timezone: chrono_tz::Tz) -> Option<chrono::NaiveDate> {
+fn calendar_date(time: f64, timezone: &jiff::tz::TimeZone) -> Option<jiff::civil::Date> {
     if !time.is_finite() {
         return None;
     }
@@ -185,42 +183,39 @@ fn calendar_date(time: f64, timezone: chrono_tz::Tz) -> Option<chrono::NaiveDate
             .as_secs(),
     )
     .ok()?;
-    Some(
-        chrono::DateTime::from_timestamp_millis(if milliseconds < 0.0 {
-            -magnitude
-        } else {
-            magnitude
-        })?
-        .with_timezone(&timezone)
-        .date_naive(),
-    )
+    let instant = jiff::Timestamp::from_millisecond(if milliseconds < 0.0 {
+        -magnitude
+    } else {
+        magnitude
+    })
+    .ok()?;
+    Some(instant.to_zoned(timezone.clone()).date())
 }
 fn matches_calendar_period(period: CalendarPeriod, timezone: &str, at: f64, time: f64) -> bool {
-    use chrono::Datelike;
-    let Ok(zone) = timezone.parse::<chrono_tz::Tz>() else {
+    let Ok(zone) = jiff::tz::TimeZone::get(timezone) else {
         return false;
     };
-    let Some(today) = calendar_date(time, zone) else {
+    let Some(today) = calendar_date(time, &zone) else {
         return false;
     };
-    let Some(date) = calendar_date(at, zone) else {
+    let Some(date) = calendar_date(at, &zone) else {
         return false;
     };
     let offset = match period {
         CalendarPeriod::Today => 0,
         CalendarPeriod::Yesterday | CalendarPeriod::SinceYesterday => 1,
-        CalendarPeriod::ThisWeek => today.weekday().num_days_from_monday(),
-        CalendarPeriod::LastWeek => today.weekday().num_days_from_monday() + 7,
+        CalendarPeriod::ThisWeek => today.weekday().to_monday_zero_offset(),
+        CalendarPeriod::LastWeek => today.weekday().to_monday_zero_offset() + 7,
     };
     let days = match period {
         CalendarPeriod::ThisWeek | CalendarPeriod::LastWeek => 7,
         CalendarPeriod::SinceYesterday => 2,
         _ => 1,
     };
-    let Some(start) = today.checked_sub_days(chrono::Days::new(u64::from(offset))) else {
+    let Ok(start) = today.checked_sub(jiff::Span::new().days(offset)) else {
         return false;
     };
-    let Some(end) = start.checked_add_days(chrono::Days::new(days)) else {
+    let Ok(end) = start.checked_add(jiff::Span::new().days(days)) else {
         return false;
     };
     date >= start && date < end
@@ -271,7 +266,7 @@ fn validate_filter(filter: &Predicate, depth: usize, nodes: &mut usize) -> Resul
             }
         }
         Predicate::CalendarPeriod { timezone, .. } => {
-            if timezone.len() > 100 || timezone.parse::<chrono_tz::Tz>().is_err() {
+            if timezone.len() > 100 || jiff::tz::TimeZone::get(timezone).is_err() {
                 return Err(invalid());
             }
         }

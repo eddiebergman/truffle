@@ -115,13 +115,7 @@ fn temporal_filters_match_utc_boundaries_and_rolling_windows() {
 }
 #[test]
 fn calendar_filters_use_saved_timezones_and_calendar_days_across_dst() {
-    let timestamp = |value: &str| {
-        exact_f64(
-            chrono::DateTime::parse_from_rfc3339(value)
-                .unwrap()
-                .timestamp(),
-        )
-    };
+    let timestamp = |value: &str| exact_f64(value.parse::<jiff::Timestamp>().unwrap().as_second());
     for (time, before, first, last, after) in [
         (
             "2026-03-30T10:00:00Z",

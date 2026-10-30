@@ -442,7 +442,7 @@ fn ui_context(repo: &Repository, p: &Value) -> Result<Value> {
     } else {
         &timezone
     };
-    if timezone.parse::<chrono_tz::Tz>().is_err() {
+    if jiff::tz::TimeZone::get(timezone).is_err() {
         return Err(Error::new("Unknown app timezone."));
     }
     ui["timezone"] = json!(timezone);
