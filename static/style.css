@@ -2,30 +2,11 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    14px/1.5 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-}
-
 button,
 input,
 select,
 textarea {
   font: inherit;
-}
-
-button,
-a,
-input,
-select,
-textarea {
-  -webkit-tap-highlight-color: transparent;
 }
 
 button,
@@ -60,10 +41,6 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
-}
-
-[hidden] {
-  display: none !important;
 }
 
 .shell {
@@ -240,12 +217,6 @@ small {
   font-size: 18px;
 }
 
-main {
-  margin-left: 238px;
-  flex: 1;
-  min-width: 0;
-}
-
 .slash {
   margin: 0 13px;
   color: color-mix(in srgb, var(--bg) 75%, var(--text));
@@ -401,14 +372,6 @@ kbd {
 .view-controls {
   display: flex;
   gap: 8px;
-}
-
-select {
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 11px;
-  color: color-mix(in srgb, var(--bg) 20%, var(--text));
-  background: var(--bg);
 }
 
 .group-count {
@@ -589,17 +552,6 @@ button.row-title {
   color: color-mix(in srgb, var(--foam) 70%, var(--bg));
   letter-spacing: 0;
   margin-left: 12px;
-}
-
-dialog {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  padding: 27px;
-  width: min(540px, calc(100vw - 32px));
-  max-height: 90vh;
-  box-shadow: 0 24px 100px color-mix(in srgb, var(--shadow) 55%, transparent);
 }
 
 dialog::backdrop {
@@ -798,10 +750,6 @@ dialog .optional {
     font-size: 19px;
   }
 
-  main {
-    margin-left: 200px;
-  }
-
   .metric small {
     font-size: 9px;
   }
@@ -856,10 +804,6 @@ dialog .optional {
     font-size: 21px;
     justify-content: center;
     padding: 12px 0;
-  }
-
-  main {
-    margin-left: 70px;
   }
 
   h1 {
@@ -925,10 +869,6 @@ dialog .optional {
 
   .dialog-actions {
     flex-wrap: wrap;
-  }
-
-  dialog {
-    padding: 21px;
   }
 }
 
@@ -1934,9 +1874,7 @@ a.ci-check-name:hover {
     font-size: 10px;
     max-width: 120px;
   }
-}
 
-@media (max-width: 760px) {
   .row-main {
     gap: 5px;
   }
