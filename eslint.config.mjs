@@ -241,7 +241,7 @@ export default [
     languageOptions: { sourceType: "commonjs", globals: globals.node },
   },
   {
-    files: ["desktop/*.mjs", "*.config.mjs"],
+    files: ["desktop/*.mjs", "desktop/diffs-build/*.mjs", "*.config.mjs"],
     languageOptions: { sourceType: "module", globals: globals.node },
   },
 ];

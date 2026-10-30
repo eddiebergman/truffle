@@ -1,7 +1,8 @@
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
-import { rm, mkdir, copyFile } from "node:fs/promises";
+import { rm, mkdir, copyFile, writeFile } from "node:fs/promises";
 import { bundledLanguagesInfo } from "shiki/langs";
+import { diffsManifest, manifestPath } from "../diffs-manifest.mjs";
 const root = fileURLToPath(new URL(".", import.meta.url));
 // Shiki grammars that the diff viewer can load. A file in another language shows as plain text.
 const languages = new Set([
@@ -83,16 +84,19 @@ const trimHighlighter = {
     );
   },
 };
-await rm(`${root}../static/vendor/diffs`, { recursive: true, force: true });
-await mkdir(`${root}../static/vendor/diffs`, { recursive: true });
+const outdir = `${root}../../static/vendor/diffs`;
+await rm(outdir, { recursive: true, force: true });
+await mkdir(outdir, { recursive: true });
 await copyFile(
   `${root}node_modules/@pierre/diffs/LICENSE.md`,
-  `${root}../static/vendor/diffs/LICENSE.pierre-diffs.md`,
+  `${outdir}/LICENSE.pierre-diffs.md`,
 );
 await build({
-  entryPoints: [`${root}frontend/diff-viewer.js`],
+  entryPoints: [`${root}../frontend/diff-viewer.js`],
   absWorkingDir: root,
-  outdir: `${root}../static/vendor/diffs`,
+  // The entry point is outside this package, so its imports resolve here.
+  nodePaths: [`${root}node_modules`],
+  outdir,
   entryNames: "diff-viewer",
   chunkNames: "chunk-[hash]",
   bundle: true,
@@ -103,3 +107,4 @@ await build({
   legalComments: "eof",
   plugins: [trimHighlighter],
 });
+await writeFile(manifestPath, diffsManifest());

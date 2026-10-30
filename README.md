@@ -102,6 +102,10 @@ cd ..
 node --test tests/*.cjs
 ```
 
+`npm ci` in `desktop/` installs only the Tauri CLI. The diff viewer bundle in `static/vendor/diffs/` is committed, so a normal build does not install its build packages. `npm run lint` from the repository root checks the bundle against the SHA-256 sums in `desktop/diffs-build/bundle.sha256` without rebuilding it.
+
+Regenerate the diff viewer bundle only when you upgrade @pierre/diffs or its Shiki and esbuild build packages, or change `desktop/frontend/diff-viewer.js`. Update the versions in `desktop/diffs-build/package.json`, then run `npm install` in `desktop/diffs-build/` and `node desktop/diffs-build/build.mjs` from the repository root. Commit `static/vendor/diffs/`, `desktop/diffs-build/package-lock.json` and `desktop/diffs-build/bundle.sha256` together. `npm run check:diffs` from the repository root installs the build packages, rebuilds the bundle and fails when the result differs from the committed files.
+
 Rust stable, Apple Command Line Tools and Node/npm are build dependencies. Production builds leave `TRUFFLE_SERVICE_URL` unset. Install `desktop/target/release/bundle/macos/truffle.app`, quit the old window and relaunch it. Restarting only the service does not replace bundled frontend assets.
 
 Use [the performance skill](.agents/skills/truffle-performance/SKILL.md) for measured diagnostics. In Logs, start UI performance recording, reproduce the interaction and inspect durations; stop recording afterward. Samples are bounded numeric data in memory.

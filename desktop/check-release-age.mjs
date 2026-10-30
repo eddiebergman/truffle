@@ -89,6 +89,7 @@ try {
 const locked = [
   ...npmLocked("package-lock.json"),
   ...npmLocked("desktop/package-lock.json"),
+  ...npmLocked("desktop/diffs-build/package-lock.json"),
   ...cargoLocked(),
 ];
 const key = ({ registry, name, version }) => `${registry}:${name}@${version}`;
