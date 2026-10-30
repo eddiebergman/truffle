@@ -2463,16 +2463,6 @@ button.git-file-row {
   border-color: color-mix(in srgb, var(--foam) 30%, var(--panel));
 }
 
-.github-role.mine {
-  background: color-mix(in srgb, var(--bg) 90%, var(--text));
-  color: var(--foam);
-}
-
-.github-role.review {
-  background: var(--overlay);
-  color: var(--iris);
-}
-
 .ci-pill.passed,
 .ci-mark.passed {
   color: var(--foam);

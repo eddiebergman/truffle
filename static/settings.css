@@ -19,20 +19,14 @@ html[data-theme] dialog {
   border-color: var(--line);
 }
 
-html[data-theme] :is(.sidebar, .agent-topbar, .topbar) {
+html[data-theme] :is(.sidebar, .agent-topbar) {
   background: var(--sidebar);
   color: var(--text);
   border-color: var(--line);
 }
 
 html[data-theme]
-  :is(
-    .agent-context,
-    .agent-context-grid,
-    .git-file-tree,
-    .diff-review-notes,
-    .diff-review-drawer-panel
-  ) {
+  :is(.agent-context-grid, .diff-review-notes, .diff-review-drawer-panel) {
   background: var(--panel);
   color: var(--text);
 }
@@ -42,8 +36,7 @@ html[data-theme] :is(.content, .agent-conversation, .embedded-terminal) {
   color: var(--text);
 }
 
-html[data-color-scheme="light"]
-  :is(.runtime-pill, .badge, .work-tag, .status-pill) {
+html[data-color-scheme="light"] :is(.runtime-pill, .badge, .status-pill) {
   background: var(--panel);
   color: var(--text);
   border-color: var(--line);

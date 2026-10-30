@@ -246,10 +246,6 @@ main {
   min-width: 0;
 }
 
-.breadcrumb {
-  color: color-mix(in srgb, var(--bg) 55%, var(--text));
-}
-
 .slash {
   margin: 0 13px;
   color: color-mix(in srgb, var(--bg) 75%, var(--text));
@@ -1940,22 +1936,7 @@ a.ci-check-name:hover {
   }
 }
 
-.github-role {
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-size: 9px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  color: color-mix(in srgb, var(--bg) 30%, var(--text));
-  border: 1px solid var(--line);
-}
-
 @media (max-width: 760px) {
-  .github-role {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-
   .row-main {
     gap: 5px;
   }
@@ -1984,18 +1965,6 @@ a.ci-check-name:hover {
 .hidden-items .row,
 .hidden-items .session-card {
   background: var(--bg);
-}
-
-.github-role.mine {
-  color: var(--foam);
-  border-color: color-mix(in srgb, var(--foam) 30%, var(--bg));
-  background: var(--panel);
-}
-
-.github-role.review {
-  color: color-mix(in srgb, var(--iris) 75%, var(--text));
-  border-color: color-mix(in srgb, var(--iris) 20%, var(--overlay));
-  background: var(--overlay);
 }
 
 .row-codes {
