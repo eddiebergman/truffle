@@ -14,10 +14,15 @@ pub fn open(repo: &Repository, p: &Value) -> Result<Value> {
     })?;
     Ok(saved)
 }
-pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
-    if path.ends_with("/open") {
-        return open(repo, p);
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// An action on an open chat shell.
+pub enum Action {
+    Poll,
+    Input,
+    Resize,
+    Close,
+}
+pub fn action(repo: &Repository, action: Action, p: &Value) -> Result<Value> {
     let id = sid(text(p, "id"))?;
     {
         let s = repo.state.lock().map_err(|_| Error::io())?;
@@ -28,28 +33,27 @@ pub fn action(repo: &Repository, path: &str, p: &Value) -> Result<Value> {
             return Err(Error::new("Chat terminal unavailable."));
         }
     }
-    match path.rsplit('/').next().unwrap_or("") {
-        "poll" => repo.shells.poll(
+    match action {
+        Action::Poll => repo.shells.poll(
             &id,
             p["cursor"].as_u64().unwrap_or(0),
             text(p, "generation"),
         ),
-        "input" => {
+        Action::Input => {
             let data = p["data"]
                 .as_str()
                 .ok_or_else(|| Error::new("Expected terminal input."))?;
             repo.shells.send(&id, data)?;
             Ok(json!({}))
         }
-        "resize" => {
+        Action::Resize => {
             repo.shells.resize(&id, p)?;
             Ok(json!({}))
         }
-        "close" => {
+        Action::Close => {
             repo.shells.close(&id, text(p, "generation"))?;
             Ok(json!({}))
         }
-        _ => Err(Error::new("Unknown terminal command.")),
     }
 }
 #[cfg(test)]

@@ -1338,20 +1338,18 @@ fn chat_command(repo: &Arc<Repository>, id: CommandId, args: &Value) -> Result<O
         CommandId::ChatsDispatchResolve => super::session_dispatch::resolve(repo, args)?,
         CommandId::ChatsDispatchFinalize => super::session_dispatch::finalize(repo, args)?,
         CommandId::ChatContext => super::session_context::read(repo, text(args, "id"))?,
-        CommandId::ChatTerminalOpen => {
-            super::chat_terminal::action(repo, "/api/shell-terminal/open", args)?
-        }
+        CommandId::ChatTerminalOpen => super::chat_terminal::open(repo, args)?,
         CommandId::ChatTerminalInput => {
-            super::chat_terminal::action(repo, "/api/shell-terminal/input", args)?
+            super::chat_terminal::action(repo, super::chat_terminal::Action::Input, args)?
         }
         CommandId::ChatTerminalPoll => {
-            super::chat_terminal::action(repo, "/api/shell-terminal/poll", args)?
+            super::chat_terminal::action(repo, super::chat_terminal::Action::Poll, args)?
         }
         CommandId::ChatTerminalResize => {
-            super::chat_terminal::action(repo, "/api/shell-terminal/resize", args)?
+            super::chat_terminal::action(repo, super::chat_terminal::Action::Resize, args)?
         }
         CommandId::ChatTerminalClose => {
-            super::chat_terminal::action(repo, "/api/shell-terminal/close", args)?
+            super::chat_terminal::action(repo, super::chat_terminal::Action::Close, args)?
         }
         _ => return Ok(None),
     }))
@@ -1389,16 +1387,26 @@ fn sharing_command(
             super::scheduler::execute(repo, text(args, "presetId"), false, None)?["runReceipt"]
                 .clone()
         }
-        CommandId::SharingConfigure => super::sharing::action(repo, "/api/sharing/config", args)?,
-        CommandId::SharingRefresh => super::sharing::action(repo, "/api/sharing/refresh", args)?,
+        CommandId::SharingConfigure => {
+            super::sharing::action(repo, super::sharing::Action::Configure, args)?
+        }
+        CommandId::SharingRefresh => {
+            super::sharing::action(repo, super::sharing::Action::Refresh, args)?
+        }
         CommandId::SharingState => super::sharing::view(repo),
-        CommandId::SharingJob => super::sharing::action(repo, "/api/sharing/job", args)?,
-        CommandId::SharingPrepare => super::sharing::action(repo, "/api/sharing/prepare", args)?,
-        CommandId::SharingSend => super::sharing::action(repo, "/api/sharing/send", args)?,
-        CommandId::SharingPreview => super::sharing::action(repo, "/api/sharing/preview", args)?,
-        CommandId::SharingImport => super::sharing::action(repo, "/api/sharing/import", args)?,
+        CommandId::SharingJob => super::sharing::action(repo, super::sharing::Action::Job, args)?,
+        CommandId::SharingPrepare => {
+            super::sharing::action(repo, super::sharing::Action::Prepare, args)?
+        }
+        CommandId::SharingSend => super::sharing::action(repo, super::sharing::Action::Send, args)?,
+        CommandId::SharingPreview => {
+            super::sharing::action(repo, super::sharing::Action::Preview, args)?
+        }
+        CommandId::SharingImport => {
+            super::sharing::action(repo, super::sharing::Action::Import, args)?
+        }
         CommandId::SharingDismiss => {
-            let view = super::sharing::action(repo, "/api/sharing/dismiss", args)?;
+            let view = super::sharing::action(repo, super::sharing::Action::Dismiss, args)?;
             if assistant {
                 json!({"id":args["id"],"dismissed":args["dismissed"]})
             } else {

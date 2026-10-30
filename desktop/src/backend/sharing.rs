@@ -955,26 +955,37 @@ fn start(
     });
     Ok(id)
 }
-pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
-    let job_id = match path {
-        "/api/sharing/job" => return job_view(repo, p),
-        "/api/sharing/config" => {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
+    Job,
+    Configure,
+    Refresh,
+    Dismiss,
+    Prepare,
+    Send,
+    Preview,
+    Import,
+}
+pub fn action(repo: &Arc<Repository>, action: Action, p: &Value) -> Result<Value> {
+    let job_id = match action {
+        Action::Job => return job_view(repo, p),
+        Action::Configure => {
             configure(repo, p)?;
             None
         }
-        "/api/sharing/refresh" => {
+        Action::Refresh => {
             configuration(repo)?;
             repo.cooldown("sharing-refresh", 10.0)?;
             refresh(repo.clone(), true);
             None
         }
-        "/api/sharing/dismiss" => {
+        Action::Dismiss => {
             dismiss(repo, p)?;
             None
         }
-        "/api/sharing/prepare" => Some(start_prepare(repo, p)?),
-        "/api/sharing/send" => Some(start_send(repo, p)?),
-        "/api/sharing/preview" => {
+        Action::Prepare => Some(start_prepare(repo, p)?),
+        Action::Send => Some(start_send(repo, p)?),
+        Action::Preview => {
             configuration(repo)?;
             Some(json!(start(
                 repo,
@@ -983,8 +994,7 @@ pub fn action(repo: &Arc<Repository>, path: &str, p: &Value) -> Result<Value> {
                 None
             )?))
         }
-        "/api/sharing/import" => Some(start_import(repo, p)?),
-        _ => return Err(Error::new("Sharing operation unavailable.")),
+        Action::Import => Some(start_import(repo, p)?),
     };
     let mut response = view(repo);
     if let Some(job_id) = job_id {

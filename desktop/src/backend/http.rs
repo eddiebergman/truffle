@@ -387,9 +387,8 @@ fn service_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         "/api/feedback" => super::feedback::update(repo, payload)?,
         "/api/guidance" => super::guidance::update(repo, payload)?,
         "/api/onboarding" => super::onboarding::update(repo, payload)?,
-        p if p.starts_with("/api/shell-terminal/") => {
-            super::chat_terminal::action(repo, p, payload)?
-        }
+        "/api/shell-terminal/open" => super::chat_terminal::open(repo, payload)?,
+        p if p.starts_with("/api/shell-terminal/") => shell_terminal(repo, p, payload)?,
         "/api/commands/invoke" => super::commands::invoke(repo, payload, false)?,
         "/api/skills/catalog" => skills_catalog(repo, payload)?,
         "/api/app-chat/send" => repo.app_chat.start(repo, payload)?,
@@ -433,7 +432,7 @@ fn skills_catalog(repo: &Repository, payload: &Value) -> Result<Value> {
 }
 fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Option<Value>> {
     Ok(Some(match path {
-        p if p.starts_with("/api/sharing/") => super::sharing::action(repo, p, payload)?,
+        p if p.starts_with("/api/sharing/") => sharing(repo, p, payload)?,
         "/api/session/links" => {
             if let Some(context) = payload.get("context") {
                 super::session_context::replace_receipt(repo, text(payload, "id"), context)?
@@ -455,6 +454,32 @@ fn session_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<O
         }
         _ => return Ok(None),
     }))
+}
+fn shell_terminal(repo: &Repository, path: &str, payload: &Value) -> Result<Value> {
+    use super::chat_terminal::{action, Action};
+    let operation = match path {
+        "/api/shell-terminal/poll" => Action::Poll,
+        "/api/shell-terminal/input" => Action::Input,
+        "/api/shell-terminal/resize" => Action::Resize,
+        "/api/shell-terminal/close" => Action::Close,
+        _ => return Err(Error::new("Unknown terminal command.")),
+    };
+    action(repo, operation, payload)
+}
+fn sharing(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Value> {
+    use super::sharing::{action, Action};
+    let operation = match path {
+        "/api/sharing/job" => Action::Job,
+        "/api/sharing/config" => Action::Configure,
+        "/api/sharing/refresh" => Action::Refresh,
+        "/api/sharing/dismiss" => Action::Dismiss,
+        "/api/sharing/prepare" => Action::Prepare,
+        "/api/sharing/send" => Action::Send,
+        "/api/sharing/preview" => Action::Preview,
+        "/api/sharing/import" => Action::Import,
+        _ => return Err(Error::new("Sharing operation unavailable.")),
+    };
+    action(repo, operation, payload)
 }
 fn terminal_post(repo: &Repository, path: &str, payload: &Value) -> Result<Value> {
     let id = sid(text(payload, "id"))?;

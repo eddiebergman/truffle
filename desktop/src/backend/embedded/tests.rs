@@ -41,13 +41,13 @@ fn companion_shell_action_preserves_whitespace_input_and_validates_payloads() {
         let input = |data: Value| {
             super::super::chat_terminal::action(
                 &repo,
-                "/api/shell-terminal/input",
+                super::super::chat_terminal::Action::Input,
                 &json!({"id":id,"data":data}),
             )
         };
         if super::super::chat_terminal::action(
             &repo,
-            "/api/shell-terminal/input",
+            super::super::chat_terminal::Action::Input,
             &json!({"id":id}),
         )
         .is_ok()

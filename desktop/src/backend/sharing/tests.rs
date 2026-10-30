@@ -18,7 +18,7 @@ fn saved_chat_open_import_receipt_projection_is_bounded_and_mismatch_stays_unkno
     .unwrap();
     let public = view(&repo);
     assert!(!public.to_string().contains("private-"));
-    let job = action(&repo, "/api/sharing/job", &json!({"id":task})).unwrap();
+    let job = action(&repo, Action::Job, &json!({"id":task})).unwrap();
     assert!(!job.to_string().contains("private-"));
     let repeated = import(&repo, &task, &json!({"deliveryId":delivery})).unwrap();
     assert!(!repeated.to_string().contains("private-"));
@@ -191,7 +191,7 @@ fn preparation_carries_attached_results_and_keeps_large_previews_off_the_poll_pa
     job(&repo, &id, ready).unwrap();
     assert!(repo.sharing.lock().unwrap()["jobs"][&id]["preview"].is_null());
     assert!(view(&repo)["jobs"][0]["preview"].is_null());
-    let details = action(&repo, "/api/sharing/job", &json!({"id":id})).unwrap();
+    let details = action(&repo, Action::Job, &json!({"id":id})).unwrap();
     assert_eq!(details["preview"]["resourceCount"], 1);
     let script = repo.root.join("reproduce.py");
     write(&script, b"def main():\n    print('attached source')\n").unwrap();
@@ -273,7 +273,7 @@ fn preparation_reuses_only_matching_conversation_options_without_starting_work()
             if let Some(recent) = requested_recent {
                 args["recentConversation"] = json!(recent);
             }
-            let result = action(&repo, "/api/sharing/prepare", &args);
+            let result = action(&repo, Action::Prepare, &args);
             if prepared_recent == requested_recent.unwrap_or(true) {
                 assert_eq!(result.unwrap()["jobId"], job_id);
             } else {
@@ -409,10 +409,10 @@ fn failed_send_retry_refuses_changed_transport_root_or_identity_but_keeps_stable
         ),
     ] {
         let current = config_view(&repo).unwrap();
-        action(&repo, "/api/sharing/config", &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":name,"transport":transport})).unwrap();
+        action(&repo, Action::Configure, &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":name,"transport":transport})).unwrap();
         let error = action(
             &repo,
-            "/api/sharing/send",
+            Action::Send,
             &json!({"draftId":draft,"recipients":["eddie"],"retryId":id}),
         )
         .unwrap_err();
@@ -424,12 +424,12 @@ fn failed_send_retry_refuses_changed_transport_root_or_identity_but_keeps_stable
         assert!(repo.sharing_busy.lock().unwrap().is_empty());
     }
     let current = config_view(&repo).unwrap();
-    action(&repo, "/api/sharing/config", &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":"eddie","transport":original["transport"]})).unwrap();
+    action(&repo, Action::Configure, &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":"eddie","transport":original["transport"]})).unwrap();
     // Revision/hash changes alone do not invalidate the immutable send identity.
     assert!(reserve_job(&repo, "send", &id, &payload).unwrap());
     assert!(!reserve_job(&repo, "send", &id, &payload).unwrap());
     let current = config_view(&repo).unwrap();
-    assert!(action(&repo, "/api/sharing/config", &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":"eddie","transport":original["transport"]})).unwrap_err().message.contains("Wait for the current sharing operation"));
+    assert!(action(&repo, Action::Configure, &json!({"revision":current["revision"],"contentHash":current["contentHash"],"handle":"eddie","transport":original["transport"]})).unwrap_err().message.contains("Wait for the current sharing operation"));
     repo.sharing_busy
         .lock()
         .unwrap()
@@ -848,11 +848,11 @@ fn folder_configuration_cas_and_profiles_preserve_existing_gcs_configuration() {
     assert_eq!(previous["root"], "gs://misc/context-bundles/v1");
     let folder = temp.path().canonicalize().unwrap();
     let payload = json!({"revision":previous["revision"],"contentHash":previous["contentHash"],"handle":"sam","transport":{"kind":"folder","root":folder}});
-    let result = action(&repo, "/api/sharing/config", &payload).unwrap();
+    let result = action(&repo, Action::Configure, &payload).unwrap();
     assert_eq!(result["config"]["revision"], 1);
     assert_eq!(result["config"]["transport"]["kind"], "folder");
     assert_eq!(
-        action(&repo, "/api/sharing/config", &payload)
+        action(&repo, Action::Configure, &payload)
             .unwrap_err()
             .status,
         409
@@ -870,9 +870,7 @@ fn folder_configuration_cas_and_profiles_preserve_existing_gcs_configuration() {
     external["handle"] = json!("alex");
     fs::write(config_path(&repo), serde_json::to_vec(&external).unwrap()).unwrap();
     assert_eq!(
-        action(&repo, "/api/sharing/config", &stale)
-            .unwrap_err()
-            .status,
+        action(&repo, Action::Configure, &stale).unwrap_err().status,
         409
     );
     external["version"] = json!(2);
