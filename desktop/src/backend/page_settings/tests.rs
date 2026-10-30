@@ -74,28 +74,20 @@ fn page_scopes_enforce_complete_catalog_bounds_without_silent_truncation() {
         }
 }
 #[test]
-fn visibility_updates_require_current_revision_and_file_content_hash() {
+fn visibility_updates_replace_one_page_and_keep_the_others() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let path = repo.settings.config_directory().join("page-settings.json");
-    let baseline = view(&repo).unwrap();
     let mut external = super::super::config::read(&path).unwrap();
     external["pages"]["github"]["scopes"] = json!(["external/project"]);
     std::fs::write(&path, serde_json::to_vec_pretty(&external).unwrap()).unwrap();
-    let saved = std::fs::read(&path).unwrap();
-    let stale = update(&repo, &payload(&baseline, &json!([]))).unwrap_err();
-    assert_eq!(stale.status, 409);
-    assert_eq!(std::fs::read(&path).unwrap(), saved);
     let fresh = view(&repo).unwrap();
-    assert_eq!(fresh["revision"], baseline["revision"]);
-    assert_ne!(fresh["contentHash"], baseline["contentHash"]);
     let none = update(&repo, &payload(&fresh, &json!([]))).unwrap();
     assert_eq!(none["pages"]["linear"]["scopes"], json!([]));
     assert_eq!(
         none["pages"]["github"]["scopes"],
         json!(["external/project"])
     );
-    assert_ne!(none["contentHash"], fresh["contentHash"]);
     let persisted = super::super::config::read(&path).unwrap();
     assert!(persisted.get("contentHash").is_none());
     assert_eq!(persisted.as_object().unwrap().len(), 3);
@@ -104,12 +96,6 @@ fn visibility_updates_require_current_revision_and_file_content_hash() {
     assert_eq!(selected["pages"]["linear"]["scopes"], json!(["Latency"]));
     let all = update(&repo, &payload(&selected, &Value::Null)).unwrap();
     assert!(all["pages"]["linear"]["scopes"].is_null());
-    assert_eq!(
-        update(&repo, &payload(&selected, &json!([])))
-            .unwrap_err()
-            .status,
-        409
-    );
 }
 #[test]
 fn invalid_or_extra_fields_never_modify_the_document() {

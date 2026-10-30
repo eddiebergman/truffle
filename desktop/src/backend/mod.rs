@@ -10,6 +10,7 @@ pub mod commands;
 pub mod config;
 pub mod config_status;
 pub mod connections;
+mod document;
 pub mod feedback;
 pub mod guidance;
 mod local_files;

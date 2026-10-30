@@ -1,14 +1,13 @@
+use super::document::{Document, Format, Version};
 use super::{json, Error, Repository, Result, Value};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, path::Path, sync::Mutex};
+use std::collections::BTreeSet;
 
-static WRITE_LOCK: Mutex<()> = Mutex::new(());
 const MAX_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Document {
+pub struct SavedViews {
     pub version: u64,
     pub revision: u64,
     pub views: Vec<SavedView>,
@@ -279,14 +278,11 @@ fn validate_filter(filter: &Predicate, depth: usize, nodes: &mut usize) -> Resul
     }
     Ok(())
 }
-pub fn parse_document(value: &Value) -> Result<Document> {
+pub fn parse_document(value: &Value) -> Result<SavedViews> {
     if serde_json::to_vec(value)?.len() > MAX_BYTES {
         return Err(Error::new("Saved views exceed 64 KiB."));
     }
-    let doc: Document = serde_json::from_value(value.clone()).map_err(|_| invalid())?;
-    if doc.revision > 9_007_199_254_740_991 {
-        return Err(invalid());
-    }
+    let doc: SavedViews = serde_json::from_value(value.clone()).map_err(|_| invalid())?;
     if doc.version != 1 {
         return Err(Error::new("Unsupported saved views version."));
     }
@@ -312,26 +308,31 @@ pub fn parse_document(value: &Value) -> Result<Document> {
     }
     Ok(doc)
 }
-fn read_document(path: &Path) -> Result<(Document, String)> {
-    let bytes = context_kit::read_bounded(path, MAX_BYTES as u64)
-        .map_err(|_| Error::new("Cannot read saved views configuration."))?;
-    let value: Value = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-    Ok((
-        parse_document(&value)?,
-        format!("{:x}", Sha256::digest(&bytes)),
-    ))
+impl Format for SavedViews {
+    const NAME: &'static str = "saved views configuration";
+    const MAX_BYTES: usize = MAX_BYTES;
+    const CONFLICT: &'static str = "Saved views changed. Reload the views before saving again.";
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        parse_document(&serde_json::from_slice(bytes).map_err(|_| invalid())?)
+    }
+    fn revision(&self) -> u64 {
+        self.revision
+    }
 }
-fn response(doc: &Document, hash: &str) -> Result<Value> {
+fn document(repo: &Repository) -> Document<SavedViews> {
+    Document::new(repo.settings.config_directory().join("views.json"))
+}
+fn response(doc: &SavedViews, version: &Version) -> Result<Value> {
     let mut value = serde_json::to_value(doc)?;
-    value["contentHash"] = json!(hash);
+    value["contentHash"] = json!(version.content_hash);
     Ok(value)
 }
-pub fn load(repo: &Repository) -> Result<Document> {
-    Ok(read_document(&repo.settings.config_directory().join("views.json"))?.0)
+pub fn load(repo: &Repository) -> Result<SavedViews> {
+    Ok(document(repo).read()?.0)
 }
 pub fn view(repo: &Repository) -> Result<Value> {
-    let (doc, hash) = read_document(&repo.settings.config_directory().join("views.json"))?;
-    response(&doc, &hash)
+    let (doc, version) = document(repo).read()?;
+    response(&doc, &version)
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -340,41 +341,22 @@ struct Update {
     content_hash: String,
     views: Vec<SavedView>,
 }
-fn replacement(current: &Document, hash: &str, payload: &Value) -> Result<Document> {
+pub fn update(repo: &Repository, payload: &Value) -> Result<Value> {
     if serde_json::to_vec(payload)?.len() > MAX_BYTES {
         return Err(Error::new("Saved views exceed 64 KiB."));
     }
     let update: Update = serde_json::from_value(payload.clone()).map_err(|_| invalid())?;
-    if update.revision != current.revision || update.content_hash != hash {
-        let mut error = Error::new("Saved views changed. Reload the views before saving again.");
-        error.status = 409;
-        return Err(error);
-    }
-    let next = Document {
+    let expected = Version {
+        revision: update.revision,
+        content_hash: update.content_hash,
+    };
+    let next = SavedViews {
         version: 1,
-        revision: current.revision.checked_add(1).ok_or_else(invalid)?,
+        revision: expected.revision,
         views: update.views,
     };
-    parse_document(&serde_json::to_value(&next)?)
-}
-fn update_file(path: &Path, payload: &Value) -> Result<Value> {
-    let _guard = WRITE_LOCK.lock().map_err(|_| Error::io())?;
-    let (current, hash) = read_document(path)?;
-    let next = replacement(&current, &hash, payload)?;
-    let bytes = serde_json::to_vec_pretty(&next)?;
-    if bytes.len() > MAX_BYTES {
-        return Err(Error::new("Saved views exceed 64 KiB."));
-    }
-    let temp = path.with_extension("json.tmp");
-    super::http::private_write(&temp, &bytes)?;
-    std::fs::rename(&temp, path)?;
-    response(&next, &format!("{:x}", Sha256::digest(&bytes)))
-}
-pub fn update(repo: &Repository, payload: &Value) -> Result<Value> {
-    update_file(
-        &repo.settings.config_directory().join("views.json"),
-        payload,
-    )
+    let (doc, version) = document(repo).replace(&expected, next)?;
+    response(&doc, &version)
 }
 fn scalar(item: &Value, field: ScalarField) -> Option<String> {
     match field {

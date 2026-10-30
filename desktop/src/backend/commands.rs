@@ -1050,12 +1050,7 @@ fn page_scopes_read(repo: &Repository, args: &Value) -> Result<Value> {
     Ok(result)
 }
 fn page_settings_apply(repo: &Repository, args: &Value) -> Result<Value> {
-    let current = super::page_settings::view(repo)?;
-    if args["revision"] != current["revision"] || args["contentHash"] != current["contentHash"] {
-        let mut error = Error::new("Page settings changed. Reopen this page's settings.");
-        error.status = 409;
-        return Err(error);
-    }
+    let current = super::page_settings::view_at(repo, args)?;
     for page in current["pages"].as_object().unwrap().values() {
         exact_page_visibility_scopes(repo, &page["scopes"])?;
     }

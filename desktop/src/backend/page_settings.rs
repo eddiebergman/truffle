@@ -1,7 +1,6 @@
+use super::document::{Document, Format, Version};
 use super::{json, text, Error, Repository, Result, Value};
-use std::sync::Mutex;
 
-static WRITE_LOCK: Mutex<()> = Mutex::new(());
 const PROVIDERS: &[&str] = &["linear", "github", "sentry"];
 
 fn validate(doc: &Value) -> Result<()> {
@@ -47,17 +46,38 @@ fn validate(doc: &Value) -> Result<()> {
     }
     Ok(())
 }
-fn read_document(path: &std::path::Path) -> Result<Value> {
-    let bytes = context_kit::read_bounded(path, 512 * 1024)
-        .map_err(|_| Error::new("Cannot read page settings configuration."))?;
-    let mut document: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| Error::new("Invalid page settings document."))?;
-    validate(&document)?;
-    document["contentHash"] = json!(context_kit::sha256(&bytes));
-    Ok(document)
+#[derive(serde::Serialize)]
+#[serde(transparent)]
+struct PageSettings(Value);
+impl Format for PageSettings {
+    const NAME: &'static str = "page settings configuration";
+    const MAX_BYTES: usize = 512 * 1024;
+    const CONFLICT: &'static str = "Page settings changed. Reopen this page's settings.";
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        let document: Value = serde_json::from_slice(bytes)
+            .map_err(|_| Error::new("Invalid page settings document."))?;
+        validate(&document)?;
+        Ok(Self(document))
+    }
+    fn revision(&self) -> u64 {
+        self.0["revision"].as_u64().unwrap()
+    }
+}
+fn document(repo: &Repository) -> Document<PageSettings> {
+    Document::new(repo.settings.config_directory().join("page-settings.json"))
+}
+fn response((document, version): (PageSettings, Version)) -> Value {
+    let mut response = document.0;
+    response["contentHash"] = json!(version.content_hash);
+    response
 }
 pub fn view(repo: &Repository) -> Result<Value> {
-    read_document(&repo.settings.config_directory().join("page-settings.json"))
+    Ok(response(document(repo).read()?))
+}
+/// The page settings, only while they are at the version `payload` sends.
+pub fn view_at(repo: &Repository, payload: &Value) -> Result<Value> {
+    let expected = Version::sent(payload);
+    Ok(response((document(repo).read_at(&expected)?, expected)))
 }
 
 // Match the page gear's scopeKey, rather than saved-view predicate normalization.
@@ -242,19 +262,6 @@ pub fn scopes(repo: &Repository, args: &Value) -> Result<Value> {
 }
 
 pub fn update(repo: &Repository, payload: &Value) -> Result<Value> {
-    let _guard = WRITE_LOCK.lock().unwrap();
-    let current = view(repo)?;
-    let next = patch(&current, payload)?;
-    let path = repo.settings.config_directory().join("page-settings.json");
-    let temp = path.with_extension("tmp");
-    let bytes = serde_json::to_vec_pretty(&next)?;
-    super::http::private_write(&temp, &bytes)?;
-    std::fs::rename(temp, path)?;
-    let mut response = next;
-    response["contentHash"] = json!(context_kit::sha256(&bytes));
-    Ok(response)
-}
-fn patch(current: &Value, payload: &Value) -> Result<Value> {
     if payload.as_object().is_none_or(|p| {
         p.keys()
             .any(|k| !["revision", "contentHash", "page", "scopes"].contains(&k.as_str()))
@@ -263,37 +270,19 @@ fn patch(current: &Value, payload: &Value) -> Result<Value> {
             "Supply revision, contentHash, page and scopes only.",
         ));
     }
-    if payload["revision"].as_u64().is_none()
-        || payload["revision"] != current["revision"]
-        || payload["contentHash"].as_str().is_none_or(|hash| {
-            hash.len() != 64
-                || !hash
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        })
-        || payload["contentHash"] != current["contentHash"]
-    {
-        let mut error = Error::new("Page settings changed. Reopen this page's settings.");
-        error.status = 409;
-        return Err(error);
-    }
+    let document = document(repo);
+    let expected = Version::sent(payload);
+    let mut next = document.read_at(&expected)?.0;
     let page = text(payload, "page");
     if !PROVIDERS.contains(&page) || payload.get("scopes").is_none() {
         return Err(Error::new("Unknown page setting."));
     }
-    let mut next = current.clone();
-    next.as_object_mut().unwrap().remove("contentHash");
     next["pages"][page]["scopes"] = payload["scopes"].clone();
-    next["revision"] = json!(current["revision"]
-        .as_u64()
-        .unwrap()
-        .checked_add(1)
-        .ok_or_else(|| Error::new("Page settings revision is exhausted."))?);
     validate(&next)?;
     if serde_json::to_vec(&next)?.len() > 128 * 1024 {
         return Err(Error::new("Page settings exceed 128 KiB."));
     }
-    Ok(next)
+    Ok(response(document.replace(&expected, PageSettings(next))?))
 }
 #[cfg(test)]
 mod tests;

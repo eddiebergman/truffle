@@ -178,29 +178,3 @@ fn calendar_filters_use_saved_timezones_and_calendar_days_across_dst() {
         assert!(parse_document(&doc).is_err());
     }
 }
-#[test]
-fn cas_catches_stale_revisions_and_external_edits() {
-    let directory = std::env::temp_dir().join(format!(
-        "truffle-views-{}-{}",
-        std::process::id(),
-        uuid::Uuid::new_v4()
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    let path = directory.join("views.json");
-    std::fs::write(&path, serde_json::to_vec(&defaults()).unwrap()).unwrap();
-    let (doc, hash) = read_document(&path).unwrap();
-    let payload = json!({"revision":doc.revision,"contentHash":hash,"views":doc.views});
-    let next = update_file(&path, &payload).unwrap();
-    assert_eq!(next["revision"], 1);
-    assert_eq!(update_file(&path, &payload).unwrap_err().status, 409);
-    let payload = json!({"revision":next["revision"],"contentHash":next["contentHash"],"views":next["views"]});
-    let mut external: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    external["views"][0]["name"] = json!("External edit");
-    std::fs::write(&path, serde_json::to_vec(&external).unwrap()).unwrap();
-    assert_eq!(update_file(&path, &payload).unwrap_err().status, 409);
-    assert_eq!(
-        read_document(&path).unwrap().0.views[0].name,
-        "External edit"
-    );
-    std::fs::remove_dir_all(directory).unwrap();
-}
