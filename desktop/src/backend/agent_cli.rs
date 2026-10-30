@@ -579,21 +579,26 @@ fn hook(o: &Options, root: &Path) -> Result<()> {
     if bytes.len() > LIMIT {
         return Err(Error::new("Hook input exceeds 128 KiB."));
     }
-    let data: Value = serde_json::from_slice(&bytes)?;
+    if let Some(payload) = hook_payload(o, &serde_json::from_slice(&bytes)?)? {
+        send(&runtime(root)?, &payload, o.has("inbox"), true)?;
+    }
+    Ok(())
+}
+/// The runtime event for hook input `data`, or `None` for a subagent's own turn events.
+fn hook_payload(o: &Options, data: &Value) -> Result<Option<Value>> {
     let event = o.required("event")?;
-    if !text(&data, "agent_id").is_empty()
+    if !text(data, "agent_id").is_empty()
         && ["SessionStart", "Stop", "UserPromptSubmit"].contains(&event)
     {
-        return Ok(());
+        return Ok(None);
     }
-    let mut payload = json!({"id":sid(o.required("record")?)?,"operation":"runtime-event","event":event,"sessionId":text(&data,"session_id"),"subagentId":if text(&data,"agent_id").is_empty(){text(&data,"subagent_id")}else{text(&data,"agent_id")}});
+    let mut payload = json!({"id":sid(o.required("record")?)?,"operation":"runtime-event","event":event,"sessionId":text(data,"session_id"),"subagentId":if text(data,"agent_id").is_empty(){text(data,"subagent_id")}else{text(data,"agent_id")}});
     if ["Stop", "SubagentStop"].contains(&event) {
-        for (k, v) in activity_snapshot(&data).as_object().unwrap() {
+        for (k, v) in activity_snapshot(data).as_object().unwrap() {
             payload[k] = v.clone();
         }
     }
-    send(&runtime(root)?, &payload, o.has("inbox"), true)?;
-    Ok(())
+    Ok(Some(payload))
 }
 fn shown_result<'a>(command: &str, result: &'a Value) -> &'a Value {
     &result[if command == "review" {
@@ -668,3 +673,6 @@ pub fn run(args: &[String]) -> Option<Result<()>> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod wire_tests;
