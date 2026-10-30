@@ -69,6 +69,27 @@ test("offline connections report unavailability without losing operation error d
   assert.deepEqual(states, [false]);
 });
 
+test("a non-JSON response reports a service error and keeps the connection up", async () => {
+  const states = [];
+  const client = createDashboardClient({
+    fetch: async () => ({
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    }),
+    onConnection: (value) => states.push(value),
+  });
+  await assert.rejects(
+    client.request("/api/state"),
+    (error) =>
+      error.status === 502 &&
+      error.message ===
+        "The local truffle service returned an unreadable response (HTTP 502).",
+  );
+  assert.deepEqual(states, [true]);
+});
+
 test("editor launch uses native IPC with the exact worktree path and preserves failures", async () => {
   const calls = [];
   const client = createDashboardClient({

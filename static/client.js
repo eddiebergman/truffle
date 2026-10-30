@@ -30,7 +30,7 @@ function createDashboardClient({
     return error;
   }
   async function request(path, payload) {
-    let data, status;
+    let data, status, response;
     try {
       if (native) {
         ({ status, data } = await native("service_request", {
@@ -38,7 +38,7 @@ function createDashboardClient({
           payload: payload ?? null,
         }));
       } else {
-        const response = await fetcher(
+        response = await fetcher(
           path,
           payload === undefined
             ? {}
@@ -52,19 +52,29 @@ function createDashboardClient({
               },
         );
         status = response.status;
-        data = await response.json();
-        if (data.csrf) {
-          csrf = data.csrf;
-          delete data.csrf;
-        }
       }
     } catch {
       onConnection(false);
       throw failure("Cannot reach the local truffle service.", {});
     }
     onConnection(status !== 503);
+    if (response) {
+      try {
+        data = await response.json();
+      } catch {
+        throw failure(
+          `The local truffle service returned an unreadable response (HTTP ${status}).`,
+          {},
+          status,
+        );
+      }
+      if (data?.csrf) {
+        csrf = data.csrf;
+        delete data.csrf;
+      }
+    }
     if (status < 200 || status >= 300) {
-      throw failure(data.error || "Request failed. Try again.", data, status);
+      throw failure(data?.error || "Request failed. Try again.", data, status);
     }
     return data;
   }
