@@ -125,7 +125,6 @@ if (typeof document !== "undefined") {
     let data = null,
       tab = "share",
       loading = false,
-      lastFetch = 0,
       previewId = "",
       previewJob = "",
       archive = false,
@@ -277,7 +276,6 @@ if (typeof document !== "undefined") {
     }
     async function call(name, args) {
       data = await sharingCommand(name, args);
-      lastFetch = Date.now();
       paint();
       return data;
     }
@@ -289,7 +287,6 @@ if (typeof document !== "undefined") {
       const initial = !data;
       try {
         data = await sharingCommand("sharing.state", {});
-        lastFetch = Date.now();
         if ($("#sharing-error")) {
           message($("#sharing-error"), "");
         }
@@ -1362,13 +1359,13 @@ if (typeof document !== "undefined") {
         e.stopPropagation();
       }
     });
-    setInterval(() => {
-      const working = data?.jobs?.some((j) => j.status === "working");
-      const interval = menu.open || working ? 1500 : 60000;
-      if (!document.hidden && Date.now() - lastFetch > interval) {
-        void load();
-      }
-    }, 1000);
+    poller.register("sharing", {
+      every: () =>
+        menu.open || data?.jobs?.some((j) => j.status === "working")
+          ? 1500
+          : 60000,
+      run: load,
+    });
     registerRenderHook(
       "sharing:initial-load",
       () => {
@@ -1392,9 +1389,6 @@ if (typeof document !== "undefined") {
         openSharingSettings,
         get data() {
           return data;
-        },
-        get lastFetch() {
-          return lastFetch;
         },
         get loading() {
           return loading;

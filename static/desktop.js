@@ -99,5 +99,8 @@ if (serviceClient.isDesktop) {
     }
   });
   void checkDesktopService();
-  setInterval(checkDesktopService, 30000);
+  poller.register("desktop-service", {
+    every: 30000,
+    run: checkDesktopService,
+  });
 }

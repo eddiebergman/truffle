@@ -2933,13 +2933,5 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("DOMContentLoaded", () => {
   void bootstrapAgentWorkspace();
 });
-setInterval(() => {
-  if (!document.hidden && !document.querySelector("dialog[open]")) {
-    refresh();
-  }
-}, 10000);
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    refresh();
-  }
-});
+poller.register("state", { every: 10000, pauseInDialog: true, run: refresh });
+document.addEventListener("visibilitychange", () => poller.kick("state"));

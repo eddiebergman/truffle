@@ -2,7 +2,6 @@
 (() => {
   let value = null,
     lastInteraction = Date.now(),
-    visitAt = 0,
     writing = Promise.resolve();
   const mark = (action) => {
     writing = writing
@@ -162,11 +161,6 @@
     if (!value || document.hidden || value.demo) {
       return;
     }
-    if (Date.now() - visitAt > 3600000) {
-      visitAt = Date.now();
-      await mark("visit").catch(() => {});
-      await load();
-    }
     const panel = $("#app-chat-panel");
     if (
       panel &&
@@ -252,11 +246,15 @@
     () => (lastInteraction = Date.now()),
     true,
   );
-  void load();
+  poller.register("feedback", { every: 60000, run: load });
+  poller.register("feedback-visit", {
+    every: 3600000,
+    when: () => value !== null && !value.demo,
+    run: async () => {
+      await mark("visit").catch(() => {});
+      await load();
+    },
+  });
+  void load().then(() => poller.kick("feedback-visit"));
   setInterval(check, 5000);
-  setInterval(() => {
-    if (!document.hidden) {
-      void load();
-    }
-  }, 60000);
 })();

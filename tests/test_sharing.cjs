@@ -727,11 +727,9 @@ test("sharing buttons invoke named commands and preserve visible state on failur
     }),
     c = f.sharing;
   const args = { recordId: "fixture", recentConversation: false };
-  assert.equal(c.lastFetch, 0);
   assert.equal(await c.call("sharing.prepare", args), result);
   assert.equal(c.data, result);
   assert.equal(f.paints(), 1);
-  assert.ok(c.lastFetch > 0);
   assert.deepEqual(JSON.parse(JSON.stringify(requests[0])), {
     path: "/api/commands/invoke",
     payload: { name: "sharing.prepare", args },

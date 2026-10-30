@@ -2069,11 +2069,11 @@ for (const button of document.querySelectorAll("[data-session-filter]")) {
     render();
   };
 }
-setInterval(() => {
-  if (!document.hidden && !document.querySelector("dialog[open]")) {
-    loadInventory();
-  }
-}, 5000);
+poller.register("agents", {
+  every: 5000,
+  pauseInDialog: true,
+  run: () => loadInventory(),
+});
 
 let sessionHashHandled = false;
 function handleSessionHash() {

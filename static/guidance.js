@@ -533,11 +533,7 @@ if (typeof document !== "undefined") {
     window.addEventListener("resize", position);
     document.addEventListener("scroll", position, true);
     setInterval(tick, 500);
-    setInterval(() => {
-      if (!document.hidden) {
-        void load();
-      }
-    }, 15000);
+    poller.register("guidance", { every: 15000, run: load });
     void load();
     if (typeof module !== "undefined") {
       module.exports.guidanceTip = {
