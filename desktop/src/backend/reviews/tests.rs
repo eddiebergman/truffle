@@ -102,7 +102,7 @@ fn new_review_preserves_history_and_rejects_stale_or_active_resets() {
         let note = action(
             &repo,
             &Git,
-            &json!({"id":id,"action":"note","previousNote":"","note":format!("Round {n}")}),
+            &json!({"id":id,"action":"note","noteToken":note_token(""),"note":format!("Round {n}")}),
         )
         .unwrap();
         action(
@@ -159,15 +159,20 @@ fn bad_batch_rolls_back_and_note_edit_is_guarded() {
     action(
         &repo,
         &Git,
-        &json!({"id":id,"action":"note","note":"first","previousNote":""}),
+        &json!({"id":id,"action":"note","note":"first","noteToken":note_token("")}),
     )
     .unwrap();
     assert!(action(
         &repo,
         &Git,
-        &json!({"id":id,"action":"note","note":"stale edit","previousNote":""})
+        &json!({"id":id,"action":"note","note":"stale edit","noteToken":note_token("")})
     )
     .is_err());
+    // static/diff-review.js computes the same token.
+    assert_eq!(
+        note_token("Previous note"),
+        "4324a0cfe77bce0c3655cba138ff0c8c7889ebc0a6cd4e29ff7ed7725d781707"
+    );
     action(
         &repo,
         &Git,
@@ -192,7 +197,7 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     action(
         &repo,
         &Git,
-        &json!({"id":id,"action":"note","note":"My summary","previousNote":""}),
+        &json!({"id":id,"action":"note","note":"My summary","noteToken":note_token("")}),
     )
     .unwrap();
     let report = json!({"id":id,"operation":"review","requestId":request,"pass":"simplification","state":"complete","report":{"comments":[],"overall":{"author":"Agent A","text":"No simplification needed. Scope: code.txt."}}});

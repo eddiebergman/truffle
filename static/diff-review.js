@@ -1314,6 +1314,16 @@ function paintReviewComments() {
     }
   }
 }
+// The server accepts the edit only while its note still matches this SHA-256.
+async function reviewNoteToken(note) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(note),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 async function saveReviewNote(current) {
   const input = $("#diff-review-note"),
     previous = current.noteBase ?? current.draft.note ?? "";
@@ -1324,7 +1334,7 @@ async function saveReviewNote(current) {
   }
   await reviewAction(current.record.id, "note", {
     note,
-    previousNote: previous,
+    noteToken: await reviewNoteToken(previous),
   });
   current.noteBase = current.draft.note;
   current.noteDirty = input.value !== note;

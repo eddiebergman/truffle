@@ -505,13 +505,17 @@ fn set_note(review: &mut Value, p: &Value) -> Result<()> {
     if note.len() > 8000 {
         return Err(Error::new("Review note exceeds 8000 bytes."));
     }
-    if p["previousNote"] != review["note"] {
-        return Err(Error::new(
-            "The review note changed. Reload it before editing.",
-        ));
+    if p["noteToken"] != note_token(text(review, "note")) {
+        let mut error = Error::new("The review note changed. Read it again before editing.");
+        error.status = 409;
+        return Err(error);
     }
     review["note"] = json!(note);
     Ok(())
+}
+/// Identifies the note a caller based its edit on. The browser computes the same SHA-256.
+pub(super) fn note_token(note: &str) -> String {
+    context_kit::sha256(note.as_bytes())
 }
 fn complete_guidance(state: &mut Value, operation: &str, p: &Value, review: &Value) {
     if operation == "append"

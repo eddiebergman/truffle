@@ -543,6 +543,35 @@ test("inspector geometry stays scoped to preview CSS and uses local coordinates 
   }
 });
 
+test("note saves send the SHA-256 of the note they edited as the conflict token", async () => {
+  const current = {
+      record: { id: "chat" },
+      draft: { revision: 4, note: "Newer note from another editor" },
+      noteBase: "Previous note",
+    },
+    calls = [];
+  const c = reviewContext({
+    crypto,
+    TextEncoder,
+    $: () => ({ value: "Edited note" }),
+    reviewAction: async (id, action, args) =>
+      calls.push([id, action, { ...args }]),
+    rememberReviewUI() {},
+  });
+  await c.saveReviewNote(current);
+  assert.deepEqual(calls, [
+    [
+      "chat",
+      "note",
+      {
+        note: "Edited note",
+        noteToken:
+          "4324a0cfe77bce0c3655cba138ff0c8c7889ebc0a6cd4e29ff7ed7725d781707",
+      },
+    ],
+  ]);
+});
+
 test("new review saves the note before archiving and never resets an active review", async () => {
   const current = {
       record: { id: "chat" },

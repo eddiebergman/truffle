@@ -78,14 +78,19 @@ fn named_review_reads_project_current_and_historical_data_without_writes() {
 fn review_note_update_uses_current_tokens_and_preserves_unrelated_state() {
     let (_temp, repo, id) = fixture();
     let current = invoke(&repo, "review.read", json!({"id":id})).unwrap();
+    repo.transaction(|state| {
+        state["sessions"][0]["reviewDraft"]["comments"][0]["text"] = json!("Reviewer feedback");
+        state["sessions"][0]["reviewDraft"]["revision"] = json!(4);
+        Ok(())
+    })
+    .unwrap();
     let before = repo.state.lock().unwrap().clone();
-    let args =
-        json!({"id":id,"revision":3,"noteToken":current["noteToken"],"note":"Replacement note"});
+    let args = json!({"id":id,"noteToken":current["noteToken"],"note":"Replacement note"});
     let receipt = invoke(&repo, "review.note.update", args.clone()).unwrap();
-    assert_eq!(receipt, json!({"id":id,"revision":4,"changed":true}));
+    assert_eq!(receipt, json!({"id":id,"revision":5,"changed":true}));
     let mut expected = before;
     expected["sessions"][0]["reviewDraft"]["note"] = json!("Replacement note");
-    expected["sessions"][0]["reviewDraft"]["revision"] = json!(4);
+    expected["sessions"][0]["reviewDraft"]["revision"] = json!(5);
     assert_eq!(*repo.state.lock().unwrap(), expected);
     let bytes = std::fs::read(&repo.data).unwrap();
     assert_eq!(
@@ -100,15 +105,16 @@ fn review_note_update_uses_current_tokens_and_preserves_unrelated_state() {
         invoke(
             &repo,
             "review.note.update",
-            json!({"id":id,"revision":4,"noteToken":latest["noteToken"],"note":"Replacement note"})
+            json!({"id":id,"noteToken":latest["noteToken"],"note":"Replacement note"})
         )
         .unwrap()["changed"],
         false
     );
     for invalid in [
-        json!({"id":id,"revision":4,"noteToken":current["noteToken"],"note":"stale"}),
-        json!({"id":id,"revision":4,"noteToken":latest["noteToken"],"note":"é".repeat(4001)}),
-        json!({"id":id,"revision":4,"noteToken":latest["noteToken"],"note":"bad","historyId":"history-a"}),
+        json!({"id":id,"noteToken":current["noteToken"],"note":"stale"}),
+        json!({"id":id,"noteToken":latest["noteToken"],"note":"é".repeat(4001)}),
+        json!({"id":id,"noteToken":latest["noteToken"],"note":"bad","historyId":"history-a"}),
+        json!({"id":id,"revision":5,"noteToken":latest["noteToken"],"note":"bad"}),
     ] {
         assert!(invoke(&repo, "review.note.update", invalid).is_err());
     }

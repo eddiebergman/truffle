@@ -1,6 +1,6 @@
 use super::{
-    arr, draft, json, redaction, sessions, summary_identity, summary_time, text, Error, Repository,
-    Result, Value,
+    arr, draft, json, note_token, redaction, sessions, summary_identity, summary_time, text, Error,
+    Repository, Result, Value,
 };
 
 fn revision(review: &Value) -> Result<u64> {
@@ -23,12 +23,6 @@ fn display(repo: &Repository, value: &Value, limit: usize, flags: &mut Value) ->
         flags["contentTruncated"] = json!(true);
     }
     Ok(json!(text.chars().take(limit).collect::<String>()))
-}
-
-fn note_token(id: &str, review: &Value) -> Result<String> {
-    Ok(context_kit::sha256(&serde_json::to_vec(
-        &json!({"id":id,"revision":revision(review)?,"note":review["note"]}),
-    )?))
 }
 
 fn public_run(repo: &Repository, run: &Value) -> Result<Value> {
@@ -159,7 +153,7 @@ pub fn read(repo: &Repository, args: &Value) -> Result<Value> {
         );
     }
     let review = draft(&record);
-    let token = note_token(id, &review)?;
+    let token = note_token(text(&review, "note"));
     summary_identity(repo, &json!(token), 64)?;
     Ok(json!({"id":id,"readOnly":false,"noteToken":token,"review":public_review(repo,&review)?}))
 }
@@ -195,23 +189,18 @@ pub fn update_note(repo: &Repository, args: &Value) -> Result<Value> {
         .as_str()
         .filter(|note| note.len() <= 8000)
         .ok_or_else(|| Error::new("Supply a review note of at most 8000 bytes."))?;
-    let expected = args["revision"]
-        .as_u64()
-        .filter(|revision| *revision < 9_007_199_254_740_991)
-        .ok_or_else(|| Error::new("Supply the current review revision."))?;
     summary_identity(repo, &json!(id), 80)?;
     repo.transaction(|state| {
         let mut review = draft(sessions::get(state, id)?);
-        if revision(&review)? != expected || args["noteToken"] != note_token(id, &review)? {
-            let mut error =
-                Error::new("The review changed. Read it again before editing the note.");
+        if args["noteToken"] != note_token(text(&review, "note")) {
+            let mut error = Error::new("The review note changed. Read it again before editing.");
             error.status = 409;
             return Err(error);
         }
         let changed = review["note"] != note;
         if changed {
             review["note"] = json!(note);
-            review["revision"] = json!(expected + 1);
+            review["revision"] = json!(revision(&review)? + 1);
         }
         let next = revision(&review)?;
         if changed {
