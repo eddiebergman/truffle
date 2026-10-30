@@ -45,9 +45,12 @@ pub fn bounded(
                 "Cannot start {program}. Check that it is installed."
             ))
         })?;
-    if let Some(data) = input {
-        child.stdin.take().unwrap().write_all(data.as_bytes())?;
-    }
+    // A child may fill stdout before it reads all of stdin, so the input has its own thread.
+    let writer = input.map(|data| {
+        let mut stdin = child.stdin.take().unwrap();
+        let data = data.as_bytes().to_vec();
+        std::thread::spawn(move || stdin.write_all(&data))
+    });
     let mut out = child.stdout.take().unwrap();
     let mut err = child.stderr.take().unwrap();
     let output = std::thread::spawn(move || {
@@ -60,9 +63,15 @@ pub fn bounded(
         err.by_ref().take(1024 * 1024).read_to_end(&mut b).ok();
         b
     });
-    let Some(status) = child.wait_timeout(timeout)? else {
+    let status = child.wait_timeout(timeout)?;
+    if status.is_none() {
         let _ = child.kill();
         let _ = child.wait();
+    }
+    if let Some(writer) = writer {
+        let _ = writer.join();
+    }
+    let Some(status) = status else {
         return Ok(Output::TimedOut);
     };
     Ok(Output::Exited(
@@ -202,5 +211,18 @@ mod run_tests {
             std::env::remove_var("CLICOLOR_FORCE");
         }
         assert_eq!(output.unwrap(), "unset");
+    }
+    #[test]
+    fn a_child_that_echoes_a_large_input_does_not_block() {
+        let input = "x".repeat(1024 * 1024);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let expected = input.clone();
+        std::thread::spawn(move || {
+            let _ = sender.send(run("/bin/cat", &[], Some(&expected), 10));
+        });
+        let output = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("bounded blocked on a child that fills stdout before reading stdin");
+        assert_eq!(output.unwrap(), input);
     }
 }
