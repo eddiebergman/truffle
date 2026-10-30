@@ -123,7 +123,7 @@ pub fn list_artifacts(repo: &Repository, args: &Value) -> Result<Value> {
         .filter(|row| {
             (text(args, "presetId").is_empty() || row["presetId"] == args["presetId"])
                 && (text(args, "recordId").is_empty()
-                    || arr(&row["sessionIds"]).contains(&args["recordId"]))
+                    || super::artifacts::linked(row, text(args, "recordId")))
                 && (text(args, "role").is_empty()
                     || text(args, "role") == "all"
                     || row["role"] == args["role"])

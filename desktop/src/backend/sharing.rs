@@ -1947,10 +1947,7 @@ fn prepare(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
     }
     let state = repo.state.lock().unwrap();
     let artifact_roots = artifacts::roots(repo, &state)?;
-    let linked_artifacts = arr(&state["artifacts"])
-        .into_iter()
-        .filter(|a| arr(&a["sessionIds"]).contains(&record["id"]))
-        .collect::<Vec<_>>();
+    let linked_artifacts = artifacts::for_chat(&state, text(&record, "id"));
     drop(state);
     for artifact in &linked_artifacts {
         parts.add_linked_artifact(&dir, &artifact_roots, artifact)?;
@@ -2537,17 +2534,12 @@ fn register_imported_artifacts(
             {
                 continue;
             }
-            // Copy to the existing private artifact root; renderer permissions stay unchanged.
             let ext = path.extension().unwrap_or_default().to_string_lossy();
-            let dest = repo.data.parent().unwrap().join("artifacts").join(format!(
-                "shared-{}.{}",
-                text(&resource, "sha256"),
-                ext
-            ));
-            if !dest.exists() {
-                let bytes = kit(context_kit::read_bounded(&path, 10 * 1024 * 1024))?;
-                write(&dest, &bytes)?;
-            }
+            let dest = artifacts::store_bytes(
+                repo,
+                &format!("shared-{}.{ext}", text(&resource, "sha256")),
+                &kit(context_kit::read_bounded(&path, 10 * 1024 * 1024))?,
+            )?;
             let title = arr(&raw["items"])
                 .iter()
                 .find(|i| arr(&i["resources"]).contains(&resource["id"]))
@@ -2559,6 +2551,8 @@ fn register_imported_artifacts(
             if ext == "json" {
                 continue;
             }
+            // The file stays readable in the imported bundle. A rejected catalog entry,
+            // such as a title conflict with an earlier import, must not fail every retry.
             let _ = artifacts::save(
                 repo,
                 s,

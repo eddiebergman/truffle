@@ -1,3 +1,4 @@
+use super::artifacts;
 use super::checkouts::{self, Link};
 use super::{
     arr, checked, directory, domain, json, now, safe_url, sessions, sid, text, Error, Repository,
@@ -10,7 +11,7 @@ fn snapshot(s: &Value, id: &str) -> Result<Value> {
         "resources": arr(&record["resources"]),
         "worktrees": arr(&record["worktrees"]),
         "itemIds": arr(&record["items"]).iter().map(|x| x["id"].clone()).collect::<Vec<_>>(),
-        "artifactIds": arr(&s["artifacts"]).iter().filter(|x| arr(&x["sessionIds"]).contains(&json!(id))).map(|x| x["id"].clone()).collect::<Vec<_>>()
+        "artifactIds": artifacts::for_chat(s, id).iter().map(|x| x["id"].clone()).collect::<Vec<_>>()
     });
     value["revision"] = json!(context_kit::sha256(&serde_json::to_vec(&value)?));
     Ok(value)
@@ -221,27 +222,6 @@ fn replace_items(s: &mut Value, id: &str, ids: &[Value]) -> Result<()> {
     sessions::get_mut(s, id)?["items"] = json!(selected);
     checkouts::unlink_items(s, id, ids)
 }
-fn replace_artifacts(s: &mut Value, id: &str, ids: &[Value]) -> Result<()> {
-    let mut artifacts = arr(&s["artifacts"]);
-    if ids
-        .iter()
-        .any(|id| !id.is_string() || !artifacts.iter().any(|x| x["id"] == *id))
-    {
-        return Err(Error::new(
-            "Attach artifact files before replacing their session links.",
-        ));
-    }
-    for artifact in &mut artifacts {
-        let mut sessions = arr(&artifact["sessionIds"]);
-        sessions.retain(|x| x != id);
-        if ids.contains(&artifact["id"]) {
-            sessions.push(json!(id));
-        }
-        artifact["sessionIds"] = json!(sessions);
-    }
-    s["artifacts"] = json!(artifacts);
-    Ok(())
-}
 fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, Value)> {
     let object = input
         .as_object()
@@ -290,7 +270,7 @@ fn replace_result(repo: &Repository, id: &str, input: &Value) -> Result<(Value, 
             checkouts::replace_all(s, id, links)?;
         }
         if let Some(ids) = artifact_ids {
-            replace_artifacts(s, id, ids)?;
+            artifacts::relink(s, id, ids)?;
         }
         let record = sessions::get_mut(s, id)?;
         record["updatedAt"] = json!(now());

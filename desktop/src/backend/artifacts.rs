@@ -44,9 +44,57 @@ pub fn roots(repo: &Repository, state: &Value) -> Result<Vec<PathBuf>> {
         .iter()
         .map(|p| expand(text(p, "reports")))
         .chain(sessions::all(state).iter().map(|s| expand(text(s, "cwd"))))
-        .chain([repo.data.parent().unwrap().join("artifacts")])
+        .chain([private_root(repo)])
         .filter_map(|p| p.canonicalize().ok())
         .collect())
+}
+fn private_root(repo: &Repository) -> PathBuf {
+    repo.data.parent().unwrap().join("artifacts")
+}
+/// Write `bytes` once under the private artifact root and return the stored path.
+pub fn store_bytes(repo: &Repository, name: &str, bytes: &[u8]) -> Result<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = private_root(repo);
+    std::fs::create_dir_all(&directory)?;
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
+    let stored = directory.join(name);
+    if !stored.exists() {
+        super::http::private_write(&stored, bytes)?;
+    }
+    Ok(stored)
+}
+/// Whether a stored or catalog artifact entry is linked to chat `chat`.
+pub fn linked(entry: &Value, chat: &str) -> bool {
+    arr(&entry["sessionIds"]).contains(&json!(chat))
+}
+/// Registered artifacts linked to chat `chat`, in stored order.
+pub fn for_chat(state: &Value, chat: &str) -> Vec<Value> {
+    arr(&state["artifacts"])
+        .into_iter()
+        .filter(|entry| linked(entry, chat))
+        .collect()
+}
+/// Make `ids` the exact set of registered artifacts linked to chat `chat`.
+pub fn relink(state: &mut Value, chat: &str, ids: &[Value]) -> Result<()> {
+    let mut artifacts = arr(&state["artifacts"]);
+    if ids
+        .iter()
+        .any(|id| !id.is_string() || !artifacts.iter().any(|x| x["id"] == *id))
+    {
+        return Err(Error::new(
+            "Attach artifact files before replacing their session links.",
+        ));
+    }
+    for artifact in &mut artifacts {
+        let mut sessions = arr(&artifact["sessionIds"]);
+        sessions.retain(|x| x != chat);
+        if ids.contains(&artifact["id"]) {
+            sessions.push(json!(chat));
+        }
+        artifact["sessionIds"] = json!(sessions);
+    }
+    state["artifacts"] = json!(artifacts);
+    Ok(())
 }
 pub fn kind(path: &Path) -> Option<&'static str> {
     match path.extension()?.to_str()?.to_lowercase().as_str() {
@@ -447,7 +495,6 @@ pub(super) fn legacy_metadata_update(
     metadata_apply(repo, state, index, &edit, None)
 }
 fn snapshot_entry(repo: &Repository, s: &Value, p: &Value) -> Result<Value> {
-    use std::os::unix::fs::PermissionsExt;
     let path = file(text(p, "path"), &roots(repo, s)?)?;
     let bytes = std::fs::read(&path)?;
     if path.extension().is_some_and(|x| x == "json") {
@@ -463,13 +510,7 @@ fn snapshot_entry(repo: &Repository, s: &Value, p: &Value) -> Result<Value> {
         path.to_string_lossy(),
         Sha256::digest(&bytes)
     ));
-    let directory = repo.data.parent().unwrap().join("artifacts");
-    std::fs::create_dir_all(&directory)?;
-    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
-    let stored = directory.join(format!("{key}.{extension}"));
-    if !stored.exists() {
-        super::http::private_write(&stored, &bytes)?;
-    }
+    let stored = store_bytes(repo, &format!("{key}.{extension}"), &bytes)?;
     Ok(
         json!({"id":key,"path":stored,"sourcePath":path,"at":now(),"format":extension,"snapshot":true}),
     )

@@ -1055,7 +1055,7 @@ fn context_from_state(repo: &Repository, id: &str, s: &Value) -> Result<String> 
         }
     }
     for artifact in arr(&artifacts::catalog(repo, s)?["artifacts"]) {
-        if arr(&artifact["sessionIds"]).contains(&json!(id)) {
+        if artifacts::linked(&artifact, id) {
             sections.push(format!(
                 "\nArtifact (reference only): {} {} {}\n",
                 text(&artifact, "title"),
