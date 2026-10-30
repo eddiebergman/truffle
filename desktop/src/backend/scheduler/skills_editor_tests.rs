@@ -272,7 +272,14 @@ fn skills_editor_projection_identity_is_rejected_before_any_command_write() {
     .unwrap();
     repo.transaction(|_| Ok(())).unwrap();
     let source = skill_presets::load(&repo).unwrap();
-    let expected = preset_field_token(&source, &row, false, "title").unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let scratch = Repository::open(scratch.path().into(), None, true).unwrap();
+    let preset = Preset {
+        row: &row,
+        custom: false,
+        source: &source,
+    };
+    let expected = field_edit::tokens(&scratch, &preset).unwrap()["title"].clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let before = repo.state.lock().unwrap().clone();
     for (name, args) in [
@@ -299,12 +306,15 @@ fn skills_editor_validation_and_failed_commit_preserve_state_and_allow_exact_ret
     let id = &created["presetId"];
     let bytes = std::fs::read(&repo.data).unwrap();
     let state = repo.state.lock().unwrap().clone();
-    for args in [
-        json!({"presetId":id,"patch":{"title":"New"},"expected":{}}),
-        json!({"presetId":id,"patch":{"reports":"move"},"expected":{"reports":"0".repeat(64)}}),
-        json!({"presetId":id,"patch":{"title":"New"},"expected":{"title":created["expected"]["title"],"command":created["expected"]["command"]}}),
+    for change in [
+        json!({"title":7}),
+        json!({"title":" "}),
+        json!({"agent":"other"}),
+        json!({"command":"daily"}),
+        json!({"skill":"../SKILL.md"}),
+        json!({"cwd":"/nonexistent/skill-editor-fixture"}),
     ] {
-        assert!(update_preset(&repo, &args).is_err());
+        assert!(patch(&repo, &created, &change).is_err());
     }
     assert!(save_preset(&repo,&json!({"id":id,"title":"Overwrite","cwd":temp.path(),"skill":"SKILL.md","command":"$fixture","agent":"codex"})).is_err());
     assert!(save_schedule(

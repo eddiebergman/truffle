@@ -56,18 +56,10 @@ fn epoch_seconds(time: libc::time_t) -> f64 {
 }
 const EDITABLE_PRESET: [&str; 6] = ["title", "cwd", "skill", "command", "agent", "description"];
 const SCHEDULE_FIELDS: [&str; 5] = ["mode", "time", "everyMinutes", "missed", "enabled"];
+use super::field_edit::{self, Edit, Record};
 use super::skill_presets::{self, Source as PresetSource};
-fn editor_error(message: &str, status: u16) -> Error {
-    let mut error = Error::new(message);
-    error.status = status;
-    error
-}
-fn editor_conflict() -> Error {
-    editor_error(
-        "This skill configuration changed. Read it again and reapply only your intended changes.",
-        409,
-    )
-}
+const SOURCE_CHANGED: &str =
+    "This skill configuration changed. Read it again and reapply only your intended changes.";
 fn editor_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     let object = value
         .as_object()
@@ -80,134 +72,42 @@ fn editor_keys(value: &Value, allowed: &[&str]) -> Result<()> {
     }
     Ok(())
 }
-fn editor_exact(repo: &Repository, value: &str) -> Result<()> {
-    if value.chars().any(char::is_control) {
-        return Err(Error::new("This skill identity or edit token is invalid."));
-    }
-    let mut projected = value.to_owned();
-    super::redaction::redact_text(repo, &mut projected);
-    if value != projected {
-        return Err(Error::new(
-            "This skill identity or edit token cannot be safely projected.",
-        ));
-    }
-    Ok(())
-}
 fn source_current(repo: &Repository, source: &PresetSource) -> Result<()> {
     if !source.is_current(repo).unwrap_or(false) {
-        return Err(editor_conflict());
+        return Err(field_edit::conflict(SOURCE_CHANGED));
     }
     Ok(())
 }
-fn preset_field_token(
-    source: &PresetSource,
-    row: &Value,
+struct Preset<'a> {
+    row: &'a Value,
     custom: bool,
-    field: &str,
-) -> Result<String> {
-    Ok(context_kit::sha256(&serde_json::to_vec(
-        &json!({"id":row["id"],"field":field,"value":row[field],"origin":if custom{"custom"}else{"configured"},"source":if custom{Value::Null}else{json!(source.hash)}}),
-    )?))
+    source: &'a PresetSource,
 }
-fn execution_identity(row: &Value) -> Value {
-    json!({"id":row["id"],"cwd":row["cwd"],"skill":row["skill"],"command":row["command"],"agent":row["agent"],"reports":row["reports"]})
-}
-fn schedule_field_token(row: &Value, schedule: &Value, field: &str) -> Result<String> {
-    Ok(context_kit::sha256(&serde_json::to_vec(
-        &json!({"preset":execution_identity(row),"exists":schedule.is_object(),"field":field,"value":schedule[field]}),
-    )?))
-}
-fn schedule_view(raw: &Value) -> Value {
-    json!({"mode":raw["mode"].as_str().unwrap_or("daily"),"time":raw["time"].as_str().unwrap_or("09:00"),"everyMinutes":raw["everyMinutes"].as_u64().unwrap_or(1440),"missed":raw["missed"].as_str().unwrap_or("latest"),"enabled":raw["enabled"]==true,"nextRun":raw["nextRun"].as_f64().filter(|value|value.is_finite()&&*value>=0.0)})
-}
-fn editor_view(repo: &Repository, source: &PresetSource, state: &Value, id: &str) -> Result<Value> {
-    editor_exact(repo, id)?;
-    let (row, custom) = source.find(state, id)?;
-    let mut preset = json!({"id":id});
-    let mut expected = json!({});
-    for field in EDITABLE_PRESET {
-        let value = if field == "agent" {
-            row[field].as_str().unwrap_or("claude")
+impl Record for Preset<'_> {
+    const NAME: &'static str = "skill";
+    const FIELDS: &'static [&'static str] = &EDITABLE_PRESET;
+    fn id(&self) -> &str {
+        text(self.row, "id")
+    }
+    fn projection(&self, field: &str) -> Result<Value> {
+        Ok(if self.custom {
+            json!({"value":self.row[field],"origin":"custom","source":null})
         } else {
-            row[field].as_str().unwrap_or("")
-        };
-        let max = match field {
-            "description" => 1000,
-            "cwd" => 4096,
-            "skill" => 500,
-            _ => 180,
-        };
-        if value.chars().count() > max
-            || value
-                .chars()
-                .any(|c| c.is_control() && c != '\n' && c != '\t')
-        {
-            return Err(Error::new("A saved skill field exceeds the editor limits."));
-        }
-        preset[field] = json!(value);
-        let token = preset_field_token(source, &row, custom, field)?;
-        editor_exact(repo, &token)?;
-        expected[field] = json!(token);
-    }
-    let raw = &state["skillSchedules"][id];
-    let mut tokens = json!({});
-    for field in SCHEDULE_FIELDS {
-        let token = schedule_field_token(&row, raw, field)?;
-        editor_exact(repo, &token)?;
-        tokens[field] = json!(token);
-    }
-    for value in [
-        "custom",
-        "configured",
-        "daily",
-        "interval",
-        "latest",
-        "skip",
-        "claude",
-        "codex",
-    ] {
-        editor_exact(repo, value)?;
-    }
-    Ok(
-        json!({"presetId":id,"preset":preset,"expected":expected,"origin":{"type":if custom{"custom"}else{"configured"}},"schedule":schedule_view(raw),"scheduleExpected":tokens}),
-    )
-}
-fn checked_patch(patch: &Value, expected: &Value, fields: &[&str]) -> Result<()> {
-    editor_keys(patch, fields)?;
-    let patch = patch.as_object().unwrap();
-    let expected = expected.as_object().ok_or_else(|| {
-        Error::new("Supply captured tokens for exactly the changed skill fields.")
-    })?;
-    if patch.is_empty()
-        || expected.len() != patch.len()
-        || patch.keys().any(|key| !expected.contains_key(key))
-        || expected.values().any(|value| {
-            !value.as_str().is_some_and(|value| {
-                value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-            })
+            json!({"value":self.row[field],"origin":"configured","source":self.source.hash})
         })
-    {
-        return Err(Error::new(
-            "Supply captured tokens for exactly the changed skill fields.",
-        ));
     }
-    Ok(())
-}
-fn preset_patch(value: &Value, create: bool) -> Result<Value> {
-    editor_keys(value, &EDITABLE_PRESET)?;
-    let mut fields = json!({});
-    for (key, value) in value.as_object().unwrap() {
+    fn normalize(_: &Repository, field: &str, value: &Value) -> Result<Value> {
         if !value.is_string() {
             return Err(Error::new("Skill preset fields must be text."));
         }
-        let max = match key.as_str() {
+        let max = match field {
             "cwd" => 4096,
             "skill" => 500,
             "description" => 1000,
             _ => 180,
         };
-        let text = checked(&json!({key:value}), key, max, key != "description")?;
-        fields[key] = json!(match key.as_str() {
+        let text = checked(&json!({field:value}), field, max, field != "description")?;
+        Ok(json!(match field {
             "cwd" => directory(&text)?,
             "agent" => {
                 if !["claude", "codex"].contains(&text.as_str()) {
@@ -237,19 +137,108 @@ fn preset_patch(value: &Value, create: bool) -> Result<Value> {
                 text
             }
             _ => text,
-        });
+        }))
     }
-    if create {
-        for field in ["title", "cwd", "skill", "command", "agent"] {
-            if fields.get(field).is_none() {
-                return Err(Error::new(
-                    "Supply the skill name, folder, file, command and agent.",
-                ));
-            }
+}
+fn execution_identity(row: &Value) -> Value {
+    json!({"id":row["id"],"cwd":row["cwd"],"skill":row["skill"],"command":row["command"],"agent":row["agent"],"reports":row["reports"]})
+}
+struct Schedule<'a> {
+    preset: &'a Value,
+    stored: &'a Value,
+}
+impl Record for Schedule<'_> {
+    const NAME: &'static str = "skill schedule";
+    const FIELDS: &'static [&'static str] = &SCHEDULE_FIELDS;
+    fn id(&self) -> &str {
+        text(self.preset, "id")
+    }
+    /// A schedule field also guards the preset's execution identity and whether the schedule exists.
+    fn projection(&self, field: &str) -> Result<Value> {
+        Ok(
+            json!({"preset":execution_identity(self.preset),"exists":self.stored.is_object(),"value":self.stored[field]}),
+        )
+    }
+    /// `validate_schedule` checks the merged schedule.
+    fn normalize(_: &Repository, _: &str, value: &Value) -> Result<Value> {
+        Ok(value.clone())
+    }
+}
+fn schedule_view(raw: &Value) -> Value {
+    json!({"mode":raw["mode"].as_str().unwrap_or("daily"),"time":raw["time"].as_str().unwrap_or("09:00"),"everyMinutes":raw["everyMinutes"].as_u64().unwrap_or(1440),"missed":raw["missed"].as_str().unwrap_or("latest"),"enabled":raw["enabled"]==true,"nextRun":raw["nextRun"].as_f64().filter(|value|value.is_finite()&&*value>=0.0)})
+}
+fn editor_view(repo: &Repository, source: &PresetSource, state: &Value, id: &str) -> Result<Value> {
+    field_edit::exact(repo, id)?;
+    let (row, custom) = source.find(state, id)?;
+    let mut preset = json!({"id":id});
+    for field in EDITABLE_PRESET {
+        let value = if field == "agent" {
+            row[field].as_str().unwrap_or("claude")
+        } else {
+            row[field].as_str().unwrap_or("")
+        };
+        let max = match field {
+            "description" => 1000,
+            "cwd" => 4096,
+            "skill" => 500,
+            _ => 180,
+        };
+        if value.chars().count() > max
+            || value
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\t')
+        {
+            return Err(Error::new("A saved skill field exceeds the editor limits."));
         }
-        if fields.get("description").is_none() {
-            fields["description"] = json!("");
+        preset[field] = json!(value);
+    }
+    let expected = field_edit::tokens(
+        repo,
+        &Preset {
+            row: &row,
+            custom,
+            source,
+        },
+    )?;
+    let raw = &state["skillSchedules"][id];
+    let tokens = field_edit::tokens(
+        repo,
+        &Schedule {
+            preset: &row,
+            stored: raw,
+        },
+    )?;
+    for value in [
+        "custom",
+        "configured",
+        "daily",
+        "interval",
+        "latest",
+        "skip",
+        "claude",
+        "codex",
+    ] {
+        field_edit::exact(repo, value)?;
+    }
+    Ok(
+        json!({"presetId":id,"preset":preset,"expected":expected,"origin":{"type":if custom{"custom"}else{"configured"}},"schedule":schedule_view(raw),"scheduleExpected":tokens}),
+    )
+}
+fn new_preset(repo: &Repository, value: &Value) -> Result<Value> {
+    editor_keys(value, &EDITABLE_PRESET)?;
+    let mut fields = json!({});
+    for (field, value) in value.as_object().unwrap() {
+        fields[field] = Preset::normalize(repo, field, value)?;
+    }
+    for field in ["title", "cwd", "skill", "command", "agent"] {
+        if fields.get(field).is_none() {
+            return Err(Error::new(
+                "Supply the skill name, folder, file, command and agent.",
+            ));
         }
+    }
+    if fields.get("description").is_none() {
+        fields["description"] = json!("");
     }
     Ok(fields)
 }
@@ -268,7 +257,7 @@ pub fn save_preset(repo: &Repository, args: &Value) -> Result<Value> {
     if args.get("id").is_some() {
         return Err(Error::new("Creation does not accept an ID. Use skills.preset.update with captured edit tokens for an existing skill."));
     }
-    let fields = preset_patch(args, true)?;
+    let fields = new_preset(repo, args)?;
     let source = skill_presets::load(repo)?;
     let id = uuid();
     repo.transaction(|state| {
@@ -299,29 +288,29 @@ fn update_preset_from_source(
 ) -> Result<Value> {
     editor_keys(args, &["presetId", "patch", "expected"])?;
     let id = checked(args, "presetId", 80, true)?;
-    checked_patch(&args["patch"], &args["expected"], &EDITABLE_PRESET)?;
-    let patch = preset_patch(&args["patch"], false)?;
+    let edit = Edit::new(repo, &args["patch"], &args["expected"])?;
     repo.transaction_if_changed(|state| {
         source_current(repo, source)?;
-        let (mut row, custom) = source.find(state, &id)?;
-        for field in patch.as_object().unwrap().keys() {
-            if args["expected"][field] != preset_field_token(source, &row, custom, field)? {
-                return Err(editor_conflict());
+        let (row, custom) = source.find(state, &id)?;
+        let mut next = row.clone();
+        let current = Preset {
+            row: &row,
+            custom,
+            source,
+        };
+        let changed = edit.apply(&current, |field, value| {
+            if next[field] == *value {
+                return Ok(false);
             }
-        }
-        let mut changed = vec![];
-        for (field, value) in patch.as_object().unwrap() {
-            if row[field] != *value {
-                row[field] = value.clone();
-                changed.push(field.clone());
-            }
-        }
+            next[field] = value.clone();
+            Ok(true)
+        })?;
         if !changed.is_empty() {
             let rows = state["skillPresets"].as_array_mut().ok_or_else(Error::io)?;
             if let Some(existing) = rows.iter_mut().find(|row| row["id"] == id) {
-                *existing = row;
+                *existing = next;
             } else {
-                rows.push(row);
+                rows.push(next);
             }
             validate_preset_count(source, state)?;
         }
@@ -367,16 +356,52 @@ pub fn save_schedule(repo: &Repository, args: &Value) -> Result<Value> {
     }
     editor_keys(args, &["presetId", "patch", "expected"])?;
     let id = checked(args, "presetId", 80, true)?;
-    checked_patch(&args["patch"], &args["expected"], &SCHEDULE_FIELDS)?;
+    let edit = Edit::new(repo, &args["patch"], &args["expected"])?;
     let source = skill_presets::load(repo)?;
-    repo.transaction_if_changed(|state|{source_current(repo,&source)?;let(row,_)=source.find(state,&id)?;let old=state["skillSchedules"][&id].clone();for field in args["patch"].as_object().unwrap().keys(){if args["expected"][field]!=schedule_field_token(&row,&old,field)?{return Err(editor_conflict());}}
- let old_view=schedule_view(&old);let mut schedule=if old.is_object(){old.clone()}else{old_view.clone()};let mut changed=vec![];
- for(field,value)in args["patch"].as_object().unwrap(){if old_view[field]!=*value||!old.is_object(){changed.push(field.clone());}schedule[field]=value.clone();}
- // Normalize only the known absent defaults; never rebuild the persisted row.
- for field in SCHEDULE_FIELDS{if schedule.get(field).is_none(){schedule[field]=old_view[field].clone();}}
- validate_schedule(&schedule)?;
- if !changed.is_empty(){let cadence_changed=old_view["mode"]!=schedule["mode"]||(schedule["mode"]=="daily"&&old_view["time"]!=schedule["time"])||(schedule["mode"]=="interval"&&old_view["everyMinutes"]!=schedule["everyMinutes"]);if !old.is_object()||schedule["enabled"]==true&&(cadence_changed||old_view["enabled"]!=true){schedule["nextRun"]=json!(next_due(&schedule,now())?);}schedule["presetId"]=json!(id);schedule["updatedAt"]=json!(now());state["skillSchedules"][&id]=schedule;}
- let view=editor_view(repo,&source,state,&id)?;Ok(json!({"saved":true,"presetId":id,"schedule":view["schedule"],"scheduleExpected":view["scheduleExpected"],"changedFields":changed}))})
+    repo.transaction_if_changed(|state| {
+        source_current(repo, &source)?;
+        let (row, _) = source.find(state, &id)?;
+        let old = state["skillSchedules"][&id].clone();
+        let old_view = schedule_view(&old);
+        let mut schedule = if old.is_object() {
+            old.clone()
+        } else {
+            old_view.clone()
+        };
+        let current = Schedule {
+            preset: &row,
+            stored: &old,
+        };
+        let changed = edit.apply(&current, |field, value| {
+            schedule[field] = value.clone();
+            Ok(old_view[field] != *value || !old.is_object())
+        })?;
+        // Normalize only the known absent defaults; never rebuild the persisted row.
+        for field in SCHEDULE_FIELDS {
+            if schedule.get(field).is_none() {
+                schedule[field] = old_view[field].clone();
+            }
+        }
+        validate_schedule(&schedule)?;
+        if !changed.is_empty() {
+            let cadence_changed = old_view["mode"] != schedule["mode"]
+                || (schedule["mode"] == "daily" && old_view["time"] != schedule["time"])
+                || (schedule["mode"] == "interval"
+                    && old_view["everyMinutes"] != schedule["everyMinutes"]);
+            if !old.is_object()
+                || schedule["enabled"] == true && (cadence_changed || old_view["enabled"] != true)
+            {
+                schedule["nextRun"] = json!(next_due(&schedule, now())?);
+            }
+            schedule["presetId"] = json!(id);
+            schedule["updatedAt"] = json!(now());
+            state["skillSchedules"][&id] = schedule;
+        }
+        let view = editor_view(repo, &source, state, &id)?;
+        Ok(
+            json!({"saved":true,"presetId":id,"schedule":view["schedule"],"scheduleExpected":view["scheduleExpected"],"changedFields":changed}),
+        )
+    })
 }
 fn list_text(repo: &Repository, value: &Value, max: usize) -> Option<Value> {
     value.as_str().map(|value| {
@@ -390,7 +415,7 @@ fn list_identity(repo: &Repository, value: &Value) -> Result<Value> {
         .as_str()
         .filter(|id| !id.is_empty() && id.chars().count() <= 80)
         .ok_or_else(|| Error::new("A saved skill identity is invalid."))?;
-    editor_exact(repo, id)?;
+    field_edit::exact(repo, id)?;
     Ok(json!(id))
 }
 /// Current catalog and its schedules, plus the existing bounded recent-run window.
