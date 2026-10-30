@@ -11,7 +11,7 @@ let appSettings = null,
   shortcutRecordingSync = Promise.resolve();
 // The theme catalog arrives with each settings read, keyed by its document.
 const settingsReadThemes = new WeakMap();
-const settingsDocument = documentStore({
+const settingsStore = documentStore({
   get: () => appSettings,
   set: (next) => {
     appSettings = next;
@@ -293,7 +293,7 @@ async function loadAppSettings({ canApply = () => true } = {}) {
     catalog = window.truffleThemeCatalog,
     current = () => appSettings === identity && canApply();
   try {
-    const next = await settingsDocument.load({ canApply: current });
+    const next = await settingsStore.load({ canApply: current });
     if (!next) {
       return null;
     }
@@ -337,7 +337,7 @@ async function loadAppSettings({ canApply = () => true } = {}) {
 // load paints the saved one again.
 async function saveAppSettings(baseline, patch) {
   const previous = appSettings,
-    result = await settingsDocument.save(baseline, patch);
+    result = await settingsStore.save(baseline, patch);
   if (result.kind === "accepted") {
     try {
       applyAppSettings();
@@ -1656,7 +1656,7 @@ function renderQuickActions() {
     $(".utility-nav").before(root);
   }
   root.replaceChildren();
-  const identity = settingsDocument.baseline();
+  const identity = settingsStore.baseline();
   for (const action of setting("quickActions", [])) {
     const button = settingsButton(
       action.title,

@@ -331,7 +331,7 @@ function commandEntries() {
       { shortcut: shortcutLabel(setting("keybindings", {}).settings) },
     );
     for (const action of setting("quickActions", [])) {
-      const identity = settingsDocument.baseline();
+      const identity = settingsStore.baseline();
       add("run", action.title, action.command, () =>
         chooseQuickAction(action, identity),
       );

@@ -378,7 +378,7 @@ function onboardingCompanyMessage(instructions) {
     }
     switch (result.kind) {
       case "accepted":
-        shownSettings = settingsDocument.baseline();
+        shownSettings = settingsStore.baseline();
         return;
       case "conflict":
         // Go Back and return paints the step from the reloaded settings.
@@ -704,7 +704,7 @@ function onboardingCompanyMessage(instructions) {
       return;
     }
     continueAction = () => next();
-    shownSettings = settingsDocument.baseline();
+    shownSettings = settingsStore.baseline();
     const step = documentState.progress.step;
     const isCurrent = () =>
       ticket === paintGeneration &&

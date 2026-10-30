@@ -1231,8 +1231,7 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     setting: (key, fallback) => fallback,
     appSettings: { revision: 2, contentHash: "a".repeat(64), commands: [] },
     loadAppSettings: async () => {},
-    saveAppSettings: (baseline, patch) =>
-      c.settingsDocument.save(baseline, patch),
+    saveAppSettings: (baseline, patch) => c.settingsStore.save(baseline, patch),
     filterSettings() {},
     openPreferences: async ({ category } = {}) => {
       settings.showModal();
@@ -1295,7 +1294,7 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
   });
   installSkillEditorInitializer(c);
   // The settings owner from settings.js, over this fixture's service.
-  c.settingsDocument = c.documentStore({
+  c.settingsStore = c.documentStore({
     get: () => c.appSettings,
     set: (next) => {
       c.appSettings = next;
