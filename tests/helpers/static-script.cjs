@@ -12,7 +12,11 @@ const scripts = new Map(),
   raws = new WeakMap();
 const identifier = /^[A-Za-z_$][\w$]*$/;
 const slot = "__staticScriptValue";
-const pollerScript = "static/poller.js";
+// Scripts that index.html loads before every feature script, by the global each defines.
+const baseScripts = {
+  poller: "static/poller.js",
+  watchJob: "static/job-watch.js",
+};
 
 function compiled(file) {
   const filename = path.resolve(root, file);
@@ -112,10 +116,11 @@ function loadScripts(c, files, { keepHost = [], elements = {} } = {}) {
       raw[name] = host[name];
     }
   }
-  // index.html loads poller.js before every script that registers a poll task.
   const list = [files].flat();
-  if (readGlobal(raw, "poller") === undefined && !list.includes(pollerScript)) {
-    list.unshift(pollerScript);
+  for (const [name, file] of Object.entries(baseScripts).reverse()) {
+    if (readGlobal(raw, name) === undefined && !list.includes(file)) {
+      list.unshift(file);
+    }
   }
   try {
     for (const file of list) {

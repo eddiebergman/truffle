@@ -311,6 +311,7 @@ fn asset_file(path: &str) -> Option<&'static str> {
         "/client.js" => "client.js",
         "/documents.js" => "documents.js",
         "/poller.js" => "poller.js",
+        "/job-watch.js" => "job-watch.js",
         "/desktop.js" => "desktop.js",
         "/performance.js" => "performance.js",
         "/workspace.js" => "workspace.js",
