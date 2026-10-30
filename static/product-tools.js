@@ -633,6 +633,15 @@ const sharingSettingsDraft = {
   operation: 0,
   status: "",
 };
+const sharingConfigStore = documentStore({
+  get: () => sharingSettingsDraft.baseline,
+  set: (next) => {
+    sharingSettingsDraft.baseline = next;
+  },
+  read: () => sharingCommand("sharing.state", {}),
+  write: (body) => sharingCommand("sharing.configure", body),
+  validate: sharingSettingsConfig,
+});
 let sharingSettingsRenderer = 0,
   sharingSettingsRefresh = null;
 function sharingSettingsConfig(value) {
@@ -644,13 +653,7 @@ function sharingSettingsConfig(value) {
         : "Could not load sharing configuration.",
     );
   }
-  if (
-    !config ||
-    !Number.isSafeInteger(config.revision) ||
-    config.revision < 0 ||
-    typeof config.contentHash !== "string" ||
-    !/^[a-f0-9]{64}$/.test(config.contentHash)
-  ) {
+  if (!validDocumentIdentity(config)) {
     throw new Error(
       "Could not load sharing configuration. Reload it before saving.",
     );
@@ -679,10 +682,12 @@ async function renderSharingSettings(panel) {
   try {
     if (!draft.baseline) {
       if (!draft.loading) {
-        draft.loading = sharingCommand("sharing.state", {})
-          .then((value) => {
-            draft.baseline = sharingSettingsConfig(value);
-            draft.draft = sharingSettingsFields(draft.baseline);
+        draft.loading = sharingConfigStore
+          .load()
+          .then((config) => {
+            if (config) {
+              draft.draft = sharingSettingsFields(config);
+            }
           })
           .finally(() => {
             draft.loading = null;
@@ -793,8 +798,13 @@ async function renderSharingSettings(panel) {
         draft.status = "Saving sharing configuration…";
         sync();
         try {
-          const result = await sharingCommand("sharing.configure", payload);
-          draft.baseline = sharingSettingsConfig(result);
+          const result = await sharingConfigStore.save(payload, {
+            handle: payload.handle,
+            transport: payload.transport,
+          });
+          if (result.kind !== "accepted") {
+            throw new Error(result.error);
+          }
           if (JSON.stringify(draft.draft) === submitted) {
             draft.draft = sharingSettingsFields(draft.baseline);
             draft.change++;
@@ -849,7 +859,12 @@ async function renderSharingSettings(panel) {
         const operation = ++draft.operation,
           change = draft.change;
         try {
-          const value = await sharingCommand("sharing.state", {});
+          const config = await sharingConfigStore.load({
+            canApply: () =>
+              live() &&
+              operation === draft.operation &&
+              change === draft.change,
+          });
           if (!live() || operation !== draft.operation) {
             return;
           }
@@ -858,8 +873,10 @@ async function renderSharingSettings(panel) {
               "Sharing draft changed while reloading. Your edits were kept; discard and reload again to replace them.",
             );
           }
-          draft.baseline = sharingSettingsConfig(value);
-          draft.draft = sharingSettingsFields(draft.baseline);
+          if (!config) {
+            return;
+          }
+          draft.draft = sharingSettingsFields(config);
           draft.change++;
           draft.status =
             "Sharing draft discarded. Saved configuration reloaded.";
@@ -994,18 +1011,19 @@ async function renderSharingSettings(panel) {
     if (hadBaseline && !draft.saving && !dirty()) {
       const operation = ++draft.operation,
         change = draft.change;
-      void sharingCommand("sharing.state", {})
-        .then((value) => {
-          if (
-            !live() ||
-            operation !== draft.operation ||
-            change !== draft.change ||
-            draft.saving
-          ) {
+      void sharingConfigStore
+        .load({
+          canApply: () =>
+            live() &&
+            operation === draft.operation &&
+            change === draft.change &&
+            !draft.saving,
+        })
+        .then((config) => {
+          if (!config) {
             return;
           }
-          draft.baseline = sharingSettingsConfig(value);
-          draft.draft = sharingSettingsFields(draft.baseline);
+          draft.draft = sharingSettingsFields(config);
           draft.status = "";
           sync();
         })

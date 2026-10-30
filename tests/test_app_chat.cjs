@@ -1087,7 +1087,7 @@ test("first-run setup uses App chat once and leaves existing or completed worksp
       window: { openAppChatSetup: async () => opened++ },
       console,
     });
-    loadScripts(c, "static/product-tools.js");
+    loadScripts(c, ["static/documents.js", "static/product-tools.js"]);
     await c.maybeOfferOnboarding();
     await c.maybeOfferOnboarding();
     assert.equal(opened, expected);

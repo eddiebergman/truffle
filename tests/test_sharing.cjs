@@ -1,5 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+// sharing.js is a classic script that uses the globals of documents.js.
+Object.assign(globalThis, require("../static/documents.js"));
 const {
   normalizeShareHandle,
   matchingSharePeople,
@@ -36,7 +38,7 @@ function sharingFixture(globals = {}) {
     registerRenderHook() {},
     ...globals,
   });
-  loadScripts(c, "static/sharing.js");
+  loadScripts(c, ["static/documents.js", "static/sharing.js"]);
   return {
     c,
     sharing: mod.exports.sharingPanel,
@@ -153,10 +155,13 @@ test("saving a reviewed profile uses the current local configuration CAS, never 
   assert.equal(request.revision, 7);
   assert.equal(request.contentHash, "a".repeat(64));
   assert.equal(request.transport.kind, "folder");
-  assert.throws(
-    () => sharingConfigurationPayload({}, "folder", "/Volumes/Team", "sam"),
-    /Reload/,
-  );
+  for (const config of [{}, { revision: -1, contentHash: "a".repeat(64) }]) {
+    assert.throws(
+      () =>
+        sharingConfigurationPayload(config, "folder", "/Volumes/Team", "sam"),
+      /Reload/,
+    );
+  }
 });
 function deferred() {
   let resolve, reject;
@@ -272,7 +277,7 @@ function sharingSettingsFixture() {
       return { config: structuredClone(config) };
     },
   });
-  loadScripts(c, "static/product-tools.js");
+  loadScripts(c, ["static/documents.js", "static/product-tools.js"]);
   let panel;
   const walk = (node) => [
     node,

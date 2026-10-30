@@ -91,11 +91,7 @@ function parseSharingProfile(profile) {
 }
 function sharingConfigurationPayload(config, kind, root, handle) {
   const profile = sharingProfile(kind, root, handle);
-  if (
-    !Number.isSafeInteger(config?.revision) ||
-    typeof config.contentHash !== "string" ||
-    !/^[a-f0-9]{64}$/.test(config.contentHash)
-  ) {
+  if (!validDocumentIdentity(config)) {
     throw new Error("Reload sharing settings before saving.");
   }
   return {
