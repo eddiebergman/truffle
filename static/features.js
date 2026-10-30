@@ -89,6 +89,7 @@ function createFeatureForm(dialog, form, target) {
       result: null,
       controls: new Map(),
       afterReady: null,
+      reloadUnknown: null,
       acceptedText: "",
       conflict: false,
     };
@@ -218,8 +219,11 @@ async function refreshFeatureForm(current) {
   freezeFeatureForm(current, true);
   current.ui.refresh.disabled = true;
   try {
-    const snapshot = await loadStateSnapshot({ attempts: 2 });
-    if (!snapshot.accepted) {
+    const reads = [loadStateSnapshot({ attempts: 2 })];
+    if (current.result.kind === "unknown" && current.reloadUnknown !== null) {
+      reads.push(current.reloadUnknown());
+    }
+    if ((await Promise.all(reads)).some((read) => !read.accepted)) {
       throw new Error("The dashboard changed while refreshing.");
     }
     if (!current.isCurrent()) {
@@ -276,15 +280,17 @@ async function refreshFeatureForm(current) {
   }
 }
 // A refused checked write keeps the draft; `onConflict` offers the editor's reload.
+// Refresh view also awaits `reloadUnknown` after an unknown outcome, so the user inspects fresh data.
 async function submitFeatureForm(
   current,
-  { write, acceptedText, afterReady, onConflict },
+  { write, acceptedText, afterReady, onConflict, reloadUnknown = null },
 ) {
   if (!featureFormMutable(current)) {
     return;
   }
   current.pending = true;
   current.afterReady = afterReady;
+  current.reloadUnknown = reloadUnknown;
   current.acceptedText = acceptedText;
   holdFormFocus(current.host, current);
   freezeFeatureForm(current, true);

@@ -299,8 +299,10 @@ test("unknown add reply keeps original draft locked even after both read-only re
   await f.send();
   assert.equal(f.save.disabled, true);
   assert.equal(f.close.disabled, false);
+  assert.equal(f.libraries, 0);
   await f.ui().button("Refresh view").onclick();
   assert.match(f.ui().message.textContent, /outcome is unknown/);
+  assert.equal(f.libraries, 1);
   assert.equal(f.form.elements.target.value, "/project/report.md");
   await f.send();
   assert.equal(f.calls.filter((call) => call.path === "/api/edit").length, 1);

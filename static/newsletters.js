@@ -388,7 +388,7 @@ async function readArtifactEditor(current) {
         ? "Discovered artifact. Save explicitly registers its metadata locally."
         : "";
     current.ui.refresh.textContent = "Refresh view";
-    current.ui.refresh.onclick = () => refreshArtifactEditor(current);
+    current.ui.refresh.onclick = () => refreshFeatureForm(current);
     current.ui.refresh.hidden = true;
   } catch (error) {
     if (current.isCurrent()) {
@@ -429,64 +429,10 @@ function editArtifact(artifact = null, session = null) {
   current.baseline = null;
   current.loading = false;
   current.loadFailed = false;
-  current.ui.refresh.onclick = () => refreshArtifactEditor(current);
   paintArtifactEditor(current);
   dialog.showModal();
   if (current.target) {
     return readArtifactEditor(current);
-  }
-}
-async function refreshArtifactEditor(current) {
-  if (
-    !current.isCurrent() ||
-    current.pending ||
-    current.refreshing ||
-    !["accepted", "unknown"].includes(current.result?.kind)
-  ) {
-    return;
-  }
-  current.refreshing = true;
-  holdFormFocus(current.host, current);
-  freezeFeatureForm(current, true);
-  current.ui.refresh.disabled = true;
-  try {
-    const [snapshot, library] = await Promise.all([
-      loadStateSnapshot({ attempts: 2 }),
-      loadArtifactLibrary(true),
-    ]);
-    if (!snapshot.accepted || !library.accepted) {
-      throw new Error("The artifact view could not refresh.");
-    }
-    if (!current.isCurrent()) {
-      return;
-    }
-    render();
-    if (current.result.kind === "accepted") {
-      current.dialog.close();
-      toast("Artifact saved.");
-    } else {
-      current.ui.message.textContent =
-        "The save outcome is unknown. The view and library were refreshed. Inspect them before saving again; this draft was not resubmitted.";
-    }
-  } catch {
-    if (current.isCurrent()) {
-      current.ui.message.textContent = localWriteMessage(
-        current.result,
-        "Artifact saved.",
-      );
-    }
-  } finally {
-    current.refreshing = false;
-    if (current.isCurrent()) {
-      freezeFeatureForm(current, true);
-      current.ui.refresh.disabled = false;
-      restoreFormFocus(
-        current,
-        current.result.kind === "unknown"
-          ? current.ui.inspect
-          : current.ui.refresh,
-      );
-    }
   }
 }
 $("#artifact-form").onsubmit = async (event) => {
@@ -576,6 +522,7 @@ $("#artifact-form").onsubmit = async (event) => {
       }
       current.dialog.close();
     },
+    reloadUnknown: () => loadArtifactLibrary(true),
     onConflict: current.target
       ? (result) => {
           current.ui.message.textContent = `${
