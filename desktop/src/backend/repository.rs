@@ -278,8 +278,9 @@ impl Repository {
         let mut state = self.state.lock().map_err(|_| Error::io())?;
         self.commit_locked(&mut state, f, skip_unchanged)
     }
-    // Both callers hold the canonical state mutex through commit and publication.
-    fn commit_locked<T>(
+    /// Commit `f` against `state`, which the caller has locked from `self.state`
+    /// and holds through commit and publication.
+    pub(super) fn commit_locked<T>(
         &self,
         state: &mut Value,
         f: impl FnOnce(&mut Value) -> Result<T>,
@@ -292,37 +293,6 @@ impl Repository {
             *state = next;
             self.revision.fetch_add(1, Ordering::Relaxed);
         }
-        Ok(result)
-    }
-    /// Local session preparation only: admission is requested after reuse checks,
-    /// but its cooldown is published only after canonical persistence succeeds.
-    pub(super) fn preparation_transaction<T>(
-        &self,
-        key: &str,
-        seconds: f64,
-        f: impl FnOnce(&mut Value, &mut dyn FnMut() -> Result<()>) -> Result<T>,
-    ) -> Result<T> {
-        let mut state = self.state.lock().map_err(|_| Error::io())?;
-        let mut times = self.cooldown.lock().map_err(|_| Error::io())?;
-        let mut admitted = false;
-        let result = self.commit_locked(
-            &mut state,
-            |next| {
-                f(next, &mut || {
-                    if !admitted && times.get(key).copied().unwrap_or(0.0) > now() {
-                        return Err(Error::new("This action just started. Give it a moment."));
-                    }
-                    admitted = true;
-                    Ok(())
-                })
-            },
-            false,
-        )?;
-        if admitted {
-            times.insert(key.into(), now() + seconds);
-        }
-        drop(times);
-        drop(state);
         Ok(result)
     }
     pub fn invalidate_snapshot(&self) {

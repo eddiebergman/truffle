@@ -1,4 +1,5 @@
 //! Loopback API and authenticated agent inbox. No UI-specific persistence.
+use super::chat_preparation::{self, Kind};
 use super::{
     arr, checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
     Result, Value,
@@ -362,7 +363,7 @@ fn asset_file(path: &str) -> Option<&'static str> {
         _ => return None,
     })
 }
-fn post_route(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Reply> {
+pub(super) fn post_route(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Reply> {
     if let Some(value) = service_post(repo, path, payload)? {
         return Ok(json_response(200, &value));
     }
@@ -510,12 +511,16 @@ fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Rep
             super::github::seen(repo, payload)?;
             None
         }
-        "/api/session/prepare" => Some(workflows::prepare(repo, payload)?),
-        "/api/session/from-view" => Some(super::view_context::prepare(repo, payload)?),
-        "/api/session/quick" => Some(workflows::quick(repo, payload, false)?),
-        "/api/session/pr-review" => Some(workflows::quick(repo, payload, true)?),
-        "/api/session/review" => Some(workflows::review(repo, payload)?),
-        "/api/session/newsletter" => Some(workflows::newsletter(repo, payload)?),
+        "/api/session/prepare" => Some(if text(payload, "id").is_empty() {
+            chat_preparation::save(repo, Kind::New, payload)?
+        } else {
+            super::chat_edit::legacy(repo, payload)?
+        }),
+        "/api/session/from-view" => Some(chat_preparation::save(repo, Kind::View, payload)?),
+        "/api/session/quick" => Some(chat_preparation::save(repo, Kind::Quick, payload)?),
+        "/api/session/pr-review" => Some(chat_preparation::save(repo, Kind::PrReview, payload)?),
+        "/api/session/review" => Some(chat_preparation::save(repo, Kind::Review, payload)?),
+        "/api/session/newsletter" => Some(chat_preparation::save(repo, Kind::Skill, payload)?),
         "/api/skills/run" => Some(super::scheduler::execute(
             repo,
             text(payload, "presetId"),
@@ -537,7 +542,7 @@ fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Rep
             })?;
             None
         }
-        "/api/session/recover" => Some(workflows::recover(repo, payload)?),
+        "/api/session/recover" => Some(chat_preparation::save(repo, Kind::Recover, payload)?),
         "/api/session/open" => {
             open_session(repo, payload, &mut extra)?;
             None

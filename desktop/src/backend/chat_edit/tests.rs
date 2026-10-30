@@ -1,5 +1,6 @@
 use super::*;
-use crate::backend::{uuid, workflows};
+use crate::backend::chat_preparation::{self, Kind};
+use crate::backend::{http, uuid};
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
     let temp = tempfile::tempdir().unwrap();
@@ -198,11 +199,13 @@ fn chat_metadata_legacy_requires_checked_patch_and_does_not_resolve_unchecked_ur
     let old = baseline(&repo, &id);
     let before = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        workflows::prepare(
+        http::post_route(
             &repo,
+            "/api/session/prepare",
             &json!({"id":id,"agent":"codex","title":"Unchecked","urls":["not a URL"]})
         )
-        .unwrap_err()
+        .err()
+        .unwrap()
         .status,
         409
     );
@@ -210,12 +213,16 @@ fn chat_metadata_legacy_requires_checked_patch_and_does_not_resolve_unchecked_ur
         .edit(&json!({"action":"save-session","id":id,"title":"Unchecked"}))
         .is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
-    assert!(
-        workflows::prepare(&repo, &json!({"id":3,"agent":"codex","title":"Invalid ID"})).is_err()
-    );
-    let checked = request(&old, &json!({"title":"Checked legacy"}));
-    workflows::prepare(
+    assert!(chat_preparation::save(
         &repo,
+        Kind::New,
+        &json!({"id":3,"agent":"codex","title":"Invalid ID"})
+    )
+    .is_err());
+    let checked = request(&old, &json!({"title":"Checked legacy"}));
+    http::post_route(
+        &repo,
+        "/api/session/prepare",
         &json!({"id":id,"patch":checked["patch"],"expected":checked["expected"]}),
     )
     .unwrap();
@@ -301,7 +308,12 @@ fn chat_metadata_invalid_stored_fields_fail_closed_and_legacy_association_cannot
     .unwrap();
     let bytes = std::fs::read(&repo.data).unwrap();
     let payload = json!({"agent":"codex","sessionId":session,"title":"Unchecked","cwd":"invalid","urls":["invalid"]});
-    assert_eq!(workflows::prepare(&repo, &payload).unwrap_err().status, 409);
+    assert_eq!(
+        chat_preparation::save(&repo, Kind::New, &payload)
+            .unwrap_err()
+            .status,
+        409
+    );
     let mut edit = payload;
     edit["action"] = json!("save-session");
     assert_eq!(repo.edit(&edit).unwrap_err().status, 409);

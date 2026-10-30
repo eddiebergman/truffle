@@ -1382,7 +1382,7 @@ fn recovery_context_verifies_receipts_and_reaches_the_model_without_replay() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let request = uuid();
     let missing = uuid();
-    let receipt = crate::backend::chat_preparation::prepare(&repo,"new",&json!({"requestId":request,"agent":"codex","title":"Recovery fixture","cwd":repo.root,"destination":"embedded","instruction":"private-recovery-instruction-canary","itemIds":[]})).unwrap();
+    let receipt = crate::backend::chat_preparation::prepare(&repo,crate::backend::chat_preparation::Kind::New,&json!({"requestId":request,"agent":"codex","title":"Recovery fixture","cwd":repo.root,"destination":"embedded","instruction":"private-recovery-instruction-canary","itemIds":[]})).unwrap();
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let context = context(&repo,&json!({"source":"all","filters":{},"chatRecovery":{"availability":"available","total":3,"entries":[
@@ -1481,7 +1481,7 @@ fn recovery_lookup_failure_stays_bounded_and_does_not_block_help() {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let request = uuid();
-    let receipt=crate::backend::chat_preparation::prepare(&repo,"new",&json!({"requestId":request,"agent":"codex","title":"Recovery fixture","cwd":repo.root,"destination":"embedded","instruction":"private-recovery-canary","itemIds":[]})).unwrap();
+    let receipt=crate::backend::chat_preparation::prepare(&repo,crate::backend::chat_preparation::Kind::New,&json!({"requestId":request,"agent":"codex","title":"Recovery fixture","cwd":repo.root,"destination":"embedded","instruction":"private-recovery-canary","itemIds":[]})).unwrap();
     repo.transaction(|state| {
         let record = state["sessions"][0].clone();
         state["sessions"].as_array_mut().unwrap().push(record);

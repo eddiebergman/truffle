@@ -14,7 +14,7 @@ fn new_args(repo: &Repository) -> Value {
 fn preparation_new_identity_survives_lost_response_metadata_changes_and_restart() {
     let (temp, repo) = fixture();
     let args = new_args(&repo);
-    let receipt = prepare(&repo, "new", &args).unwrap();
+    let receipt = prepare(&repo, Kind::New, &args).unwrap();
     assert_eq!(receipt.as_object().unwrap().len(), 5);
     assert_eq!(receipt["status"], "prepared");
     assert_eq!(receipt["reused"], false);
@@ -31,7 +31,7 @@ fn preparation_new_identity_survives_lost_response_metadata_changes_and_restart(
     .unwrap();
     let before = repo.state.lock().unwrap().clone();
     let disk = std::fs::read(&repo.data).unwrap();
-    assert_eq!(prepare(&repo, "new", &args).unwrap(), receipt);
+    assert_eq!(prepare(&repo, Kind::New, &args).unwrap(), receipt);
     assert_eq!(
         read(&repo, &json!({"requestId":args["requestId"]})).unwrap(),
         receipt
@@ -42,7 +42,7 @@ fn preparation_new_identity_survives_lost_response_metadata_changes_and_restart(
     assert_eq!(before["sessions"][0]["id"], id);
     drop(repo);
     let reopened = Repository::open(temp.path().into(), None, true).unwrap();
-    assert_eq!(prepare(&reopened, "new", &args).unwrap(), receipt);
+    assert_eq!(prepare(&reopened, Kind::New, &args).unwrap(), receipt);
     assert_eq!(arr(&reopened.state.lock().unwrap()["sessions"]).len(), 1);
     assert_eq!(reopened.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
@@ -58,7 +58,7 @@ fn preparation_concurrent_same_request_commits_one_record_and_one_alias() {
         let barrier = barrier.clone();
         threads.push(std::thread::spawn(move || {
             barrier.wait();
-            prepare(&repo, "new", &args).unwrap()
+            prepare(&repo, Kind::New, &args).unwrap()
         }));
     }
     barrier.wait();
@@ -76,7 +76,7 @@ fn preparation_reused_requests_keep_all_original_aliases_and_latest_attached_met
     let mut args = new_args(&repo);
     args.as_object_mut().unwrap().remove("instruction");
     args["sessionId"] = json!(uuid());
-    let first = prepare(&repo, "attach", &args).unwrap();
+    let first = prepare(&repo, Kind::Attach, &args).unwrap();
     let id = first["recordId"].clone();
     repo.transaction(|state| {
         let row = &mut state["sessions"][0];
@@ -91,11 +91,11 @@ fn preparation_reused_requests_keep_all_original_aliases_and_latest_attached_met
     let mut second_args = args.clone();
     second_args["requestId"] = json!(uuid());
     second_args["title"] = json!("Stale title");
-    let second = prepare(&repo, "attach", &second_args).unwrap();
+    let second = prepare(&repo, Kind::Attach, &second_args).unwrap();
     assert_eq!(second["recordId"], id);
     assert_eq!(second["reused"], true);
-    assert_eq!(prepare(&repo, "attach", &args).unwrap(), first);
-    assert_eq!(prepare(&repo, "attach", &second_args).unwrap(), second);
+    assert_eq!(prepare(&repo, Kind::Attach, &args).unwrap(), first);
+    assert_eq!(prepare(&repo, Kind::Attach, &second_args).unwrap(), second);
     let row = repo.state.lock().unwrap()["sessions"][0].clone();
     assert_eq!(row["title"], "Newer associated title");
     assert_eq!(row["cwd"], "/not-a-current-directory");
@@ -108,15 +108,15 @@ fn preparation_reused_requests_keep_all_original_aliases_and_latest_attached_met
 fn preparation_changed_intent_and_malformed_state_fail_without_effects() {
     let (_temp, repo) = fixture();
     let args = new_args(&repo);
-    prepare(&repo, "new", &args).unwrap();
+    prepare(&repo, Kind::New, &args).unwrap();
     let before = repo.state.lock().unwrap().clone();
     let disk = std::fs::read(&repo.data).unwrap();
     let mut changed = args.clone();
     changed["title"] = json!("Different intent");
-    assert_eq!(prepare(&repo, "new", &changed).unwrap_err().status, 409);
+    assert_eq!(prepare(&repo, Kind::New, &changed).unwrap_err().status, 409);
     let mut extra = args;
     extra["id"] = json!(uuid());
-    assert!(prepare(&repo, "new", &extra).is_err());
+    assert!(prepare(&repo, Kind::New, &extra).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     repo.transaction(|state| {
@@ -126,7 +126,9 @@ fn preparation_changed_intent_and_malformed_state_fail_without_effects() {
     .unwrap();
     let disk = std::fs::read(&repo.data).unwrap();
     assert_eq!(
-        prepare(&repo, "new", &new_args(&repo)).unwrap_err().status,
+        prepare(&repo, Kind::New, &new_args(&repo))
+            .unwrap_err()
+            .status,
         409
     );
     assert!(read(&repo, &json!({"requestId":uuid()})).is_err());
@@ -139,7 +141,7 @@ fn preparation_full_alias_capacity_allows_duplicates_but_rejects_new_reuse_befor
     let mut args = new_args(&repo);
     args.as_object_mut().unwrap().remove("instruction");
     args["sessionId"] = json!(uuid());
-    let first = prepare(&repo, "attach", &args).unwrap();
+    let first = prepare(&repo, Kind::Attach, &args).unwrap();
     repo.transaction(|state| {
         let entries = state["sessions"][0]["preparationRequests"]["entries"]
             .as_array_mut()
@@ -153,10 +155,10 @@ fn preparation_full_alias_capacity_allows_duplicates_but_rejects_new_reuse_befor
     })
     .unwrap();
     let disk = std::fs::read(&repo.data).unwrap();
-    assert_eq!(prepare(&repo, "attach", &args).unwrap(), first);
+    assert_eq!(prepare(&repo, Kind::Attach, &args).unwrap(), first);
     let mut next = args.clone();
     next["requestId"] = json!(uuid());
-    assert_eq!(prepare(&repo, "attach", &next).unwrap_err().status, 409);
+    assert_eq!(prepare(&repo, Kind::Attach, &next).unwrap_err().status, 409);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert_eq!(
         aliases(&repo.state.lock().unwrap()["sessions"][0])
@@ -173,7 +175,7 @@ fn preparation_failed_commit_has_no_alias_and_exact_retry_creates_once() {
     let before = repo.state.lock().unwrap().clone();
     let temporary = repo.data.with_extension("tmp");
     std::fs::create_dir(&temporary).unwrap();
-    assert!(prepare(&repo, "new", &args).is_err());
+    assert!(prepare(&repo, Kind::New, &args).is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert_eq!(
@@ -181,8 +183,8 @@ fn preparation_failed_commit_has_no_alias_and_exact_retry_creates_once() {
         "not-found"
     );
     std::fs::remove_dir(temporary).unwrap();
-    let receipt = prepare(&repo, "new", &args).unwrap();
-    assert_eq!(prepare(&repo, "new", &args).unwrap(), receipt);
+    let receipt = prepare(&repo, Kind::New, &args).unwrap();
+    assert_eq!(prepare(&repo, Kind::New, &args).unwrap(), receipt);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
 #[test]
@@ -192,7 +194,7 @@ fn preparation_read_is_state_only_and_duplicate_skill_bypasses_removed_configura
     repo.transaction(|state|{state["skillPresets"]=json!([{"id":preset,"title":"Fixture","cwd":repo.root,"skill":"fixture.md","reports":"reports","command":"$fixture","agent":"codex"}]);Ok(())}).unwrap();
     std::fs::write(repo.root.join("fixture.md"), "Fixture skill").unwrap();
     let args = json!({"requestId":uuid(),"presetId":preset});
-    let first = prepare(&repo, "skill", &args).unwrap();
+    let first = prepare(&repo, Kind::Skill, &args).unwrap();
     let config = repo.data.parent().unwrap().join("config/skills.json");
     std::fs::remove_file(config).unwrap();
     std::fs::remove_file(repo.root.join("fixture.md")).unwrap();
@@ -201,7 +203,7 @@ fn preparation_read_is_state_only_and_duplicate_skill_bypasses_removed_configura
         read(&repo, &json!({"requestId":args["requestId"]})).unwrap(),
         first
     );
-    assert_eq!(prepare(&repo, "skill", &args).unwrap(), first);
+    assert_eq!(prepare(&repo, Kind::Skill, &args).unwrap(), first);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
@@ -210,7 +212,7 @@ fn preparation_view_failed_validation_and_persistence_do_not_consume_admission()
     let (_temp, repo) = fixture();
     let args = json!({"requestId":uuid(),"agent":"codex","source":"github","question":"Which needs attention?","itemIds":["known"],"filters":{},"folderPath":repo.root});
     let cooldown = repo.cooldown.lock().unwrap().clone();
-    assert!(prepare(&repo, "view", &args).is_err());
+    assert!(prepare(&repo, Kind::View, &args).is_err());
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
     repo.transaction(|state| {
         state["items"] = json!([{"id":"known","source":"github","title":"Known"}]);
@@ -220,12 +222,12 @@ fn preparation_view_failed_validation_and_persistence_do_not_consume_admission()
     let disk = std::fs::read(&repo.data).unwrap();
     let temporary = repo.data.with_extension("tmp");
     std::fs::create_dir(&temporary).unwrap();
-    assert!(prepare(&repo, "view", &args).is_err());
+    assert!(prepare(&repo, Kind::View, &args).is_err());
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     std::fs::remove_dir(temporary).unwrap();
-    let receipt = prepare(&repo, "view", &args).unwrap();
-    assert_eq!(prepare(&repo, "view", &args).unwrap(), receipt);
+    let receipt = prepare(&repo, Kind::View, &args).unwrap();
+    assert_eq!(prepare(&repo, Kind::View, &args).unwrap(), receipt);
     assert_eq!(arr(&repo.state.lock().unwrap()["sessions"]).len(), 1);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
@@ -244,13 +246,13 @@ fn preparation_unverifiable_legacy_view_collision_is_rejected_without_writes_or_
     for question in ["Inspect", "Different question"] {
         let mut changed = args.clone();
         changed["question"] = json!(question);
-        let error = prepare(&repo, "view", &changed).unwrap_err();
+        let error = prepare(&repo, Kind::View, &changed).unwrap_err();
         assert_eq!(error.status, 409);
         assert!(error.message.contains("no verified intent hash"));
         assert_eq!(*repo.state.lock().unwrap(), before);
         assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     }
-    let legacy = super::super::view_context::prepare(&repo, &args).unwrap();
+    let legacy = save(&repo, Kind::View, &args).unwrap();
     assert_eq!(legacy["id"], record_id);
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
@@ -262,7 +264,7 @@ fn preparation_unverifiable_legacy_view_collision_is_rejected_without_writes_or_
 fn preparation_malformed_alias_record_identity_never_becomes_actionable() {
     let (_temp, repo) = fixture();
     let args = new_args(&repo);
-    let first = prepare(&repo, "new", &args).unwrap();
+    let first = prepare(&repo, Kind::New, &args).unwrap();
     repo.transaction(|state| {
         state["sessions"][0]["id"] = json!("not-a-chat-uuid");
         Ok(())
@@ -270,7 +272,7 @@ fn preparation_malformed_alias_record_identity_never_becomes_actionable() {
     .unwrap();
     let disk = std::fs::read(&repo.data).unwrap();
     assert!(read(&repo, &json!({"requestId":first["requestId"]})).is_err());
-    assert!(prepare(&repo, "new", &args).is_err());
+    assert!(prepare(&repo, Kind::New, &args).is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert_eq!(repo.embedded.inventory(), [] as [serde_json::Value; 0]);
 }
@@ -279,7 +281,7 @@ fn preparation_malformed_alias_record_identity_never_becomes_actionable() {
 fn preparation_transaction_rechecks_identity_after_two_preflight_misses() {
     let (_temp, repo) = fixture();
     let args = new_args(&repo);
-    let (id, payload) = input("new", &args).unwrap();
+    let (id, payload) = input(Kind::New, &args).unwrap();
     let hash = context_kit::sha256(
         &serde_json::to_vec(&json!({"version":1,"kind":"new","intent":payload})).unwrap(),
     );
@@ -291,15 +293,13 @@ fn preparation_transaction_rechecks_identity_after_two_preflight_misses() {
         let payload = payload.clone();
         let request = Request {
             id: id.clone(),
-            kind: "new".into(),
+            kind: Kind::New,
             hash: hash.clone(),
         };
         let barrier = barrier.clone();
         threads.push(std::thread::spawn(move || {
             barrier.wait();
-            super::super::workflows::prepare_with_request(&repo, &payload, Some(&request)).unwrap()
-                [RECEIPT]
-                .clone()
+            run(&repo, Kind::New, Some(&request), &payload).unwrap()[RECEIPT].clone()
         }));
     }
     barrier.wait();
@@ -319,7 +319,7 @@ fn preparation_multiple_reuse_aliases_survive_restart_without_retargeting() {
     let mut receipts = vec![];
     for _ in 0..12 {
         args["requestId"] = json!(uuid());
-        let receipt = prepare(&repo, "attach", &args).unwrap();
+        let receipt = prepare(&repo, Kind::Attach, &args).unwrap();
         receipts.push((args.clone(), receipt));
     }
     let target = receipts[0].1["recordId"].clone();
@@ -330,7 +330,7 @@ fn preparation_multiple_reuse_aliases_survive_restart_without_retargeting() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     let disk = std::fs::read(&repo.data).unwrap();
     for (args, receipt) in receipts {
-        assert_eq!(prepare(&repo, "attach", &args).unwrap(), receipt);
+        assert_eq!(prepare(&repo, Kind::Attach, &args).unwrap(), receipt);
     }
     assert_eq!(std::fs::read(&repo.data).unwrap(), disk);
     assert_eq!(arr(&repo.state.lock().unwrap()["sessions"]).len(), 1);

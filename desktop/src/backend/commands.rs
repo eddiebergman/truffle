@@ -1,3 +1,4 @@
+use super::chat_preparation::Kind;
 use super::{
     checked, directory, home, json, sessions, text, Error, PathBuf, Repository, Result, Value,
 };
@@ -1421,14 +1422,14 @@ fn chat_command(repo: &Arc<Repository>, id: CommandId, args: &Value) -> Result<O
     Ok(Some(match id {
         CommandId::QuickActionOutputs => super::agent_access::quick_action_outputs(repo, args),
         CommandId::ChatsSearch => super::chat_search::search(repo, args)?,
-        CommandId::PrepareQuick => super::chat_preparation::prepare(repo, "quick", args)?,
-        CommandId::PreparePrReview => super::chat_preparation::prepare(repo, "pr-review", args)?,
-        CommandId::PrepareReview => super::chat_preparation::prepare(repo, "review", args)?,
-        CommandId::PrepareSkill => super::chat_preparation::prepare(repo, "skill", args)?,
-        CommandId::PrepareRecover => super::chat_preparation::prepare(repo, "recover", args)?,
-        CommandId::PrepareNew => super::chat_preparation::prepare(repo, "new", args)?,
-        CommandId::PrepareAttach => super::chat_preparation::prepare(repo, "attach", args)?,
-        CommandId::PrepareView => super::chat_preparation::prepare(repo, "view", args)?,
+        CommandId::PrepareQuick => super::chat_preparation::prepare(repo, Kind::Quick, args)?,
+        CommandId::PreparePrReview => super::chat_preparation::prepare(repo, Kind::PrReview, args)?,
+        CommandId::PrepareReview => super::chat_preparation::prepare(repo, Kind::Review, args)?,
+        CommandId::PrepareSkill => super::chat_preparation::prepare(repo, Kind::Skill, args)?,
+        CommandId::PrepareRecover => super::chat_preparation::prepare(repo, Kind::Recover, args)?,
+        CommandId::PrepareNew => super::chat_preparation::prepare(repo, Kind::New, args)?,
+        CommandId::PrepareAttach => super::chat_preparation::prepare(repo, Kind::Attach, args)?,
+        CommandId::PrepareView => super::chat_preparation::prepare(repo, Kind::View, args)?,
         CommandId::PreparationRead => super::chat_preparation::read(repo, args)?,
         CommandId::ChatsMetadataRead => super::chat_edit::read(repo, args)?,
         CommandId::ChatsMetadataUpdate => super::chat_edit::update(repo, args)?,

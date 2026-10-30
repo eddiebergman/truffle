@@ -1,4 +1,5 @@
 use super::*;
+use chat_preparation::Kind;
 #[test]
 fn custom_review_uses_native_discovery_and_preserves_editable_legacy_templates() {
     for (agent, command) in [("claude", "/custom-review"), ("codex", "$custom-review")] {
@@ -23,10 +24,10 @@ fn custom_review_uses_native_discovery_and_preserves_editable_legacy_templates()
                 state["itemSettings"]["github:fixture"] = json!({"explicit":true,"cwd":temp.path()});
                 Ok(())
             }).unwrap();
-        let record = quick(
+        let record = chat_preparation::save(
             &repo,
+            Kind::PrReview,
             &json!({"agent":agent,"itemId":"github:fixture"}),
-            true,
         )
         .unwrap();
         let prompt = text(&record, "instruction");
@@ -81,10 +82,10 @@ fn builtin_pr_review_reads_profile_skill_for_either_agent() {
                 state["itemSettings"]["github:fixture"] = json!({"explicit":true,"cwd":temp.path()});
                 Ok(())
             }).unwrap();
-        let record = quick(
+        let record = chat_preparation::save(
             &repo,
+            Kind::PrReview,
             &json!({"agent":agent,"itemId":"github:fixture"}),
-            true,
         )
         .unwrap();
         let prompt = text(&record, "instruction");

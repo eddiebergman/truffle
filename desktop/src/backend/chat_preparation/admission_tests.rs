@@ -1,4 +1,6 @@
 use super::*;
+use crate::backend::{now, uuid};
+use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
     std::fs::write(temp.path().join("SKILL.md"), "Fixture skill").unwrap();
@@ -16,13 +18,13 @@ fn key(kind: &str) -> &str {
 }
 fn prepare(repo: &Repository, kind: &str) -> Result<Value> {
     match kind {
-        "quick" => quick(
+        "quick" => save(
             repo,
+            Kind::Quick,
             &json!({"agent":"codex","itemId":"note:preparation-fixture"}),
-            false,
         ),
-        "review" => review(repo, &json!({"agent":"codex"})),
-        _ => newsletter(repo, &json!({"presetId":"admission-fixture"})),
+        "review" => save(repo, Kind::Review, &json!({"agent":"codex"})),
+        _ => save(repo, Kind::Skill, &json!({"presetId":"admission-fixture"})),
     }
 }
 #[test]
@@ -36,10 +38,10 @@ fn preparation_validation_failure_preserves_expired_admission_and_allows_immedia
     let before = repo.state.lock().unwrap().clone();
     let bytes = std::fs::read(&repo.data).unwrap();
     let cooldown = repo.cooldown.lock().unwrap().clone();
-    assert!(quick(
+    assert!(save(
         &repo,
+        Kind::Quick,
         &json!({"agent":"codex","folderPath":temp.path().join("missing-folder")}),
-        false
     )
     .is_err());
     assert_eq!(*repo.state.lock().unwrap(), before);
@@ -179,10 +181,10 @@ fn preparation_saved_pr_review_reuse_bypasses_admission_even_after_it_was_opened
         .insert("pr-review-prepare".into(), now() + 86400.0);
     let before = repo.state.lock().unwrap().clone();
     let cooldown = repo.cooldown.lock().unwrap().clone();
-    let reused = quick(
+    let reused = save(
         &repo,
+        Kind::PrReview,
         &json!({"agent":"codex","itemId":"github:fixture"}),
-        true,
     )
     .unwrap();
     assert_eq!(reused["id"], id);

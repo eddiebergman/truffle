@@ -1,5 +1,7 @@
 use super::*;
+use crate::backend::uuid;
 use std::os::unix::fs::symlink;
+use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, PathBuf) {
     let temp = tempfile::tempdir().unwrap();
     let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
@@ -9,6 +11,19 @@ fn fixture() -> (tempfile::TempDir, Arc<Repository>, PathBuf) {
 }
 fn args() -> Value {
     json!({"agent":"codex","newFolder":"owned-project"})
+}
+/// Save with the work directory at `root`.
+fn save_in(root: &std::path::Path, repo: &Repository, kind: Kind, intent: &Value) -> Result<Value> {
+    let _env = crate::backend::tests::ENV.lock().unwrap();
+    let previous = std::env::var_os("TRUFFLE_WORKDIR");
+    std::env::set_var("TRUFFLE_WORKDIR", root);
+    let result = save(repo, kind, intent);
+    if let Some(value) = previous {
+        std::env::set_var("TRUFFLE_WORKDIR", value);
+    } else {
+        std::env::remove_var("TRUFFLE_WORKDIR");
+    }
+    result
 }
 #[test]
 fn quick_folder_canonical_failure_removes_only_created_leaf_and_immediate_retry_succeeds() {
@@ -22,7 +37,7 @@ fn quick_folder_canonical_failure_removes_only_created_leaf_and_immediate_retry_
     let cooldown = repo.cooldown.lock().unwrap().clone();
     let blocked = repo.data.with_extension("tmp");
     std::fs::create_dir(&blocked).unwrap();
-    let error = quick_in_root(&repo, &args(), false, None, &root).unwrap_err();
+    let error = save_in(&root, &repo, Kind::Quick, &args()).unwrap_err();
     assert_eq!(error.status, 500);
     assert!(!error.message.contains("retained"));
     assert!(!root.join("owned-project").exists());
@@ -32,7 +47,7 @@ fn quick_folder_canonical_failure_removes_only_created_leaf_and_immediate_retry_
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
     std::fs::remove_dir(blocked).unwrap();
-    let record = quick_in_root(&repo, &args(), false, None, &root).unwrap();
+    let record = save_in(&root, &repo, Kind::Quick, &args()).unwrap();
     assert!(root.join("owned-project").is_dir());
     assert_eq!(
         record["cwd"],
@@ -60,7 +75,7 @@ fn quick_folder_review_validation_precedes_creation_for_missing_or_malformed_tem
         payload["itemId"] = json!("github:fixture");
         let before = std::fs::read(&repo.data).unwrap();
         let cooldown = repo.cooldown.lock().unwrap().clone();
-        assert!(quick_in_root(&repo, &payload, true, None, &root).is_err());
+        assert!(save_in(&root, &repo, Kind::PrReview, &payload).is_err());
         assert!(!root.exists());
         assert_eq!(std::fs::read(&repo.data).unwrap(), before);
         assert_eq!(*repo.cooldown.lock().unwrap(), cooldown);
@@ -86,7 +101,13 @@ fn quick_folder_invalid_title_or_instruction_is_rejected_before_creation() {
         repo.transaction(|s|{s["items"]=json!([{"id":"github:fixture","source":"github","kind":"Pull request","title":"Invalid\nTitle","url":"https://github.com/example/project/pull/1"}]);Ok(())}).unwrap();
         payload["itemId"] = json!("github:fixture");
         let bytes = std::fs::read(&repo.data).unwrap();
-        assert!(quick_in_root(&repo, &payload, review, None, &root).is_err());
+        assert!(save_in(
+            &root,
+            &repo,
+            if review { Kind::PrReview } else { Kind::Quick },
+            &payload
+        )
+        .is_err());
         assert!(!root.exists());
         assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     }
@@ -95,13 +116,13 @@ fn quick_folder_invalid_title_or_instruction_is_rejected_before_creation() {
 fn quick_folder_cleanup_preserves_added_content_and_original_error_details() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("owned");
-    let mut folder = Some(CreatedQuickFolder::create(&path).unwrap());
+    let mut folder = Some(Created::Folder(CreatedFolder::create(&path).unwrap()));
     std::fs::write(path.join("someone-else.txt"), b"keep content").unwrap();
     let mut failure = Error::new("Original failure.");
     failure.status = 409;
     failure.data = json!({"existing":"details"});
     failure.retry = 17.0;
-    let error = complete_quick_preparation(Err(failure), &mut folder).unwrap_err();
+    let error = rollback(Err(failure), &mut folder).unwrap_err();
     assert_eq!(error.status, 409);
     assert_eq!(error.data, json!({"existing":"details"}));
     assert_eq!(error.retry, 17.0);
@@ -124,7 +145,7 @@ fn quick_folder_cleanup_preserves_replacement_inode_and_symlink_targets() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("owned");
         let original = temp.path().join("renamed-owned");
-        let mut folder = Some(CreatedQuickFolder::create(&path).unwrap());
+        let mut folder = Some(Created::Folder(CreatedFolder::create(&path).unwrap()));
         std::fs::rename(&path, &original).unwrap();
         if replace_symlink {
             let target = temp.path().join("target");
@@ -134,8 +155,7 @@ fn quick_folder_cleanup_preserves_replacement_inode_and_symlink_targets() {
         } else {
             std::fs::create_dir(&path).unwrap();
         }
-        let error = complete_quick_preparation(Err(Error::new("Fixture failure")), &mut folder)
-            .unwrap_err();
+        let error = rollback(Err(Error::new("Fixture failure")), &mut folder).unwrap_err();
         assert!(error.message.contains("retained"));
         drop(folder);
         assert!(original.is_dir());
@@ -157,11 +177,11 @@ fn quick_folder_success_disarms_cleanup_and_preexisting_targets_are_never_owned(
     std::fs::create_dir(&target).unwrap();
     std::fs::write(target.join("keep"), b"preexisting").unwrap();
     let before = std::fs::read(&repo.data).unwrap();
-    assert!(quick_in_root(&repo, &args(), false, None, &root).is_err());
+    assert!(save_in(&root, &repo, Kind::Quick, &args()).is_err());
     assert_eq!(std::fs::read(target.join("keep")).unwrap(), b"preexisting");
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     let path = root.join("committed");
-    let mut folder = Some(CreatedQuickFolder::create(&path).unwrap());
+    let mut folder = Some(Created::Folder(CreatedFolder::create(&path).unwrap()));
     let request = uuid();
     let record = json!({"id":uuid(),"cwd":path,"preparationRequests":{"version":1,"entries":[{"requestId":request,"kind":"quick","hash":context_kit::sha256(&serde_json::to_vec(&json!({"version":1,"kind":"quick","intent":args()})).unwrap()),"reused":false}]}});
     repo.transaction(|s| {
@@ -169,23 +189,17 @@ fn quick_folder_success_disarms_cleanup_and_preexisting_targets_are_never_owned(
         Ok(())
     })
     .unwrap();
-    assert_eq!(
-        complete_quick_preparation(Ok(record.clone()), &mut folder).unwrap(),
-        record
-    );
+    assert_eq!(rollback(Ok(record.clone()), &mut folder).unwrap(), record);
     drop(folder);
     assert!(path.is_dir());
     let later_error = Error::new("Response projection failed");
     drop(later_error);
     assert!(path.is_dir());
-    let expected = chat_preparation::read(&repo, &json!({"requestId":request})).unwrap();
+    let expected = read(&repo, &json!({"requestId":request})).unwrap();
     let mut retry = args();
     retry["requestId"] = json!(request);
     let bytes = std::fs::read(&repo.data).unwrap();
-    assert_eq!(
-        chat_preparation::prepare(&repo, "quick", &retry).unwrap(),
-        expected
-    );
+    assert_eq!(prepare(&repo, Kind::Quick, &retry).unwrap(), expected);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     assert!(path.is_dir());
 }
@@ -193,18 +207,18 @@ fn quick_folder_success_disarms_cleanup_and_preexisting_targets_are_never_owned(
 fn quick_folder_missing_identity_is_retained_and_drop_only_removes_empty_owned_leaf() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("owned");
-    let mut folder = CreatedQuickFolder::create(&path).unwrap();
+    let mut folder = CreatedFolder::create(&path).unwrap();
     folder.identity = None;
-    let error = complete_quick_preparation(
+    let error = rollback(
         Err(Error::new("Cannot inspect identity")),
-        &mut Some(folder),
+        &mut Some(Created::Folder(folder)),
     )
     .unwrap_err();
     assert!(error.message.contains("retained"));
     assert!(path.exists());
     let empty = temp.path().join("empty");
     {
-        let _folder = CreatedQuickFolder::create(&empty).unwrap();
+        let _folder = CreatedFolder::create(&empty).unwrap();
     }
     assert!(!empty.exists());
     assert!(temp.path().exists());

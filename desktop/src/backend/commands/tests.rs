@@ -1734,7 +1734,7 @@ fn every_preparation_command_delegates_its_owner_without_opening_an_agent() {
     let settings = repo.settings.view();
     repo.settings.apply(&json!({"revision":settings["revision"],"contentHash":settings["contentHash"],"patch":{"codexReviewCommand":"$fixture-review"}}),false).unwrap();
     repo.transaction(|state|{state["items"]=json!([{"id":"github:prepare-fixture","source":"github","kind":"Pull request","title":"Preparation fixture","url":"https://github.com/example/project/pull/1","project":"example/project","reference":"#1","status":"todo"}]);state["itemSettings"]["github:prepare-fixture"]=json!({"explicit":true,"cwd":temp.path()});state["skillPresets"]=json!([{"id":"prepare-fixture","title":"Fixture skill","cwd":temp.path(),"skill":"SKILL.md","reports":"reports","agent":"codex","command":"$fixture"}]);Ok(())}).unwrap();
-    let original=super::super::workflows::prepare(&repo,&json!({"agent":"codex","title":"Original fixture","cwd":temp.path(),"destination":"embedded","instruction":"Context only","itemIds":[]})).unwrap();
+    let original=super::super::chat_preparation::save(&repo,super::super::chat_preparation::Kind::New,&json!({"agent":"codex","title":"Original fixture","cwd":temp.path(),"destination":"embedded","instruction":"Context only","itemIds":[]})).unwrap();
     for (kind, mut args) in [
         (
             "quick",

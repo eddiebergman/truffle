@@ -1,4 +1,4 @@
-use super::chat_preparation::{self, Request};
+use super::chat_preparation::{self, Created, Recipe};
 use super::{
     arr, checked, commands, directory, expand, home, json, now, safe_url, sid, text, uuid, Error,
     PathBuf, Repository, Result, Value,
@@ -138,44 +138,18 @@ fn choose_with(
     error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').next_back().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
     Err(error)
 }
-#[derive(Clone, Copy, PartialEq)]
-enum PrepareIntent {
-    LegacyForm,
-    Internal,
-    Register,
-}
-pub fn prepare(repo: &Repository, p: &Value) -> Result<Value> {
-    if !text(p, "id").is_empty() {
-        return super::chat_edit::legacy(repo, p);
+fn checked_agent(p: &Value) -> Result<&str> {
+    let agent = text(p, "agent");
+    if !["claude", "codex"].contains(&agent) {
+        return Err(Error::new("Choose Claude or Codex."));
     }
-    {
-        let state = repo.state.lock().map_err(|_| Error::io())?;
-        super::chat_edit::reject_unchecked_association(&state, p)?;
-    }
-    prepare_impl(repo, p, None, PrepareIntent::LegacyForm)
+    Ok(agent)
 }
-pub(super) fn prepare_with_request(
+fn resolve_urls(
     repo: &Repository,
     p: &Value,
-    request: Option<&Request>,
-) -> Result<Value> {
-    prepare_impl(repo, p, request, PrepareIntent::Internal)
-}
-fn prepare_impl(
-    repo: &Repository,
-    p: &Value,
-    request: Option<&Request>,
-    intent: PrepareIntent,
-) -> Result<Value> {
-    prepare_resolving(repo, p, request, intent, |url| repo.providers.resolve(url))
-}
-fn prepare_resolving(
-    repo: &Repository,
-    p: &Value,
-    request: Option<&Request>,
-    intent: PrepareIntent,
     resolve: impl Fn(&str) -> Result<Value>,
-) -> Result<Value> {
+) -> Result<Vec<Value>> {
     let mut imported = vec![];
     let urls = arr(&p["urls"]);
     if urls.len() > 10 {
@@ -194,224 +168,397 @@ fn prepare_resolving(
             )?,
         });
     }
-    repo.transaction(|s| {
-        if intent == PrepareIntent::LegacyForm {
-            super::chat_edit::reject_unchecked_association(s, p)?;
-        }
-        if let Some(existing) = chat_preparation::lookup(repo, request, s)? {
-            return Ok(existing);
-        }
-        if request.is_some_and(|request| request.kind == "attach") {
-            if let Some(existing) = sessions::find(s, |row| {
-                row["agent"] == p["agent"] && row["sessionId"] == p["sessionId"]
-            })
-            .cloned()
-            {
-                return chat_preparation::finish(repo, request, s, existing, true);
-            }
-        }
-
-        let mut payload = p.clone();
-        let mut ids = arr(&p["itemIds"]);
-        for item in &imported {
-            if intent == PrepareIntent::Register
-                && domain::catalog(s).contains_key(text(item, "id"))
-            {
-                ids.push(item["id"].clone());
-                continue;
-            }
-            let mut items = arr(&s["items"]);
-            items.retain(|x| x["id"] != item["id"]);
-            items.push(item.clone());
-            s["items"] = json!(items);
+    Ok(imported)
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SaveIntent {
+    Save,
+    Register,
+}
+/// Save `p` with its imported items and named project linked.
+fn save_linked(s: &mut Value, p: &Value, imported: &[Value], intent: SaveIntent) -> Result<Value> {
+    let mut payload = p.clone();
+    let mut ids = arr(&p["itemIds"]);
+    for item in imported {
+        if intent == SaveIntent::Register && domain::catalog(s).contains_key(text(item, "id")) {
             ids.push(item["id"].clone());
+            continue;
         }
-        let name = p["projectName"]
-            .as_str()
-            .or_else(|| p["project"].as_str())
-            .unwrap_or("");
-        if !name.trim().is_empty() {
-            let project = arr(&s["notes"])
-                .into_iter()
-                .find(|x| x["title"] == name && x["archivedAt"].is_null());
-            let id = if let Some(project) = project {
-                text(&project, "id").to_owned()
-            } else {
-                domain::edit(
-                    s,
-                    &json!({"action":"save-note","title":name,"status":"todo","cwd":p["cwd"]}),
-                )?;
-                text(arr(&s["notes"]).last().unwrap(), "id").to_owned()
-            };
-            ids.push(json!(id));
-        }
-        payload["itemIds"] = json!(ids);
-        if text(&payload, "title").is_empty() && intent != PrepareIntent::Register {
-            payload["title"] = json!(if name.is_empty() {
-                "Agent session"
-            } else {
-                name
-            });
-        }
-        let record = if intent == PrepareIntent::Register {
-            sessions::register(s, &payload)?
+        let mut items = arr(&s["items"]);
+        items.retain(|x| x["id"] != item["id"]);
+        items.push(item.clone());
+        s["items"] = json!(items);
+        ids.push(item["id"].clone());
+    }
+    let name = p["projectName"]
+        .as_str()
+        .or_else(|| p["project"].as_str())
+        .unwrap_or("");
+    if !name.trim().is_empty() {
+        let project = arr(&s["notes"])
+            .into_iter()
+            .find(|x| x["title"] == name && x["archivedAt"].is_null());
+        let id = if let Some(project) = project {
+            text(&project, "id").to_owned()
         } else {
-            sessions::save(s, &payload)?
+            domain::edit(
+                s,
+                &json!({"action":"save-note","title":name,"status":"todo","cwd":p["cwd"]}),
+            )?;
+            text(arr(&s["notes"]).last().unwrap(), "id").to_owned()
         };
-        chat_preparation::finish(repo, request, s, record, false)
-    })
+        ids.push(json!(id));
+    }
+    payload["itemIds"] = json!(ids);
+    match intent {
+        SaveIntent::Save => {
+            if text(&payload, "title").is_empty() {
+                payload["title"] = json!(if name.is_empty() {
+                    "Agent session"
+                } else {
+                    name
+                });
+            }
+            sessions::save(s, &payload)
+        }
+        SaveIntent::Register => sessions::register(s, &payload),
+    }
 }
-// Best-effort rollback only: a crash can leave a folder, and inode checking is
-// not atomic with rmdir against a concurrent rename. Never remove contents.
-struct CreatedQuickFolder {
-    path: Option<PathBuf>,
-    identity: Option<(u64, u64)>,
+/// A new chat from a form, or with `attach`, a chat for an existing conversation.
+pub(super) struct NewChat<'a> {
+    intent: &'a Value,
+    imported: Vec<Value>,
+    attach: bool,
 }
-impl CreatedQuickFolder {
-    fn create(path: &std::path::Path) -> Result<Self> {
-        use std::os::unix::fs::MetadataExt;
-        std::fs::create_dir(path)?;
-        let identity = std::fs::symlink_metadata(path)
-            .ok()
-            .filter(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
-            .map(|metadata| (metadata.dev(), metadata.ino()));
+impl<'a> NewChat<'a> {
+    pub(super) fn validate(repo: &Repository, intent: &'a Value, attach: bool) -> Result<Self> {
+        if !attach {
+            let state = repo.state.lock().map_err(|_| Error::io())?;
+            super::chat_edit::reject_unchecked_association(&state, intent)?;
+        }
         Ok(Self {
-            path: Some(path.into()),
-            identity,
+            intent,
+            imported: resolve_urls(repo, intent, |url| repo.providers.resolve(url))?,
+            attach,
         })
     }
-    fn disarm(&mut self) {
-        self.path = None;
+}
+impl Recipe for NewChat<'_> {
+    fn admission(&self) -> Option<(String, f64)> {
+        None
     }
-    fn cleanup(&mut self) -> bool {
-        use std::os::unix::fs::MetadataExt;
-        let Some(path) = self.path.take() else {
-            return true;
-        };
-        let metadata = match std::fs::symlink_metadata(&path) {
-            Ok(value) => value,
-            Err(error) => return error.kind() == std::io::ErrorKind::NotFound,
-        };
-        if !metadata.is_dir()
-            || metadata.file_type().is_symlink()
-            || self.identity != Some((metadata.dev(), metadata.ino()))
-        {
-            return false;
+    /// An attach returns the chat already saved for its conversation; a new chat
+    /// refuses to save that conversation again.
+    fn reusable(&self, s: &Value) -> Result<Option<Value>> {
+        if self.attach {
+            return Ok(sessions::find(s, |row| {
+                row["agent"] == self.intent["agent"] && row["sessionId"] == self.intent["sessionId"]
+            })
+            .cloned());
         }
-        match std::fs::remove_dir(path) {
-            Ok(()) => true,
-            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
-        }
+        super::chat_edit::reject_unchecked_association(s, self.intent)?;
+        Ok(None)
+    }
+    fn build(&self, _: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
+        save_linked(s, self.intent, &self.imported, SaveIntent::Save)
     }
 }
-impl Drop for CreatedQuickFolder {
-    fn drop(&mut self) {
-        self.cleanup();
-    }
-}
-fn complete_quick_preparation(
-    result: Result<Value>,
-    created: &mut Option<CreatedQuickFolder>,
-) -> Result<Value> {
-    match result {
-        Ok(record) => {
-            if let Some(folder) = created {
-                folder.disarm();
-            }
-            Ok(record)
-        }
-        Err(mut error) => {
-            if created.as_mut().is_some_and(|folder| !folder.cleanup()) {
-                error.message.push_str(
-                    " The new folder was retained because it could not be safely removed.",
-                );
-            }
-            Err(error)
-        }
-    }
-}
-pub fn quick(repo: &Repository, p: &Value, review: bool) -> Result<Value> {
-    quick_with_request(repo, p, review, None)
-}
-pub(super) fn quick_with_request(
-    repo: &Repository,
-    p: &Value,
+/// A chat for one work item or folder, or with `review`, a review of one GitHub PR.
+pub(super) struct Quick<'a> {
+    intent: &'a Value,
+    agent: &'a str,
     review: bool,
-    request: Option<&Request>,
-) -> Result<Value> {
-    quick_in_root(repo, p, review, request, &work_root())
+    review_command: String,
 }
-fn quick_in_root(
-    repo: &Repository,
-    p: &Value,
-    review: bool,
-    request: Option<&Request>,
-    root: &std::path::Path,
-) -> Result<Value> {
-    let agent = text(p, "agent");
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
+impl<'a> Quick<'a> {
+    pub(super) fn validate(repo: &Repository, intent: &'a Value, review: bool) -> Result<Self> {
+        let agent = checked_agent(intent)?;
+        let review_command = text(
+            &repo.settings.values(),
+            if agent == "claude" {
+                "claudeReviewCommand"
+            } else {
+                "codexReviewCommand"
+            },
+        )
+        .to_owned();
+        if review && review_command.is_empty() {
+            return Err(Error::new(
+                "Choose a review skill in Settings → Agents & workflows.",
+            ));
+        }
+        Ok(Self {
+            intent,
+            agent,
+            review,
+            review_command,
+        })
     }
-    let preferences = repo.settings.values();
-    let review_command = text(
-        &preferences,
-        if agent == "claude" {
-            "claudeReviewCommand"
+    fn item(&self, s: &Value) -> Result<Value> {
+        let p = self.intent;
+        let mut item = domain::catalog(s)
+            .get(text(p, "itemId"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        if !text(p, "itemId").is_empty() && item.is_null() {
+            return Err(Error::new("Work item unavailable."));
+        }
+        if item.is_null() && p["scopeSource"] == "github" && !text(p, "scope").is_empty() {
+            item = arr(&s["items"])
+                .into_iter()
+                .find(|i| i["source"] == "github" && repo_name(i) == text(p, "scope"))
+                .unwrap_or(Value::Null);
+        }
+        if self.review && (item["source"] != "github" || item["kind"] != "Pull request") {
+            return Err(Error::new("Choose a GitHub PR."));
+        }
+        Ok(item)
+    }
+    fn review_instruction(
+        &self,
+        repo: &Repository,
+        item: &Value,
+        pr_label: &str,
+    ) -> Result<String> {
+        let (agent, review_command) = (self.agent, self.review_command.as_str());
+        let builtin = super::skills_catalog::review_skill(repo.settings.config_directory());
+        if builtin["commands"][agent] == review_command {
+            if builtin["available"] != true {
+                return Err(Error::new(
+                    "The portable review skill is unavailable. Check the profile configuration.",
+                ));
+            }
+            return Ok(format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(item,"url")));
+        }
+        let template_path = repo
+            .settings
+            .config_directory()
+            .join(format!("workflows/pr-review-{agent}.md"));
+        let template = String::from_utf8(
+            context_kit::read_bounded(&template_path, 16000)
+                .map_err(|_| Error::new("Cannot read the review workflow template."))?,
+        )
+        .map_err(|_| Error::new("Review workflow template must be UTF-8."))?;
+        Ok(review_skill_discovery(&template)
+            .replace("{{REVIEW_COMMAND}}", review_command)
+            .replace(
+                "{{REVIEW_SKILL}}",
+                review_command.trim_start_matches(['/', '$']),
+            )
+            .replace("{{PR_URL}}", text(item, "url"))
+            .replace("{{PR_LABEL}}", pr_label)
+            .replace("{{HOME}}", &home().to_string_lossy()))
+    }
+}
+impl Recipe for Quick<'_> {
+    fn admission(&self) -> Option<(String, f64)> {
+        let key = if self.review {
+            "pr-review-prepare"
         } else {
-            "codexReviewCommand"
-        },
-    );
-    if review && review_command.is_empty() {
-        return Err(Error::new(
-            "Choose a review skill in Settings → Agents & workflows.",
-        ));
+            "quick-session"
+        };
+        Some((key.into(), 3.0))
     }
-    let mut created = None;
-    let result=repo.preparation_transaction(if review{"pr-review-prepare"}else{"quick-session"},3.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}let mut item=domain::catalog(s).get(text(p,"itemId")).cloned().unwrap_or(Value::Null);if !text(p,"itemId").is_empty()&&item.is_null(){return Err(Error::new("Work item unavailable."));}
-if item.is_null()&&p["scopeSource"]=="github"&&!text(p,"scope").is_empty(){item=arr(&s["items"]).into_iter().find(|i|i["source"]=="github"&&repo_name(i)==text(p,"scope")).unwrap_or(Value::Null);}
- if review{if item["source"]!="github"||item["kind"]!="Pull request"{return Err(Error::new("Choose a GitHub PR."));}
-if let Some(existing)=sessions::latest(s,|x|x["workflow"]=="pr-review"&&x["reviewItemId"]==item["id"]&&x["agent"]==agent&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,existing,true);}}
- admit()?;let (cwd,new)=choose_with(s,&item,p,root,&folders_in(root))?;let choices=contexts(&item);let remember=p["rememberKey"].as_str().unwrap_or_else(||choices.first().map_or("", |x|text(x,"key")));if !remember.is_empty()&&!choices.iter().any(|x|x["key"]==remember){return Err(Error::new("Choose a valid remembered folder scope."));}
- let pr_label=format!("{}{}",repo_name(&item).split('/').next_back().unwrap_or(""),text(&item,"reference"));let title=if review{format!("Review {pr_label}")}else if !text(p,"itemId").is_empty(){text(&item,"title").chars().take(180).collect()}else{format!("New {agent} session")};let instruction=if review{let builtin=super::skills_catalog::review_skill(repo.settings.config_directory());if builtin["commands"][agent]==review_command {if builtin["available"]!=true{return Err(Error::new("The portable review skill is unavailable. Check the profile configuration."));}format!("Read the complete truffle-review skill at {} and follow it for this assigned PR review. Start after registering this conversation. Review only {} at {}. Verify the current head and target branch, use a matching review worktree, and save the four reviewer reports as a registered Markdown artifact. No review request ID was supplied; do not invent one.",json!(text(&builtin,"path")),pr_label,text(&item,"url"))}else{let template_path=repo.settings.config_directory().join(format!("workflows/pr-review-{agent}.md"));let template=String::from_utf8(context_kit::read_bounded(&template_path,16000).map_err(|_|Error::new("Cannot read the review workflow template."))?).map_err(|_|Error::new("Review workflow template must be UTF-8."))?;review_skill_discovery(&template).replace("{{REVIEW_COMMAND}}",review_command).replace("{{REVIEW_SKILL}}",review_command.trim_start_matches(['/','$'])).replace("{{PR_URL}}",text(&item,"url")).replace("{{PR_LABEL}}",&pr_label).replace("{{HOME}}",&home().to_string_lossy())}}else{String::new()};
- let ids=if text(p,"itemId").is_empty() {json!([])} else {json!([item["id"]])};
- let payload=json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});super::sessions::validate_text(&payload)?;
- if new.is_some(){std::fs::create_dir_all(root)?;created=Some(CreatedQuickFolder::create(std::path::Path::new(&cwd))?);if created.as_ref().unwrap().identity.is_none(){return Err(Error::new("The new folder identity could not be verified."));}}
- let record=sessions::save_with(s,&payload,|record|{if !text(p,"itemId").is_empty(){record["originItemId"]=item["id"].clone();}
-if review{record["workflow"]=json!("pr-review");record["reviewItemId"]=item["id"].clone();}})?;
-if !text(p,"folderPath").is_empty()||new.is_some(){if !remember.is_empty(){s["folderMappings"][remember]=json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});}
-if remember==format!("item:{}",text(&item,"id")){s["itemSettings"][text(&item,"id")]["explicit"]=json!(true);}}
- chat_preparation::finish(repo,request,s,record,false)});
-    complete_quick_preparation(result, &mut created)
-}
-pub fn review(repo: &Repository, p: &Value) -> Result<Value> {
-    review_with_request(repo, p, None)
-}
-pub(super) fn review_with_request(
-    repo: &Repository,
-    p: &Value,
-    request: Option<&Request>,
-) -> Result<Value> {
-    let agent = text(p, "agent");
-    if !["claude", "codex"].contains(&agent) {
-        return Err(Error::new("Choose Claude or Codex."));
+    /// Fails for an unavailable work item. A review returns the newest unarchived
+    /// review of the same PR by the same agent, also after it was opened.
+    fn reusable(&self, s: &Value) -> Result<Option<Value>> {
+        let item = self.item(s)?;
+        if !self.review {
+            return Ok(None);
+        }
+        Ok(sessions::latest(s, |x| {
+            x["workflow"] == "pr-review"
+                && x["reviewItemId"] == item["id"]
+                && x["agent"] == self.agent
+                && x["archivedAt"].is_null()
+        })
+        .cloned())
     }
-    repo.preparation_transaction("work-review",30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
-if let Some(x)=sessions::latest(s,|x|x["workflow"]=="work-review"&&x["agent"]==agent&&x["launchNew"]==true&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,x,true);}admit()?;let mut times=json!({});for(source,info)in s["sources"].as_object().unwrap(){times[source]=info["lastSuccess"].clone();}let record=sessions::save_with(s,&json!({"agent":agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}),|record|{record["workflow"]=json!("work-review");record["reviewSourceTimes"]=times;})?;chat_preparation::finish(repo,request,s,record,false)})
+    fn build(
+        &self,
+        repo: &Repository,
+        s: &mut Value,
+        created: &mut Option<Created>,
+    ) -> Result<Value> {
+        let (p, agent) = (self.intent, self.agent);
+        let item = self.item(s)?;
+        let root = work_root();
+        let (cwd, new) = choose_with(s, &item, p, &root, &folders_in(&root))?;
+        let choices = contexts(&item);
+        let remember = p["rememberKey"]
+            .as_str()
+            .unwrap_or_else(|| choices.first().map_or("", |x| text(x, "key")));
+        if !remember.is_empty() && !choices.iter().any(|x| x["key"] == remember) {
+            return Err(Error::new("Choose a valid remembered folder scope."));
+        }
+        let pr_label = format!(
+            "{}{}",
+            repo_name(&item).split('/').next_back().unwrap_or(""),
+            text(&item, "reference")
+        );
+        let title = if self.review {
+            format!("Review {pr_label}")
+        } else if !text(p, "itemId").is_empty() {
+            text(&item, "title").chars().take(180).collect()
+        } else {
+            format!("New {agent} session")
+        };
+        let instruction = if self.review {
+            self.review_instruction(repo, &item, &pr_label)?
+        } else {
+            String::new()
+        };
+        let ids = if text(p, "itemId").is_empty() {
+            json!([])
+        } else {
+            json!([item["id"]])
+        };
+        let payload = json!({"agent":agent,"title":title,"cwd":cwd,"destination":"embedded","instruction":instruction,"itemIds":ids});
+        sessions::validate_text(&payload)?;
+        if new.is_some() {
+            std::fs::create_dir_all(&root)?;
+            chat_preparation::create_folder(created, std::path::Path::new(&cwd))?;
+        }
+        let record = sessions::save_with(s, &payload, |record| {
+            if !text(p, "itemId").is_empty() {
+                record["originItemId"] = item["id"].clone();
+            }
+            if self.review {
+                record["workflow"] = json!("pr-review");
+                record["reviewItemId"] = item["id"].clone();
+            }
+        })?;
+        if !text(p, "folderPath").is_empty() || new.is_some() {
+            if !remember.is_empty() {
+                s["folderMappings"][remember] = json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});
+            }
+            if remember == format!("item:{}", text(&item, "id")) {
+                s["itemSettings"][text(&item, "id")]["explicit"] = json!(true);
+            }
+        }
+        Ok(record)
+    }
 }
-pub fn newsletter(repo: &Repository, p: &Value) -> Result<Value> {
-    newsletter_with_request(repo, p, None)
+/// A chat that reviews all work.
+pub(super) struct WorkReview<'a> {
+    agent: &'a str,
 }
-pub(super) fn newsletter_with_request(
-    repo: &Repository,
-    p: &Value,
-    request: Option<&Request>,
-) -> Result<Value> {
-    let preset = artifacts::presets(repo, &repo.state.lock().unwrap())?
-        .into_iter()
-        .find(|x| x["id"] == p["presetId"] && x["available"] == true)
-        .ok_or_else(|| Error::new("Newsletter skill or folder unavailable."))?;
-    repo.preparation_transaction(&format!("newsletter:{}",text(&preset,"id")),30.0,|s,admit|{if let Some(existing)=chat_preparation::lookup(repo,request,s)?{return Ok(existing)}
-if let Some(x)=sessions::latest(s,|x|x["newsletterId"]==preset["id"]&&x["launchNew"]==true&&x["archivedAt"].is_null()).cloned(){return chat_preparation::finish(repo,request,s,x,true);}admit()?;let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(&preset,"skill"),text(&preset,"command"),text(&preset,"cwd"),text(&preset,"reports"));let record=sessions::save_with(s,&json!({"agent":preset["agent"],"title":format!("{} · {}",text(&preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}),|record|{record["workflow"]=json!("newsletter");record["newsletterId"]=preset["id"].clone();})?;chat_preparation::finish(repo,request,s,record,false)})
+impl<'a> WorkReview<'a> {
+    pub(super) fn validate(intent: &'a Value) -> Result<Self> {
+        Ok(Self {
+            agent: checked_agent(intent)?,
+        })
+    }
+}
+impl Recipe for WorkReview<'_> {
+    fn admission(&self) -> Option<(String, f64)> {
+        Some(("work-review".into(), 30.0))
+    }
+    /// The newest unarchived work review by the same agent that was never opened.
+    fn reusable(&self, s: &Value) -> Result<Option<Value>> {
+        Ok(sessions::latest(s, |x| {
+            x["workflow"] == "work-review"
+                && x["agent"] == self.agent
+                && x["launchNew"] == true
+                && x["archivedAt"].is_null()
+        })
+        .cloned())
+    }
+    fn build(&self, repo: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
+        let mut times = json!({});
+        for (source, info) in s["sources"].as_object().unwrap() {
+            times[source] = info["lastSuccess"].clone();
+        }
+        sessions::save_with(
+            s,
+            &json!({"agent":self.agent,"title":"Work review","cwd":repo.root,"destination":"embedded","instruction":include_str!("../../resources/work-review.md"),"itemIds":[]}),
+            |record| {
+                record["workflow"] = json!("work-review");
+                record["reviewSourceTimes"] = times;
+            },
+        )
+    }
+}
+/// A chat that runs a configured skill preset.
+pub(super) struct Skill {
+    preset: Value,
+}
+impl Skill {
+    pub(super) fn validate(repo: &Repository, intent: &Value) -> Result<Self> {
+        let preset = artifacts::presets(repo, &repo.state.lock().unwrap())?
+            .into_iter()
+            .find(|x| x["id"] == intent["presetId"] && x["available"] == true)
+            .ok_or_else(|| Error::new("Newsletter skill or folder unavailable."))?;
+        Ok(Self { preset })
+    }
+}
+impl Recipe for Skill {
+    fn admission(&self) -> Option<(String, f64)> {
+        Some((format!("newsletter:{}", text(&self.preset, "id")), 30.0))
+    }
+    /// The newest unarchived chat for the same preset that was never opened.
+    fn reusable(&self, s: &Value) -> Result<Option<Value>> {
+        Ok(sessions::latest(s, |x| {
+            x["newsletterId"] == self.preset["id"]
+                && x["launchNew"] == true
+                && x["archivedAt"].is_null()
+        })
+        .cloned())
+    }
+    fn build(&self, _: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
+        let preset = &self.preset;
+        let instruction=format!("Run the assigned skill now after registration. Read the complete skill at {} and follow {} in {}. Follow the skill's constraints. Save final reports under {} and register final outputs with the artifact helper using --skill-output. Register supporting attachments without --skill-output. This is a local dashboard run: do not send Slack messages or publish externally unless the user asks in this session. Do not wait for another instruction.",text(preset,"skill"),text(preset,"command"),text(preset,"cwd"),text(preset,"reports"));
+        sessions::save_with(
+            s,
+            &json!({"agent":preset["agent"],"title":format!("{} · {}",text(preset,"title"),&super::repository::iso_time()[..10]),"cwd":preset["cwd"],"destination":"embedded","instruction":instruction,"itemIds":[]}),
+            |record| {
+                record["workflow"] = json!("newsletter");
+                record["newsletterId"] = preset["id"].clone();
+            },
+        )
+    }
+}
+/// A new chat with the context of the saved chat `intent.id`.
+pub(super) struct Recover<'a> {
+    pub intent: &'a Value,
+}
+impl Recipe for Recover<'_> {
+    fn admission(&self) -> Option<(String, f64)> {
+        None
+    }
+    /// The newest recovery of the same chat that was never opened.
+    fn reusable(&self, s: &Value) -> Result<Option<Value>> {
+        let original = sessions::get(s, text(self.intent, "id"))?;
+        Ok(sessions::latest(s, |x| {
+            x["recoveryOf"] == original["id"] && x["launchNew"] == true
+        })
+        .cloned())
+    }
+    fn build(&self, _: &Repository, s: &mut Value, _: &mut Option<Created>) -> Result<Value> {
+        let p = self.intent;
+        let original = sessions::get(s, text(p, "id"))?.clone();
+        let mut payload = original.clone();
+        payload.as_object_mut().unwrap().remove("id");
+        payload.as_object_mut().unwrap().remove("sessionId");
+        if !text(p, "cwd").is_empty() {
+            payload["cwd"] = p["cwd"].clone();
+        }
+        payload["itemIds"] = json!(arr(&original["items"])
+            .iter()
+            .map(|i| i["id"].clone())
+            .collect::<Vec<_>>());
+        sessions::save_with(s, &payload, |record| {
+            for k in [
+                "workflow",
+                "reviewItemId",
+                "newsletterId",
+                "reviewSourceTimes",
+            ] {
+                record[k] = original[k].clone();
+            }
+            record["recoveryOf"] = original["id"].clone();
+        })
+    }
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn worktree_metadata(cwd: &str) -> Option<Value> {
@@ -850,7 +997,8 @@ fn register_resolving(
     let mut p = p.clone();
     p["preserveItemFolders"] = json!(true);
     p["sessionId"] = json!(sid(text(&p, "sessionId"))?);
-    let record = prepare_resolving(repo, &p, None, PrepareIntent::Register, resolve)?;
+    let imported = resolve_urls(repo, &p, resolve)?;
+    let record = repo.transaction(|s| save_linked(s, &p, &imported, SaveIntent::Register))?;
     let metadata = worktree_metadata(text(&record, "cwd"));
     finish_registration(
         repo,
@@ -909,50 +1057,6 @@ fn finish_registration(
         let row = sessions::get_mut(s, text(record, "id"))?;
         row["launchNew"] = json!(false);
         Ok(row.clone())
-    })
-}
-pub fn recover(repo: &Repository, p: &Value) -> Result<Value> {
-    recover_with_request(repo, p, None)
-}
-pub(super) fn recover_with_request(
-    repo: &Repository,
-    p: &Value,
-    request: Option<&Request>,
-) -> Result<Value> {
-    repo.transaction(|s| {
-        if let Some(existing) = chat_preparation::lookup(repo, request, s)? {
-            return Ok(existing);
-        }
-        let original = sessions::get(s, text(p, "id"))?.clone();
-        if let Some(pending) = sessions::latest(s, |x| {
-            x["recoveryOf"] == original["id"] && x["launchNew"] == true
-        })
-        .cloned()
-        {
-            return chat_preparation::finish(repo, request, s, pending, true);
-        }
-        let mut payload = original.clone();
-        payload.as_object_mut().unwrap().remove("id");
-        payload.as_object_mut().unwrap().remove("sessionId");
-        if !text(p, "cwd").is_empty() {
-            payload["cwd"] = p["cwd"].clone();
-        }
-        payload["itemIds"] = json!(arr(&original["items"])
-            .iter()
-            .map(|i| i["id"].clone())
-            .collect::<Vec<_>>());
-        let record = sessions::save_with(s, &payload, |record| {
-            for k in [
-                "workflow",
-                "reviewItemId",
-                "newsletterId",
-                "reviewSourceTimes",
-            ] {
-                record[k] = original[k].clone();
-            }
-            record["recoveryOf"] = original["id"].clone();
-        })?;
-        chat_preparation::finish(repo, request, s, record, false)
     })
 }
 pub fn context(repo: &Repository, id: &str) -> Result<String> {
@@ -1325,9 +1429,6 @@ mod portable_review_tests;
 mod folder_tests;
 
 #[cfg(test)]
-mod preparation_admission_tests;
-
-#[cfg(test)]
 mod saved_chat_open_tests;
 
 #[cfg(test)]
@@ -1338,5 +1439,3 @@ mod live_unregistered_open_tests;
 
 #[cfg(test)]
 mod agent_command_tests;
-#[cfg(test)]
-mod quick_folder_cleanup_tests;

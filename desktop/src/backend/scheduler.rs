@@ -560,7 +560,11 @@ fn execute_with(
         })?;
         return Ok(existing.clone());
     }
-    let mut record = workflows::newsletter(repo, &json!({"presetId":preset}))?;
+    let mut record = super::chat_preparation::save(
+        repo,
+        super::chat_preparation::Kind::Skill,
+        &json!({"presetId":preset}),
+    )?;
     let run = run_id.unwrap_or_else(uuid);
     repo.transaction(|s|{
         let entry=json!({"id":run,"presetId":preset,"sessionId":record["id"],"at":now(),"outcome":"starting","scheduled":scheduled});

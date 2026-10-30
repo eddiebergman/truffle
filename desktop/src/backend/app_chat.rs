@@ -341,7 +341,7 @@ fn chat_recovery_context(repo: &Repository, p: &Value) -> Result<Value> {
             })
             || !entry["pending"].is_boolean()
             || !entry["openAttempted"].is_boolean()
-            || !super::chat_preparation::KINDS.contains(&text(entry, "kind"))
+            || super::chat_preparation::Kind::parse(text(entry, "kind")).is_none()
         {
             return Err(Error::new("Invalid chat recovery request."));
         }

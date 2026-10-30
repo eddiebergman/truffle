@@ -1,7 +1,9 @@
 use super::*;
+use crate::backend::chat_preparation::{self, Kind};
 use crate::backend::sessions;
 use std::sync::Mutex;
-static ENV: Mutex<()> = Mutex::new(());
+/// Held by tests that change process environment variables.
+pub(super) static ENV: Mutex<()> = Mutex::new(());
 fn fixture() -> (tempfile::TempDir, std::sync::Arc<Repository>) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("truffle");
@@ -336,10 +338,10 @@ fn quick_launch_attaches_only_clicked_work_and_newsletters_do_not_merge_work_gro
         Ok(())
     })
     .unwrap();
-    let record = workflows::quick(
+    let record = chat_preparation::save(
         &repo,
+        Kind::Quick,
         &json!({"agent":"claude","itemId":"github:a","folderPath":folder}),
-        false,
     )
     .unwrap();
     assert_eq!(arr(&record["items"]).len(), 1);
@@ -368,7 +370,7 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     .unwrap();
     let p = json!({"agent":"claude","itemId":"github:42"});
     repo.settings.apply(&json!({"revision":0,"contentHash":repo.settings.view()["contentHash"],"patch":{"claudeReviewCommand":"/eddie-review"}}),false).unwrap();
-    let record = workflows::quick(&repo, &p, true).unwrap();
+    let record = chat_preparation::save(&repo, Kind::PrReview, &p).unwrap();
     assert_eq!(record["workflow"], "pr-review");
     let tree = folder.join(".worktrees/review-pr-42");
     std::fs::create_dir_all(&tree).unwrap();
@@ -377,7 +379,7 @@ fn review_launch_reuses_identity_and_actual_worktree() {
         &json!({"id":record["id"],"agent":"claude","sessionId":record["sessionId"],"cwd":tree}),
     )
     .unwrap();
-    let again = workflows::quick(&repo, &p, true).unwrap();
+    let again = chat_preparation::save(&repo, Kind::PrReview, &p).unwrap();
     assert_eq!(again["id"], record["id"]);
     assert_eq!(
         again["cwd"],
