@@ -185,8 +185,8 @@ new MutationObserver(() => {
     button.hidden = source !== "agents";
   }
 }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
-let actionOutputId = "",
-  actionOutputTimer = null;
+let actionOutputId = "";
+const actionOutputWatch = watchJob(refreshActionOutput);
 async function openActionOutput(id) {
   actionOutputId = id || "";
   let panel = $("#action-output-panel");
@@ -200,7 +200,7 @@ async function openActionOutput(id) {
         "×",
         () => {
           panel.hidden = true;
-          clearTimeout(actionOutputTimer);
+          actionOutputWatch.stop();
         },
         "icon-button",
       );
@@ -211,7 +211,7 @@ async function openActionOutput(id) {
     select.setAttribute("aria-label", "Action run");
     select.onchange = () => {
       actionOutputId = select.value;
-      void refreshActionOutput();
+      void actionOutputWatch.start();
     };
     const meta = el("div", "form-hint");
     meta.id = "action-output-meta";
@@ -222,13 +222,12 @@ async function openActionOutput(id) {
     document.body.append(panel);
   }
   panel.hidden = false;
-  await refreshActionOutput();
+  await actionOutputWatch.start();
 }
 async function refreshActionOutput() {
-  clearTimeout(actionOutputTimer);
   const panel = $("#action-output-panel");
   if (!panel || panel.hidden) {
-    return;
+    return null;
   }
   try {
     const { jobs } = await api("/api/quick-actions"),
@@ -261,11 +260,10 @@ async function refreshActionOutput() {
       (job?.state === "running"
         ? "Running…"
         : "This command produced no output.");
-    if (rows.some((row) => row.state === "running")) {
-      actionOutputTimer = setTimeout(refreshActionOutput, 750);
-    }
+    return rows.some((row) => row.state === "running") ? 750 : null;
   } catch (error) {
     $("#action-output-text").textContent = error.message;
+    return null;
   }
 }
 async function openThemeChooser() {
