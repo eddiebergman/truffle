@@ -193,7 +193,8 @@ test("Add sends one create-only command and exposes exact accepted ID even after
     f.calls.filter((call) => call.payload?.name === "skills.save").length,
     1,
   );
-  assert.equal(f.libraries, 2);
+  // The failed state refresh skips the save-time library read; Refresh view reads it.
+  assert.equal(f.libraries, 1);
 });
 test("accepted Add needs accepted library on save and every recovery, with no write replay", async () => {
   let libs = 0;

@@ -1,15 +1,10 @@
 "use strict";
 // These two forms edit preset creation and schedule metadata, never run a skill.
 function skillEditorMutable(current = featureForms.get($("#skill-editor"))) {
-  return featureFormMutable(current) && !current.loading && !current.conflict;
+  return featureFormMutable(current) && !current.loading;
 }
 function skillScheduleMutable(current) {
-  return (
-    featureFormMutable(current) &&
-    !current.loading &&
-    !current.loadFailed &&
-    !current.conflict
-  );
+  return featureFormMutable(current) && !current.loading && !current.loadFailed;
 }
 function openSkillEditor({
   skill = null,
@@ -97,6 +92,8 @@ async function readSkillSchedule(current) {
     current.result = null;
     current.conflict = false;
     current.ui.message.textContent = "";
+    current.ui.refresh.textContent = "Refresh view";
+    current.ui.refresh.onclick = () => refreshSkillEditor(current);
     current.ui.refresh.hidden = true;
   } catch (error) {
     if (current.isCurrent()) {
@@ -190,12 +187,8 @@ async function refreshSkillEditor(current) {
   }
 }
 async function saveSkillEditor(current, name, args) {
-  current.pending = true;
-  holdFormFocus(current.host, current);
-  freezeFeatureForm(current, true);
-  current.ui.message.textContent = "Saving…";
-  let receipt,
-    invalidated = false;
+  let invalidated = false,
+    savedError = null;
   const invalidateLibrary = () => {
     if (current.kind === "preset" && !invalidated) {
       libraryGeneration++;
@@ -203,88 +196,60 @@ async function saveSkillEditor(current, name, args) {
       invalidated = true;
     }
   };
-  const result = await presentLocalWrite(async () => {
-    try {
-      receipt = await api("/api/commands/invoke", { name, args });
-      invalidateLibrary();
-      if (
-        receipt.saved !== true ||
-        typeof receipt.presetId !== "string" ||
-        !receipt.presetId
-      ) {
-        throw new Error("The save identity could not be confirmed.");
-      }
-    } catch (error) {
-      current.rejectedStatus = error.status;
-      if (writeFailureKind(error) === "unknown") {
-        invalidateLibrary();
-      }
-      throw error;
-    }
-  });
-  current.result = result;
-  if (result.kind === "accepted" && current.kind === "preset") {
-    if (current.isCurrent()) {
-      current.acceptedPresetId = receipt.presetId;
+  await submitFeatureForm(current, {
+    write: async () => {
       try {
-        current.onSaved?.(receipt.presetId);
+        const receipt = await api("/api/commands/invoke", { name, args });
+        invalidateLibrary();
+        if (
+          receipt.saved !== true ||
+          typeof receipt.presetId !== "string" ||
+          !receipt.presetId
+        ) {
+          throw new Error("The save identity could not be confirmed.");
+        }
+        if (current.kind === "preset" && current.isCurrent()) {
+          current.acceptedPresetId = receipt.presetId;
+          // The caller learns the accepted ID even when the view cannot refresh.
+          try {
+            current.onSaved?.(receipt.presetId);
+          } catch (error) {
+            savedError = error;
+          }
+        }
       } catch (error) {
-        current.result = {
-          kind: "accepted",
-          presentation: "pending",
-          error: error.message,
-        };
+        if (writeFailureKind(error) === "unknown") {
+          invalidateLibrary();
+        }
+        throw error;
       }
-    }
-    try {
-      const library = await loadArtifactLibrary(true);
-      if (!library.accepted) {
-        throw new Error("The Skills library could not refresh.");
+    },
+    acceptedText: current.acceptedText,
+    afterReady: async () => {
+      if (savedError) {
+        throw savedError;
       }
-    } catch (error) {
-      current.result = {
-        kind: "accepted",
-        presentation: "pending",
-        error: error.message,
-      };
-    }
-  }
-  current.pending = false;
-  if (!current.isCurrent()) {
-    if (featureForms.get(current.dialog) === current && current.dialog.open) {
-      freezeFeatureForm(current, true);
-    }
-    toast(localWriteMessage(current.result, current.acceptedText));
-    return;
-  }
-  if (
-    current.result.kind === "accepted" &&
-    current.result.presentation === "ready"
-  ) {
-    current.dialog.close();
-    toast(current.acceptedText);
-    return;
-  }
-  current.ui.refresh.textContent = "Refresh view";
-  current.ui.refresh.onclick = () => refreshSkillEditor(current);
-  if (
-    current.result.kind === "rejected" &&
-    current.rejectedStatus === 409 &&
-    current.kind === "schedule"
-  ) {
-    current.conflict = true;
-    freezeFeatureForm(current, false);
-    current.ui.message.textContent = `${
-      current.result.error
-    } Your draft remains. Reload schedule replaces it with the current schedule before saving.`;
-    current.ui.refresh.textContent = "Reload schedule";
-    current.ui.refresh.hidden = false;
-    current.ui.refresh.onclick = () => readSkillSchedule(current);
-    current.host.querySelector('button[type="submit"]').disabled = true;
-    restoreFormFocus(current, current.ui.refresh);
-  } else {
-    presentFeatureFormResult(current);
-  }
+      if (current.kind === "preset") {
+        const library = await loadArtifactLibrary(true);
+        if (!library.accepted) {
+          throw new Error("The Skills library could not refresh.");
+        }
+      }
+      current.dialog.close();
+    },
+    onConflict:
+      current.kind === "schedule"
+        ? (result) => {
+            current.ui.message.textContent = `${
+              result.error
+            } Your draft remains. Reload schedule replaces it with the current schedule before saving.`;
+            current.ui.refresh.textContent = "Reload schedule";
+            current.ui.refresh.hidden = false;
+            current.ui.refresh.onclick = () => readSkillSchedule(current);
+            restoreFormFocus(current, current.ui.refresh);
+          }
+        : null,
+  });
 }
 $("#skill-editor-form").onsubmit = async (event) => {
   event.preventDefault();
@@ -322,14 +287,14 @@ $("#schedule-form").onsubmit = async (event) => {
       missed: form.elements.missed.value,
       enabled: form.elements.enabled.checked,
     },
-    patch = {},
-    expected = {};
-  for (const field of Object.keys(values)) {
-    if (values[field] !== current.baseline.schedule[field]) {
-      patch[field] = values[field];
-      expected[field] = current.baseline.scheduleExpected[field];
-    }
-  }
+    { patch, expected } = checkedPatch(
+      {
+        values: current.baseline.schedule,
+        expected: current.baseline.scheduleExpected,
+      },
+      values,
+      Object.keys(values),
+    );
   if (!Object.keys(patch).length) {
     current.dialog.close();
     return;
