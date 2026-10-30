@@ -5,6 +5,8 @@ use std::{
     path::{Component, Path},
 };
 
+pub(super) mod item_folders;
+
 const MAX_FILES: usize = 500;
 
 /// The chat's working directory, then its linked worktrees, without blanks or repeats.
@@ -34,6 +36,12 @@ fn resolve(path: &str) -> Option<PathBuf> {
         return None;
     }
     path.canonicalize().ok().filter(|path| path.is_dir())
+}
+/// What remembering a folder does to a different folder already remembered for the item.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Remember {
+    Replace,
+    Preserve,
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn metadata(cwd: &str) -> Option<Value> {

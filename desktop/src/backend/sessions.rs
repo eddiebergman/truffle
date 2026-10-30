@@ -3,6 +3,8 @@
 //! This module is the only code that indexes the stored list. Callers reach a
 //! record by its ID or by a predicate, never by position. Records stay JSON
 //! objects, so fields this module does not know are kept unchanged.
+use super::checkouts::item_folders::{self, Strength};
+use super::checkouts::Remember;
 use super::{arr, checked, directory, domain, json, now, sid, text, uuid, Error, Result, Value};
 
 /// Stored on the record but left out of the public snapshot.
@@ -158,6 +160,11 @@ fn link_items(
         return Err(Error::new("Choose up to 100 linked work items."));
     }
     let catalog = domain::catalog(s);
+    let existing = if p["preserveItemFolders"] == true {
+        Remember::Preserve
+    } else {
+        Remember::Replace
+    };
     let mut items = if intent == Intent::Register {
         arr(&old["items"])
     } else {
@@ -174,14 +181,7 @@ fn link_items(
         if !text(item, "detail").is_empty() {
             s["itemArchive"][text(item, "id")] = item.clone();
         }
-        if !s["itemSettings"][text(item, "id")].is_object() {
-            s["itemSettings"][text(item, "id")] = json!({});
-        }
-        if p["preserveItemFolders"] != true
-            || text(&s["itemSettings"][text(item, "id")], "cwd").is_empty()
-        {
-            s["itemSettings"][text(item, "id")]["cwd"] = json!(cwd);
-        }
+        item_folders::remember(s, text(item, "id"), cwd, Strength::Implicit, existing);
     }
     Ok(items)
 }

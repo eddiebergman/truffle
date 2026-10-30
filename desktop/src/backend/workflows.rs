@@ -1,4 +1,6 @@
 use super::chat_preparation::{self, Created, Recipe};
+use super::checkouts::item_folders::{self, Strength};
+use super::checkouts::Remember;
 use super::terminals::{Live, Presence};
 use super::{
     arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
@@ -63,9 +65,9 @@ pub(super) fn automatic_folder(
 ) -> Option<String> {
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let usable = |value: &str| directory(value).ok().filter(|path| *path != root);
-    let setting = &s["itemSettings"][text(item, "id")];
-    if setting["explicit"] == true {
-        if let Some(path) = usable(text(setting, "cwd")) {
+    let remembered = item_folders::remembered(s, text(item, "id"));
+    if let Some((cwd, Strength::Explicit)) = remembered {
+        if let Some(path) = usable(cwd) {
             return Some(path);
         }
     }
@@ -93,7 +95,7 @@ pub(super) fn automatic_folder(
             return Some(path);
         }
     }
-    usable(text(setting, "cwd"))
+    remembered.and_then(|(cwd, _)| usable(cwd))
 }
 fn choose_with(
     s: &Value,
@@ -463,7 +465,13 @@ impl Recipe for Quick<'_> {
                 s["folderMappings"][remember] = json!({"path":cwd,"label":choices.iter().find(|x|x["key"]==remember).map_or(Value::Null, |x|x["label"].clone())});
             }
             if remember == format!("item:{}", text(&item, "id")) {
-                s["itemSettings"][text(&item, "id")]["explicit"] = json!(true);
+                item_folders::remember(
+                    s,
+                    text(&item, "id"),
+                    text(&record, "cwd"),
+                    Strength::Explicit,
+                    Remember::Replace,
+                );
             }
         }
         Ok(record)
@@ -607,11 +615,6 @@ impl Recipe for Recover<'_> {
         })
     }
 }
-#[derive(Clone, Copy, PartialEq)]
-enum FolderIntent {
-    Replace,
-    PreserveMapped,
-}
 pub(super) fn save_worktree(
     s: &mut Value,
     id: &str,
@@ -619,7 +622,7 @@ pub(super) fn save_worktree(
     ids: &[Value],
     primary: bool,
 ) -> Result<Value> {
-    save_worktree_with_folders(s, id, metadata, ids, primary, FolderIntent::Replace)
+    save_worktree_with_folders(s, id, metadata, ids, primary, Remember::Replace)
 }
 fn save_worktree_with_folders(
     s: &mut Value,
@@ -627,7 +630,7 @@ fn save_worktree_with_folders(
     metadata: &Value,
     ids: &[Value],
     primary: bool,
-    folder_intent: FolderIntent,
+    existing: Remember,
 ) -> Result<Value> {
     let record = sessions::get(s, id)?.clone();
     let linked = arr(&record["items"]);
@@ -677,17 +680,7 @@ fn save_worktree_with_folders(
         let key = id
             .as_str()
             .ok_or_else(|| Error::new("Invalid work item ID."))?;
-        if folder_intent == FolderIntent::PreserveMapped
-            && !text(&s["itemSettings"][key], "cwd").is_empty()
-            && s["itemSettings"][key]["cwd"] != metadata["path"]
-        {
-            continue;
-        }
-        if !s["itemSettings"][key].is_object() {
-            s["itemSettings"][key] = json!({});
-        }
-        s["itemSettings"][key]["cwd"] = metadata["path"].clone();
-        s["itemSettings"][key]["explicit"] = json!(true);
+        item_folders::remember(s, key, text(metadata, "path"), Strength::Explicit, existing);
     }
     Ok(sessions::get(s, id)?.clone())
 }
@@ -1029,17 +1022,17 @@ fn finish_registration(
                     metadata,
                     &current_ids,
                     true,
-                    FolderIntent::PreserveMapped,
+                    Remember::Preserve,
                 )?;
             } else {
                 for id in &current_ids {
-                    let key = id.as_str().unwrap();
-                    if text(&s["itemSettings"][key], "cwd").is_empty() {
-                        if !s["itemSettings"][key].is_object() {
-                            s["itemSettings"][key] = json!({});
-                        }
-                        s["itemSettings"][key]["cwd"] = latest["cwd"].clone();
-                    }
+                    item_folders::remember(
+                        s,
+                        id.as_str().unwrap(),
+                        text(&latest, "cwd"),
+                        Strength::Implicit,
+                        Remember::Preserve,
+                    );
                 }
             }
         }
