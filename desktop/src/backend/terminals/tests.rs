@@ -49,3 +49,60 @@ fn inventory_rejects_duplicate_terminals_and_noncanonical_generations() {
         assert!(Inventory::new(vec![row]).is_err());
     }
 }
+#[test]
+fn live_prefers_the_chat_key_then_the_same_conversation() {
+    let (chat, other, conversation) = (uuid(), uuid(), uuid());
+    let record = json!({"id":chat,"agent":"codex","sessionId":conversation});
+    let keyed =
+        json!({"recordId":chat,"agent":"codex","sessionId":null,"generation":uuid(),"live":true});
+    let resumed = json!({"recordId":other,"agent":"codex","sessionId":conversation,"generation":uuid(),"live":true});
+    let live = |rows: Vec<Value>| Inventory::new(rows).unwrap().live(&record);
+    assert_eq!(
+        live(vec![resumed.clone(), keyed.clone()])
+            .unwrap()
+            .generation,
+        text(&keyed, "generation")
+    );
+    let found = live(vec![resumed.clone()]).unwrap();
+    assert_eq!(
+        (
+            found.id.as_str(),
+            found.agent.as_str(),
+            found.session_id.as_str()
+        ),
+        (other.as_str(), "codex", conversation.as_str())
+    );
+    for (key, value) in [
+        ("live", json!(false)),
+        ("agent", json!("claude")),
+        ("sessionId", json!(uuid())),
+    ] {
+        let mut row = resumed.clone();
+        row[key] = value;
+        assert_eq!(live(vec![row]), None, "{key}");
+    }
+    let mut closed = keyed;
+    closed["live"] = json!(false);
+    assert_eq!(live(vec![closed]), None);
+    let unregistered = json!({"id":chat,"agent":"codex","sessionId":""});
+    let mut blank = resumed;
+    blank["sessionId"] = json!("");
+    let inventory = Inventory::new(vec![blank]).unwrap();
+    assert_eq!(inventory.live(&unregistered), None);
+}
+#[test]
+fn unclaimed_lists_live_terminals_that_no_chat_matches() {
+    let (chat, orphan, conversation) = (uuid(), uuid(), uuid());
+    let chats = [json!({"id":chat,"agent":"claude","sessionId":conversation})];
+    let row = |id: &str, session: &str, live: bool| json!({"recordId":id,"agent":"claude","sessionId":session,"generation":uuid(),"live":live});
+    let inventory = Inventory::new(vec![
+        row(&chat, "", true),
+        row(&uuid(), &conversation, true),
+        row(&uuid(), "", false),
+        row(&orphan, "", true),
+    ])
+    .unwrap();
+    let unclaimed = inventory.unclaimed(&chats).collect::<Vec<_>>();
+    assert_eq!(unclaimed.len(), 1);
+    assert_eq!(unclaimed[0]["recordId"], orphan);
+}

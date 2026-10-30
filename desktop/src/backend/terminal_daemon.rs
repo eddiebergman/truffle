@@ -186,12 +186,10 @@ impl Host {
         record: &Value,
         packet: &str,
         new: bool,
-        root: &Path,
     ) -> Result<super::terminal::OpenOutcome> {
         match self {
-            Self::Local(h) => h
-                .open(record, packet, new, root)
-                .map(|_| super::terminal::OpenOutcome::Accepted),
+            // The local host serves only demo data and never starts an agent.
+            Self::Local(_) => Ok(super::terminal::OpenOutcome::Preview),
             Self::Remote(r) => {
                 r.ensure()?;
                 let mut launch = json!({});
@@ -204,7 +202,7 @@ impl Host {
                 )
             }
             #[cfg(test)]
-            Self::Fake(_) => Err(Error::new("The fake terminal host cannot open agents.")),
+            Self::Fake(fake) => fake.open(record, Path::new(packet)),
         }
     }
     pub fn open_shell(&self, record: &Value) -> Result<Value> {

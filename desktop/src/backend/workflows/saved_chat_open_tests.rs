@@ -1,10 +1,12 @@
+use super::super::terminals::fake::Fake;
 use super::*;
-fn fixture() -> (tempfile::TempDir, Arc<Repository>, String) {
+fn fixture() -> (tempfile::TempDir, Arc<Repository>, Arc<Fake>, String) {
     let temp = tempfile::tempdir().unwrap();
-    let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+    let mut repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+    let fake = Fake::install(&mut repo);
     let id = uuid();
     repo.transaction(|s|{s["sessions"]=json!([{"id":id,"title":"Captured title","agent":"codex","cwd":temp.path(),"destination":"embedded","launchNew":true,"items":[],"checkpoint":{"next":"Captured next"},"privateNs":{"keep":true}}]);Ok(())}).unwrap();
-    (temp, repo, id)
+    (temp, repo, fake, id)
 }
 #[test]
 fn saved_chat_open_receipt_vocabulary_is_projection_safe_before_effects() {
@@ -33,7 +35,7 @@ fn saved_chat_open_receipt_vocabulary_is_projection_safe_before_effects() {
 }
 #[test]
 fn saved_chat_open_preeffect_failure_does_not_consume_admission() {
-    let (_temp, repo, id) = fixture();
+    let (_temp, repo, fake, id) = fixture();
     repo.transaction(|s| {
         s["sessions"][0]["sessionId"] = json!(uuid());
         Ok(())
@@ -42,45 +44,36 @@ fn saved_chat_open_preeffect_failure_does_not_consume_admission() {
     let key = format!("open:{id}");
     repo.cooldown.lock().unwrap().insert(key, 1.0);
     let before = repo.cooldown.lock().unwrap().clone();
-    assert!(
-        open_chat_with(&repo, &json!({"recordId":id}), |_, _| Err(Error::new(
-            "Invalid launch arguments"
-        )))
-        .is_err()
-    );
+    fake.on_open(|_, _| Err(Error::new("Invalid launch arguments")));
+    assert!(open_chat(&repo, &json!({"recordId":id})).is_err());
     assert_eq!(*repo.cooldown.lock().unwrap(), before);
-    let mut calls = 0;
-    let receipt = open_chat_with(&repo, &json!({"recordId":id}), |_, _| {
-        calls += 1;
-        Ok(terminal::OpenOutcome::Accepted)
-    })
-    .unwrap();
-    assert_eq!(calls, 1);
+    let receipt = open_chat(&repo, &json!({"recordId":id})).unwrap();
+    assert_eq!(fake.opened(), 2);
     assert_eq!(receipt["status"], "accepted");
-    let again = open_chat_with(&repo, &json!({"recordId":id}), |_, _| {
-        panic!("Cooldown must not launch again")
-    })
-    .unwrap();
+    let again = open_chat(&repo, &json!({"recordId":id})).unwrap();
+    assert_eq!(fake.opened(), 2, "cooldown must not launch again");
     assert_eq!(again["status"], "unknown");
 }
 #[test]
 fn saved_chat_open_preserves_latest_metadata_and_uses_captured_context() {
-    let (_temp, repo, id) = fixture();
-    let receipt = open_chat_with(&repo, &json!({"recordId":id}), |record, path| {
+    let (_temp, repo, fake, id) = fixture();
+    let during = repo.clone();
+    fake.on_open(move |record, path| {
         assert_eq!(record["title"], "Captured title");
         let context = std::fs::read_to_string(path).unwrap();
         assert!(context.contains("Captured title") && context.contains("Captured next"));
-        repo.transaction(|s| {
-            let row = &mut s["sessions"][0];
-            row["title"] = json!("Concurrent title");
-            row["items"] = json!([{"id":"note:new-link"}]);
-            row["checkpoint"] = json!({"next":"New next"});
-            Ok(())
-        })
-        .unwrap();
+        during
+            .transaction(|s| {
+                let row = &mut s["sessions"][0];
+                row["title"] = json!("Concurrent title");
+                row["items"] = json!([{"id":"note:new-link"}]);
+                row["checkpoint"] = json!({"next":"New next"});
+                Ok(())
+            })
+            .unwrap();
         Ok(terminal::OpenOutcome::Accepted)
-    })
-    .unwrap();
+    });
+    let receipt = open_chat(&repo, &json!({"recordId":id})).unwrap();
     assert_eq!(receipt["status"], "accepted");
     assert_eq!(receipt["localSaved"], true);
     assert_eq!(receipt["terminal"], json!({"state":"acknowledged"}));
@@ -95,21 +88,23 @@ fn saved_chat_open_preserves_latest_metadata_and_uses_captured_context() {
 #[test]
 fn saved_chat_open_accepted_then_save_failure_or_deleted_record_stays_accepted() {
     for delete in [false, true] {
-        let (_temp, repo, id) = fixture();
+        let (_temp, repo, fake, id) = fixture();
         let before = std::fs::read(&repo.data).unwrap();
-        let receipt = open_chat_with(&repo, &json!({"recordId":id}), |_, _| {
+        let during = repo.clone();
+        fake.on_open(move |_, _| {
             if delete {
-                repo.transaction(|s| {
-                    s["sessions"] = json!([]);
-                    Ok(())
-                })
-                .unwrap();
+                during
+                    .transaction(|s| {
+                        s["sessions"] = json!([]);
+                        Ok(())
+                    })
+                    .unwrap();
             } else {
-                std::fs::create_dir(repo.data.with_extension("tmp")).unwrap();
+                std::fs::create_dir(during.data.with_extension("tmp")).unwrap();
             }
             Ok(terminal::OpenOutcome::Accepted)
-        })
-        .unwrap();
+        });
+        let receipt = open_chat(&repo, &json!({"recordId":id})).unwrap();
         assert_eq!(receipt["status"], "accepted");
         assert_eq!(receipt["localSaved"], false);
         assert!(repo.opening.lock().unwrap().is_empty());
@@ -121,15 +116,11 @@ fn saved_chat_open_accepted_then_save_failure_or_deleted_record_stays_accepted()
 }
 #[test]
 fn saved_chat_open_unknown_never_patches_launch_metadata() {
-    let (_temp, repo, id) = fixture();
+    let (_temp, repo, fake, id) = fixture();
     let before = std::fs::read(&repo.data).unwrap();
-    let mut calls = 0;
-    let result = open_chat_with(&repo, &json!({"recordId":id}), |_, _| {
-        calls += 1;
-        Ok(terminal::OpenOutcome::Unknown)
-    })
-    .unwrap();
-    assert_eq!(calls, 1);
+    fake.on_open(|_, _| Ok(terminal::OpenOutcome::Unknown));
+    let result = open_chat(&repo, &json!({"recordId":id})).unwrap();
+    assert_eq!(fake.opened(), 1);
     assert_eq!(result["status"], "unknown");
     assert_eq!(result["terminal"]["state"], "unconfirmed");
     assert_eq!(result["localSaved"], false);
@@ -137,7 +128,7 @@ fn saved_chat_open_unknown_never_patches_launch_metadata() {
 }
 #[test]
 fn saved_chat_open_snapshot_projection_excludes_private_dispatch_and_review_drafts() {
-    let (_temp, repo, id) = fixture();
+    let (_temp, repo, fake, id) = fixture();
     repo.transaction(|s| {
         s["sessionDispatch"] = json!({"secret":"private-dispatch-canary"});
         s["sessions"][0]["workflow"] = json!("work-review");
@@ -147,27 +138,26 @@ fn saved_chat_open_snapshot_projection_excludes_private_dispatch_and_review_draf
     .unwrap();
     let (_, public) = repo.capture_for_open().unwrap();
     assert_eq!(public, repo.snapshot(false));
-    open_chat_with(&repo, &json!({"recordId":id}), |_, path| {
+    fake.on_open(|_, path| {
         let value = std::fs::read_to_string(path.with_extension("json")).unwrap();
         assert!(!value.contains("private-dispatch-canary"));
         assert!(!value.contains("private-draft-canary"));
         Ok(terminal::OpenOutcome::Preview)
-    })
-    .unwrap();
+    });
+    open_chat(&repo, &json!({"recordId":id})).unwrap();
+    assert_eq!(fake.opened(), 1);
 }
 #[test]
 fn saved_chat_open_rejects_stale_record_fields_before_launch() {
-    let (_temp, repo, id) = fixture();
+    let (_temp, repo, fake, id) = fixture();
     for args in [
         json!({"recordId":id,"title":"Stale"}),
         json!({"recordId":id,"target":"desktop"}),
         json!({"recordId":id,"items":[]}),
         json!({"recordId":"missing"}),
     ] {
-        assert!(open_chat_with(&repo, &args, |_, _| panic!(
-            "Rejected intent must not launch"
-        ))
-        .is_err());
+        assert!(open_chat(&repo, &args).is_err());
     }
+    assert_eq!(fake.opened(), 0, "rejected intent must not launch");
     assert!(repo.opening.lock().unwrap().is_empty());
 }

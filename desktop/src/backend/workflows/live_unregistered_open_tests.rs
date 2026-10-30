@@ -1,6 +1,7 @@
+use super::super::terminals::{fake::Fake, Terminals};
 use super::*;
 struct DemoCleanup<'a> {
-    terminals: &'a super::super::terminals::Terminals,
+    terminals: &'a Terminals,
     id: String,
     generation: String,
 }
@@ -17,33 +18,42 @@ fn saved_chat_open_observation_rechecks_canonical_identity_and_keeps_uncertainty
         "destination",
         "deleted",
         "unavailable",
+        "terminal agent",
+        "terminal conversation",
     ] {
         let temp = tempfile::tempdir().unwrap();
-        let repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+        let mut repo = Repository::open(temp.path().join("profile"), None, true).unwrap();
+        let fake = Fake::install(&mut repo);
         let id = uuid();
         repo.transaction(|s|{s["sessions"]=json!([{"id":id,"agent":"codex","sessionId":null,"launchNew":false,"cwd":"/invalid","destination":"embedded","items":[]}]);Ok(())}).unwrap();
-        let receipt = open_chat_observing(
-            &repo,
-            &json!({"recordId":id}),
-            |_, _| panic!("Changed or uncertain runtime must never launch"),
-            |_| {
-                if changed == "unavailable" {
-                    return terminal::RuntimeObservation::Unavailable;
-                }
-                repo.transaction(|s| {
-                    match changed {
-                        "deleted" => s["sessions"] = json!([]),
-                        "sessionId" => s["sessions"][0][changed] = json!(uuid()),
-                        "agent" => s["sessions"][0][changed] = json!("claude"),
-                        _ => s["sessions"][0][changed] = json!("desktop"),
-                    }
-                    Ok(())
-                })
-                .unwrap();
-                terminal::RuntimeObservation::Observed(uuid())
-            },
-        )
-        .unwrap();
+        let mut row =
+            json!({"recordId":id,"agent":"codex","sessionId":null,"generation":uuid(),"live":true});
+        match changed {
+            "unavailable" => fake.fail("Terminal daemon did not respond."),
+            "terminal agent" => row["agent"] = json!("claude"),
+            "terminal conversation" => row["sessionId"] = json!(uuid()),
+            _ => {
+                let during = repo.clone();
+                fake.before_read(move || {
+                    during
+                        .transaction(|s| {
+                            match changed {
+                                "deleted" => s["sessions"] = json!([]),
+                                "sessionId" => s["sessions"][0][changed] = json!(uuid()),
+                                "agent" => s["sessions"][0][changed] = json!("claude"),
+                                _ => s["sessions"][0][changed] = json!("desktop"),
+                            }
+                            Ok(())
+                        })
+                        .unwrap();
+                });
+            }
+        }
+        if changed != "unavailable" {
+            fake.rows(vec![row]);
+        }
+        let receipt = open_chat(&repo, &json!({"recordId":id})).unwrap();
+        assert_eq!(fake.opened(), 0, "{changed}");
         assert_eq!(receipt["status"], "unknown", "{changed}");
         assert_eq!(receipt["terminal"]["state"], "unconfirmed");
         assert!(!repo.data.parent().unwrap().join("contexts").exists());
@@ -73,9 +83,7 @@ fn saved_chat_open_observes_unregistered_live_terminal_without_launch_packet_or_
         let before = std::fs::read(&repo.data)?;
         let cooldown = repo.cooldown.lock().unwrap().clone();
         for _ in 0..2 {
-            let receipt = open_chat_with(&repo, &json!({"recordId":id}), |_, _| {
-                panic!("Observational reuse must not launch")
-            })?;
+            let receipt = open_chat(&repo, &json!({"recordId":id}))?;
             assert_eq!(receipt["status"], "accepted");
             assert_eq!(receipt["terminal"]["state"], "observed");
             assert_eq!(receipt["terminal"]["generation"], generation);
@@ -92,21 +100,14 @@ fn saved_chat_open_observes_unregistered_live_terminal_without_launch_packet_or_
             s["sessions"][0]["destination"] = json!("desktop");
             Ok(())
         })?;
-        assert!(
-            open_chat_with(&repo, &json!({"recordId":id}), |_, _| panic!(
-                "Desktop null ID cannot borrow embedded runtime"
-            ))
-            .is_err()
-        );
+        assert!(open_chat(&repo, &json!({"recordId":id})).is_err());
         Ok(())
     })();
     let close = repo.terminals.close(&id, &generation);
     result.unwrap();
     close.unwrap();
-    assert!(open_chat_with(
-        &repo,
-        &json!({"recordId":id,"target":"embedded"}),
-        |_, _| panic!("Dead runtime must not launch")
-    )
-    .is_err());
+    let error = open_chat(&repo, &json!({"recordId":id,"target":"embedded"})).unwrap_err();
+    assert!(error
+        .message
+        .contains("No live terminal could be confirmed"));
 }

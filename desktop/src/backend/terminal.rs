@@ -95,45 +95,6 @@ pub fn executable(name: &str) -> String {
     }
     name.into()
 }
-/// Observations do not launch, focus, or write to a terminal.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum RuntimeObservation {
-    Observed(String),
-    Missing,
-    Unavailable,
-}
-pub(super) fn existing_codex_runtime(
-    record: &Value,
-    inventory: &[Value],
-    unavailable: bool,
-) -> RuntimeObservation {
-    if unavailable {
-        return RuntimeObservation::Unavailable;
-    }
-    if record["agent"] != "codex" || !record["sessionId"].is_null() && record["sessionId"] != "" {
-        return RuntimeObservation::Missing;
-    }
-    let matching = inventory
-        .iter()
-        .filter(|row| row["recordId"] == record["id"] && row["live"] == true)
-        .collect::<Vec<_>>();
-    if matching.is_empty() {
-        return RuntimeObservation::Missing;
-    }
-    if matching.len() != 1 {
-        return RuntimeObservation::Unavailable;
-    }
-    let row = matching[0];
-    let generation = text(row, "generation");
-    if row["host"] != "embedded"
-        || row["agent"] != record["agent"]
-        || (!row["sessionId"].is_null() && row["sessionId"] != "")
-        || sid(generation).ok().as_deref() != Some(generation)
-    {
-        return RuntimeObservation::Unavailable;
-    }
-    RuntimeObservation::Observed(generation.to_owned())
-}
 #[derive(Debug, PartialEq, Eq)]
 pub enum OpenOutcome {
     Accepted,
@@ -227,5 +188,3 @@ mod run_tests {
         assert_eq!(output.unwrap(), "unset");
     }
 }
-#[cfg(test)]
-mod runtime_observation_tests;

@@ -3,7 +3,7 @@
 use super::terminal::OpenOutcome;
 use super::terminal_daemon::Host;
 use super::{sid, text, Error, Result, Value};
-use std::{collections::BTreeSet, ops::RangeInclusive, path::Path};
+use std::{collections::BTreeSet, ops::RangeInclusive};
 
 /// The UI clamps every terminal view to these sizes.
 const COLUMNS: RangeInclusive<u64> = 10..=500;
@@ -18,6 +18,8 @@ pub struct Live {
     /// The terminal key. It is another chat's ID when the match is by conversation.
     pub id: String,
     pub generation: String,
+    pub agent: String,
+    pub session_id: String,
 }
 
 #[derive(Debug)]
@@ -58,7 +60,18 @@ impl Inventory {
             .map(|row| Live {
                 id: text(row, "recordId").to_owned(),
                 generation: text(row, "generation").to_owned(),
+                agent: text(row, "agent").to_owned(),
+                session_id: text(row, "sessionId").to_owned(),
             })
+    }
+    /// Live terminals that no chat in `chats` matches.
+    pub fn unclaimed<'a>(&'a self, chats: &'a [Value]) -> impl Iterator<Item = &'a Value> {
+        self.rows.iter().filter(|row| {
+            row["live"] == true
+                && !chats
+                    .iter()
+                    .any(|chat| row["recordId"] == chat["id"] || same_conversation(row, chat))
+        })
     }
 }
 
@@ -84,14 +97,8 @@ impl Terminals {
             Err(error) => Presence::Unknown(error),
         }
     }
-    pub fn open(
-        &self,
-        record: &Value,
-        packet: &str,
-        new: bool,
-        root: &Path,
-    ) -> Result<OpenOutcome> {
-        self.host.open(record, packet, new, root)
+    pub fn open(&self, record: &Value, packet: &str, new: bool) -> Result<OpenOutcome> {
+        self.host.open(record, packet, new)
     }
     pub fn open_shell(&self, record: &Value) -> Result<Value> {
         self.host.open_shell(record)

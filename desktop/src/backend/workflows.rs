@@ -1,4 +1,5 @@
 use super::chat_preparation::{self, Created, Recipe};
+use super::terminals::{Live, Presence};
 use super::{
     arr, checked, commands, directory, expand, home, json, now, safe_url, sid, text, uuid, Error,
     PathBuf, Repository, Result, Value,
@@ -1218,9 +1219,6 @@ impl Drop for Opening<'_> {
 pub fn open(repo: &Repository, id: &str) -> Result<Value> {
     open_chat(repo, &json!({"recordId":id}))
 }
-pub fn open_with_focus(repo: &Repository, id: &str, _background: bool) -> Result<Value> {
-    open(repo, id)
-}
 pub(super) fn open_receipt(id: &str, target: &str, status: &str, local_saved: bool) -> Value {
     let terminal = match (status, target) {
         ("accepted", "embedded") => "acknowledged",
@@ -1230,36 +1228,6 @@ pub(super) fn open_receipt(id: &str, target: &str, status: &str, local_saved: bo
     };
     let message=match (status,local_saved,target){("unknown",_,_)=>"The open outcome is unknown. Check the existing terminal or desktop app before another open request. Do not start a new chat to recover this request.",("accepted",false,_)=>"The open request was acknowledged, but its local metadata could not be saved. Refresh the view to inspect the same chat; do not open it again to repair metadata.",("accepted",true,"desktop")=>"The operating system acknowledged the desktop open request. This does not confirm the app consumed it.",("accepted",true,_)=>"The terminal owner acknowledged the open request. This does not confirm agent readiness or task completion.",_=>"Preview only. No agent or terminal was opened."};
     json!({"status":status,"recordId":id,"target":target,"localSaved":local_saved,"terminal":{"state":terminal},"message":message})
-}
-pub fn open_chat(repo: &Repository, args: &Value) -> Result<Value> {
-    open_chat_with(repo, args, |record, packet| {
-        if repo.demo {
-            return Ok(terminal::OpenOutcome::Preview);
-        }
-        if record["destination"] == "desktop" {
-            terminal::open_desktop(record, &packet.to_string_lossy())
-        } else {
-            repo.terminals.open(
-                record,
-                &packet.to_string_lossy(),
-                record["launchNew"] == true,
-                &repo.root,
-            )
-        }
-    })
-}
-fn open_chat_with(
-    repo: &Repository,
-    args: &Value,
-    launch: impl FnOnce(&Value, &std::path::Path) -> Result<terminal::OpenOutcome>,
-) -> Result<Value> {
-    open_chat_observing(repo, args, launch, |record| {
-        repo.terminals
-            .inventory()
-            .map_or(terminal::RuntimeObservation::Unavailable, |inventory| {
-                terminal::existing_codex_runtime(record, inventory.rows(), false)
-            })
-    })
 }
 fn open_chat_arguments<'a>(repo: &Repository, args: &'a Value) -> Result<(String, &'a str)> {
     let fields = args
@@ -1310,15 +1278,16 @@ fn open_unregistered_codex(
     repo: &Repository,
     id: &str,
     intent: &str,
-    observation: terminal::RuntimeObservation,
+    presence: Presence,
 ) -> Result<Value> {
-    match observation {
-        terminal::RuntimeObservation::Observed(generation)=>{
+    match presence {
+        Presence::Live(Live{generation,agent,session_id,..}) if agent=="codex"&&session_id.is_empty()=>{
             let eligible=sessions::get(&*repo.state.lock().map_err(|_|Error::io())?,id).is_ok_and(|row|row["agent"]=="codex"&&row["launchNew"]==false&&(row["sessionId"].is_null()||row["sessionId"]=="")&&(intent=="embedded"||row["destination"]!="desktop"));
             if !eligible{return Ok(open_receipt(id,"embedded","unknown",false));}
             let mut projected=generation.clone();commands::redact_text(repo,&mut projected);if projected!=generation{return Err(Error::new("Terminal generation cannot be safely projected."));}let mut receipt=open_receipt(id,"embedded","accepted",true);receipt["terminal"]=json!({"state":"observed","generation":generation});receipt["message"]=json!("Existing terminal found. No new open request was sent.");Ok(receipt)},
-        terminal::RuntimeObservation::Unavailable=>Ok(open_receipt(id,"embedded","unknown",false)),
-        terminal::RuntimeObservation::Missing=>Err(Error::new("No live terminal could be confirmed for this unregistered chat. Link its exact conversation UUID or inspect History; a new agent was not started.")),
+        // A terminal under this key that runs another agent or a registered conversation is not this chat.
+        Presence::Live(_)|Presence::Unknown(_)=>Ok(open_receipt(id,"embedded","unknown",false)),
+        Presence::Absent=>Err(Error::new("No live terminal could be confirmed for this unregistered chat. Link its exact conversation UUID or inspect History; a new agent was not started.")),
     }
 }
 fn write_open_packet(
@@ -1354,12 +1323,7 @@ fn write_open_packet(
     super::http::private_write(&path, sections.concat().as_bytes())?;
     Ok(path)
 }
-fn open_chat_observing(
-    repo: &Repository,
-    args: &Value,
-    launch: impl FnOnce(&Value, &std::path::Path) -> Result<terminal::OpenOutcome>,
-    observe: impl FnOnce(&Value) -> terminal::RuntimeObservation,
-) -> Result<Value> {
+pub fn open_chat(repo: &Repository, args: &Value) -> Result<Value> {
     let (id, intent) = open_chat_arguments(repo, args)?;
     if !repo
         .opening
@@ -1395,7 +1359,7 @@ fn open_chat_observing(
         && record["launchNew"] == false
         && (record["sessionId"].is_null() || record["sessionId"] == "")
     {
-        return open_unregistered_codex(repo, &id, intent, observe(&record));
+        return open_unregistered_codex(repo, &id, intent, repo.terminals.live(&record));
     }
     let cooldown_key = format!("open:{id}");
     if repo
@@ -1419,7 +1383,17 @@ fn open_chat_observing(
         sid(text(&record, "sessionId"))?;
     }
     let path = write_open_packet(repo, &id, &record, &snapshot, public)?;
-    let outcome = launch(&record, &path)?;
+    let packet = path.to_string_lossy();
+    let outcome = if target == "desktop" {
+        if repo.demo {
+            terminal::OpenOutcome::Preview
+        } else {
+            terminal::open_desktop(&record, &packet)?
+        }
+    } else {
+        repo.terminals
+            .open(&record, &packet, record["launchNew"] == true)?
+    };
     // The per-record opening guard serializes admission. Only a completed
     // transport attempt consumes cooldown; validation and local I/O may be fixed
     // and retried immediately without creating an artificial unknown outcome.

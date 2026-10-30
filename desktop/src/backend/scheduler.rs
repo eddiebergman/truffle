@@ -488,31 +488,14 @@ fn add_run(s: &mut Value, run: Value) {
     runs.truncate(100);
     s["skillRuns"] = json!(runs);
 }
+fn run_receipt(preset: &str, record: &Value, run: Option<&Value>, status: &str) -> Value {
+    json!({"presetId":preset,"recordId":record["id"],"runId":run.map(|run|run["id"].clone()),"status":status})
+}
 pub fn execute(
     repo: &Repository,
     preset: &str,
     scheduled: bool,
     run_id: Option<String>,
-) -> Result<Value> {
-    execute_with(
-        repo,
-        preset,
-        scheduled,
-        run_id,
-        &repo.inventory(),
-        workflows::open_with_focus,
-    )
-}
-fn run_receipt(preset: &str, record: &Value, run: Option<&Value>, status: &str) -> Value {
-    json!({"presetId":preset,"recordId":record["id"],"runId":run.map(|run|run["id"].clone()),"status":status})
-}
-fn execute_with(
-    repo: &Repository,
-    preset: &str,
-    scheduled: bool,
-    run_id: Option<String>,
-    inventory: &Value,
-    launch: impl FnOnce(&Repository, &str, bool) -> Result<Value>,
 ) -> Result<Value> {
     let state = repo.state.lock().unwrap().clone();
     if !artifacts::presets(repo, &state)?
@@ -521,20 +504,16 @@ fn execute_with(
     {
         return Err(Error::new("Choose a current skill preset."));
     }
+    let inventory = repo.terminals.inventory()?;
     repo.cooldown(&format!("skill-run:{preset}"), 30.0)?;
     // Do not overlap a previous skill run while its agent terminal remains alive.
     if let Some(existing) = sessions::latest(&state, |x| {
+        let waiting = x["runtime"]["state"] == "waiting"
+            && x["runtime"]["subagents"].as_u64().unwrap_or(0) == 0;
         x["newsletterId"] == preset
             && x["archivedAt"].is_null()
-            && arr(&inventory["candidates"]).iter().any(|c| {
-                let same = c["recordId"] == x["id"]
-                    || (!text(x, "sessionId").is_empty()
-                        && c["sessionId"] == x["sessionId"]
-                        && c["agent"] == x["agent"]);
-                let waiting = x["runtime"]["state"] == "waiting"
-                    && x["runtime"]["subagents"].as_u64().unwrap_or(0) == 0;
-                c["live"] == true && same && !waiting && c["lifecycle"] != "idle"
-            })
+            && !waiting
+            && inventory.live(x).is_some()
     }) {
         if !scheduled {
             let mut record = existing.clone();
@@ -571,7 +550,7 @@ fn execute_with(
         if let Some(row)=s["skillRuns"].as_array_mut().unwrap().iter_mut().find(|x|x["id"]==run){*row=entry;}else{add_run(s,entry);}
         Ok(())
     })?;
-    let result = launch(repo, text(&record, "id"), scheduled);
+    let result = workflows::open(repo, text(&record, "id"));
     let run_saved=repo.transaction(|s| {
         if let Some(row) = s["skillRuns"]
             .as_array_mut()

@@ -44,26 +44,13 @@ fn rank(row: &Value, words: &[String]) -> usize {
         .sum()
 }
 fn rows(repo: &Repository) -> Vec<Value> {
-    let candidates = arr(&repo.inventory()["candidates"]);
+    // Search still lists saved chats when the daemon fails. None of them shows as live then.
+    let inventory = repo.terminals.inventory().ok();
     let state = repo.state.lock().unwrap();
-    let mut rows = sessions::all(&state).iter().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"],"archived":r["archivedAt"].as_f64().is_some_and(|t|t>0.0),"live":candidates.iter().any(|c|c["live"]==true&&(c["recordId"]==r["id"]||!text(r,"sessionId").is_empty()&&c["sessionId"]==r["sessionId"]&&c["agent"]==r["agent"]))})).collect::<Vec<_>>();
-    for c in candidates.iter().filter(|c| c["live"] == true) {
-        if rows.iter().any(|r| r["id"] == c["recordId"]) {
-            continue;
-        }
-        if sessions::all(&state).iter().any(|r| {
-            !text(r, "sessionId").is_empty()
-                && r["sessionId"] == c["sessionId"]
-                && r["agent"] == c["agent"]
-        }) {
-            continue;
-        }
-        let id = if c["host"] == "embedded" {
-            format!("embedded:{}", text(c, "recordId"))
-        } else {
-            format!("{}:{}", text(c, "agent"), text(c, "sessionId"))
-        };
-        rows.push(json!({"id":id,"title":c["title"],"cwd":c["cwd"],"agent":c["agent"],"items":[],"archived":false,"live":true}));
+    let chats = sessions::all(&state);
+    let mut rows = chats.iter().map(|r|json!({"id":r["id"],"title":r["title"],"agent":r["agent"],"cwd":r["cwd"],"items":r["items"],"archived":r["archivedAt"].as_f64().is_some_and(|t|t>0.0),"live":inventory.as_ref().is_some_and(|i|i.live(r).is_some())})).collect::<Vec<_>>();
+    for c in inventory.iter().flat_map(|i| i.unclaimed(chats)) {
+        rows.push(json!({"id":format!("embedded:{}", text(c, "recordId")),"title":c["title"],"cwd":c["cwd"],"agent":c["agent"],"items":[],"archived":false,"live":true}));
     }
     drop(state);
     rows
