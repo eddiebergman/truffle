@@ -2127,6 +2127,8 @@ a.ci-check-name:hover {
 
 .briefing-body th {
   font-weight: 600;
+  background: var(--overlay);
+  color: var(--rose);
 }
 
 .briefing-body .markdown-align-center {

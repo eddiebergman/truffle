@@ -430,6 +430,8 @@
   top: 0;
   text-align: left;
   font-weight: 550;
+  background: var(--overlay);
+  color: var(--rose);
 }
 
 .result-table th,
@@ -1072,12 +1074,6 @@ dialog {
   background: color-mix(in srgb, var(--bg) 90%, var(--text));
   color: var(--gold);
   border-color: color-mix(in srgb, var(--gold) 30%, var(--bg));
-}
-
-.result-table th,
-.briefing-body th {
-  background: var(--overlay);
-  color: var(--rose);
 }
 
 /* One global launcher; its dropdown holds secondary options. */
