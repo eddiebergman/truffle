@@ -13,13 +13,7 @@ fn fixture() -> (
     let root = temp.path().join("checkout");
     std::fs::create_dir(&root).unwrap();
     let git = |args: &[&str]| {
-        let result = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&root)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(result.status.success());
+        crate::backend::git::run(&root, args).unwrap();
     };
     git(&["init", "-b", "main"]);
     std::fs::write(root.join("code.txt"), "base\n").unwrap();

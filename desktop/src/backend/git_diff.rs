@@ -1,4 +1,4 @@
-use super::{arr, json, sessions, terminal, text, Error, PathBuf, Repository, Result, Value};
+use super::{arr, git, json, sessions, text, Error, PathBuf, Repository, Result, Value};
 use serde::Serialize;
 use std::{
     fs,
@@ -31,15 +31,6 @@ struct Comparison {
     files: Vec<FileChange>,
 }
 
-fn git(root: &Path, args: &[&str]) -> Result<String> {
-    let mut command = vec![
-        "--no-optional-locks".into(),
-        "-C".into(),
-        root.to_string_lossy().into_owned(),
-    ];
-    command.extend(args.iter().map(std::string::ToString::to_string));
-    terminal::run("git", &command, None, 10)
-}
 fn valid_path(path: &str) -> Result<PathBuf> {
     let path = PathBuf::from(path);
     if path.as_os_str().is_empty()
@@ -101,14 +92,14 @@ fn untracked_lines(path: &Path, budget: &mut u64) -> Result<Option<u64>> {
 }
 fn compare(cwd: &Path) -> Result<Comparison> {
     let root = PathBuf::from(
-        git(cwd, &["rev-parse", "--show-toplevel"])
+        git::run(cwd, &["rev-parse", "--show-toplevel"])
             .map_err(|_| Error::new("This agent's working directory is not a Git checkout."))?
             .trim_end_matches('\n'),
     );
     let base_ref = ["refs/remotes/origin/main", "refs/heads/main"]
         .into_iter()
         .find(|name| {
-            git(
+            git::run(
                 &root,
                 &["rev-parse", "--verify", &format!("{name}^{{commit}}")],
             )
@@ -117,14 +108,14 @@ fn compare(cwd: &Path) -> Result<Comparison> {
         .ok_or_else(|| {
             Error::new("No main branch is available locally. Fetch main, then retry.")
         })?;
-    let base = git(&root, &["merge-base", base_ref, "HEAD"])
+    let base = git::run(&root, &["merge-base", base_ref, "HEAD"])
         .map_err(|_| Error::new("This branch has no shared ancestor with main."))?
         .trim()
         .to_owned();
-    let branch = git(&root, &["rev-parse", "--abbrev-ref", "HEAD"])?
+    let branch = git::run(&root, &["rev-parse", "--abbrev-ref", "HEAD"])?
         .trim()
         .to_owned();
-    let mut files = parse_numstat(&git(
+    let mut files = parse_numstat(&git::run(
         &root,
         &[
             "-c",
@@ -139,7 +130,7 @@ fn compare(cwd: &Path) -> Result<Comparison> {
             "--",
         ],
     )?)?;
-    let untracked = git(&root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
+    let untracked = git::run(&root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
     let mut budget = 20 * 1024 * 1024;
     for name in untracked.split('\0').filter(|s| !s.is_empty()) {
         let path = valid_path(name)?;
@@ -210,7 +201,7 @@ pub fn for_session(repo: &Repository, id: &str, requested: &str) -> Result<Value
     Ok(value)
 }
 pub fn review_version(checkout: &str) -> Result<Value> {
-    let identity = git(
+    let identity = git::run(
         Path::new(checkout),
         &["rev-parse", "--show-toplevel", "HEAD"],
     )?;
@@ -220,15 +211,15 @@ pub fn review_version(checkout: &str) -> Result<Value> {
             .next()
             .ok_or_else(|| Error::new("Git root unavailable."))?,
     );
-    let status = git(
+    let status = git::run(
         &root,
         &["status", "--porcelain=v1", "--untracked-files=all", "-z"],
     )?;
-    let main = git(
+    let main = git::run(
         &root,
         &["rev-parse", "--verify", "refs/remotes/origin/main"],
     )
-    .or_else(|_| git(&root, &["rev-parse", "--verify", "refs/heads/main"]))?;
+    .or_else(|_| git::run(&root, &["rev-parse", "--verify", "refs/heads/main"]))?;
     let mut stamp = identity + &main + &status;
     let mut entries = status.split('\0').filter(|s| !s.is_empty());
     let mut count = 0;
@@ -283,10 +274,10 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
     let target = comparison.root.join(&relative);
     let spec = format!("{}:{}", comparison.base, path);
     let limit = 512 * 1024;
-    let old = if file.untracked || git(&comparison.root, &["cat-file", "-e", &spec]).is_err() {
+    let old = if file.untracked || git::run(&comparison.root, &["cat-file", "-e", &spec]).is_err() {
         vec![]
     } else {
-        let size = git(&comparison.root, &["cat-file", "-s", &spec])?
+        let size = git::run(&comparison.root, &["cat-file", "-s", &spec])?
             .trim()
             .parse::<usize>()
             .map_err(|_| Error::new("Invalid Git object size."))?;
@@ -295,18 +286,7 @@ pub fn file_for_session(repo: &Repository, id: &str, path: &str, requested: &str
                 "This file exceeds the 512 KiB inline diff limit. Use Zed.",
             ));
         }
-        terminal::run_bytes(
-            "git",
-            &[
-                "-C".into(),
-                comparison.root.to_string_lossy().into_owned(),
-                "cat-file".into(),
-                "blob".into(),
-                spec,
-            ],
-            None,
-            10,
-        )?
+        git::bytes(&comparison.root, &["cat-file", "blob", &spec])?
     };
     let new = match fs::symlink_metadata(&target) {
         Ok(meta) if meta.is_file() && meta.len() <= limit as u64 => {
@@ -504,33 +484,23 @@ pub fn zed_arguments(cwd: &Path, snapshots: &Path) -> Result<Vec<String>> {
             let relative = valid_path(&file.path)?;
             let target = comparison.root.join(&relative);
             let spec = format!("{}:{}", comparison.base, file.path);
-            let bytes =
-                if file.untracked || git(&comparison.root, &["cat-file", "-e", &spec]).is_err() {
-                    vec![]
-                } else {
-                    let size = git(&comparison.root, &["cat-file", "-s", &spec])?
-                        .trim()
-                        .parse::<u64>()
-                        .map_err(|_| Error::new("Invalid Git object size."))?;
-                    if size > MAX_FILE_BYTES {
-                        return Err(Error::new(format!(
-                            "{} exceeds the 10 MiB diff limit.",
-                            file.path
-                        )));
-                    }
-                    terminal::run_bytes(
-                        "git",
-                        &[
-                            "-C".into(),
-                            comparison.root.to_string_lossy().into_owned(),
-                            "cat-file".into(),
-                            "blob".into(),
-                            spec,
-                        ],
-                        None,
-                        10,
-                    )?
-                };
+            let bytes = if file.untracked
+                || git::run(&comparison.root, &["cat-file", "-e", &spec]).is_err()
+            {
+                vec![]
+            } else {
+                let size = git::run(&comparison.root, &["cat-file", "-s", &spec])?
+                    .trim()
+                    .parse::<u64>()
+                    .map_err(|_| Error::new("Invalid Git object size."))?;
+                if size > MAX_FILE_BYTES {
+                    return Err(Error::new(format!(
+                        "{} exceeds the 10 MiB diff limit.",
+                        file.path
+                    )));
+                }
+                git::bytes(&comparison.root, &["cat-file", "blob", &spec])?
+            };
             total += bytes.len();
             if total > 100 * 1024 * 1024 {
                 return Err(Error::new("The diff exceeds the 100 MiB snapshot limit."));

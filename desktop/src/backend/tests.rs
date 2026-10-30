@@ -439,24 +439,14 @@ fn artifact_paths_cannot_escape_and_links_are_reversible() {
     );
 }
 fn run_git(cwd: &std::path::Path, args: &[&str]) {
-    use std::process::Command;
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args([
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let mut command = vec![
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "commit.gpgsign=false",
+    ];
+    command.extend(args);
+    super::git::run(cwd, &command).unwrap();
 }
 /// Creates a repository with two linked worktrees on branches `feature-one` and `feature-two`.
 fn linked_checkouts(root: &std::path::Path) -> (PathBuf, PathBuf, PathBuf) {

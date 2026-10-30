@@ -2,8 +2,8 @@ use super::*;
 use crate::backend::operations::Caller;
 use crate::backend::sessions;
 fn commit(root: &Path) {
-    git(root, &["add", "-A"]).unwrap();
-    git(
+    git::run(root, &["add", "-A"]).unwrap();
+    git::run(
         root,
         &[
             "-c",
@@ -22,19 +22,19 @@ fn fixture() -> (tempfile::TempDir, PathBuf) {
     let root = temp.path().join("repo with spaces");
     fs::create_dir(&root).unwrap();
     let root = root.canonicalize().unwrap();
-    git(&root, &["init", "-b", "main"]).unwrap();
+    git::run(&root, &["init", "-b", "main"]).unwrap();
     fs::write(root.join("a.txt"), b"base\nkeep\n").unwrap();
     fs::write(root.join("deleted.txt"), b"deleted\n").unwrap();
     fs::write(root.join("binary.bin"), [0, 1, 2]).unwrap();
     commit(&root);
-    git(&root, &["checkout", "-b", "feature"]).unwrap();
+    git::run(&root, &["checkout", "-b", "feature"]).unwrap();
     fs::write(root.join("a.txt"), b"branch\nkeep\n").unwrap();
     fs::write(root.join("committed.txt"), b"committed\n").unwrap();
     commit(&root);
-    git(&root, &["checkout", "main"]).unwrap();
+    git::run(&root, &["checkout", "main"]).unwrap();
     fs::write(root.join("main-only.txt"), b"not part of this work\n").unwrap();
     commit(&root);
-    git(&root, &["checkout", "feature"]).unwrap();
+    git::run(&root, &["checkout", "feature"]).unwrap();
     fs::write(root.join("a.txt"), b"branch\nkeep\nlocal\n").unwrap();
     fs::remove_file(root.join("deleted.txt")).unwrap();
     fs::write(root.join("binary.bin"), [0, 2, 3]).unwrap();
@@ -62,7 +62,7 @@ fn overview_includes_committed_and_dirty_files_but_excludes_main_only_changes() 
 #[test]
 fn zed_diff_uses_base_snapshots_and_live_worktree_files_without_changing_git() {
     let (temp, root) = fixture();
-    let before = git(&root, &["status", "--porcelain=v1", "-z"]).unwrap();
+    let before = git::run(&root, &["status", "--porcelain=v1", "-z"]).unwrap();
     let args = zed_arguments(&root, &temp.path().join("snapshots")).unwrap();
     assert_eq!(args.last().unwrap(), root.to_str().unwrap());
     assert_eq!(args.len(), 16);
@@ -88,7 +88,7 @@ fn zed_diff_uses_base_snapshots_and_live_worktree_files_without_changing_git() {
         .unwrap();
     assert_eq!(fs::read(&binary[1]).unwrap(), [0, 1, 2]);
     assert_eq!(
-        git(&root, &["status", "--porcelain=v1", "-z"]).unwrap(),
+        git::run(&root, &["status", "--porcelain=v1", "-z"]).unwrap(),
         before
     );
 }
@@ -96,7 +96,7 @@ fn zed_diff_uses_base_snapshots_and_live_worktree_files_without_changing_git() {
 fn overview_uses_the_selected_worktree_and_leaves_other_checkouts_out() {
     let (temp, root) = fixture();
     let tree = temp.path().join("agent-worktree");
-    git(
+    git::run(
         &root,
         &[
             "worktree",
@@ -147,7 +147,7 @@ fn inline_file_preview_is_scoped_to_the_session_diff_and_fingerprints_content() 
 fn session_diff_can_select_only_its_linked_checkouts() {
     let (temp, root) = fixture();
     let tree = temp.path().join("second");
-    git(
+    git::run(
         &root,
         &[
             "worktree",
@@ -181,7 +181,7 @@ fn session_diff_can_select_only_its_linked_checkouts() {
 #[test]
 fn missing_main_and_invalid_paths_report_errors_instead_of_guessing() {
     let temp = tempfile::tempdir().unwrap();
-    git(temp.path(), &["init", "-b", "trunk"]).unwrap();
+    git::run(temp.path(), &["init", "-b", "trunk"]).unwrap();
     fs::write(temp.path().join("a"), b"x").unwrap();
     commit(temp.path());
     assert!(overview(temp.path())

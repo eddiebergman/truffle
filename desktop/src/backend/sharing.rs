@@ -1794,16 +1794,10 @@ fn strip_code_fence(t: &str) -> &str {
 fn source_roots(record: &Value) -> Vec<PathBuf> {
     let cwd = expand(text(record, "cwd"));
     let mut roots = vec![cwd.clone()];
-    if let Ok(out) = std::process::Command::new("git")
-        .args(["worktree", "list", "--porcelain"])
-        .current_dir(&cwd)
-        .output()
-    {
-        if out.status.success() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                if let Some(path) = line.strip_prefix("worktree ") {
-                    roots.push(PathBuf::from(path));
-                }
+    if let Ok(list) = super::git::run(&cwd, &["worktree", "list", "--porcelain"]) {
+        for line in list.lines() {
+            if let Some(path) = line.strip_prefix("worktree ") {
+                roots.push(PathBuf::from(path));
             }
         }
     }
@@ -1820,12 +1814,7 @@ fn git_facts(record: &Value) -> serde_json::Map<String, Value> {
         ("branch", vec!["branch", "--show-current"]),
         ("origin", vec!["remote", "get-url", "origin"]),
     ] {
-        let mut command = vec![
-            "-C".into(),
-            expand(text(record, "cwd")).to_string_lossy().into_owned(),
-        ];
-        command.extend(args.into_iter().map(str::to_owned));
-        if let Ok(value) = super::terminal::run("git", &command, None, 5) {
+        if let Ok(value) = super::git::run(&expand(text(record, "cwd")), &args) {
             let mut value = value.trim().to_owned();
             if key == "origin" {
                 if let Some(path) = value.strip_prefix("git@github.com:") {
@@ -2362,18 +2351,7 @@ fn recommended_directory(raw: &Value) -> Option<String> {
         }
         let branch = text(&item["data"], "branch");
         if !branch.is_empty() {
-            if let Ok(list) = super::terminal::run(
-                "git",
-                &[
-                    "-C".into(),
-                    root.to_string_lossy().into(),
-                    "worktree".into(),
-                    "list".into(),
-                    "--porcelain".into(),
-                ],
-                None,
-                5,
-            ) {
+            if let Ok(list) = super::git::run(&root, &["worktree", "list", "--porcelain"]) {
                 let mut path = None;
                 for line in list.lines() {
                     if let Some(p) = line.strip_prefix("worktree ") {

@@ -2,19 +2,32 @@
 use super::{directory, home, json, sid, text, Error, PathBuf, Result, Value};
 use std::{
     io::{Read, Write},
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
     time::Duration,
 };
 use wait_timeout::ChildExt;
 pub fn run(program: &str, args: &[String], input: Option<&str>, seconds: u64) -> Result<String> {
-    Ok(String::from_utf8_lossy(&run_bytes(program, args, input, seconds)?).into())
+    let timeout = Duration::from_secs(seconds);
+    match bounded(program, args, input, timeout)? {
+        Output::TimedOut => Err(timed_out(program, timeout)),
+        Output::Exited(status, stdout, _) if status.success() => {
+            Ok(String::from_utf8_lossy(&stdout).into())
+        }
+        Output::Exited(_, _, stderr) => Err(failed(&stderr)),
+    }
 }
-pub fn run_bytes(
+pub enum Output {
+    /// Exit status, stdout and stderr.
+    Exited(ExitStatus, Vec<u8>, Vec<u8>),
+    TimedOut,
+}
+/// Runs `program` and kills it if it is still running after `timeout`.
+pub fn bounded(
     program: &str,
     args: &[String],
     input: Option<&str>,
-    seconds: u64,
-) -> Result<Vec<u8>> {
+    timeout: Duration,
+) -> Result<Output> {
     let mut child = Command::new(program)
         .args(args)
         // Callers parse stdout; gh colors JSON in a pipe when this is set.
@@ -47,33 +60,36 @@ pub fn run_bytes(
         err.by_ref().take(1024 * 1024).read_to_end(&mut b).ok();
         b
     });
-    let status = child.wait_timeout(Duration::from_secs(seconds))?;
-    if status.is_none() {
+    let Some(status) = child.wait_timeout(timeout)? else {
         let _ = child.kill();
         let _ = child.wait();
-        let mut e = Error::new(format!(
-            "{program} timed out. Cached data remains available."
-        ));
-        e.retry = 300.0;
-        e.data = json!({"kind":"timeout","transport":"local-cli","timeoutSeconds":seconds});
-        return Err(e);
-    }
-    let stdout = output.join().unwrap_or_default();
-    let stderr = errors.join().unwrap_or_default();
-    if !status.unwrap().success() {
-        let mut e =
-            Error::new("Local command failed. Check account access or the selected command.");
-        let line = String::from_utf8_lossy(&stderr)
-            .lines()
-            .next()
-            .unwrap_or("")
-            .chars()
-            .take(200)
-            .collect::<String>();
-        e.data = json!({"kind":"exit","transport":"local-cli","stderr":line});
-        return Err(e);
-    }
-    Ok(stdout)
+        return Ok(Output::TimedOut);
+    };
+    Ok(Output::Exited(
+        status,
+        output.join().unwrap_or_default(),
+        errors.join().unwrap_or_default(),
+    ))
+}
+pub fn timed_out(program: &str, timeout: Duration) -> Error {
+    let mut e = Error::new(format!(
+        "{program} timed out. Cached data remains available."
+    ));
+    e.retry = 300.0;
+    e.data = json!({"kind":"timeout","transport":"local-cli","timeoutSeconds":timeout.as_secs()});
+    e
+}
+pub fn failed(stderr: &[u8]) -> Error {
+    let mut e = Error::new("Local command failed. Check account access or the selected command.");
+    let line = String::from_utf8_lossy(stderr)
+        .lines()
+        .next()
+        .unwrap_or("")
+        .chars()
+        .take(200)
+        .collect::<String>();
+    e.data = json!({"kind":"exit","transport":"local-cli","stderr":line});
+    e
 }
 pub fn quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))

@@ -609,20 +609,16 @@ impl Recipe for Recover<'_> {
 }
 /// Git metadata is read only during explicit registration, never during UI reads.
 pub(super) fn worktree_metadata(cwd: &str) -> Option<Value> {
-    let output = terminal::run(
-        "git",
+    let output = super::git::run(
+        std::path::Path::new(cwd),
         &[
-            "-C".into(),
-            cwd.into(),
-            "rev-parse".into(),
-            "--path-format=absolute".into(),
-            "--show-toplevel".into(),
-            "--git-common-dir".into(),
-            "--abbrev-ref".into(),
-            "HEAD".into(),
+            "rev-parse",
+            "--path-format=absolute",
+            "--show-toplevel",
+            "--git-common-dir",
+            "--abbrev-ref",
+            "HEAD",
         ],
-        None,
-        3,
     )
     .ok()?;
     let mut lines = output.lines();

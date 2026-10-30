@@ -31,6 +31,7 @@ pub mod changes;
 pub mod domain;
 pub mod embedded;
 pub mod gcp_auth;
+mod git;
 pub mod git_diff;
 pub mod github;
 pub mod http;

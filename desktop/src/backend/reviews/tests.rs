@@ -304,13 +304,7 @@ fn git_fixture() -> (tempfile::TempDir, Arc<Repository>, String, PathBuf) {
     let root = temp.path().join("checkout");
     std::fs::create_dir(&root).unwrap();
     let git = |args: &[&str]| {
-        let status = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&root)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(status.status.success());
+        crate::backend::git::run(&root, args).unwrap();
     };
     git(&["init", "-b", "main"]);
     std::fs::write(root.join("code.txt"), "old\n").unwrap();
@@ -381,13 +375,16 @@ fn bad_batch_rolls_back_and_stale_fingerprints_are_rejected() {
 fn conversation_review_accepts_new_roots_and_marks_changed_versions_without_writing() {
     let (tmp, repo, id, root) = git_fixture();
     let other = tmp.path().join("other");
-    assert!(std::process::Command::new("git")
-        .args(["clone", "--quiet"])
-        .arg(&root)
-        .arg(&other)
-        .status()
-        .unwrap()
-        .success());
+    crate::backend::git::run(
+        tmp.path(),
+        &[
+            "clone",
+            "--quiet",
+            root.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    )
+    .unwrap();
     std::fs::write(other.join("code.txt"), "review this second repository\n").unwrap();
     let request = uuid();
     start_on_git(&repo, &id, &request);
