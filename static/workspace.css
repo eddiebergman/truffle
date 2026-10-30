@@ -4147,6 +4147,10 @@ button.git-file-row {
   white-space: nowrap;
 }
 
+.git-change-counts :is(.git-added, .git-deleted) {
+  font-size: inherit !important;
+}
+
 #diff-review-files .review-file :is(.git-added, .git-deleted) {
   font-size: 9px;
   text-align: right;
@@ -4575,10 +4579,6 @@ button.git-file-row {
 .git-count-separator {
   color: var(--muted);
   font-weight: 400;
-}
-
-.git-change-counts :is(.git-added, .git-deleted) {
-  font-size: inherit !important;
 }
 
 .review-file-counts {
