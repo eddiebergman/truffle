@@ -1,3 +1,38 @@
+/* Rosé Pine main — palette and ANSI reference: rosepinetheme.com / rose-pine/ghostty.
+   Themes replace these values on the root element at runtime. */
+:root {
+  color-scheme: dark;
+
+  --bg: rgb(25 23 36);
+  --panel: rgb(31 29 46);
+  --overlay: rgb(38 35 58);
+  --line: rgb(57 53 82);
+  --text: rgb(224 222 244);
+  --muted: rgb(144 140 170);
+  --rose: rgb(235 188 186);
+  --foam: rgb(156 207 216);
+  --iris: rgb(196 167 231);
+  --love: rgb(235 111 146);
+  --gold: rgb(246 193 119);
+  --sidebar: var(--panel);
+  --green: var(--foam);
+  --accent: var(--iris);
+  --review: var(--iris);
+  --progress: var(--gold);
+  --blocked: var(--love);
+  --subtle: var(--muted);
+  --highlight: color-mix(in srgb, var(--text) 10%, var(--line));
+  --shadow: rgb(0 0 0);
+  --titlebar-height: 32px;
+  --ui-scale: 1;
+  --diff-font-size: 10px;
+  --diff-line-height: 16px;
+  --control-height: 30px;
+  --control-radius: 5px;
+  --control-gap: 6px;
+  --control-font-size: 12px;
+}
+
 * {
   box-sizing: border-box;
 }
