@@ -1,5 +1,6 @@
 use super::super::terminals::fake::Fake;
 use super::*;
+use crate::backend::commands;
 use crate::backend::operations::Caller;
 use crate::backend::uuid;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>, Arc<Fake>, String) {

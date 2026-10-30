@@ -1,14 +1,14 @@
+use super::agent_bridge::Registration;
 use super::agents::Agent;
 use super::chat_preparation::{self, Created, Recipe};
 use super::checkouts::item_folders::{self, Strength};
 use super::checkouts::{Link, Remember};
 use super::terminals::{Live, Presence};
 use super::{
-    arr, checked, commands, directory, expand, home, json, now, redaction, safe_url, sid, text,
-    Error, PathBuf, Repository, Result, Value,
+    arr, checked, directory, expand, home, json, now, redaction, sid, text, Error, PathBuf,
+    Repository, Result, Value,
 };
-use super::{artifacts, checkouts, domain, reviews, sessions, terminal};
-use crate::backend::operations::{self, Caller};
+use super::{artifacts, checkouts, domain, sessions, terminal};
 use std::sync::Arc;
 pub fn work_root() -> PathBuf {
     std::env::var("TRUFFLE_WORKDIR").map_or_else(|_| home().join("code"), |s| expand(&s))
@@ -604,306 +604,21 @@ impl Recipe for Recover<'_> {
         })
     }
 }
-pub fn registration_reply(record: &Value) -> Value {
-    if !record["commandResult"].is_null() {
-        return json!({"commandResult":record["commandResult"]});
-    }
-    if record["settings"].is_object() {
-        return json!({"settings":record["settings"]});
-    }
-    let mut reply = json!({"id":record["id"],"linkedItems":arr(&record["items"]).len()});
-    if record["artifactReceipt"].is_object() {
-        reply["artifactReceipt"] = record["artifactReceipt"].clone();
-    }
-    if record["review"].is_object() {
-        reply["review"] = record["review"].clone();
-    }
-    if record["context"].is_object() {
-        reply["context"] = record["context"].clone();
-    }
-    reply
-}
-pub fn register(repo: &Arc<Repository>, p: &Value) -> Result<Value> {
-    register_resolving(repo, p, |url| repo.providers.resolve(url))
-}
-fn register_review(repo: &Repository, p: &Value) -> Result<Value> {
-    if let Some(report) = p.get("report") {
-        if !report.is_object() || !report["comments"].is_array() {
-            return Err(Error::new("Review report must contain a comments array."));
-        }
-        if report.get("overall").is_some() && !report["overall"].is_object() {
-            return Err(Error::new("Overall assessment must be an object."));
-        }
-        if arr(&report["comments"]).is_empty()
-            && !report["overall"].is_object()
-            && text(p, "state").is_empty()
-        {
-            return Err(Error::new("The review batch has no comments."));
-        }
-    }
-    let review = if !arr(&p["report"]["comments"]).is_empty() || p["report"]["overall"].is_object()
-    {
-        let mut batch = p.clone();
-        batch["comments"] = p["report"]["comments"].clone();
-        if let Some(overall) = p["report"].get("overall") {
-            batch["overall"] = overall.clone();
-        }
-        reviews::append(repo, &reviews::Git, &batch)?
-    } else if !text(p, "state").is_empty() {
-        reviews::status(repo, &reviews::Git, p)?
-    } else {
-        reviews::draft(sessions::get(
-            &*repo.state.lock().map_err(|_| Error::io())?,
-            text(p, "id"),
-        )?)
-    };
-    Ok(json!({"id":text(p, "id"),"review":review}))
-}
-fn register_worktree(repo: &Repository, p: &Value) -> Result<Value> {
-    let path = directory(text(p, "path"))?;
-    let metadata = checkouts::metadata(&path).ok_or_else(|| {
-        Error::new("Choose an existing Git repository or worktree with a commit.")
-    })?;
-    let record = sessions::get(&repo.state.lock().unwrap(), text(p, "id"))?.clone();
-    let mut ids = arr(&p["itemIds"]);
-    let urls = arr(&p["urls"]);
-    if ids.len() + urls.len() > 100 {
-        return Err(Error::new("Link at most 100 work items at once."));
-    }
-    for url in &urls {
-        safe_url(
-            url.as_str()
-                .ok_or_else(|| Error::new("Invalid work URL."))?,
-        )?;
-        let item = arr(&record["items"])
-            .into_iter()
-            .find(|x| x["url"] == *url)
-            .ok_or_else(|| {
-                Error::new("Register this URL with the session before linking its worktree.")
-            })?;
-        if !ids.contains(&item["id"]) {
-            ids.push(item["id"].clone());
-        }
-    }
-    if ids.is_empty() && urls.is_empty() {
-        ids = arr(&record["items"])
-            .iter()
-            .map(|x| x["id"].clone())
-            .collect();
-    }
-    let link = Link {
-        metadata,
-        item_ids: ids,
-        primary: p["primary"] == true,
-    };
-    repo.transaction(|s| checkouts::link(s, text(p, "id"), &link, Remember::Replace))
-}
-fn apply_background_activity(
-    runtime: &mut Value,
-    old: &Value,
-    p: &Value,
-    has_subagents: bool,
-) -> Result<()> {
-    // Turn-end hooks carry an authoritative snapshot of background work.
-    // Omitted snapshots mean unknown, not zero; unrelated events retain it.
-    if p["event"] != "SessionStart" {
-        for field in ["backgroundCounts", "scheduledWakeups", "activityAt"] {
-            if !old[field].is_null() {
-                runtime[field] = old[field].clone();
-            }
-        }
-    }
-    if let Some(counts) = p.get("backgroundCounts") {
-        let counts = counts
-            .as_object()
-            .ok_or_else(|| Error::new("Invalid background activity counts."))?;
-        if counts.len() > 100
-            || counts.iter().any(|(kind, count)| {
-                kind.is_empty()
-                    || kind.chars().count() > 40
-                    || count.as_u64().is_none_or(|n| n > 1000)
-            })
-        {
-            return Err(Error::new("Invalid background activity counts."));
-        }
-        runtime["backgroundCounts"] = json!(counts);
-        runtime["activityAt"] = json!(now());
-    }
-    if let Some(count) = p.get("scheduledWakeups") {
-        if count.as_u64().is_none_or(|n| n > 1000) {
-            return Err(Error::new("Invalid scheduled wakeup count."));
-        }
-        runtime["scheduledWakeups"] = count.clone();
-        runtime["activityAt"] = json!(now());
-    }
-    let background = runtime["backgroundCounts"]
-        .as_object()
-        .map_or(0, |v| v.values().filter_map(Value::as_u64).sum::<u64>());
-    if runtime["state"] == "waiting"
-        && (background > 0
-            || has_subagents
-            || runtime["scheduledWakeups"].as_u64().unwrap_or(0) > 0)
-    {
-        runtime["state"] = json!("background");
-    } else if runtime["state"] == "background"
-        && background == 0
-        && !has_subagents
-        && runtime["scheduledWakeups"].as_u64().unwrap_or(0) == 0
-    {
-        runtime["state"] = json!("waiting");
-    }
-    Ok(())
-}
-fn complete_skill_runs(s: &mut Value, session_id: &Value) {
-    for run in s["skillRuns"].as_array_mut().unwrap() {
-        if run["sessionId"] == *session_id
-            && ["starting", "launched"].contains(&text(run, "outcome"))
-        {
-            run["outcome"] = json!("completed");
-            run["finishedAt"] = json!(now());
-            run["message"] = json!("Agent finished its turn. Registered results appear below.");
-        }
-    }
-}
-fn apply_runtime_event(s: &mut Value, p: &Value) -> Result<Value> {
-    let row = sessions::get_mut(s, text(p, "id"))?;
-    if p["event"] == "SessionStart" && !text(p, "sessionId").is_empty() {
-        let id = sid(text(p, "sessionId"))?;
-        if text(row, "sessionId").is_empty() {
-            row["sessionId"] = json!(id);
-        }
-    }
-    let old = row["runtime"].clone();
-    let mut ids = arr(&old["subagentIds"]);
-    if p["event"] == "SessionStart" {
-        ids.clear();
-    }
-    let sub = checked(p, "subagentId", 200, false)?;
-    let state = match text(p, "event") {
-        "SessionStart" | "Stop" => "waiting",
-        "UserPromptSubmit" => "working",
-        "PermissionRequest" => "needs-input",
-        "SubagentStart" => {
-            if !sub.is_empty() && !ids.contains(&json!(sub)) && ids.len() < 1000 {
-                ids.push(json!(sub));
-            }
-            old["state"].as_str().unwrap_or("working")
-        }
-        "SubagentStop" => {
-            ids.retain(|x| x != &json!(sub));
-            old["state"].as_str().unwrap_or("working")
-        }
-        _ => return Err(Error::new("Unsupported runtime event.")),
-    };
-    let reason = match text(p, "event") {
-        "PermissionRequest" => "approval",
-        "Stop" => "finished",
-        "SessionStart" => "ready",
-        "UserPromptSubmit" => "",
-        _ => text(&old, "reason"),
-    };
-    let mut runtime =
-        json!({"reason":reason,"state":state,"subagents":ids.len(),"subagentIds":ids,"at":now()});
-    apply_background_activity(&mut runtime, &old, p, !ids.is_empty())?;
-    row["runtime"] = runtime;
-    let record = row.clone();
-    if ["Stop", "SubagentStop"].contains(&text(p, "event"))
-        && record["runtime"]["state"] == "waiting"
-        && record["runtime"]["subagents"] == 0
-    {
-        complete_skill_runs(s, &record["id"]);
-    }
-    Ok(record)
-}
-fn register_runtime(repo: &Repository, p: &Value) -> Result<Value> {
-    let state = checked(p, "state", 32, true)?;
-    if !["working", "waiting", "needs-input"].contains(&state.as_str()) {
-        return Err(Error::new("Choose working, waiting, or needs-input."));
-    }
-    if p.get("subagents")
-        .is_some_and(|v| v.as_u64().is_none_or(|x| x > 1000))
-    {
-        return Err(Error::new("Subagent count must be 0–1000."));
-    }
-    repo.transaction(|s| {
-        let row = sessions::get_mut(s, text(p, "id"))?;
-        let reason = checked(p, "reason", 32, false)?;
-        if !["", "ready", "finished", "question", "approval", "failed"].contains(&reason.as_str()) {
-            return Err(Error::new("Invalid attention reason."));
-        }
-        row["runtime"] =
-            json!({"state":state,"reason":reason,"subagents":p["subagents"],"at":now()});
-        Ok(row.clone())
-    })
-}
-fn save_session_output(repo: &Repository, p: &Value) -> Result<Value> {
-    let record = sessions::get(&repo.state.lock().unwrap(), text(p, "id"))?.clone();
-    if p["operation"] == "save-artifact" {
-        let receipt = super::artifacts::attach_to_chat(repo, text(&record, "id"), p)?;
-        let mut reply = record;
-        reply["artifactReceipt"] = receipt;
-        return Ok(reply);
-    }
-    let mut edit = p.clone();
-    edit["action"] = p["operation"].clone();
-    repo.edit(&edit)?;
-    Ok(record)
+/// Register an agent's own conversation with the chat it names, or with a new chat.
+pub fn register(repo: &Arc<Repository>, registration: &Registration) -> Result<Value> {
+    register_resolving(repo, registration, |url| repo.providers.resolve(url))
 }
 fn register_resolving(
     repo: &Arc<Repository>,
-    p: &Value,
+    registration: &Registration,
     resolve: impl Fn(&str) -> Result<Value>,
 ) -> Result<Value> {
-    let agent = Caller::Agent {
-        chat: text(p, "id"),
-    };
-    if p["operation"] == "command" {
-        return Ok(json!({"commandResult": commands::invoke(repo, p, agent)?}));
-    }
-    if p["operation"] == "settings-read" {
-        let settings = operations::run(repo, agent, "settings.read", &json!({}))?;
-        return Ok(json!({ "settings": settings }));
-    }
-    if p["operation"] == "settings-apply" {
-        let args =
-            json!({"revision":p["revision"],"contentHash":p["contentHash"],"patch":p["patch"]});
-        let settings = operations::run(repo, agent, "settings.apply", &args)?;
-        return Ok(json!({ "settings": settings }));
-    }
-    if p["operation"] == "ci-investigation" {
-        return super::session_ci::investigation(repo, p);
-    }
-    if p["operation"] == "review" {
-        return register_review(repo, p);
-    }
-    if p["operation"] == "context-read" {
-        return super::session_context::read(repo, text(p, "id"));
-    }
-    if p["operation"] == "context-replace" {
-        return super::session_context::replace(repo, text(p, "id"), &p["context"]);
-    }
-    if p["operation"] == "resources" {
-        return super::resources::apply(repo, text(p, "id"), &p["report"]);
-    }
-    if p["operation"] == "worktree" {
-        return register_worktree(repo, p);
-    }
-
-    if p["operation"] == "runtime-event" {
-        return repo.transaction(|s| apply_runtime_event(s, p));
-    }
-    if p["operation"] == "runtime" {
-        return register_runtime(repo, p);
-    }
-    if ["checkpoint", "save-briefing", "save-artifact"].contains(&text(p, "operation")) {
-        return save_session_output(repo, p);
-    }
-    sid(text(p, "sessionId"))?;
+    let session = sid(&registration.session_id)?;
+    let mut p = serde_json::to_value(registration)?;
+    p["preserveItemFolders"] = json!(true);
+    p["sessionId"] = json!(session);
     let requested_ids = arr(&p["itemIds"]);
     let requested_urls = arr(&p["urls"]);
-    let mut p = p.clone();
-    p["preserveItemFolders"] = json!(true);
-    p["sessionId"] = json!(sid(text(&p, "sessionId"))?);
     let imported = resolve_urls(repo, &p, resolve)?;
     let record = repo.transaction(|s| save_linked(repo, s, &p, &imported, SaveIntent::Register))?;
     let metadata = checkouts::metadata(text(&record, "cwd"));
@@ -1314,6 +1029,3 @@ mod registration_merge_tests;
 
 #[cfg(test)]
 mod live_unregistered_open_tests;
-
-#[cfg(test)]
-mod agent_command_tests;

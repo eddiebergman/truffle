@@ -35,7 +35,7 @@ fn command(id: Option<&str>, name: &str, args: &Value) -> Value {
 fn agent_writes_run_and_show_in_their_chat() {
     let (_temp, repo, id) = fixture();
     let before = notes(&repo);
-    let result = register(
+    let result = receive(
         &repo,
         &command(Some(&id), "projects.create", &json!({"title":"From agent"})),
     )
@@ -50,7 +50,7 @@ fn agent_writes_run_and_show_in_their_chat() {
 #[test]
 fn agent_user_action_commands_are_allowed_and_failures_are_shown() {
     let (_temp, repo, id) = fixture();
-    let error = register(
+    let error = receive(
         &repo,
         &command(Some(&id), "chats.prepare.quick", &json!({})),
     )
@@ -68,7 +68,7 @@ fn agent_writes_without_a_chat_are_refused_before_they_run() {
         command(None, "projects.create", &json!({"title":"Hidden"})),
         command(Some(&uuid()), "projects.create", &json!({"title":"Hidden"})),
     ] {
-        assert!(register(&repo, &p).is_err());
+        assert!(receive(&repo, &p).is_err());
     }
     assert_eq!(notes(&repo), before);
     assert_eq!(log(&repo, &id), Vec::<Value>::new());
@@ -77,7 +77,7 @@ fn agent_writes_without_a_chat_are_refused_before_they_run() {
 fn agent_reads_need_no_chat_and_leave_no_notice() {
     let (_temp, repo, id) = fixture();
     assert!(
-        register(&repo, &command(None, "commands.list", &json!({}))).unwrap()["commandResult"]
+        receive(&repo, &command(None, "commands.list", &json!({}))).unwrap()["commandResult"]
             .is_object()
     );
     assert_eq!(log(&repo, &id), Vec::<Value>::new());
@@ -86,7 +86,7 @@ fn agent_reads_need_no_chat_and_leave_no_notice() {
 fn agent_command_notices_keep_the_latest_twenty() {
     let (_temp, repo, id) = fixture();
     for index in 0..25 {
-        register(
+        receive(
             &repo,
             &command(
                 Some(&id),
@@ -112,14 +112,14 @@ fn settings_apply(id: Option<&str>, repo: &Repository, patch: &Value) -> Value {
 fn agent_settings_writes_show_in_their_chat() {
     let (_temp, repo, id) = fixture();
     let p = settings_apply(None, &repo, &json!({"uiScale":110}));
-    assert!(register(&repo, &p).is_err());
+    assert!(receive(&repo, &p).is_err());
     assert_ne!(repo.settings.values()["uiScale"], 110);
     let p = settings_apply(Some(&id), &repo, &json!({"uiScale":110}));
-    let reply = register(&repo, &p).unwrap();
+    let reply = receive(&repo, &p).unwrap();
     assert_eq!(reply["settings"]["values"]["uiScale"], 110);
     assert!(reply["settings"]["values"].get("quickActions").is_none());
     let p = settings_apply(Some(&id), &repo, &json!({"editor":"code"}));
-    assert!(register(&repo, &p)
+    assert!(receive(&repo, &p)
         .unwrap_err()
         .message
         .contains("Ask the user to approve"));

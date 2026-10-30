@@ -1,6 +1,6 @@
 //! Loopback API and authenticated agent inbox. No UI-specific persistence.
 use super::chat_preparation::{self, Kind};
-use super::{artifacts, workflows};
+use super::{agent_bridge, artifacts, workflows};
 use super::{
     checked, domain, home, json, now, sessions, sid, text, uuid, Error, PathBuf, Repository,
     Result, Value,
@@ -486,8 +486,8 @@ fn state_post(repo: &Arc<Repository>, path: &str, payload: &Value) -> Result<Rep
     let mut extra = json!({});
     let saved = match path {
         "/api/agent/register" => {
-            let record = workflows::register(repo, payload)?;
-            return Ok(json_response(200, &workflows::registration_reply(&record)));
+            let record = agent_bridge::receive(repo, payload)?;
+            return Ok(json_response(200, &agent_bridge::reply(&record)));
         }
         "/api/edit" => {
             repo.edit(payload)?;
@@ -682,8 +682,8 @@ pub(super) fn inbox_once(repo: &Arc<Repository>, inbox: &Path, token: &str) {
             mac.verify_slice(&expected)
                 .map_err(|_| Error::new("Invalid registration signature."))?;
             reply_needed = data["reply"] != false;
-            let record = workflows::register(repo, &data["payload"])?;
-            Ok(workflows::registration_reply(&record))
+            let record = agent_bridge::receive(repo, &data["payload"])?;
+            Ok(agent_bridge::reply(&record))
         })();
         let reply = match result {
             Ok(v) => v,

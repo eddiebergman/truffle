@@ -1,6 +1,6 @@
 use super::*;
+use crate::backend::agent_bridge;
 use crate::backend::sessions;
-use crate::backend::workflows;
 #[test]
 fn resources_keep_open_metadata_and_update_without_erasing_other_resources() {
     let temp = tempfile::tempdir().unwrap();
@@ -144,7 +144,7 @@ fn destructive_reports_share_context_cas_and_transaction_local_save_cannot_bypas
             report["revision"] = revision;
         }
         assert_eq!(
-            workflows::register(
+            agent_bridge::receive(
                 &repo,
                 &json!({"operation":"resources","id":id,"report":report})
             )
@@ -161,7 +161,7 @@ fn destructive_reports_share_context_cas_and_transaction_local_save_cannot_bypas
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     let fresh =
         super::super::session_context::read(&repo, &id).unwrap()["context"]["revision"].clone();
-    let record=workflows::register(&repo,&json!({"operation":"resources","id":id,"report":{"replace":true,"revision":fresh,"resources":[{"id":"A","provider":"local","kind":"monitor","state":"completed"}]}})).unwrap();
+    let record=agent_bridge::receive(&repo,&json!({"operation":"resources","id":id,"report":{"replace":true,"revision":fresh,"resources":[{"id":"A","provider":"local","kind":"monitor","state":"completed"}]}})).unwrap();
     assert_eq!(arr(&record["resources"]).len(), 1);
     assert_eq!(record["resources"][0]["id"], "A");
     assert_eq!(record["resources"][0]["purpose"], "");
@@ -269,7 +269,7 @@ fn staged_reports_import_once_and_new_state_does_not_inherit_old_observation() {
     let repo = Repository::open(temp.path().into(), None, true).unwrap();
     assert!(!file.exists());
     assert!(file.with_extension("imported").exists());
-    let updated=workflows::register(&repo,&json!({"id":id,"operation":"resources","report":{"resources":[{"id":"vm-1","provider":"gcp","kind":"vm","state":"stopped"}]}})).unwrap();
+    let updated=agent_bridge::receive(&repo,&json!({"id":id,"operation":"resources","report":{"resources":[{"id":"vm-1","provider":"gcp","kind":"vm","state":"stopped"}]}})).unwrap();
     assert_eq!(updated["resources"][0]["name"], "Friendly name");
     assert_eq!(updated["resources"][0]["verification"], "reported");
     assert!(updated["resources"][0]["observedAt"].is_null());

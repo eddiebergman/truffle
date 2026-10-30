@@ -1,6 +1,6 @@
 use super::*;
+use crate::backend::agent_bridge;
 use crate::backend::operations::Caller;
-use crate::backend::workflows;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -145,23 +145,23 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     )
     .unwrap();
     let report = json!({"id":id,"operation":"review","requestId":request,"pass":"simplification","state":"complete","report":{"comments":[],"overall":{"author":"Agent A","text":"No simplification needed. Scope: code.txt."}}});
-    let first = workflows::register(&repo, &report).unwrap();
+    let first = agent_bridge::receive(&repo, &report).unwrap();
     assert_eq!(first["review"]["assessments"][0]["author"], "Agent A");
-    assert_eq!(workflows::register(&repo, &report).unwrap(), first);
+    assert_eq!(agent_bridge::receive(&repo, &report).unwrap(), first);
     let mut invalid = report.clone();
     invalid["requestId"] = json!(uuid());
-    assert!(workflows::register(&repo, &invalid).is_err());
+    assert!(agent_bridge::receive(&repo, &invalid).is_err());
     invalid = report.clone();
     invalid["report"]["overall"]["text"] = json!("Changed");
-    assert!(workflows::register(&repo, &invalid).is_err());
+    assert!(agent_bridge::receive(&repo, &invalid).is_err());
     invalid = report.clone();
     invalid["pass"] = json!("correctness");
     invalid["report"]["overall"]["text"] = json!("x".repeat(8001));
-    assert!(workflows::register(&repo, &invalid).is_err());
+    assert!(agent_bridge::receive(&repo, &invalid).is_err());
     let mut second = report;
     second["pass"] = json!("performance");
     second["report"]["overall"]["author"] = json!("Agent B");
-    workflows::register(&repo, &second).unwrap();
+    agent_bridge::receive(&repo, &second).unwrap();
     let ack = json!({"comments":[],"assessments":[first["review"]["assessments"][0]],"note":"old summary"});
     repo.transaction(|s| acknowledge(s, &id, &ack)).unwrap();
     let result = browser(&repo, &json!({"id":id,"action":"read"})).unwrap();
@@ -169,10 +169,7 @@ fn reviewer_assessments_are_scoped_durable_and_ack_preserves_new_arrivals() {
     assert!(result["review"]["assessments"][0]["sentAt"].is_number());
     assert!(result["review"]["assessments"][1]["sentAt"].is_null());
     assert_eq!(result["review"]["note"], "My summary");
-    assert_eq!(
-        workflows::registration_reply(&result)["review"],
-        result["review"]
-    );
+    assert_eq!(agent_bridge::reply(&result)["review"], result["review"]);
 }
 #[test]
 fn completion_consumes_only_verified_feedback_and_keeps_later_comments_pending() {
@@ -246,7 +243,7 @@ fn a_run_that_starts_reviewing_captures_its_versions_on_every_path() {
 fn review_progress_accepts_dynamic_reviewers_and_parent_completion() {
     let (_tmp, repo, id) = fixture();
     let request = uuid();
-    assert!(workflows::register(
+    assert!(agent_bridge::receive(
         &repo,
         &json!({"id":id,"operation":"review","report":{"comments":"invalid"}})
     )
@@ -261,12 +258,12 @@ fn review_progress_accepts_dynamic_reviewers_and_parent_completion() {
     .is_err());
     assert_eq!(started["run"]["passes"], json!({}));
     for pass in ["security", "api-contract"] {
-        workflows::register(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":pass,"state":"reviewing"})).unwrap();
-        workflows::register(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":pass,"state":"complete"})).unwrap();
+        agent_bridge::receive(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":pass,"state":"reviewing"})).unwrap();
+        agent_bridge::receive(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":pass,"state":"complete"})).unwrap();
     }
-    workflows::register(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":"extra-reviewer","state":"reviewing"})).unwrap();
-    assert!(workflows::register(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":"invalid name","state":"reviewing"})).is_err());
-    let end = workflows::register(
+    agent_bridge::receive(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":"extra-reviewer","state":"reviewing"})).unwrap();
+    assert!(agent_bridge::receive(&repo,&json!({"id":id,"operation":"review","requestId":request,"pass":"invalid name","state":"reviewing"})).is_err());
+    let end = agent_bridge::receive(
         &repo,
         &json!({"id":id,"operation":"review","requestId":request,"state":"complete"}),
     )
@@ -354,10 +351,7 @@ fn append_anchors_comments_through_checkout_aliases_and_is_idempotent() {
     assert_eq!(again, first);
     let result = append_on_git(&repo, &id, "two", "Background agent");
     assert_eq!(arr(&result["review"]["comments"]).len(), 2);
-    assert_eq!(
-        workflows::registration_reply(&result)["review"],
-        result["review"]
-    );
+    assert_eq!(agent_bridge::reply(&result)["review"], result["review"]);
 }
 #[test]
 fn bad_batch_rolls_back_and_stale_fingerprints_are_rejected() {

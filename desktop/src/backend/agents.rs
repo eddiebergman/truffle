@@ -2,10 +2,22 @@
 use super::{home, json, text, Error, PathBuf, Result, Value};
 use std::path::Path;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "&'static str")]
 pub enum Agent {
     Claude,
     Codex,
+}
+impl TryFrom<String> for Agent {
+    type Error = String;
+    fn try_from(name: String) -> std::result::Result<Self, String> {
+        Self::parse(&name).map_err(|error| error.message)
+    }
+}
+impl From<Agent> for &'static str {
+    fn from(agent: Agent) -> Self {
+        agent.name()
+    }
 }
 impl Agent {
     pub const ALL: [Self; 2] = [Self::Claude, Self::Codex];

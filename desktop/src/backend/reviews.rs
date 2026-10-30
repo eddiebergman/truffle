@@ -595,5 +595,40 @@ pub(super) fn action(repo: &Repository, versions: &impl Versions, p: &Value) -> 
     Ok(json!({"id":id,"review":review}))
 }
 
+/// An agent's review update: a feedback batch, a run state, or with neither, a draft read.
+pub(super) fn agent_update(repo: &Repository, p: &Value) -> Result<Value> {
+    if let Some(report) = p.get("report") {
+        if !report.is_object() || !report["comments"].is_array() {
+            return Err(Error::new("Review report must contain a comments array."));
+        }
+        if report.get("overall").is_some() && !report["overall"].is_object() {
+            return Err(Error::new("Overall assessment must be an object."));
+        }
+        if arr(&report["comments"]).is_empty()
+            && !report["overall"].is_object()
+            && text(p, "state").is_empty()
+        {
+            return Err(Error::new("The review batch has no comments."));
+        }
+    }
+    let review = if !arr(&p["report"]["comments"]).is_empty() || p["report"]["overall"].is_object()
+    {
+        let mut batch = p.clone();
+        batch["comments"] = p["report"]["comments"].clone();
+        if let Some(overall) = p["report"].get("overall") {
+            batch["overall"] = overall.clone();
+        }
+        append(repo, &Git, &batch)?
+    } else if !text(p, "state").is_empty() {
+        status(repo, &Git, p)?
+    } else {
+        draft(sessions::get(
+            &*repo.state.lock().map_err(|_| Error::io())?,
+            text(p, "id"),
+        )?)
+    };
+    Ok(json!({"id":text(p, "id"),"review":review}))
+}
+
 #[cfg(test)]
 mod tests;

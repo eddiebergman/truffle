@@ -44,12 +44,12 @@ fn attachment_identity_and_explicit_skill_provenance_survive_reattachment_and_le
     assert_eq!(result["artifactId"], again["artifactId"]);
     assert_eq!(again["presetId"], "first");
     assert_eq!(again["role"], "skill-output");
-    let registration = super::super::workflows::register(
+    let registration = super::super::agent_bridge::receive(
         &repo,
         &json!({"operation":"save-artifact","id":second,"path":file}),
     )
     .unwrap();
-    let reply = super::super::workflows::registration_reply(&registration);
+    let reply = super::super::agent_bridge::reply(&registration);
     assert_eq!(reply["id"], second);
     assert_eq!(reply["artifactReceipt"]["artifactId"], result["artifactId"]);
     assert_eq!(reply["artifactReceipt"]["presetId"], "first");

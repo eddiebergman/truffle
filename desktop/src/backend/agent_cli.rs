@@ -1,4 +1,9 @@
 //! Native registration and lifecycle client for the local agent bridge.
+use super::agent_bridge::{
+    ArtifactAttachment, Background, Briefing, Checkpoint, CiInvestigation, Command, ContextRead,
+    ContextReplace, Operation, Registration, Request, ResourceReport, ReviewUpdate, RuntimeEvent,
+    SettingsApply, SettingsRead, StatusReport, WorktreeReport,
+};
 use super::agents::Agent;
 use super::{expand, home, json, now, safe_url, sid, terminal, text, uuid, Error, Result, Value};
 use hmac::{Hmac, Mac};
@@ -92,6 +97,12 @@ impl Options {
             Ok(value)
         }
     }
+    /// The value of `key`, or `None` when it is missing or empty.
+    fn optional(&self, key: &str) -> Option<String> {
+        Some(self.get(key))
+            .filter(|value| !value.is_empty())
+            .map(Into::into)
+    }
     fn many(&self, key: &str) -> Vec<String> {
         self.values.get(key).cloned().unwrap_or_default()
     }
@@ -143,73 +154,80 @@ fn require_context_revision(input: &Value) -> Result<()> {
     Ok(())
 }
 fn payload(command: &str, o: &Options) -> Result<Value> {
-    let mut p = json!({});
-    if command != "register" && command != "settings" {
-        p["id"] = json!(sid(o.required("record")?)?);
-    }
-    match command {
-        "command" => command_payload(o, &mut p)?,
-        "settings" => settings_payload(o, &mut p)?,
-        "register" => p = register_payload(o)?,
-        "review" => review_payload(o, &mut p)?,
-        "context" => context_payload(o, &mut p)?,
-        "resource" => resource_payload(o, &mut p)?,
-        "worktree" => worktree_payload(o, &mut p)?,
-        "status" => status_payload(o, &mut p)?,
+    let request = match command {
+        "register" => Request::Register(register_payload(o)?),
+        "settings" => Request::Operation(settings_payload(o)?),
+        _ => Request::Operation(operation(command, o, sid(o.required("record")?)?)?),
+    };
+    request.to_json()
+}
+fn operation(command: &str, o: &Options, id: String) -> Result<Operation> {
+    Ok(match command {
+        "command" => {
+            o.validate(&["record", "name", "file"])?;
+            Operation::Command(Command {
+                id: Some(id),
+                name: o.required("name")?.into(),
+                args: if o.get("file").is_empty() {
+                    json!({})
+                } else {
+                    json_file(o, 64 * 1024)?
+                },
+            })
+        }
+        "review" => review_payload(o, id)?,
+        "context" => context_payload(o, id)?,
+        "resource" => resource_payload(o, id)?,
+        "worktree" => worktree_payload(o, id)?,
+        "status" => status_payload(o, id)?,
         "ci" => {
             o.validate(&["record", "item", "request", "state"])?;
-            p["operation"] = json!("ci-investigation");
-            p["itemId"] = json!(o.required("item")?);
-            p["requestId"] = json!(sid(o.required("request")?)?);
-            p["state"] = json!(o.required("state")?);
+            Operation::CiInvestigation(CiInvestigation {
+                id,
+                item_id: o.required("item")?.into(),
+                request_id: sid(o.required("request")?)?,
+                state: o.required("state")?.into(),
+            })
         }
-        "artifact" => artifact_payload(o, &mut p)?,
-        "checkpoint" | "briefing" => report_payload(command, o, &mut p)?,
+        "artifact" => artifact_payload(o, id)?,
+        "checkpoint" | "briefing" => report_payload(command, o, id)?,
         _ => return Err(Error::new("Unknown agent command.")),
-    }
-    Ok(p)
+    })
 }
-fn command_payload(o: &Options, p: &mut Value) -> Result<()> {
-    o.validate(&["record", "name", "file"])?;
-    p["operation"] = json!("command");
-    p["name"] = json!(o.required("name")?);
-    p["args"] = if o.get("file").is_empty() {
-        json!({})
-    } else {
-        json_file(o, 64 * 1024)?
-    };
-    Ok(())
-}
-fn settings_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn settings_payload(o: &Options) -> Result<Operation> {
     o.validate(&["record", "show", "file", "revision", "content-hash"])?;
-    if !o.get("record").is_empty() {
-        p["id"] = json!(sid(o.get("record"))?);
-    }
+    let id = o.optional("record").as_deref().map(sid).transpose()?;
     if o.has("show") {
         if !o.get("file").is_empty() {
             return Err(Error::new("Read settings separately from updates."));
         }
-        p["operation"] = json!("settings-read");
-    } else {
-        p["operation"] = json!("settings-apply");
-        p["patch"] = json_file(o, 64 * 1024)?;
-        p["revision"] = json!(o
-            .required("revision")?
-            .parse::<u64>()
-            .map_err(|_| Error::new("Supply the current settings revision."))?);
-        let hash=o.required("content-hash").map_err(|_|Error::new("Read settings --show, then supply its revision and --content-hash with your patch."))?;
-        if hash.len() != 64
-            || !hash
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
-            return Err(Error::new("Supply --content-hash from settings --show."));
-        }
-        p["contentHash"] = json!(hash);
+        return Ok(Operation::SettingsRead(SettingsRead { id }));
     }
-    Ok(())
+    let patch = json_file(o, 64 * 1024)?;
+    let revision = o
+        .required("revision")?
+        .parse::<u64>()
+        .map_err(|_| Error::new("Supply the current settings revision."))?;
+    let hash = o.required("content-hash").map_err(|_| {
+        Error::new(
+            "Read settings --show, then supply its revision and --content-hash with your patch.",
+        )
+    })?;
+    if hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(Error::new("Supply --content-hash from settings --show."));
+    }
+    Ok(Operation::SettingsApply(SettingsApply {
+        id,
+        patch,
+        revision,
+        content_hash: hash.into(),
+    }))
 }
-fn register_payload(o: &Options) -> Result<Value> {
+fn register_payload(o: &Options) -> Result<Registration> {
     o.validate(&[
         "agent",
         "session",
@@ -232,20 +250,19 @@ fn register_payload(o: &Options) -> Result<Value> {
     } else {
         path(o.get("cwd"))?
     };
-    let mut p = json!({"agent":agent.name(),"sessionId":sid(&session)?,"cwd":cwd,"urls":o.many("url"),"itemIds":o.many("item")});
-    for (key, field) in [
-        ("record", "id"),
-        ("title", "title"),
-        ("project", "project"),
-        ("destination", "destination"),
-    ] {
-        if !o.get(key).is_empty() {
-            p[field] = json!(o.get(key));
-        }
-    }
-    Ok(p)
+    Ok(Registration {
+        agent,
+        session_id: sid(&session)?,
+        cwd,
+        urls: o.many("url"),
+        item_ids: o.many("item"),
+        id: o.optional("record"),
+        title: o.optional("title"),
+        project: o.optional("project"),
+        destination: o.optional("destination"),
+    })
 }
-fn review_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn review_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&[
         "record",
         "request",
@@ -263,47 +280,41 @@ fn review_payload(o: &Options, p: &mut Value) -> Result<()> {
     if !o.has("show") && o.get("file").is_empty() && o.get("state").is_empty() {
         return Err(Error::new("Review needs --show, --file, or --state."));
     }
-    p["operation"] = json!("review");
-    for (key, field) in [
-        ("request", "requestId"),
-        ("state", "state"),
-        ("pass", "pass"),
-    ] {
-        if !o.get(key).is_empty() {
-            p[field] = json!(o.get(key));
-        }
-    }
     if !o.get("state").is_empty() || !o.get("pass").is_empty() {
         sid(o.required("request")?)?;
     }
-    if !o.get("file").is_empty() {
-        p["report"] = json_file(o, 96 * 1024)?;
-    }
-    if !o.get("reviewed-revision").is_empty() {
-        p["reviewedRevision"] = json!(o
-            .get("reviewed-revision")
-            .parse::<u64>()
-            .map_err(|_| Error::new("Invalid review revision."))?);
-    }
-    Ok(())
+    let report = if o.get("file").is_empty() {
+        None
+    } else {
+        Some(json_file(o, 96 * 1024)?)
+    };
+    let reviewed_revision = o
+        .optional("reviewed-revision")
+        .map(|revision| revision.parse::<u64>())
+        .transpose()
+        .map_err(|_| Error::new("Invalid review revision."))?;
+    Ok(Operation::Review(ReviewUpdate {
+        id,
+        request_id: o.optional("request"),
+        pass: o.optional("pass"),
+        state: o.optional("state"),
+        report,
+        reviewed_revision,
+    }))
 }
-fn context_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn context_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "file", "show"])?;
     if o.has("show") != o.get("file").is_empty() {
         return Err(Error::new("Choose either --show or --file."));
     }
-    p["operation"] = json!(if o.has("show") {
-        "context-read"
-    } else {
-        "context-replace"
-    });
-    if !o.has("show") {
-        p["context"] = json_file(o, 96 * 1024)?;
-        require_context_revision(&p["context"])?;
+    if o.has("show") {
+        return Ok(Operation::ContextRead(ContextRead { id }));
     }
-    Ok(())
+    let context = json_file(o, 96 * 1024)?;
+    require_context_revision(&context)?;
+    Ok(Operation::ContextReplace(ContextReplace { id, context }))
 }
-fn resource_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn resource_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "file", "replace"])?;
     let mut report = json_file(o, 64 * 1024)?;
     if !report["resources"].is_array() {
@@ -313,84 +324,76 @@ fn resource_payload(o: &Options, p: &mut Value) -> Result<()> {
         require_context_revision(&report)?;
     }
     report["replace"] = json!(o.has("replace"));
-    p["operation"] = json!("resources");
-    p["report"] = report;
-    Ok(())
+    Ok(Operation::Resources(ResourceReport { id, report }))
 }
-fn worktree_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn worktree_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "path", "url", "item", "primary"])?;
     let cwd = std::env::current_dir()?;
-    p["operation"] = json!("worktree");
-    p["path"] = json!(path(if o.get("path").is_empty() {
-        cwd.to_str().ok_or_else(Error::io)?
-    } else {
-        o.get("path")
-    })?);
-    p["urls"] = json!(o.many("url"));
-    p["itemIds"] = json!(o.many("item"));
-    p["primary"] = json!(o.has("primary"));
-    Ok(())
+    Ok(Operation::Worktree(WorktreeReport {
+        id,
+        path: path(if o.get("path").is_empty() {
+            cwd.to_str().ok_or_else(Error::io)?
+        } else {
+            o.get("path")
+        })?,
+        urls: o.many("url"),
+        item_ids: o.many("item"),
+        primary: o.has("primary"),
+    }))
 }
-fn status_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn status_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "state", "subagents", "reason"])?;
-    p["operation"] = json!("runtime");
-    p["state"] = json!(o.required("state")?);
-    if !o.get("subagents").is_empty() {
-        p["subagents"] = json!(o
-            .get("subagents")
-            .parse::<u64>()
-            .map_err(|_| Error::new("Subagent count must be nonnegative."))?);
-    }
-    if !o.get("reason").is_empty() {
-        p["reason"] = json!(o.get("reason"));
-    }
-    Ok(())
+    let state = o.required("state")?.into();
+    let subagents = o
+        .optional("subagents")
+        .map(|count| count.parse::<u64>())
+        .transpose()
+        .map_err(|_| Error::new("Subagent count must be nonnegative."))?;
+    Ok(Operation::Runtime(StatusReport {
+        id,
+        state,
+        subagents,
+        reason: o.optional("reason"),
+    }))
 }
-fn artifact_payload(o: &Options, p: &mut Value) -> Result<()> {
+fn artifact_payload(o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "file", "url", "title", "skill-output"])?;
-    if o.has("skill-output") {
-        p["skillOutput"] = json!(true);
-    }
     if o.get("file").is_empty() == o.get("url").is_empty() {
         return Err(Error::new("Choose a file or URL."));
     }
-    p["operation"] = json!("save-artifact");
-    if o.get("file").is_empty() {
-        p["url"] = json!(safe_url(o.get("url"))?);
-    } else {
-        p["path"] = json!(path(o.get("file"))?);
-    }
-    if !o.get("title").is_empty() {
-        p["title"] = json!(o.get("title"));
-    }
-    Ok(())
+    Ok(Operation::SaveArtifact(ArtifactAttachment {
+        id,
+        path: o.optional("file").as_deref().map(path).transpose()?,
+        url: o.optional("url").as_deref().map(safe_url).transpose()?,
+        title: o.optional("title"),
+        skill_output: o.has("skill-output"),
+    }))
 }
-fn report_payload(command: &str, o: &Options, p: &mut Value) -> Result<()> {
+fn report_payload(command: &str, o: &Options, id: String) -> Result<Operation> {
     o.validate(&["record", "file"])?;
     let bytes = read(&expand(o.required("file")?), 96000)?;
     if command == "briefing" {
-        p["operation"] = json!("save-briefing");
-        p["body"] =
-            json!(String::from_utf8(bytes).map_err(|_| Error::new("Report must be UTF-8."))?);
-    } else {
-        let report: Value = serde_json::from_slice(&bytes)?;
-        let object = report
-            .as_object()
-            .ok_or_else(|| Error::new("Checkpoint must be an object."))?;
-        if object
-            .keys()
-            .any(|k| !["done", "blocked", "next"].contains(&k.as_str()))
-        {
-            return Err(Error::new(
-                "Checkpoint supports done, blocked, and next only.",
-            ));
-        }
-        p["operation"] = json!("checkpoint");
-        for (k, v) in object {
-            p[k] = v.clone();
-        }
+        let body = String::from_utf8(bytes).map_err(|_| Error::new("Report must be UTF-8."))?;
+        return Ok(Operation::SaveBriefing(Briefing { id, body }));
     }
-    Ok(())
+    let report: Value = serde_json::from_slice(&bytes)?;
+    let object = report
+        .as_object()
+        .ok_or_else(|| Error::new("Checkpoint must be an object."))?;
+    if object
+        .keys()
+        .any(|k| !["done", "blocked", "next"].contains(&k.as_str()))
+    {
+        return Err(Error::new(
+            "Checkpoint supports done, blocked, and next only.",
+        ));
+    }
+    Ok(Operation::Checkpoint(Checkpoint {
+        id,
+        done: object.get("done").cloned(),
+        blocked: object.get("blocked").cloned(),
+        next: object.get("next").cloned(),
+    }))
 }
 fn runtime(root: &Path) -> Result<Value> {
     let value: Value = serde_json::from_slice(&read(&root.join("data/runtime.json"), 16384)?)?;
@@ -533,8 +536,8 @@ fn send(runtime: &Value, payload: &Value, inbox_only: bool, hook: bool) -> Resul
         wait_inbox(&inbox, &nonce)
     }
 }
-pub fn activity_snapshot(data: &Value) -> Value {
-    let mut result = json!({});
+pub fn activity_snapshot(data: &Value) -> Background {
+    let mut result = Background::default();
     if let Some(tasks) = data["background_tasks"].as_array() {
         let mut seen = BTreeSet::new();
         let mut counts = BTreeMap::<String, u64>::new();
@@ -563,10 +566,10 @@ pub fn activity_snapshot(data: &Value) -> Value {
                 *counts.entry(kind.into()).or_default() += 1;
             }
         }
-        result["backgroundCounts"] = json!(counts);
+        result.background_counts = Some(counts);
     }
     if let Some(crons) = data["session_crons"].as_array() {
-        result["scheduledWakeups"] = json!(crons.len().min(1000));
+        result.scheduled_wakeups = Some(crons.len().min(1000) as u64);
     }
     result
 }
@@ -592,13 +595,25 @@ fn hook_payload(o: &Options, data: &Value) -> Result<Option<Value>> {
     {
         return Ok(None);
     }
-    let mut payload = json!({"id":sid(o.required("record")?)?,"operation":"runtime-event","event":event,"sessionId":text(data,"session_id"),"subagentId":if text(data,"agent_id").is_empty(){text(data,"subagent_id")}else{text(data,"agent_id")}});
-    if ["Stop", "SubagentStop"].contains(&event) {
-        for (k, v) in activity_snapshot(data).as_object().unwrap() {
-            payload[k] = v.clone();
+    let event = RuntimeEvent {
+        id: sid(o.required("record")?)?,
+        event: event.into(),
+        session_id: text(data, "session_id").into(),
+        subagent_id: if text(data, "agent_id").is_empty() {
+            text(data, "subagent_id")
+        } else {
+            text(data, "agent_id")
         }
-    }
-    Ok(Some(payload))
+        .into(),
+        background: if ["Stop", "SubagentStop"].contains(&event) {
+            activity_snapshot(data)
+        } else {
+            Background::default()
+        },
+    };
+    Request::Operation(Operation::RuntimeEvent(event))
+        .to_json()
+        .map(Some)
 }
 fn shown_result<'a>(command: &str, result: &'a Value) -> &'a Value {
     &result[if command == "review" {

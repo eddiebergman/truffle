@@ -1,6 +1,8 @@
 //! A chat's local checkouts: which folders belong to it, their Git metadata and their versions.
+use super::agent_bridge::WorktreeReport;
 use super::{
-    arr, directory, expand, git, json, now, sessions, text, Error, PathBuf, Result, Value,
+    arr, directory, expand, git, json, now, safe_url, sessions, text, Error, PathBuf, Repository,
+    Result, Value,
 };
 use item_folders::Strength;
 use std::{
@@ -298,6 +300,47 @@ pub(super) fn valid_path(path: &str) -> Result<PathBuf> {
         return Err(Error::new("Git returned an invalid file path."));
     }
     Ok(path)
+}
+
+/// Link a checkout an agent reports to its chat and to the chat's work items it names.
+pub(super) fn link_reported(repo: &Repository, report: &WorktreeReport) -> Result<Value> {
+    let path = directory(&report.path)?;
+    let metadata = metadata(&path).ok_or_else(|| {
+        Error::new("Choose an existing Git repository or worktree with a commit.")
+    })?;
+    let record = sessions::get(&repo.state.lock().unwrap(), &report.id)?.clone();
+    if report.item_ids.len() + report.urls.len() > 100 {
+        return Err(Error::new("Link at most 100 work items at once."));
+    }
+    let mut ids = report
+        .item_ids
+        .iter()
+        .map(|id| json!(id))
+        .collect::<Vec<_>>();
+    for url in &report.urls {
+        safe_url(url)?;
+        let item = arr(&record["items"])
+            .into_iter()
+            .find(|x| x["url"] == *url)
+            .ok_or_else(|| {
+                Error::new("Register this URL with the session before linking its worktree.")
+            })?;
+        if !ids.contains(&item["id"]) {
+            ids.push(item["id"].clone());
+        }
+    }
+    if ids.is_empty() && report.urls.is_empty() {
+        ids = arr(&record["items"])
+            .iter()
+            .map(|x| x["id"].clone())
+            .collect();
+    }
+    let link = Link {
+        metadata,
+        item_ids: ids,
+        primary: report.primary,
+    };
+    repo.transaction(|s| self::link(s, &report.id, &link, Remember::Replace))
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use super::*;
 use crate::backend::sessions;
-use crate::backend::{resources, uuid, workflows};
+use crate::backend::{agent_bridge, resources, uuid};
 use std::fs;
 use std::path::PathBuf;
 fn fixture() -> (
@@ -142,7 +142,7 @@ fn replacement_requires_captured_revision_and_preserves_state_on_missing_invalid
         assert_eq!(*repo.state.lock().unwrap(), state);
     }
     assert_eq!(
-        workflows::register(
+        agent_bridge::receive(
             &repo,
             &json!({"operation":"context-replace","id":id,"context":{"resources":[]}})
         )
@@ -151,7 +151,7 @@ fn replacement_requires_captured_revision_and_preserves_state_on_missing_invalid
         409
     );
     let captured = read(&repo, &id).unwrap()["context"].clone();
-    let result=workflows::register(&repo,&json!({"operation":"context-replace","id":id,"context":{"revision":captured["revision"],"resources":[]}})).unwrap();
+    let result=agent_bridge::receive(&repo,&json!({"operation":"context-replace","id":id,"context":{"revision":captured["revision"],"resources":[]}})).unwrap();
     assert_eq!(result["id"], id);
     assert_eq!(arr(&result["resources"]), [] as [serde_json::Value; 0]);
 }
@@ -214,7 +214,7 @@ fn resource_replacement_drops_stale_metadata_instead_of_merging_it() {
     let record = read(&repo, &id).unwrap();
     assert_eq!(record["context"]["resources"][0]["purpose"], "");
     assert_eq!(record["context"]["resources"][0]["state"], "completed");
-    let reply = workflows::registration_reply(&record);
+    let reply = agent_bridge::reply(&record);
     assert_eq!(reply["context"], record["context"]);
 }
 #[test]

@@ -1,4 +1,5 @@
 mod agent_access;
+pub mod agent_bridge;
 pub mod agent_cli;
 pub mod agents;
 pub mod app_chat;

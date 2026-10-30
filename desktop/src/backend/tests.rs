@@ -181,7 +181,7 @@ fn hook_events_deduplicate_subagents_and_register_real_conversation() {
     })
     .unwrap();
     let session = uuid();
-    workflows::register(&repo,&json!({"id":record["id"],"operation":"runtime-event","event":"SessionStart","sessionId":session})).unwrap();
+    agent_bridge::receive(&repo,&json!({"id":record["id"],"operation":"runtime-event","event":"SessionStart","sessionId":session})).unwrap();
     assert_eq!(repo.snapshot(false)["skillRuns"][0]["outcome"], "starting");
     for event in [
         "SessionStart",
@@ -191,7 +191,7 @@ fn hook_events_deduplicate_subagents_and_register_real_conversation() {
         "SubagentStop",
         "Stop",
     ] {
-        workflows::register(&repo,&json!({"id":record["id"],"operation":"runtime-event","event":event,"sessionId":session,"subagentId":"child-1"})).unwrap();
+        agent_bridge::receive(&repo,&json!({"id":record["id"],"operation":"runtime-event","event":event,"sessionId":session,"subagentId":"child-1"})).unwrap();
     }
     let row = repo.snapshot(false)["sessions"][0].clone();
     assert_eq!(row["sessionId"], session);
@@ -234,7 +234,7 @@ fn background_snapshots_keep_shells_monitors_and_timers_out_of_attention_state()
         for (k, v) in extra.as_object().unwrap() {
             p[k] = v.clone();
         }
-        workflows::register(&repo, &p)
+        agent_bridge::receive(&repo, &p)
     };
     repo.transaction(|s| {
         s["skillRuns"] =
@@ -367,7 +367,7 @@ fn review_launch_reuses_identity_and_actual_worktree() {
     assert_eq!(record["workflow"], "pr-review");
     let tree = folder.join(".worktrees/review-pr-42");
     std::fs::create_dir_all(&tree).unwrap();
-    workflows::register(
+    agent_bridge::receive(
         &repo,
         &json!({"id":record["id"],"agent":"claude","sessionId":record["sessionId"],"cwd":tree}),
     )
@@ -498,12 +498,12 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
         .map(|x| x["id"].clone())
         .collect::<Vec<_>>();
     let session = uuid();
-    let record = workflows::register(
+    let record = agent_bridge::receive(
         &repo,
         &json!({"agent":"codex","sessionId":session,"cwd":main,"title":"Two tasks","itemIds":ids}),
     )
     .unwrap();
-    workflows::register(&repo,&json!({"operation":"worktree","id":record["id"],"path":first,"itemIds":[ids[0]],"primary":false})).unwrap();
+    agent_bridge::receive(&repo,&json!({"operation":"worktree","id":record["id"],"path":first,"itemIds":[ids[0]],"primary":false})).unwrap();
     let state = repo.snapshot(false);
     assert_eq!(
         state["sessions"][0]["cwd"],
@@ -513,8 +513,8 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
         state["itemSettings"][ids[0].as_str().unwrap()]["cwd"],
         first.canonicalize().unwrap().to_str().unwrap()
     );
-    workflows::register(&repo,&json!({"operation":"worktree","id":record["id"],"path":second,"itemIds":[ids[1]],"primary":true})).unwrap();
-    workflows::register(&repo,&json!({"id":record["id"],"agent":"codex","sessionId":session,"cwd":first,"itemIds":[ids[0]]})).unwrap();
+    agent_bridge::receive(&repo,&json!({"operation":"worktree","id":record["id"],"path":second,"itemIds":[ids[1]],"primary":true})).unwrap();
+    agent_bridge::receive(&repo,&json!({"id":record["id"],"agent":"codex","sessionId":session,"cwd":first,"itemIds":[ids[0]]})).unwrap();
     let state = repo.snapshot(false);
     let row = &state["sessions"][0];
     assert_eq!(arr(&row["items"]).len(), 2);
@@ -534,7 +534,7 @@ fn worktree_registration_tracks_real_branches_and_preserves_other_item_folders()
     );
     assert_eq!(tree["itemIds"], json!([ids[0]]));
     let before = repo.state.lock().unwrap().clone();
-    assert!(workflows::register(
+    assert!(agent_bridge::receive(
         &repo,
         &json!({"operation":"worktree","id":record["id"],"path":first,"itemIds":["unrelated"]})
     )

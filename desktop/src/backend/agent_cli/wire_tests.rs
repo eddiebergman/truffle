@@ -327,7 +327,29 @@ fn every_cli_payload_keeps_its_wire_format() {
     ];
     for (sent, pinned) in cases.into_iter().flatten() {
         assert_eq!(sent, pinned);
+        assert_eq!(Request::parse(&pinned).unwrap().to_json().unwrap(), pinned);
     }
+}
+#[test]
+fn the_service_ignores_undeclared_fields_and_rejects_unknown_operations() {
+    let extra = json!({"id":RECORD,"operation":"context-read","note":"from a newer CLI"});
+    assert_eq!(
+        Request::parse(&extra).unwrap().to_json().unwrap(),
+        json!({"id":RECORD,"operation":"context-read"})
+    );
+    let registration =
+        json!({"agent":"codex","sessionId":SESSION,"cwd":"/tmp","urls":[],"itemIds":[]});
+    assert!(matches!(
+        Request::parse(&registration).unwrap(),
+        Request::Register(_)
+    ));
+    assert!(Request::parse(&json!({"id":RECORD,"operation":"unknown"})).is_err());
+    assert_eq!(
+        Request::parse(&json!({"agent":"other","sessionId":SESSION}))
+            .unwrap_err()
+            .message,
+        "Choose Claude or Codex."
+    );
 }
 #[test]
 fn subagent_turn_events_are_not_sent() {

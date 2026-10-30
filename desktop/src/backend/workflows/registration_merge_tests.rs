@@ -13,7 +13,7 @@ fn registration_resolution_merges_latest_links_and_omitted_title_without_overwri
     let (temp, repo, id, session) = fixture();
     let before_alias = repo.state.lock().unwrap()["sessions"][0]["preparationRequests"].clone();
     let payload = json!({"id":id,"agent":"codex","sessionId":session,"cwd":temp.path(),"preserveItemFolders":true,"title":"","itemIds":[],"urls":["https://example.invalid/new"]});
-    let result=register_resolving(&repo,&payload,|_|{repo.transaction(|s|{s["sessions"][0]["title"]=json!("Concurrent title");s["sessions"][0]["items"].as_array_mut().unwrap().push(json!({"id":"note:concurrent","source":"notes","title":"Concurrent","newExtension":9}));s["sessions"][0]["runtime"]=json!({"state":"working"});Ok(())})?;Ok(json!({"id":"github:new","source":"github","title":"Imported","url":"https://example.invalid/new"}))}).unwrap();
+    let result=register_resolving(&repo,&serde_json::from_value(payload).unwrap(),|_|{repo.transaction(|s|{s["sessions"][0]["title"]=json!("Concurrent title");s["sessions"][0]["items"].as_array_mut().unwrap().push(json!({"id":"note:concurrent","source":"notes","title":"Concurrent","newExtension":9}));s["sessions"][0]["runtime"]=json!({"state":"working"});Ok(())})?;Ok(json!({"id":"github:new","source":"github","title":"Imported","url":"https://example.invalid/new"}))}).unwrap();
     assert_eq!(result["id"], id);
     assert_eq!(result["title"], "Concurrent title");
     assert_eq!(result["items"].as_array().unwrap().len(), 3);
@@ -35,7 +35,7 @@ fn registration_resolution_merges_latest_links_and_omitted_title_without_overwri
 #[test]
 fn registration_explicit_title_is_intentional_and_repeated_association_keeps_exact_record() {
     let (temp, repo, id, session) = fixture();
-    let result=register(&repo,&json!({"agent":"codex","sessionId":session.to_uppercase(),"title":"Intentional title","cwd":temp.path(),"itemIds":["note:concurrent"]})).unwrap();
+    let result=register(&repo,&serde_json::from_value(json!({"agent":"codex","sessionId":session.to_uppercase(),"title":"Intentional title","cwd":temp.path(),"itemIds":["note:concurrent"]})).unwrap()).unwrap();
     assert_eq!(result["id"], id);
     assert_eq!(result["title"], "Intentional title");
     assert_eq!(result["items"][0]["linkExtension"]["keep"], true);
@@ -48,7 +48,10 @@ fn registration_explicit_title_is_intentional_and_repeated_association_keeps_exa
     );
     let again = register(
         &repo,
-        &json!({"agent":"codex","sessionId":session,"cwd":temp.path(),"itemIds":[]}),
+        &serde_json::from_value(
+            json!({"agent":"codex","sessionId":session,"cwd":temp.path(),"itemIds":[]}),
+        )
+        .unwrap(),
     )
     .unwrap();
     assert_eq!(again["id"], id);

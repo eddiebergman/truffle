@@ -96,9 +96,9 @@ fn context_show_prints_the_owner_context_for_direct_edit_and_resubmit() {
         .unwrap();
     let id = text(&record, "id");
     let owner =
-        super::super::workflows::register(&repo, &json!({"operation":"context-read","id":id}))
+        super::super::agent_bridge::receive(&repo, &json!({"operation":"context-read","id":id}))
             .unwrap();
-    let reply = super::super::workflows::registration_reply(&owner);
+    let reply = super::super::agent_bridge::reply(&owner);
     let shown = shown_result("context", &reply);
     assert_eq!(shown, &owner["context"]);
     assert!(shown.get("id").is_none());
@@ -112,7 +112,7 @@ fn context_show_prints_the_owner_context_for_direct_edit_and_resubmit() {
     )
     .unwrap();
     assert_eq!(request["context"], *shown);
-    super::super::workflows::register(&repo, &request).unwrap();
+    super::super::agent_bridge::receive(&repo, &request).unwrap();
 }
 #[test]
 fn settings_updates_carry_the_explicit_captured_content_hash() {
@@ -257,17 +257,18 @@ fn native_payloads_preserve_ids_repeated_links_and_validate_input() {
 #[test]
 fn hooks_keep_counts_only_and_preserve_unknown_and_empty_snapshots() {
     let data = json!({"background_tasks":[{"id":"s","type":"shell","command":"private"},{"id":"s","type":"shell"},{"id":"m","type":"monitor"},{"id":"done","type":"shell","status":"completed"},null,{"type":[]}],"session_crons":[{"prompt":"private"}]});
+    let snapshot = |data: &Value| serde_json::to_value(activity_snapshot(data)).unwrap();
     assert_eq!(
-        activity_snapshot(&data),
+        snapshot(&data),
         json!({"backgroundCounts":{"shell":1,"monitor":1,"other":1},"scheduledWakeups":1})
     );
-    assert_eq!(activity_snapshot(&json!({})), json!({}));
+    assert_eq!(snapshot(&json!({})), json!({}));
     assert_eq!(
-        activity_snapshot(&json!({"background_tasks":[],"session_crons":[]})),
+        snapshot(&json!({"background_tasks":[],"session_crons":[]})),
         json!({"backgroundCounts":{},"scheduledWakeups":0})
     );
     assert_eq!(
-        activity_snapshot(&json!({"session_crons":vec![json!({});1100]}))["scheduledWakeups"],
+        snapshot(&json!({"session_crons":vec![json!({});1100]}))["scheduledWakeups"],
         1000
     );
 }
