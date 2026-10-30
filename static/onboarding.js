@@ -85,7 +85,9 @@ function onboardingCompanyMessage(instructions) {
     openGeneration = 0,
     returnGeneration = 0,
     resume = null,
-    actionSerial = 0;
+    actionSerial = 0,
+    // The settings identity that the current step shows.
+    shownSettings = null;
   const labels = {
     assistant: "Your assistant",
     theme: "Make yourself at home",
@@ -368,17 +370,24 @@ function onboardingCompanyMessage(instructions) {
   }
   async function preference(patch) {
     const session = openGeneration,
-      current = await api("/api/settings");
+      result = shownSettings
+        ? await saveAppSettings(shownSettings, { patch })
+        : { kind: "conflict" };
     if (session !== openGeneration || !onboardingIsOpen()) {
       return;
     }
-    await api("/api/settings", {
-      revision: current.revision,
-      contentHash: current.contentHash,
-      patch,
-    });
-    if (session === openGeneration && onboardingIsOpen()) {
-      await loadAppSettings();
+    switch (result.kind) {
+      case "accepted":
+        shownSettings = settingsDocument.baseline();
+        return;
+      case "conflict":
+        // Go Back and return paints the step from the reloaded settings.
+        await loadAppSettings();
+        throw new Error(
+          "Settings changed in another window. Go Back and return to review the current settings.",
+        );
+      default:
+        throw new Error(result.error);
     }
   }
   function paragraph(text) {
@@ -695,6 +704,7 @@ function onboardingCompanyMessage(instructions) {
       return;
     }
     continueAction = () => next();
+    shownSettings = settingsDocument.baseline();
     const step = documentState.progress.step;
     const isCurrent = () =>
       ticket === paintGeneration &&

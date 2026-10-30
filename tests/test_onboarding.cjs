@@ -713,21 +713,29 @@ test("a single installed assistant or editor needs no redundant picker and saves
     assert.equal(decisions(f)[0].payload.patch[key], id);
   }
 });
-test("question confirmation preserves revision plus content hash and does not advance after a conflict", async () => {
+test("question confirmation saves against the settings the step showed and reports a conflict", async () => {
   const f = onboardingHostFixture(),
     ob = f.internals;
   await f.c.window.openOnboarding();
   const requests = [],
     original = f.c.api;
+  let reloads = 0;
+  f.c.loadAppSettings = async () => {
+    reloads++;
+  };
+  // Another window saved revision 4 after this step painted revision 2.
   f.c.api = async (path, payload) => {
     if (path !== "/api/settings") {
       return original(path, payload);
     }
     requests.push({ path, payload });
     if (!payload) {
-      return { revision: 4, contentHash: "a".repeat(64) };
+      return { revision: 4, contentHash: "b".repeat(64) };
     }
-    throw new Error("Settings changed.");
+    if (payload.revision !== 4) {
+      throw Object.assign(new Error("Settings changed."), { status: 409 });
+    }
+    return { revision: 5, contentHash: "c".repeat(64) };
   };
   ob.confirmChoice(
     [{ id: "codex", label: "Codex" }],
@@ -736,10 +744,15 @@ test("question confirmation preserves revision plus content hash and does not ad
     "Choose an assistant",
   );
   const before = f.calls.length;
-  await assert.rejects(ob.continueAction(), /Settings changed/);
-  assert.equal(requests[1].payload.revision, 4);
-  assert.equal(requests[1].payload.contentHash, "a".repeat(64));
-  assert.equal(requests[1].payload.patch.defaultAgent, "codex");
+  await assert.rejects(
+    ob.continueAction(),
+    /Settings changed in another window\. Go Back and return/,
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].payload.revision, 2);
+  assert.equal(requests[0].payload.contentHash, "a".repeat(64));
+  assert.equal(requests[0].payload.patch.defaultAgent, "codex");
+  assert.equal(reloads, 1);
   assert.equal(decisions({ calls: f.calls.slice(before) }).length, 0);
 });
 test("remaining native onboarding selectors have explicit accessible labels", async () => {
@@ -1216,8 +1229,10 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     TextEncoder,
     structuredClone,
     setting: (key, fallback) => fallback,
-    appSettings: { commands: [] },
+    appSettings: { revision: 2, contentHash: "a".repeat(64), commands: [] },
     loadAppSettings: async () => {},
+    saveAppSettings: (baseline, patch) =>
+      c.settingsDocument.save(baseline, patch),
     filterSettings() {},
     openPreferences: async ({ category } = {}) => {
       settings.showModal();
@@ -1279,6 +1294,15 @@ function onboardingHostFixture({ step = "assistant" } = {}) {
     },
   });
   installSkillEditorInitializer(c);
+  // The settings owner from settings.js, over this fixture's service.
+  c.settingsDocument = c.documentStore({
+    get: () => c.appSettings,
+    set: (next) => {
+      c.appSettings = next;
+    },
+    read: () => c.api("/api/settings"),
+    write: (request) => c.api("/api/settings", request),
+  });
   const internals = loadOnboarding(c),
     tick = () => new Promise((resolve) => setImmediate(resolve));
   return {
@@ -1528,7 +1552,7 @@ test("reopening a shell after interrupted confirmation resets busy controls and 
     original = f.c.api;
   let release;
   f.c.api = async (path, payload) =>
-    path === "/api/settings" && !payload
+    path === "/api/settings" && payload
       ? new Promise((resolve) => (release = resolve))
       : original(path, payload);
   await f.c.window.openOnboarding({ host: f.host });
@@ -1546,12 +1570,13 @@ test("reopening a shell after interrupted confirmation resets busy controls and 
   assert.equal(footer.disabled, false);
   assert.equal(f.host.attrs["aria-busy"], "false");
   assert.equal(f.host.querySelector("[data-onboarding-close]").disabled, false);
-  release({ revision: 2, contentHash: "a".repeat(64), values: {} });
+  const reopened = f.calls.length;
+  release({ revision: 3, contentHash: "b".repeat(64), values: {} });
   await f.tick();
   assert.equal(footer.disabled, false);
   assert.equal(f.host.attrs["aria-busy"], "false");
   assert.equal(
-    f.calls.some((call) => call.path === "/api/settings" && call.payload),
+    f.calls.slice(reopened).some((call) => call.path === "/api/onboarding"),
     false,
   );
 });
