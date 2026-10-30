@@ -685,9 +685,6 @@ dialog {
   white-space: nowrap;
 }
 
-dialog input,
-dialog textarea,
-dialog label select,
 .briefing-body pre {
   background: var(--bg);
   color: var(--text);
@@ -781,17 +778,11 @@ dialog label select,
 
 .history-time,
 .history-work,
-.artifact-time,
 .skill-timing,
 .agent-type,
 .nav-item b,
 .skill-name small,
 .change-timestamp small {
-  color: var(--muted);
-}
-
-.artifact-format {
-  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -924,11 +915,8 @@ dialog label select,
   color: var(--iris);
 }
 
-.row-title,
 .context-work-title,
-.history-title,
-.change-title,
-.artifact-title {
+.history-title {
   color: var(--text);
 }
 
@@ -997,8 +985,6 @@ dialog label select,
   border-color: var(--line);
 }
 
-.row-bar,
-.session-card,
 .hidden-items .row-bar,
 .hidden-items .session-card {
   background: var(--panel);
@@ -1018,10 +1004,7 @@ dialog label select,
   background: var(--overlay);
 }
 
-.source-icon,
-.runtime-pill,
 .agent-link,
-.agent-icon,
 .briefing-body code,
 .agent-icon.claude,
 .agent-icon.codex {
@@ -1058,7 +1041,6 @@ dialog label select,
   color: var(--muted);
 }
 
-.status-pill,
 .status-pill.draft {
   background: var(--overlay);
   color: var(--muted);
@@ -1606,10 +1588,6 @@ summary::-webkit-details-marker {
   flex-shrink: 0;
   grid-column: 4;
   margin-left: auto;
-}
-
-.search input {
-  min-width: 0;
 }
 
 .search kbd {

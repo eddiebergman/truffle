@@ -315,6 +315,8 @@ button.row-title {
   font-size: 9px;
   white-space: nowrap;
   padding: 2px 6px;
+  background: var(--overlay);
+  color: var(--muted);
 }
 
 .pin-button,
@@ -435,6 +437,8 @@ dialog label select {
   padding: 10px 11px;
   margin-top: 7px;
   font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
 }
 
 dialog textarea {
@@ -457,6 +461,7 @@ textarea:focus-visible {
   font-size: 11px;
   width: 100%;
   outline: none;
+  min-width: 0;
 }
 
 dialog .optional {
@@ -754,6 +759,8 @@ a.ci-check-name:hover {
   border-radius: 9px;
   font-size: 22px;
   flex-shrink: 0;
+  background: var(--overlay);
+  color: var(--muted);
 }
 
 .agent-link {
@@ -773,6 +780,8 @@ a.ci-check-name:hover {
   padding: 3px 7px;
   border-radius: 5px;
   white-space: nowrap;
+  background: var(--overlay);
+  color: var(--muted);
 }
 
 .runtime-pill.running {
@@ -1105,6 +1114,8 @@ a.ci-check-name:hover {
   width: 21px;
   border-radius: 4px;
   font-size: 13px;
+  background: var(--overlay);
+  color: var(--muted);
 }
 
 .row-main {
@@ -1121,6 +1132,7 @@ a.ci-check-name:hover {
   text-overflow: ellipsis;
   font-size: 12px;
   overflow-wrap: normal;
+  color: var(--text);
 }
 
 .row-title:hover {
@@ -1170,7 +1182,7 @@ a.ci-check-name:hover {
 }
 
 .session-card {
-  border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
+  border: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1179,6 +1191,7 @@ a.ci-check-name:hover {
   margin: 2px 0;
   padding: 3px 8px;
   border-radius: 4px;
+  background: var(--panel);
 }
 
 .session-card > .agent-icon {
@@ -1481,8 +1494,9 @@ a.ci-check-name:hover {
   min-width: 0;
   height: 32px;
   padding: 3px 8px;
-  border: 1px solid color-mix(in srgb, var(--bg) 90%, var(--text));
+  border: 1px solid var(--line);
   border-radius: 4px;
+  background: var(--panel);
 }
 
 .row-bar .row-main {
@@ -2228,6 +2242,7 @@ a.ci-check-name:hover {
   grid-template-columns: 145px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+  color: var(--text);
 }
 
 .change-title:hover {
@@ -2444,9 +2459,15 @@ a.ci-check-name:hover {
   text-align: left;
 }
 
-.artifact-time,
+.artifact-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .artifact-format {
   font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .artifact-title {
@@ -2459,6 +2480,7 @@ a.ci-check-name:hover {
   border: 0;
   cursor: pointer;
   font-size: 13px;
+  color: var(--text);
 }
 
 .artifact-title:hover {
