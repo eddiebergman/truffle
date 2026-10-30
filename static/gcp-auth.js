@@ -5,7 +5,6 @@
     panel = $("#gcp-login-status"),
     cancel = $("#gcp-login-cancel");
   let current = null,
-    timer = null,
     pending = false;
   function paint() {
     const running = Boolean(current?.running),
@@ -42,27 +41,26 @@
     cancel.disabled = Boolean(current?.cancelling);
     cancel.textContent = current?.cancelling ? "Cancelling…" : "Cancel login";
   }
-  function schedule() {
-    clearTimeout(timer);
-    if (current?.running || (current?.cooldownUntil || 0) * 1000 > Date.now()) {
-      timer = setTimeout(load, 1000);
-    }
-  }
   async function load() {
     try {
       current = await api("/api/gcp-auth");
       paint();
-      schedule();
+      return current.running || (current.cooldownUntil || 0) * 1000 > Date.now()
+        ? 1000
+        : null;
     } catch (error) {
       if (current?.running) {
-        timer = setTimeout(load, 5000);
-      } else if (error.message.includes("Not found")) {
+        return 5000;
+      }
+      if (error.message.includes("Not found")) {
         button.disabled = true;
         button.title =
           "Restart the updated Truffle service to enable GCP login.";
       }
+      return null;
     }
   }
+  const watch = watchJob(load);
   button.onclick = async () => {
     if (pending || current?.running) {
       return;
@@ -81,7 +79,7 @@
     } finally {
       pending = false;
       paint();
-      schedule();
+      void watch.start();
     }
   };
   cancel.onclick = async () => {
@@ -89,15 +87,14 @@
     try {
       current = await api("/api/gcp-auth/cancel", {});
       paint();
-      schedule();
+      void watch.start();
     } catch (error) {
       toast(error.message);
       cancel.disabled = false;
     }
   };
   window.addEventListener("truffle-service-restarted", () => {
-    clearTimeout(timer);
-    void load();
+    void watch.start();
   });
-  void load();
+  void watch.start();
 })();

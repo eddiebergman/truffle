@@ -42,10 +42,13 @@ function fixture() {
     clearTimeout: () => {},
     Date,
   };
-  vm.runInNewContext(
-    fs.readFileSync(require.resolve("../static/gcp-auth.js"), "utf8"),
-    context,
-  );
+  vm.createContext(context);
+  for (const file of ["job-watch.js", "gcp-auth.js"]) {
+    vm.runInContext(
+      fs.readFileSync(require.resolve(`../static/${file}`), "utf8"),
+      context,
+    );
+  }
   return {
     node,
     calls,
