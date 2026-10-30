@@ -1648,10 +1648,10 @@ function paintManagedLaunch(current) {
   current.reload.hidden =
     (Boolean(current.result) &&
       ["accepted", "unknown"].includes(current.result.kind)) ||
-    (!current.conflicted && Boolean(current.baseline));
+    (!current.conflict && Boolean(current.baseline));
   current.reload.disabled =
     current.pending || current.refreshing || current.loading;
-  if (current.conflicted) {
+  if (current.conflict) {
     for (const button of launchForm.querySelectorAll('button[type="submit"]')) {
       button.disabled = true;
     }
@@ -1711,7 +1711,7 @@ async function readManagedLaunch(current) {
       chat: { ...chat, itemIds: [...chat.itemIds] },
       expected: { ...value.expected },
     };
-    current.conflicted = false;
+    current.conflict = false;
     selectedSession = {
       ...selectedSession,
       id: current.target,
@@ -1759,7 +1759,7 @@ async function readManagedLaunch(current) {
     restoreFormFocus(current, launchForm.elements.title);
   } catch (error) {
     if (current.isCurrent()) {
-      current.conflicted = true;
+      current.conflict = true;
       current.ui.message.textContent = error.message;
       freezeFeatureForm(current, true);
       restoreFormFocus(current, current.reload);
@@ -1781,7 +1781,6 @@ function beginManagedLaunch(id, lifetime) {
   current.context = context;
   current.baseline = null;
   current.loading = false;
-  current.conflicted = false;
   current.targetCurrent = () => managedLaunchCurrent(current);
   current.acceptedText = "Session changes saved.";
   const reload = featureButton(
@@ -1807,14 +1806,11 @@ async function saveExistingLaunch(values, { lifetime, open }) {
     current.lifetime !== lifetime ||
     !featureFormMutable(current) ||
     current.loading ||
-    current.conflicted ||
     !current.baseline
   ) {
     return;
   }
-  const patch = {},
-    expected = {},
-    urls = (values.urls || "")
+  const urls = (values.urls || "")
       .split(/\n/)
       .map((value) => value.trim())
       .filter(Boolean),
@@ -1826,14 +1822,15 @@ async function saveExistingLaunch(values, { lifetime, open }) {
       sessionId: values.sessionId.trim(),
       itemIds: [...selectedWork].sort(),
     };
-  for (const field of launchEditableFields) {
-    if (
-      JSON.stringify(next[field]) !== JSON.stringify(current.display[field]) ||
-      (field === "itemIds" && urls.length)
-    ) {
-      patch[field] = next[field];
-      expected[field] = current.baseline.expected[field];
-    }
+  const { patch, expected } = checkedPatch(
+    { values: current.display, expected: current.baseline.expected },
+    next,
+    launchEditableFields,
+  );
+  // The service imports URLs only into a checked work list.
+  if (urls.length) {
+    patch.itemIds = next.itemIds;
+    expected.itemIds = current.baseline.expected.itemIds;
   }
   const record = () => {
     const saved = state.sessions.find((eachSaved) => eachSaved.id === id);
@@ -1911,6 +1908,44 @@ async function saveExistingLaunch(values, { lifetime, open }) {
   current.openResult?.remove();
   current.openResult = openButton;
   current.ui.refresh.parentElement.append(openButton);
+  current.reload.hidden = true;
+  await submitFeatureForm(current, {
+    write: async () => {
+      if (!Object.keys(patch).length) {
+        return;
+      }
+      const receipt = await api("/api/commands/invoke", {
+        name: "chats.metadata.update",
+        args: {
+          recordId: id,
+          patch,
+          expected,
+          ...(urls.length ? { urls } : {}),
+        },
+      });
+      if (receipt?.saved !== true || receipt.recordId !== id) {
+        throw new Error("The session save response could not be confirmed.");
+      }
+    },
+    acceptedText: Object.keys(patch).length
+      ? "Session changes saved."
+      : "Session settings unchanged.",
+    afterReady: () => {
+      record();
+      if (!open) {
+        finish();
+      }
+    },
+    onConflict: (result) => {
+      current.ui.message.textContent = result.error;
+      current.reload.hidden = false;
+      current.reload.disabled = false;
+      enforceManagedIdentity(current);
+      restoreFormFocus(current, current.reload);
+      revealManagedRecovery(current);
+    },
+  });
+  // After Refresh view the user chooses when to open the saved chat.
   current.afterReady = () => {
     if (!current.isCurrent()) {
       return;
@@ -1925,79 +1960,10 @@ async function saveExistingLaunch(values, { lifetime, open }) {
       finish();
     }
   };
-  current.acceptedText = Object.keys(patch).length
-    ? "Session changes saved."
-    : "Session settings unchanged.";
-  current.pending = true;
-  holdFormFocus(launchForm, current);
-  freezeFeatureForm(current, true);
-  current.reload.hidden = true;
-  current.ui.message.textContent = "Saving session changes…";
-  let failureStatus = null;
-  const result = await presentLocalWrite(async () => {
-    if (!Object.keys(patch).length) {
-      return;
-    }
-    try {
-      const receipt = await api("/api/commands/invoke", {
-        name: "chats.metadata.update",
-        args: {
-          recordId: id,
-          patch,
-          expected,
-          ...(urls.length ? { urls } : {}),
-        },
-      });
-      if (receipt?.saved !== true || receipt.recordId !== id) {
-        throw new Error("The session save response could not be confirmed.");
-      }
-    } catch (error) {
-      failureStatus = error.status;
-      throw error;
-    }
-  });
-  current.pending = false;
-  current.result = result;
-  if (!current.isCurrent()) {
-    if (featureForms.get(dialog) === current && dialog.open) {
-      freezeFeatureForm(current, true);
-    }
-    toast(localWriteMessage(result, current.acceptedText));
-    return;
+  if (open) {
+    await openSaved();
   }
-  if (result.kind === "accepted" && result.presentation === "ready") {
-    try {
-      record();
-      if (open) {
-        await openSaved();
-      } else {
-        finish();
-        toast(current.acceptedText);
-      }
-      return;
-    } catch (error) {
-      current.result = {
-        kind: "accepted",
-        presentation: "pending",
-        error: error.message,
-      };
-    }
-  }
-  if (result.kind === "rejected" && failureStatus === 409) {
-    current.conflicted = true;
-    current.ui.message.textContent = result.error;
-    freezeFeatureForm(current, false);
-    for (const button of launchForm.querySelectorAll('button[type="submit"]')) {
-      button.disabled = true;
-    }
-    current.reload.hidden = false;
-    current.reload.disabled = false;
-    enforceManagedIdentity(current);
-    restoreFormFocus(current, current.reload);
-    revealManagedRecovery(current);
-    return;
-  }
-  if (current.isCurrent()) {
+  if (!current.conflict) {
     paintManagedLaunch(current);
   }
 }
