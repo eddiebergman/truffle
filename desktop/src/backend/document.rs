@@ -52,12 +52,18 @@ pub struct Document<T> {
     format: PhantomData<fn() -> T>,
 }
 impl<T: Format> Document<T> {
+    /// A missing file cannot be read until `or_missing` supplies its bytes.
     pub const fn new(path: PathBuf) -> Self {
         Self {
             path,
             missing: None,
             format: PhantomData,
         }
+    }
+    /// Read `bytes` as the stored content while the file does not exist.
+    pub fn or_missing(mut self, bytes: Vec<u8>) -> Self {
+        self.missing = Some(bytes);
+        self
     }
     pub fn read(&self) -> Result<(T, Version)> {
         let bytes = self.bytes()?;

@@ -1,5 +1,6 @@
-use super::{arr, json, now, text, uuid, Error, PathBuf, Result, Value};
-use std::{collections::BTreeSet, io::Write, os::unix::fs::OpenOptionsExt, sync::Mutex};
+use super::document::{Document, Format, Version};
+use super::{arr, json, now, text, Error, PathBuf, Result, Value};
+use std::{collections::BTreeSet, sync::Mutex};
 
 /// Who must approve a settings change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -244,77 +245,62 @@ fn normalize_document(document: &mut Value) -> Result<()> {
     }
     validate(&document["values"])
 }
-fn document_hash(document: &Value) -> Result<String> {
-    Ok(context_kit::sha256(&serde_json::to_vec(document)?))
+#[derive(serde::Serialize)]
+#[serde(transparent)]
+struct Preferences(Value);
+impl Format for Preferences {
+    const NAME: &'static str = "settings file";
+    const MAX_BYTES: usize = 128 * 1024;
+    const CONFLICT: &'static str = "Settings changed elsewhere. Reload settings before saving.";
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        let mut document = serde_json::from_slice(bytes)?;
+        normalize_document(&mut document)?;
+        Ok(Self(document))
+    }
+    fn revision(&self) -> u64 {
+        self.0["revision"].as_u64().unwrap()
+    }
 }
 
 pub struct Store {
+    file: Document<Preferences>,
     path: PathBuf,
     directory: PathBuf,
-    document: Mutex<Value>,
+    /// The last valid file. A broken hand edit leaves these values in effect.
+    last: Mutex<(Value, Version)>,
 }
 impl Store {
     pub fn load(path: PathBuf) -> Result<Self> {
         let directory = path.parent().unwrap().join("config");
         super::config::install(&directory)?;
-        let initial = super::config::defaults(&directory)?;
-        let doc = if path.exists() {
-            let bytes = std::fs::read(&path)?;
-            if bytes.len() > 128 * 1024 {
-                return Err(Error::new("Settings file exceeds 128 KiB."));
-            }
-            let mut v: Value = serde_json::from_slice(&bytes)?;
-            normalize_document(&mut v)?;
-            v
-        } else {
-            json!({"version":1,"revision":0,"values":initial})
-        };
+        let initial = serde_json::to_vec_pretty(
+            &json!({"version":1,"revision":0,"values":super::config::defaults(&directory)?}),
+        )?;
         if !path.exists() {
-            super::http::private_write(&path, &serde_json::to_vec_pretty(&doc)?)?;
+            super::http::private_write(&path, &initial)?;
         }
+        let file = Document::new(path.clone()).or_missing(initial);
+        let (document, version) = file.read()?;
         Ok(Self {
+            file,
             path,
             directory,
-            document: Mutex::new(doc),
+            last: Mutex::new((document.0, version)),
         })
     }
     fn refresh(&self) -> Result<()> {
-        if !self.path.exists() {
-            return Ok(());
-        }
-        let mut external = super::config::read(&self.path)?;
-        normalize_document(&mut external)?;
-        let mut doc = self.document.lock().map_err(|_| Error::io())?;
-        let revision = doc["revision"].as_u64().unwrap();
-        let values_changed = external["values"] != doc["values"];
-        external["revision"] =
-            json!(external["revision"]
-                .as_u64()
-                .unwrap()
-                .max(if values_changed {
-                    revision
-                        .checked_add(1)
-                        .ok_or_else(|| Error::new("Settings revision is exhausted."))?
-                } else {
-                    revision
-                }));
-        if external != *doc {
-            *doc = external;
-        }
-        drop(doc);
+        let (document, version) = self.file.read()?;
+        *self.last.lock().map_err(|_| Error::io())? = (document.0, version);
         Ok(())
     }
     pub fn values(&self) -> Value {
         let _ = self.refresh();
-        self.document.lock().unwrap()["values"].clone()
+        self.last.lock().unwrap().0["values"].clone()
     }
     pub fn view(&self) -> Value {
         let error = self.refresh().err();
-        let mut doc = self.document.lock().unwrap().clone();
-        match document_hash(&doc) {
-            Ok(hash) => doc["contentHash"] = json!(hash),
-            Err(_) => doc["configError"] = json!("Settings configuration could not load."),
-        }
+        let (mut doc, version) = self.last.lock().unwrap().clone();
+        doc["contentHash"] = json!(version.content_hash);
         doc["defaults"] = defaults();
         doc["commands"] = json!(commands());
         doc["approval"] = json!(defaults()
@@ -359,15 +345,6 @@ impl Store {
         super::config::themes(&self.directory)
     }
     fn proposed_values(&self, doc: &Value, p: &Value, granted: Approval) -> Result<Value> {
-        if p["revision"].as_u64().is_none()
-            || p["revision"] != doc["revision"]
-            || p["contentHash"].as_str() != Some(document_hash(doc)?.as_str())
-        {
-            let mut error =
-                Error::new("Settings changed elsewhere. Reload settings before saving.");
-            error.status = 409;
-            return Err(error);
-        }
         let patch = p["patch"]
             .as_object()
             .ok_or_else(|| Error::new("Supply a settings patch."))?;
@@ -397,42 +374,22 @@ impl Store {
     }
     /// Validate a patch that `granted` may approve, without saving it.
     pub fn preview(&self, p: &Value, granted: Approval) -> Result<Value> {
-        self.refresh()?;
-        let doc = self.document.lock().map_err(|_| Error::io())?;
-        let values = self.proposed_values(&doc, p, granted)?;
-        let view =
-            json!({"revision":doc["revision"],"contentHash":document_hash(&doc)?,"values":values});
-        drop(doc);
-        Ok(view)
+        let expected = Version::sent(p);
+        let current = self.file.read_at(&expected)?.0;
+        let values = self.proposed_values(&current, p, granted)?;
+        Ok(
+            json!({"revision":expected.revision,"contentHash":expected.content_hash,"values":values}),
+        )
     }
     /// Save a patch that `granted` may approve.
     pub fn apply(&self, p: &Value, granted: Approval) -> Result<Value> {
-        self.refresh()?;
-        let mut doc = self.document.lock().map_err(|_| Error::io())?;
-        let values = self.proposed_values(&doc, p, granted)?;
-        if values == doc["values"] {
-            drop(doc);
-            return Ok(self.view());
+        let expected = Version::sent(p);
+        let current = self.file.read_at(&expected)?.0;
+        let values = self.proposed_values(&current, p, granted)?;
+        if values != current["values"] {
+            let next = json!({"version":1,"revision":expected.revision,"values":values,"updatedAt":now(),"updatedBy":match granted{Approval::Routine=>"agent",Approval::User=>"user"}});
+            self.file.replace(&expected, Preferences(next))?;
         }
-        let next = json!({"version":1,"revision":doc["revision"].as_u64().unwrap()+1,"values":values,"updatedAt":now(),"updatedBy":match granted{Approval::Routine=>"agent",Approval::User=>"user"}});
-        let temp = self.path.with_extension(format!("{}.tmp", uuid()));
-        let result = (|| -> Result<()> {
-            let mut f = std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .mode(0o600)
-                .open(&temp)?;
-            f.write_all(&serde_json::to_vec_pretty(&next)?)?;
-            f.sync_all()?;
-            std::fs::rename(&temp, &self.path)?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(&temp);
-        }
-        result?;
-        *doc = next;
-        drop(doc);
         Ok(self.view())
     }
 }

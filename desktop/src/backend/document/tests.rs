@@ -107,6 +107,21 @@ fn concurrent_replaces_of_one_version_let_exactly_one_win() {
 }
 
 #[test]
+fn a_missing_file_reads_as_its_default_and_is_refused_without_one() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.json");
+    assert!(Document::<Note>::new(path.clone()).read().is_err());
+    let default = serde_json::to_vec(&note("default")).unwrap();
+    let document = Document::<Note>::new(path.clone()).or_missing(default.clone());
+    let (read, version) = document.read().unwrap();
+    assert_eq!(read.text, "default");
+    assert_eq!(version.content_hash, context_kit::sha256(&default));
+    assert!(!path.exists());
+    document.replace(&version, note("saved")).unwrap();
+    assert_eq!(document.read().unwrap().0.text, "saved");
+}
+
+#[test]
 fn oversized_files_and_replacements_are_refused() {
     let (_temp, path) = stored("first");
     let document = Document::<Note>::new(path.clone());
