@@ -343,7 +343,10 @@ fn the_service_ignores_undeclared_fields_and_rejects_unknown_operations() {
         Request::parse(&registration).unwrap(),
         Request::Register(_)
     ));
-    assert!(Request::parse(&json!({"id":RECORD,"operation":"unknown"})).is_err());
+    assert!(
+        Request::parse(&json!({"operation":"unknown","agent":"codex","sessionId":SESSION}))
+            .is_err()
+    );
     assert_eq!(
         Request::parse(&json!({"agent":"other","sessionId":SESSION}))
             .unwrap_err()
