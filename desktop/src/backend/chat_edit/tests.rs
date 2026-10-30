@@ -212,9 +212,6 @@ fn chat_metadata_legacy_requires_checked_patch_and_does_not_resolve_unchecked_ur
         .status,
         409
     );
-    assert!(repo
-        .edit(&json!({"action":"save-session","id":id,"title":"Unchecked"}))
-        .is_err());
     assert_eq!(std::fs::read(&repo.data).unwrap(), before);
     assert!(chat_preparation::save(
         &repo,
@@ -317,9 +314,6 @@ fn chat_metadata_invalid_stored_fields_fail_closed_and_legacy_association_cannot
             .status,
         409
     );
-    let mut edit = payload;
-    edit["action"] = json!("save-session");
-    assert_eq!(repo.edit(&edit).unwrap_err().status, 409);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
     for (field, value) in [
         ("title", json!(42)),

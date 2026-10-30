@@ -187,22 +187,5 @@ pub fn mark_read(repo: &Repository, args: &Value) -> Result<Value> {
     }
     repo.transaction_if_changed(|state| mark_in_state(state, args))
 }
-pub(super) fn legacy_mark(state: &mut Value, args: &Value) -> Result<Value> {
-    if args.get("all").is_some() {
-        return Err(Error::new(
-            "Global mark-all is retired. Supply the captured change IDs instead.",
-        ));
-    }
-    keys(args, &["action", "id", "ids"])?;
-    if args.get("id").is_some() && args.get("ids").is_some() {
-        return Err(Error::new("Supply captured IDs or one ID, not both."));
-    }
-    let captured = if let Some(value) = args.get("id") {
-        json!({"ids":[id(value)?]})
-    } else {
-        json!({"ids":args["ids"]})
-    };
-    mark_in_state(state, &captured)
-}
 #[cfg(test)]
 mod tests;

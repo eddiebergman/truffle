@@ -366,16 +366,7 @@ impl Repository {
         Ok(())
     }
     pub fn edit(&self, p: &Value) -> Result<()> {
-        if text(p, "action") == "save-session" && !text(p, "id").is_empty() {
-            super::chat_edit::legacy(self, p)?;
-            return Ok(());
-        }
         self.transaction(|s| match text(p, "action") {
-            "save-session" => {
-                super::chat_edit::reject_unchecked_association(s, p)?;
-                super::sessions::save(s, p)?;
-                Ok(())
-            }
             "save-note" => super::projects::save_in_state(self, s, p).map(drop),
             "save-artifact" => {
                 if p.get("id").is_some() {

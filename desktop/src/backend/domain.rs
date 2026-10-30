@@ -414,11 +414,11 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
             row["title"] = json!(title);
             row["updatedAt"] = json!(now());
         }
-        "delete-note" | "unlink-session" | "delete-sentry-view" => {
-            let collection = match action {
-                "delete-note" => "notes",
-                "unlink-session" => "sessions",
-                _ => "sentryViews",
+        "delete-note" | "delete-sentry-view" => {
+            let collection = if action == "delete-note" {
+                "notes"
+            } else {
+                "sentryViews"
             };
             s[collection] = json!(arr(&s[collection])
                 .into_iter()
@@ -451,9 +451,6 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
         }
         "override" => override_item(s, key, &cat, p)?,
         "snooze" => snooze(s, key, &cat, p)?,
-        "read-changes" => {
-            super::changes::legacy_mark(s, p)?;
-        }
         "link-work" | "unlink-work" => {
             let change = if action == "link-work" {
                 super::work_links::Change::Add

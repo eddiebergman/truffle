@@ -1,6 +1,5 @@
 use super::*;
 use crate::backend::commands;
-use crate::backend::domain;
 use crate::backend::operations::Caller;
 use std::sync::Arc;
 fn fixture() -> (tempfile::TempDir, Arc<Repository>) {
@@ -104,21 +103,8 @@ fn changes_invalid_and_legacy_global_arguments_fail_before_effects() {
     ] {
         assert!(list(&repo, &args).is_err());
     }
-    for args in [
-        json!({"action":"read-changes","all":true}),
-        json!({"action":"read-changes","all":false,"id":"a"}),
-        json!({"action":"read-changes","id":"a","ids":["a"]}),
-    ] {
-        assert!(repo
-            .transaction(|state| domain::edit(state, &args))
-            .is_err());
-    }
     assert_eq!(*repo.state.lock().unwrap(), before);
     assert_eq!(std::fs::read(&repo.data).unwrap(), bytes);
-    repo.transaction(|state| domain::edit(state, &json!({"action":"read-changes","id":"a"})))
-        .unwrap();
-    assert_eq!(repo.state.lock().unwrap()["changes"][0]["read"], true);
-    assert_eq!(repo.state.lock().unwrap()["changes"][2]["read"], false);
 }
 #[test]
 fn changes_redact_before_display_limits_and_reject_unsafe_urls() {
