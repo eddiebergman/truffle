@@ -208,22 +208,14 @@ fn rename_session_changes_only_its_display_title_and_timestamp() {
         &json!({"agent":"claude","title":"Before","cwd":"/tmp","itemIds":[]}),
     )
     .unwrap();
-    domain::edit(
-        &mut state,
-        &json!({"action":"rename-session","id":record["id"],"title":"After"}),
-    )
-    .unwrap();
+    sessions::rename(&mut state, text(&record, "id"), "After").unwrap();
     let mut updated = state["sessions"][0].clone();
     assert_eq!(updated["title"], "After");
     updated["title"] = record["title"].clone();
     updated["updatedAt"] = record["updatedAt"].clone();
     assert_eq!(updated, record);
     let before = state.clone();
-    assert!(domain::edit(
-        &mut state,
-        &json!({"action":"rename-session","id":record["id"],"title":""})
-    )
-    .is_err());
+    assert!(sessions::rename(&mut state, text(&record, "id"), "").is_err());
     assert_eq!(state, before);
 }
 #[test]

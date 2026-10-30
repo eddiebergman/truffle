@@ -408,12 +408,6 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
     let action = text(p, "action");
     let cat = catalog(s);
     match action {
-        "rename-session" => {
-            let title = checked(p, "title", 180, true)?;
-            let row = super::sessions::get_mut(s, key)?;
-            row["title"] = json!(title);
-            row["updatedAt"] = json!(now());
-        }
         "delete-note" | "delete-sentry-view" => {
             let collection = if action == "delete-note" {
                 "notes"
@@ -425,29 +419,18 @@ pub fn edit(s: &mut Value, p: &Value) -> Result<()> {
                 .filter(|x| x["id"] != key)
                 .collect::<Vec<_>>());
         }
-        "archive-project" | "archive-session" | "hide-session" => {
-            let row = if action == "archive-project" {
-                s["notes"]
-                    .as_array_mut()
-                    .unwrap()
-                    .iter_mut()
-                    .find(|x| x["id"] == key)
-                    .ok_or_else(|| Error::new("Record no longer exists."))?
+        "archive-project" => {
+            let row = s["notes"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|x| x["id"] == key)
+                .ok_or_else(|| Error::new("Record no longer exists."))?;
+            row["archivedAt"] = if p["restore"] == true {
+                Value::Null
             } else {
-                super::sessions::get_mut(s, key)?
+                json!(now())
             };
-            if action == "hide-session" {
-                if !p["hidden"].is_boolean() {
-                    return Err(Error::new("Choose a visibility setting."));
-                }
-                row["hidden"] = p["hidden"].clone();
-            } else {
-                row["archivedAt"] = if p["restore"] == true {
-                    Value::Null
-                } else {
-                    json!(now())
-                };
-            }
         }
         "override" => override_item(s, key, &cat, p)?,
         "snooze" => snooze(s, key, &cat, p)?,

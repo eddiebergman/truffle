@@ -95,17 +95,12 @@ pub enum ChatMetadata<'a> {
 }
 pub fn update_chat(repo: &Repository, id: &str, change: ChatMetadata<'_>) -> Result<Value> {
     let id = sid(id)?;
-    let edit = match change {
-        ChatMetadata::Rename(title) => json!({"action":"rename-session","id":id,"title":title}),
-        ChatMetadata::Visibility(hidden) => {
-            json!({"action":"hide-session","id":id,"hidden":hidden})
-        }
-        ChatMetadata::Archive(archived) => {
-            json!({"action":"archive-session","id":id,"restore":!archived})
-        }
-    };
     repo.transaction(|state| {
-        domain::edit(state, &edit)?;
+        match change {
+            ChatMetadata::Rename(title) => sessions::rename(state, &id, title)?,
+            ChatMetadata::Visibility(hidden) => sessions::set_hidden(state, &id, hidden)?,
+            ChatMetadata::Archive(archived) => sessions::set_archived(state, &id, archived)?,
+        }
         let record = sessions::get(state, &id)?;
         let timestamp = |key: &str| record[key].as_f64().filter(|value| value.is_finite() && *value >= 0.0);
         Ok(json!({"chat":{"id":record["id"],"title":record["title"].as_str().unwrap_or(""),"hidden":record["hidden"].as_bool().unwrap_or(false),"archivedAt":timestamp("archivedAt"),"updatedAt":timestamp("updatedAt")},"scope":"local"}))

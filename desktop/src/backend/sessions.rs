@@ -53,6 +53,22 @@ pub fn public(record: &mut Value) {
         }
     }
 }
+/// Rename the chat and mark it updated.
+pub fn rename(s: &mut Value, id: &str, title: &str) -> Result<()> {
+    let title = checked(&json!({ "title": title }), "title", 180, true)?;
+    let record = get_mut(s, id)?;
+    record["title"] = json!(title);
+    record["updatedAt"] = json!(now());
+    Ok(())
+}
+pub fn set_hidden(s: &mut Value, id: &str, hidden: bool) -> Result<()> {
+    get_mut(s, id)?["hidden"] = json!(hidden);
+    Ok(())
+}
+pub fn set_archived(s: &mut Value, id: &str, archived: bool) -> Result<()> {
+    get_mut(s, id)?["archivedAt"] = if archived { json!(now()) } else { Value::Null };
+    Ok(())
+}
 pub(super) fn validate_text(fields: &Value) -> Result<(String, String)> {
     let title = checked(fields, "title", 180, true)?;
     if title.chars().any(char::is_control) {
