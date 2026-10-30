@@ -2,6 +2,7 @@
 const { test } = require("node:test"),
   assert = require("node:assert/strict");
 const {
+  checkedPatch,
   documentStore,
   validDocumentIdentity,
 } = require("../static/documents.js");
@@ -118,4 +119,47 @@ test("document identity needs a non-negative revision and a 64-hex content hash"
   ]) {
     assert.equal(validDocumentIdentity(value), false, JSON.stringify(value));
   }
+});
+
+test("checked patch sends changed fields with their read tokens and compares arrays by value", () => {
+  const baseline = {
+    values: { title: "Saved", enabled: true, count: 5, itemIds: ["a", "b"] },
+    expected: {
+      title: hash("1"),
+      enabled: hash("2"),
+      count: hash("3"),
+      itemIds: hash("4"),
+    },
+  };
+  const fields = ["title", "enabled", "count", "itemIds"];
+  assert.deepEqual(
+    checkedPatch(
+      baseline,
+      { title: "Saved", enabled: true, count: 5, itemIds: ["a", "b"] },
+      fields,
+    ),
+    { patch: {}, expected: {} },
+  );
+  assert.deepEqual(
+    checkedPatch(
+      baseline,
+      { title: "New", enabled: true, count: 5, itemIds: ["b", "a"] },
+      fields,
+    ),
+    {
+      patch: { title: "New", itemIds: ["b", "a"] },
+      expected: { title: hash("1"), itemIds: hash("4") },
+    },
+  );
+  assert.deepEqual(
+    checkedPatch(
+      baseline,
+      { title: "New", enabled: false, count: 6, itemIds: ["a"] },
+      ["enabled", "count", "itemIds"],
+    ),
+    {
+      patch: { enabled: false, count: 6, itemIds: ["a"] },
+      expected: { enabled: hash("2"), count: hash("3"), itemIds: hash("4") },
+    },
+  );
 });

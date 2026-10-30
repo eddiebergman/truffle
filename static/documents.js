@@ -15,6 +15,24 @@ function writeFailureKind(error) {
       return "unknown";
   }
 }
+function sameFieldValue(saved, next) {
+  return Array.isArray(saved) && Array.isArray(next)
+    ? saved.length === next.length &&
+        saved.every((value, index) => value === next[index])
+    : saved === next;
+}
+// A checked write sends each changed field with the token the read returned for it.
+function checkedPatch(baseline, next, fields) {
+  const patch = {},
+    expected = {};
+  for (const field of fields) {
+    if (!sameFieldValue(baseline.values[field], next[field])) {
+      patch[field] = next[field];
+      expected[field] = baseline.expected[field];
+    }
+  }
+  return { patch, expected };
+}
 function validDocumentIdentity(value) {
   return (
     Number.isSafeInteger(value?.revision) &&
@@ -74,5 +92,10 @@ function documentStore({ get, set, read, write, validate = (value) => value }) {
   };
 }
 if (typeof module !== "undefined") {
-  module.exports = { writeFailureKind, validDocumentIdentity, documentStore };
+  module.exports = {
+    writeFailureKind,
+    checkedPatch,
+    validDocumentIdentity,
+    documentStore,
+  };
 }
