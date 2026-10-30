@@ -563,7 +563,7 @@ fn import_cache_identity_and_digest_keep_reused_share_ids_immutable() {
         let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
         let digest = context_kit::sha256(&bytes);
         let key = format!("manifests/sha256/{digest}/context.json");
-        store.put(&key, &bytes).unwrap();
+        store.objects.put_immutable(&key, &bytes).unwrap();
         change(&repo,|state| {state["entries"][delivery]=json!({"id":delivery,"shareId":share,"bundle":{"uri":format!("{}/{}",store.root,key),"sha256":digest,"size":bytes.len()}});Ok(())}).unwrap();
         manifests.push(bytes);
     }
@@ -693,10 +693,17 @@ fn conversation_excerpt_excludes_tools_and_machine_notifications() {
 fn immutable_conflicts_and_unsafe_uris_fail_without_overwrite() {
     let (_t, repo) = fixture();
     let store = Store::new(&repo, &configuration(&repo).unwrap()).unwrap();
-    store.put("test/value", b"first").unwrap();
-    assert!(store.put("test/value", b"second").is_err());
+    store.objects.put_immutable("test/value", b"first").unwrap();
+    assert!(store
+        .objects
+        .put_immutable("test/value", b"second")
+        .is_err());
     assert_eq!(
-        store.read("test/value", 100, None).unwrap().unwrap(),
+        store
+            .objects
+            .read("test/value", 100, None)
+            .unwrap()
+            .unwrap(),
         b"first"
     );
     for uri in [
@@ -704,7 +711,7 @@ fn immutable_conflicts_and_unsafe_uris_fail_without_overwrite() {
         "gs://other-bucket/x",
         "gs://misc/context-bundles/v1/../escape",
     ] {
-        assert!(store.object(uri).is_err());
+        assert!(store.key_for(uri).is_err());
     }
 }
 #[test]
@@ -718,29 +725,38 @@ fn folder_objects_are_atomic_immutable_bounded_and_do_not_follow_symlinks() {
             .as_str()
             .trim_end_matches('/')
             .into(),
-        backend: StoreBackend::Folder {
-            directory: directory.clone(),
+        transport: Transport::Folder {
+            root: directory.clone(),
         },
+        objects: Objects::Folder(directory.clone()),
     };
     store
-        .put("inboxes/alex/deliveries/object.json", b"first")
+        .objects
+        .put_immutable("inboxes/alex/deliveries/object.json", b"first")
         .unwrap();
     store
-        .put("inboxes/alex/deliveries/object.json", b"first")
+        .objects
+        .put_immutable("inboxes/alex/deliveries/object.json", b"first")
         .unwrap();
     assert!(store
-        .put("inboxes/alex/deliveries/object.json", b"second")
+        .objects
+        .put_immutable("inboxes/alex/deliveries/object.json", b"second")
         .is_err());
-    let listing = store.list("inboxes/alex/deliveries/", "").unwrap();
+    let listing = store
+        .objects
+        .list("inboxes/alex/deliveries/", "", false)
+        .unwrap();
     let generation = text(&listing["items"][0], "generation");
     assert_eq!(
         store
+            .objects
             .read("inboxes/alex/deliveries/object.json", 5, Some(generation))
             .unwrap()
             .unwrap(),
         b"first"
     );
     assert!(store
+        .objects
         .read("inboxes/alex/deliveries/object.json", 4, None)
         .is_err());
     fs::write(
@@ -749,20 +765,23 @@ fn folder_objects_are_atomic_immutable_bounded_and_do_not_follow_symlinks() {
     )
     .unwrap();
     assert!(store
+        .objects
         .read("inboxes/alex/deliveries/object.json", 100, Some(generation))
         .is_err());
     let outside = tempfile::tempdir().unwrap();
     fs::write(outside.path().join("secret"), b"outside").unwrap();
     symlink(outside.path(), directory.join("escape")).unwrap();
     symlink(outside.path().join("secret"), directory.join("leaf")).unwrap();
-    assert!(store.read("escape/secret", 100, None).is_err());
-    assert!(store.read("leaf", 100, None).is_err());
-    assert!(store.put("escape/new", b"no").is_err());
+    assert!(store.objects.read("escape/secret", 100, None).is_err());
+    assert!(store.objects.read("leaf", 100, None).is_err());
+    assert!(store.objects.put_immutable("escape/new", b"no").is_err());
     assert!(!outside.path().join("new").exists());
-    assert!(store.object("file:///outside/context.json").is_err());
-    assert!(store.object("https://example.org/context.json").is_err());
-    assert!(store.object(&(store.root.clone() + "/../outside")).is_err());
-    assert!(store.read("../outside", 100, None).is_err());
+    assert!(store.key_for("file:///outside/context.json").is_err());
+    assert!(store.key_for("https://example.org/context.json").is_err());
+    assert!(store
+        .key_for(&(store.root.clone() + "/../outside"))
+        .is_err());
+    assert!(store.objects.read("../outside", 100, None).is_err());
     assert_eq!(
         fs::read_dir(directory.join("inboxes/alex/deliveries"))
             .unwrap()
@@ -793,10 +812,10 @@ fn folder_send_preview_and_import_preserve_portable_bundle_and_retry_identity() 
     assert_eq!(first["uri"], retry["uri"]);
     assert!(text(&first, "uri").starts_with("file://"));
     let store = Store::new(&repo, &configuration(&repo).unwrap()).unwrap();
-    let StoreBackend::Folder { directory } = &store.backend else {
+    let Objects::Folder(directory) = &store.objects else {
         panic!()
     };
-    let manifest = directory.join(store.object(text(&first, "uri")).unwrap());
+    let manifest = directory.join(store.key_for(text(&first, "uri")).unwrap());
     let bundle = Bundle::load(&manifest).unwrap();
     assert!(bundle
         .inspect(manifest.parent().unwrap())
@@ -810,6 +829,7 @@ fn folder_send_preview_and_import_preserve_portable_bundle_and_retry_identity() 
     );
     let delivery = text(&payload["deliveryIds"], "eddie");
     let bytes = store
+        .objects
         .read(
             &format!("inboxes/eddie/deliveries/{delivery}.json"),
             MAX_RECORD,

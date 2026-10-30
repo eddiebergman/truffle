@@ -489,169 +489,96 @@ fn folder_put(root: &Path, key: &str, bytes: &[u8]) -> Result<()> {
     unsafe { libc::unlinkat(parent.as_raw_fd(), temp.as_ptr(), 0) };
     result
 }
-enum StoreBackend {
-    Gcs {
-        bucket: String,
-        prefix: String,
-        client: Client,
-        token: String,
-    },
-    Folder {
-        directory: PathBuf,
-    },
+/// GCS JSON API access to one bucket prefix.
+struct Gcs {
+    api: Url,
+    bucket: String,
+    prefix: String,
+    client: Client,
+    token: String,
 }
-struct Store {
-    root: String,
-    backend: StoreBackend,
-}
-impl Store {
-    fn new(repo: &Repository, config: &Value) -> Result<Self> {
-        let transport: Transport = if config["transport"].is_object() {
-            serde_json::from_value(config["transport"].clone())
-                .map_err(|_| Error::new("Invalid sharing transport."))?
-        } else {
-            Transport::Gcs {
-                root: text(config, "root").into(),
-            }
-        };
-        let root = SharingConfig {
-            version: 1,
-            revision: 0,
-            handle: handle(text(config, "handle"))?,
-            transport: transport.clone(),
-        }
-        .root_uri()?;
-        match transport {
-            Transport::Folder { root: directory } => {
-                if repo.demo {
-                    let directory = base(repo).join("demo-folder");
-                    fs::create_dir_all(&directory)?;
-                    return Ok(Self {
-                        root,
-                        backend: StoreBackend::Folder { directory },
-                    });
-                }
-                let canonical = directory.canonicalize().map_err(|_| {
-                    Error::new("Shared folder is unavailable. Mount it before retrying.")
-                })?;
-                if !canonical.is_dir() || canonical != directory {
-                    return Err(Error::new("Shared folder changed. Choose its current absolute path in sharing settings."));
-                }
-                Ok(Self {
-                    root,
-                    backend: StoreBackend::Folder { directory },
-                })
-            }
-            Transport::Gcs { .. } => {
-                let (bucket, prefix) = gs(&root)?;
-                if repo.demo {
-                    let directory = base(repo).join("demo-team");
-                    fs::create_dir_all(&directory)?;
-                    return Ok(Self {
-                        root,
-                        backend: StoreBackend::Folder { directory },
-                    });
-                }
-                let token=super::terminal::run(&super::terminal::executable("gcloud"),&["auth".into(),"print-access-token".into()],None,20).map_err(|_|Error::new("GCP credentials unavailable. Run gcloud auth login in Terminal, then retry."))?.trim().to_string();
-                if token.is_empty() {
-                    return Err(Error::new("GCP returned no access token."));
-                }
-                let client = Client::builder()
-                    .no_proxy()
-                    .redirect(reqwest::redirect::Policy::none())
-                    .connect_timeout(Duration::from_secs(5))
-                    .timeout(Duration::from_secs(30))
-                    .build()
-                    .map_err(|_| Error::new("Cannot initialize GCS transport."))?;
-                Ok(Self {
-                    root,
-                    backend: StoreBackend::Gcs {
-                        bucket,
-                        prefix,
-                        client,
-                        token,
-                    },
-                })
-            }
-        }
-    }
-    fn folder_extension(&self) -> bool {
-        self.root.starts_with("file://")
-    }
-    fn object(&self, uri: &str) -> Result<String> {
-        if self.folder_extension() {
-            let url = Url::parse(uri).map_err(|_| Error::new("Invalid folder manifest URI."))?;
-            if url.scheme() != "file"
-                || url.host_str().is_some()
-                || url.query().is_some()
-                || url.fragment().is_some()
-            {
-                return Err(Error::new("Folder references must use a local file URI."));
-            }
-            let root = Url::parse(&self.root)
-                .unwrap()
-                .to_file_path()
-                .map_err(|()| Error::new("Invalid folder root URI."))?;
-            let path = url
-                .to_file_path()
-                .map_err(|()| Error::new("Invalid folder reference URI."))?;
-            let key=path.strip_prefix(root).map_err(|_|Error::new("Reference is outside the configured sharing folder. It remains an external link."))?;
-            let key = key
-                .to_str()
-                .ok_or_else(|| Error::new("Folder reference is not UTF-8."))?;
-            relative(key)?;
-            return Ok(key.into());
-        }
-        let key = uri
-            .strip_prefix(&(self.root.clone() + "/"))
-            .ok_or_else(|| {
-                Error::new(
-                "Reference is outside the configured sharing root. It remains an external link.",
+impl Gcs {
+    fn connect(root: &str) -> Result<Self> {
+        let (bucket, prefix) = gs(root)?;
+        let token = super::terminal::run(
+            &super::terminal::executable("gcloud"),
+            &["auth".into(), "print-access-token".into()],
+            None,
+            20,
+        )
+        .map_err(|_| {
+            Error::new(
+                "GCP credentials unavailable. Run gcloud auth login in Terminal, then retry.",
             )
-            })?;
-        relative(key)?;
-        Ok(key.into())
-    }
-    fn url(&self, key: Option<&str>, upload: bool) -> Url {
-        let StoreBackend::Gcs { bucket, prefix, .. } = &self.backend else {
-            unreachable!()
-        };
-        let mut u = Url::parse(if upload {
-            "https://storage.googleapis.com/upload/storage/v1/b/"
-        } else {
-            "https://storage.googleapis.com/storage/v1/b/"
-        })
-        .unwrap();
-        {
-            let mut p = u.path_segments_mut().unwrap();
-            p.pop_if_empty().push(bucket).push("o");
-            if let Some(key) = key {
-                let full = if prefix.is_empty() {
-                    key.into()
-                } else {
-                    format!("{prefix}/{key}")
-                };
-                p.push(&full);
-            }
+        })?
+        .trim()
+        .to_string();
+        if token.is_empty() {
+            return Err(Error::new("GCP returned no access token."));
         }
-        u
+        Self::new(
+            Url::parse("https://storage.googleapis.com/").unwrap(),
+            bucket,
+            prefix,
+            token,
+        )
+    }
+    fn new(api: Url, bucket: String, prefix: String, token: String) -> Result<Self> {
+        let client = Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|_| Error::new("Cannot initialize GCS transport."))?;
+        Ok(Self {
+            api,
+            bucket,
+            prefix,
+            client,
+            token,
+        })
+    }
+    fn name(&self, key: &str) -> String {
+        if self.prefix.is_empty() {
+            key.into()
+        } else {
+            format!("{}/{key}", self.prefix)
+        }
+    }
+    fn key<'a>(&self, name: &'a str) -> Option<&'a str> {
+        if self.prefix.is_empty() {
+            return Some(name);
+        }
+        name.strip_prefix(&self.prefix)?.strip_prefix('/')
+    }
+    fn objects_url(&self, upload: bool) -> Url {
+        let mut url = self.api.clone();
+        {
+            let mut path = url.path_segments_mut().unwrap();
+            path.pop_if_empty();
+            if upload {
+                path.push("upload");
+            }
+            path.extend(["storage", "v1", "b", &self.bucket, "o"]);
+        }
+        url
     }
     fn read(&self, key: &str, limit: u64, generation: Option<&str>) -> Result<Option<Vec<u8>>> {
-        relative(key)?;
-        if let StoreBackend::Folder { directory } = &self.backend {
-            return folder_read(directory, key, limit, generation);
-        }
-        let StoreBackend::Gcs { client, token, .. } = &self.backend else {
-            unreachable!()
-        };
-        let mut url = self.url(Some(key), false);
+        let mut url = self.objects_url(false);
+        url.path_segments_mut().unwrap().push(&self.name(key));
         url.query_pairs_mut().append_pair("alt", "media");
         if let Some(g) = generation {
             url.query_pairs_mut().append_pair("generation", g);
         }
-        let response = client.get(url).bearer_auth(token).send().map_err(|_| {
-            Error::new("GCS download failed or timed out. Cached context remains available.")
-        })?;
+        let response = self
+            .client
+            .get(url)
+            .bearer_auth(&self.token)
+            .send()
+            .map_err(|_| {
+                Error::new("GCS download failed or timed out. Cached context remains available.")
+            })?;
         if response.status().as_u16() == 404 {
             return Ok(None);
         }
@@ -671,31 +598,13 @@ impl Store {
         }
         Ok(Some(bytes))
     }
-    fn put(&self, key: &str, bytes: &[u8]) -> Result<()> {
-        relative(key)?;
-        if let StoreBackend::Folder { directory } = &self.backend {
-            return folder_put(directory, key, bytes);
-        }
-        let StoreBackend::Gcs {
-            client,
-            token,
-            prefix,
-            ..
-        } = &self.backend
-        else {
-            unreachable!()
-        };
-        let mut url = self.url(None, true);
-        let full = if prefix.is_empty() {
-            key.into()
-        } else {
-            format!("{prefix}/{key}")
-        };
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<()> {
+        let mut url = self.objects_url(true);
         url.query_pairs_mut()
             .append_pair("uploadType", "media")
-            .append_pair("name", &full)
+            .append_pair("name", &self.name(key))
             .append_pair("ifGenerationMatch", "0");
-        let response=client.post(url).bearer_auth(token).header("Content-Type","application/octet-stream").body(bytes.to_vec()).send().map_err(|_|Error::new("GCS upload failed or timed out. Retry this send to keep the same delivery IDs."))?;
+        let response=self.client.post(url).bearer_auth(&self.token).header("Content-Type","application/octet-stream").body(bytes.to_vec()).send().map_err(|_|Error::new("GCS upload failed or timed out. Retry this send to keep the same delivery IDs."))?;
         if response.status().as_u16() == 412 {
             if self.read(key, bytes.len() as u64, None)?.as_deref() == Some(bytes) {
                 return Ok(());
@@ -712,43 +621,10 @@ impl Store {
         }
         Ok(())
     }
-    fn list(&self, prefix: &str, page: &str) -> Result<Value> {
-        self.list_page(prefix, page, false)
-    }
-    fn inbox_prefixes(&self, page: &str) -> Result<Value> {
-        self.list_page("inboxes/", page, true)
-    }
-    fn list_page(&self, prefix: &str, page: &str, prefixes_only: bool) -> Result<Value> {
-        relative(prefix.trim_end_matches('/'))?;
-        match &self.backend {
-            StoreBackend::Folder { directory } => {
-                list_folder_page(directory, prefix, page, prefixes_only)
-            }
-            StoreBackend::Gcs {
-                client,
-                token,
-                prefix: store_prefix,
-                ..
-            } => self.list_gcs_page(client, token, store_prefix, prefix, page, prefixes_only),
-        }
-    }
-    fn list_gcs_page(
-        &self,
-        client: &Client,
-        token: &str,
-        store_prefix: &str,
-        prefix: &str,
-        page: &str,
-        prefixes_only: bool,
-    ) -> Result<Value> {
-        let mut url = self.url(None, false);
-        let full = if store_prefix.is_empty() {
-            prefix.into()
-        } else {
-            format!("{store_prefix}/{prefix}")
-        };
+    fn list(&self, prefix: &str, page: &str, prefixes_only: bool) -> Result<Value> {
+        let mut url = self.objects_url(false);
         url.query_pairs_mut()
-            .append_pair("prefix", &full)
+            .append_pair("prefix", &self.name(prefix))
             .append_pair("maxResults", "100")
             .append_pair(
                 "fields",
@@ -764,9 +640,10 @@ impl Store {
         if !page.is_empty() {
             url.query_pairs_mut().append_pair("pageToken", page);
         }
-        let response = client
+        let response = self
+            .client
             .get(url)
-            .bearer_auth(token)
+            .bearer_auth(&self.token)
             .send()
             .map_err(|_| Error::new("GCS inbox listing failed or timed out."))?;
         if !response.status().is_success() {
@@ -782,23 +659,166 @@ impl Store {
         }
         let mut v: Value = serde_json::from_slice(&bytes)?;
         for prefix in v["prefixes"].as_array_mut().into_iter().flatten() {
-            if !store_prefix.is_empty() {
-                *prefix = json!(prefix
-                    .as_str()
-                    .unwrap_or("")
-                    .strip_prefix(&format!("{store_prefix}/"))
-                    .ok_or_else(|| Error::new("Unexpected inbox prefix."))?);
-            }
+            *prefix = json!(self
+                .key(prefix.as_str().unwrap_or(""))
+                .ok_or_else(|| Error::new("Unexpected inbox prefix."))?);
         }
         for entry in v["items"].as_array_mut().into_iter().flatten() {
-            if !store_prefix.is_empty() {
-                entry["name"] = json!(text(entry, "name")
-                    .strip_prefix(&format!("{store_prefix}/"))
-                    .ok_or_else(|| Error::new("Unexpected object prefix."))?);
-            }
+            entry["name"] = json!(self
+                .key(text(entry, "name"))
+                .ok_or_else(|| Error::new("Unexpected object prefix."))?);
         }
         Ok(v)
     }
+}
+/// Immutable objects addressed by keys relative to the sharing root.
+enum Objects {
+    Gcs(Gcs),
+    Folder(PathBuf),
+}
+impl Objects {
+    fn read(&self, key: &str, limit: u64, generation: Option<&str>) -> Result<Option<Vec<u8>>> {
+        relative(key)?;
+        match self {
+            Self::Gcs(gcs) => gcs.read(key, limit, generation),
+            Self::Folder(directory) => folder_read(directory, key, limit, generation),
+        }
+    }
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<()> {
+        relative(key)?;
+        match self {
+            Self::Gcs(gcs) => gcs.put_immutable(key, bytes),
+            Self::Folder(directory) => folder_put(directory, key, bytes),
+        }
+    }
+    fn list(&self, prefix: &str, page: &str, prefixes_only: bool) -> Result<Value> {
+        relative(prefix.trim_end_matches('/'))?;
+        match self {
+            Self::Gcs(gcs) => gcs.list(prefix, page, prefixes_only),
+            Self::Folder(directory) => list_folder_page(directory, prefix, page, prefixes_only),
+        }
+    }
+}
+/// The configured transport. Its kind sets the reference rules, publish plan and
+/// delivery format; `objects` holds the bytes, which demo mode keeps in a local folder.
+struct Store {
+    root: String,
+    transport: Transport,
+    objects: Objects,
+}
+impl Store {
+    fn new(repo: &Repository, config: &Value) -> Result<Self> {
+        let (handle, transport) = destination(config)?;
+        let root = SharingConfig {
+            version: 1,
+            revision: 0,
+            handle,
+            transport: transport.clone(),
+        }
+        .root_uri()?;
+        let objects = match &transport {
+            Transport::Folder { .. } if repo.demo => {
+                Objects::Folder(demo_directory(repo, "demo-folder")?)
+            }
+            Transport::Folder { root: directory } => {
+                let canonical = directory.canonicalize().map_err(|_| {
+                    Error::new("Shared folder is unavailable. Mount it before retrying.")
+                })?;
+                if !canonical.is_dir() || canonical != *directory {
+                    return Err(Error::new("Shared folder changed. Choose its current absolute path in sharing settings."));
+                }
+                Objects::Folder(directory.clone())
+            }
+            Transport::Gcs { .. } if repo.demo => {
+                gs(&root)?;
+                Objects::Folder(demo_directory(repo, "demo-team")?)
+            }
+            Transport::Gcs { .. } => Objects::Gcs(Gcs::connect(&root)?),
+        };
+        Ok(Self {
+            root,
+            transport,
+            objects,
+        })
+    }
+    fn key_for(&self, uri: &str) -> Result<String> {
+        let key = match self.transport {
+            Transport::Folder { .. } => {
+                let url =
+                    Url::parse(uri).map_err(|_| Error::new("Invalid folder manifest URI."))?;
+                if url.scheme() != "file"
+                    || url.host_str().is_some()
+                    || url.query().is_some()
+                    || url.fragment().is_some()
+                {
+                    return Err(Error::new("Folder references must use a local file URI."));
+                }
+                let root = Url::parse(&self.root)
+                    .unwrap()
+                    .to_file_path()
+                    .map_err(|()| Error::new("Invalid folder root URI."))?;
+                let path = url
+                    .to_file_path()
+                    .map_err(|()| Error::new("Invalid folder reference URI."))?;
+                let key=path.strip_prefix(root).map_err(|_|Error::new("Reference is outside the configured sharing folder. It remains an external link."))?;
+                key.to_str()
+                    .ok_or_else(|| Error::new("Folder reference is not UTF-8."))?
+                    .to_owned()
+            }
+            Transport::Gcs { .. } => uri
+                .strip_prefix(&(self.root.clone() + "/"))
+                .ok_or_else(|| {
+                    Error::new(
+                "Reference is outside the configured sharing root. It remains an external link.",
+            )
+                })?
+                .to_owned(),
+        };
+        relative(&key)?;
+        Ok(key)
+    }
+    fn plan(
+        &self,
+        bundle: &Bundle,
+        directory: &Path,
+        manifest_file: &Path,
+    ) -> Result<context_kit::PublishPlan> {
+        match self.transport {
+            Transport::Folder { .. } => folder_plan(bundle, directory, &self.root, manifest_file),
+            Transport::Gcs { .. } => kit(context_kit::plan_gcs(
+                bundle,
+                directory,
+                &self.root,
+                manifest_file,
+            )),
+        }
+    }
+    fn delivery_extensions(&self) -> Option<Value> {
+        match self.transport {
+            Transport::Folder { .. } => Some(
+                json!({"org.truffle/folder-storage":{"version":1,"sameMountPathRequired":true}}),
+            ),
+            Transport::Gcs { .. } => None,
+        }
+    }
+    /// Copies a folder bundle's attachments next to its imported manifest.
+    fn fetch_resources(&self, raw: &Value, dir: &Path, manifest_uri: &str) -> Vec<Value> {
+        match self.transport {
+            Transport::Folder { .. } => fetch_folder_resources(raw, dir, self, manifest_uri),
+            Transport::Gcs { .. } => vec![],
+        }
+    }
+    /// Whether `fetch_resources` already copied this attachment into the import directory.
+    fn fetched(&self, resource: &Value) -> bool {
+        matches!(self.transport, Transport::Folder { .. })
+            && text(resource, "href")
+                == format!("objects/{}", text(resource, "sha256").to_ascii_lowercase())
+    }
+}
+fn demo_directory(repo: &Repository, name: &str) -> Result<PathBuf> {
+    let directory = base(repo).join(name);
+    fs::create_dir_all(&directory)?;
+    Ok(directory)
 }
 fn list_folder_page(
     directory: &Path,
@@ -1306,7 +1326,7 @@ fn merge_people(discovered: &[Value], directory: &[Value]) -> Vec<Value> {
 }
 fn refresh_people(repo: &Repository, store: &Store) -> Result<()> {
     // An optional missing directory clears old display names; transport failures retain cached names.
-    match store.read("directory.json", 1024 * 1024, None) {
+    match store.objects.read("directory.json", 1024 * 1024, None) {
         Ok(None) => {
             change(repo, |s| {
                 s["directoryPeople"] = json!([]);
@@ -1338,7 +1358,7 @@ fn refresh_people(repo: &Repository, store: &Store) -> Result<()> {
             .collect()
     };
     for _ in 0..4 {
-        let listing = store.inbox_prefixes(&page)?;
+        let listing = store.objects.list("inboxes/", &page, true)?;
         for value in arr(&listing["prefixes"]) {
             let Some(id) = value
                 .as_str()
@@ -1404,7 +1424,7 @@ fn refresh_once(repo: &Repository) -> Result<()> {
     }
     let mut page = text(&repo.sharing.lock().unwrap(), "pageToken").to_string();
     for _ in 0..20 {
-        let listing = store.list(&prefix, &page)?;
+        let listing = store.objects.list(&prefix, &page, false)?;
         for item in arr(&listing["items"]) {
             let key = text(&item, "name");
             let Some(filename) = key.strip_prefix(&prefix) else {
@@ -1500,6 +1520,7 @@ fn delivery_entry(
         return Err(Error::new("Delivery record exceeds 64 KiB."));
     }
     let bytes = store
+        .objects
         .read(key, MAX_RECORD, Some(text(item, "generation")))?
         .ok_or_else(|| Error::new("Delivery disappeared while refreshing."))?;
     let record: Value = serde_json::from_slice(&bytes)?;
@@ -1526,7 +1547,7 @@ fn validate_delivery(v: &Value, id: &str, recipient: &str, store: &Store) -> Res
     handle(text(&v["sender"], "id"))?;
     checked(v, "title", 300, true)?;
     checked(v, "message", 4000, false)?;
-    let key = store.object(text(&v["bundle"], "uri"))?;
+    let key = store.key_for(text(&v["bundle"], "uri"))?;
     let digest = text(&v["bundle"], "sha256");
     if digest.len() != 64
         || !digest.chars().all(|c| c.is_ascii_hexdigit())
@@ -2142,7 +2163,7 @@ fn fetch_folder_resources(
     store: &Store,
     manifest_uri: &str,
 ) -> Vec<Value> {
-    if !store.folder_extension() || !text(raw, "version").starts_with("1.") {
+    if !text(raw, "version").starts_with("1.") {
         return vec![];
     }
     let mut notices = Vec::new();
@@ -2164,8 +2185,9 @@ fn fetch_folder_resources(
         }
         total += size;
         let result = (|| {
-            let key = store.object(&format!("{parent}{href}"))?;
+            let key = store.key_for(&format!("{parent}{href}"))?;
             let bytes = store
+                .objects
                 .read(&key, size, None)?
                 .ok_or_else(|| Error::new("Shared folder attachment is unavailable."))?;
             if bytes.len() as u64 != size
@@ -2194,20 +2216,11 @@ fn send(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
     let b = kit(Bundle::load(&path))?;
     let remote = base(repo).join("outbox").join(id).join("context.json");
     fs::create_dir_all(remote.parent().unwrap())?;
-    let plan = if store.folder_extension() {
-        folder_plan(&b, path.parent().unwrap(), &store.root, &remote)?
-    } else {
-        kit(context_kit::plan_gcs(
-            &b,
-            path.parent().unwrap(),
-            &store.root,
-            &remote,
-        ))?
-    };
+    let plan = store.plan(&b, path.parent().unwrap(), &remote)?;
     let remote_bytes = serde_json::to_vec_pretty(&plan.manifest)?;
     write(&remote, &remote_bytes)?;
     for upload in &plan.uploads {
-        let key = store.object(&upload.object)?;
+        let key = store.key_for(&upload.object)?;
         let bytes = if upload.object == plan.manifest_uri {
             remote_bytes.clone()
         } else {
@@ -2219,7 +2232,7 @@ fn send(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
         if context_kit::sha256(&bytes) != upload.sha256 {
             return Err(Error::new("Prepared file changed before sending."));
         }
-        store.put(&key, &bytes)?;
+        store.objects.put_immutable(&key, &bytes)?;
     }
     let mut outcomes = repo.sharing.lock().unwrap()["jobs"][id]["outcomes"]
         .as_object()
@@ -2237,12 +2250,11 @@ fn send(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
         let delivery_id = text(&p["deliveryIds"], name);
         let delivery = json!({"format":"context-delivery","version":"1.0","id":delivery_id,"share_id":p["shareId"],"created_at":at,"sender":{"id":config["handle"],"name":config["handle"]},"recipient":name,"title":draft["title"],"message":p["message"],"bundle":{"uri":plan.manifest_uri,"sha256":context_kit::sha256(&remote_bytes),"size":remote_bytes.len()}});
         let mut delivery = delivery;
-        if store.folder_extension() {
-            delivery["extensions"] =
-                json!({"org.truffle/folder-storage":{"version":1,"sameMountPathRequired":true}});
+        if let Some(extensions) = store.delivery_extensions() {
+            delivery["extensions"] = extensions;
         }
         let bytes = serde_json::to_vec_pretty(&delivery)?;
-        let result = store.put(
+        let result = store.objects.put_immutable(
             &format!("inboxes/{name}/deliveries/{delivery_id}.json"),
             &bytes,
         );
@@ -2298,7 +2310,8 @@ fn fetched_manifest(repo: &Repository, id: &str) -> Result<(Value, PathBuf, Stor
     let bytes = match cached {
         Some(b) if context_kit::sha256(&b) == text(expected, "sha256") => b,
         _ => store
-            .read(&store.object(text(expected, "uri"))?, MAX_MANIFEST, None)?
+            .objects
+            .read(&store.key_for(text(expected, "uri"))?, MAX_MANIFEST, None)?
             .ok_or_else(|| Error::new("Shared manifest is missing or inaccessible."))?,
     };
     if bytes.len() as u64 != expected["size"].as_u64().unwrap_or(0)
@@ -2391,7 +2404,7 @@ fn import(repo: &Repository, id: &str, p: &Value) -> Result<Value> {
     }
     let (mut raw, dir, store) = fetched_manifest(repo, delivery_id)?;
     let supported_version = text(&raw, "version").starts_with("1.");
-    let folder_notices = fetch_folder_resources(&raw, &dir, &store, text(&e["bundle"], "uri"));
+    let folder_notices = store.fetch_resources(&raw, &dir, text(&e["bundle"], "uri"));
     let initial_report = kit(Bundle::parse(&serde_json::to_vec(&raw)?))?.inspect(&dir);
     let unavailable_ids = initial_report
         .resources
@@ -2508,10 +2521,7 @@ fn resource_bytes(
             notices.push(json!("Invalid inline attachment encoding."));
         }
         decoded
-    } else if store.folder_extension()
-        && text(resource, "href")
-            == format!("objects/{}", text(resource, "sha256").to_ascii_lowercase())
-    {
+    } else if store.fetched(resource) {
         match kit(context_kit::read_bounded(
             &dir.join(text(resource, "href")),
             size,
@@ -2522,8 +2532,8 @@ fn resource_bytes(
                 None
             }
         }
-    } else if let Ok(key) = store.object(text(resource, "href")) {
-        match store.read(&key, size, None) {
+    } else if let Ok(key) = store.key_for(text(resource, "href")) {
+        match store.objects.read(&key, size, None) {
             Ok(Some(v)) => Some(v),
             Ok(None) => {
                 notices.push(json!(format!(
