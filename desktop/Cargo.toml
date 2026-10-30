@@ -15,8 +15,6 @@ jiff = { version = "0.2.38", default-features = false, features = ["std", "tz-sy
 # The default features without `compression`, which adds four brotli crates to
 # shrink the embedded frontend.
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus"] }
-tauri-plugin-single-instance = "2"
-tauri-plugin-window-state = "2"
 zeroize = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -38,9 +36,9 @@ graphql-parser = "0.4"
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3.7"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSString", "NSArray"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSString", "NSArray", "NSUserDefaults"] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFString", "CFUserNotification", "CFDate", "CFURL"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSImage"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSImage", "NSResponder", "NSWindow"] }
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

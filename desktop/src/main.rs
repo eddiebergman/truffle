@@ -3,6 +3,8 @@ mod clipboard;
 mod dialog;
 mod restart;
 mod service;
+mod single_instance;
+mod window_state;
 use serde_json::Value;
 use service::{DashboardService, LocalHttpService, Reply};
 use std::{
@@ -674,6 +676,63 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     app.set_menu(menu)?;
     Ok(())
 }
+fn build_app(service: Arc<LocalHttpService>, context: tauri::Context) -> tauri::App {
+    let assets = service.clone();
+    tauri::Builder::default()
+        .manage(NativeState {
+            service: service.clone(),
+            verified: Arc::new(AtomicBool::new(false)),
+            connections: Arc::new(Mutex::new(None)),
+        })
+        .invoke_handler(tauri::generate_handler![
+            service_request,
+            service_status,
+            connection_setup_view,
+            connection_setup_preview,
+            connection_setup_commit,
+            connection_setup_cancel,
+            restart_dashboard_preview,
+            restart_dashboard_start,
+            restart_dashboard_status,
+            read_artifact,
+            copy_text,
+            copy_artifact_image,
+            desktop_info,
+            open_cmux,
+            open_git_diff_in_zed,
+            drag_titlebar,
+            apply_native_settings,
+            set_shortcut_recording,
+            open_settings_file
+        ])
+        .register_asynchronous_uri_scheme_protocol(
+            "truffle-artifact",
+            move |_, request, responder| {
+                let service = assets.clone();
+                std::thread::spawn(move || {
+                    responder.respond(artifact_response(&service, &request));
+                });
+            },
+        )
+        .setup(move |app| {
+            build_main_window(app, service)?;
+            if let Some(window) = app.get_webview_window("main") {
+                window_state::restore(
+                    &window,
+                    &app.path().app_config_dir()?.join(".window-state.json"),
+                );
+            }
+            install_menu(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let _ = window.hide();
+            }
+        })
+        .build(context)
+        .expect("Could not initialize truffle")
+}
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     if let Some(result) = backend::agent_cli::run(&args) {
@@ -719,61 +778,30 @@ fn main() {
         .unwrap_or_else(|| "http://127.0.0.1:8765".into());
     let service =
         Arc::new(LocalHttpService::new(&address).expect("Invalid local service configuration"));
-    let assets = service.clone();
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
-        .manage(NativeState {
-            service: service.clone(),
-            verified: Arc::new(AtomicBool::new(false)),
-            connections: Arc::new(Mutex::new(None)),
-        })
-        .invoke_handler(tauri::generate_handler![
-            service_request,
-            service_status,
-            connection_setup_view,
-            connection_setup_preview,
-            connection_setup_commit,
-            connection_setup_cancel,
-            restart_dashboard_preview,
-            restart_dashboard_start,
-            restart_dashboard_status,
-            read_artifact,
-            copy_text,
-            copy_artifact_image,
-            desktop_info,
-            open_cmux,
-            open_git_diff_in_zed,
-            drag_titlebar,
-            apply_native_settings,
-            set_shortcut_recording,
-            open_settings_file
-        ])
-        .register_asynchronous_uri_scheme_protocol(
-            "truffle-artifact",
-            move |_, request, responder| {
-                let service = assets.clone();
-                std::thread::spawn(move || {
-                    responder.respond(artifact_response(&service, &request));
-                });
-            },
-        )
-        .setup(move |app| {
-            build_main_window(app, service)?;
-            install_menu(app)?;
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let _ = window.hide();
+    let context = tauri::generate_context!();
+    let socket = single_instance::socket(&context.config().identifier);
+    let listener = match single_instance::claim(&socket) {
+        single_instance::Instance::Secondary => return,
+        single_instance::Instance::Primary(listener) => Some(listener),
+        single_instance::Instance::Uncoordinated => None,
+    };
+    let app = build_app(service, context);
+    let primary = listener.is_some();
+    if let Some(listener) = listener {
+        let handle = app.handle().clone();
+        single_instance::serve(listener, move || show(&handle));
+    }
+    app.run(move |app, event| match event {
+        tauri::RunEvent::Reopen { .. } => show(app),
+        tauri::RunEvent::Exit => {
+            if let Some(window) = app.get_webview_window("main") {
+                window_state::save(&window);
             }
-        })
-        .build(tauri::generate_context!())
-        .expect("Could not initialize truffle");
-    app.run(|app, event| {
-        if let tauri::RunEvent::Reopen { .. } = event {
-            show(app);
+            if primary {
+                let _ = std::fs::remove_file(&socket);
+            }
         }
+        _ => {}
     });
 }
 
