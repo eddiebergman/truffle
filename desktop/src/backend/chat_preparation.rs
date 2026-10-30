@@ -42,7 +42,35 @@ impl Kind {
     pub fn parse(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
     }
+    /// The command arguments: the recipe's intent plus `requestId`.
+    pub fn schema(self) -> Value {
+        match self {
+            Self::Quick | Self::PrReview => workflows::Quick::schema(),
+            Self::Review => workflows::WorkReview::schema(),
+            Self::Skill => workflows::Skill::schema(),
+            Self::Recover => workflows::Recover::schema(),
+            Self::New => workflows::NewChat::schema(),
+            Self::Attach => workflows::NewChat::attach_schema(),
+            Self::View => view_context::View::schema(),
+        }
+    }
 }
+/// The command arguments for `read`.
+pub fn read_schema() -> Value {
+    schema(json!({}), &[])
+}
+pub(super) fn uuid_schema() -> Value {
+    json!({"type":"string","maxLength":36,"pattern":"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"})
+}
+/// A recipe's command arguments: its intent fields plus the required `requestId`.
+pub(super) fn schema(mut properties: Value, required: &[&str]) -> Value {
+    properties["requestId"] = uuid_schema();
+    let required = std::iter::once("requestId")
+        .chain(required.iter().copied())
+        .collect::<Vec<_>>();
+    json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
+}
+
 /// One kind of preparation, built from an intent that was validated before the
 /// canonical transaction starts.
 pub(super) trait Recipe {
@@ -356,7 +384,7 @@ pub fn save(repo: &Repository, kind: Kind, intent: &Value) -> Result<Value> {
     run(repo, kind, None, intent)
 }
 fn input(kind: Kind, args: &Value) -> Result<(String, Value)> {
-    super::commands::validate_preparation_arguments(kind.name(), args)?;
+    super::commands::validate_arguments(&kind.schema(), args, "args")?;
     if serde_json::to_vec(args)?.len() > 64 * 1024 {
         return Err(Error::new("Preparation input exceeds 64 KiB."));
     }

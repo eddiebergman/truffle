@@ -138,6 +138,9 @@ fn choose_with(
     error.data = json!({"location":{"root":root,"folders":candidates,"contexts":choices,"suggestedName":repo_name(item).split('/').next_back().unwrap_or(""),"title":item["title"].as_str().unwrap_or("New session"),"reason":"Choose where the agent should work. This can be remembered for related work."}});
     Err(error)
 }
+fn agent_schema() -> Value {
+    json!({"type":"string","enum":["claude","codex"]})
+}
 fn checked_agent(p: &Value) -> Result<&str> {
     let agent = text(p, "agent");
     if !["claude", "codex"].contains(&agent) {
@@ -231,6 +234,25 @@ pub(super) struct NewChat<'a> {
     attach: bool,
 }
 impl<'a> NewChat<'a> {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(
+            json!({"agent":agent_schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"instruction":{"type":"string","maxLength":8000},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}},"urls":{"type":"array","maxItems":10,"items":{"type":"string","maxLength":4096}},"projectName":{"type":"string","maxLength":180}}),
+            &[
+                "agent",
+                "title",
+                "cwd",
+                "destination",
+                "instruction",
+                "itemIds",
+            ],
+        )
+    }
+    pub(super) fn attach_schema() -> Value {
+        chat_preparation::schema(
+            json!({"agent":agent_schema(),"sessionId":chat_preparation::uuid_schema(),"title":{"type":"string","maxLength":180},"cwd":{"type":"string","maxLength":4096},"destination":{"type":"string","enum":["embedded","desktop","cmux"]},"itemIds":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":200}}}),
+            &["agent", "sessionId", "title", "cwd", "destination"],
+        )
+    }
     pub(super) fn validate(repo: &Repository, intent: &'a Value, attach: bool) -> Result<Self> {
         if !attach {
             let state = repo.state.lock().map_err(|_| Error::io())?;
@@ -271,6 +293,12 @@ pub(super) struct Quick<'a> {
     review_command: String,
 }
 impl<'a> Quick<'a> {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(
+            json!({"agent":agent_schema(),"itemId":{"type":"string","maxLength":200},"scopeSource":{"type":"string","maxLength":80},"scope":{"type":"string","maxLength":1000},"folderPath":{"type":"string","maxLength":4096},"newFolder":{"type":"string","maxLength":80},"rememberKey":{"type":"string","maxLength":1000},"chooseFolder":{"type":"boolean"}}),
+            &["agent"],
+        )
+    }
     pub(super) fn validate(repo: &Repository, intent: &'a Value, review: bool) -> Result<Self> {
         let agent = checked_agent(intent)?;
         let review_command = text(
@@ -444,6 +472,9 @@ pub(super) struct WorkReview<'a> {
     agent: &'a str,
 }
 impl<'a> WorkReview<'a> {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(json!({"agent":agent_schema()}), &["agent"])
+    }
     pub(super) fn validate(intent: &'a Value) -> Result<Self> {
         Ok(Self {
             agent: checked_agent(intent)?,
@@ -484,6 +515,12 @@ pub(super) struct Skill {
     preset: Value,
 }
 impl Skill {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(
+            json!({"presetId":{"type":"string","maxLength":80}}),
+            &["presetId"],
+        )
+    }
     pub(super) fn validate(repo: &Repository, intent: &Value) -> Result<Self> {
         let preset = artifacts::presets(repo, &repo.state.lock().unwrap())?
             .into_iter()
@@ -521,6 +558,14 @@ impl Recipe for Skill {
 /// A new chat with the context of the saved chat `intent.id`.
 pub(super) struct Recover<'a> {
     pub intent: &'a Value,
+}
+impl Recover<'_> {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(
+            json!({"id":{"type":"string","maxLength":80},"cwd":{"type":"string","maxLength":4096}}),
+            &["id"],
+        )
+    }
 }
 impl Recipe for Recover<'_> {
     fn admission(&self) -> Option<(String, f64)> {

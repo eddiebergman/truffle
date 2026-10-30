@@ -1,5 +1,5 @@
 //! Durable, bounded reference snapshots for an explicitly requested agent task.
-use super::chat_preparation::{Created, Recipe};
+use super::chat_preparation::{self, Created, Recipe};
 use super::{
     arr, checked, directory, http, json, repository, sessions, sid, text, uuid, workflows, Error,
     PathBuf, Repository, Result, Value,
@@ -21,6 +21,12 @@ pub(super) struct View<'a> {
     file: PathBuf,
 }
 impl<'a> View<'a> {
+    pub(super) fn schema() -> Value {
+        chat_preparation::schema(
+            json!({"agent":{"type":"string","enum":["claude","codex"]},"source":{"type":"string","enum":["all","linear","github","sentry"]},"question":{"type":"string","maxLength":4000},"itemIds":{"type":"array","minItems":1,"maxItems":4096,"items":{"type":"string","maxLength":160}},"folderPath":{"type":"string","maxLength":4096},"filters":{"type":"object","additionalProperties":true}}),
+            &["agent", "source", "question", "itemIds", "filters"],
+        )
+    }
     /// Without a `preparation_id`, `intent.requestId` names the view.
     pub(super) fn validate(
         repo: &Repository,
