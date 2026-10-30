@@ -6,6 +6,7 @@ import {
   getFiletypeFromFileName,
 } from "@pierre/diffs";
 import rosePine from "@shikijs/themes/rose-pine";
+import { bundledLanguages } from "shiki/langs";
 registerCustomTheme("truffle-rose-pine", () =>
   Promise.resolve({ ...rosePine, name: "truffle-rose-pine" }),
 );
@@ -111,9 +112,14 @@ export function createDiffReview(root, initialStyle, renderComments) {
             10,
           ) || 16,
       });
+      const language = getFiletypeFromFileName(data.path);
+      // A language without a bundled grammar shows as plain text instead of failing to load.
+      const lang = Object.hasOwn(bundledLanguages, language)
+        ? language
+        : "text";
       view.render({
-        oldFile: { name: data.path, contents: data.oldContent },
-        newFile: { name: data.path, contents: data.newContent },
+        oldFile: { name: data.path, contents: data.oldContent, lang },
+        newFile: { name: data.path, contents: data.newContent, lang },
         containerWrapper: container,
         lineAnnotations: annotations,
       });

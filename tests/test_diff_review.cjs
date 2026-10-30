@@ -34,6 +34,8 @@ function adapterContext(globals) {
   const c = browserContext({
     registerCustomTheme() {},
     rosePine: {},
+    bundledLanguages: {},
+    getFiletypeFromFileName: () => "text",
     ...globals,
   });
   vm.runInContext(code, rawContext(c));
@@ -90,6 +92,37 @@ test("continuous loading keeps other files available after an unsupported file a
   };
   await c.drainReviewFiles(current);
   assert.equal(mounted.length, 1);
+});
+test("the diff viewer shows a file as plain text when its grammar is not bundled", () => {
+  const rendered = [];
+  const c = adapterContext({
+    themeName: () => "truffle-rose-pine",
+    getComputedStyle: () => ({ getPropertyValue: () => "" }),
+    document: { documentElement: { dataset: {} } },
+    Virtualizer: class {
+      setup() {}
+    },
+    VirtualizedFileDiff: class {
+      render(target) {
+        rendered.push([target.oldFile.lang, target.newFile.lang]);
+      }
+    },
+    bundledLanguages: { rust: () => {} },
+    getFiletypeFromFileName: (path) => (path.endsWith(".rs") ? "rust" : "php"),
+  });
+  const controller = c.createDiffReview({}, "unified");
+  for (const path of ["a.rs", "b.php"]) {
+    controller.mount(
+      {},
+      { path, oldContent: "", newContent: "x" },
+      [],
+      () => {},
+    );
+  }
+  assert.deepEqual(rendered, [
+    ["rust", "rust"],
+    ["text", "text"],
+  ]);
 });
 test("changing diff layout keeps mounted files and line annotations and passes fresh options to the renderer", () => {
   const views = [];
