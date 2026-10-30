@@ -191,7 +191,7 @@ test("shared UX hook cleans active chat effects on every page, including a faile
     querySelectorAll: () => [],
   };
   f.c.syncActiveDiff = () => effects.push("diff");
-  f.c.syncActiveChatCI = () => effects.push("ci");
+  f.c.poller.kick = (name) => effects.push(name);
   f.c.leftSidebarCollapsed = true;
   f.c.featureButton = () => ({ setAttribute() {} });
   f.c.activityView = "sessions";
@@ -201,7 +201,7 @@ test("shared UX hook cleans active chat effects on every page, including a faile
     f.c.source = page;
     f.c.render();
     assert.ok(effects.includes("diff"));
-    assert.ok(effects.includes("ci"));
+    assert.ok(effects.includes("chat-ci"));
     assert.equal(
       f.c.document.querySelector("#activity-tabs").hidden,
       page !== "logs",
@@ -222,7 +222,7 @@ test("shared UX hook cleans active chat effects on every page, including a faile
   };
   assert.throws(() => f.c.render(), /page/);
   assert.ok(effects.includes("diff"));
-  assert.ok(effects.includes("ci"));
+  assert.ok(effects.includes("chat-ci"));
 });
 test("restart availability and GitHub attention hooks retain their actual UI effects", () => {
   const f = fixture(),

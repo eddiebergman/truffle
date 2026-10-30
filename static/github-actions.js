@@ -832,10 +832,7 @@ async function syncActiveChatCI() {
   }
 }
 if (typeof window !== "undefined") {
-  setInterval(() => {
-    void syncActiveChatCI();
-  }, 1000);
-  document.addEventListener("visibilitychange", () => {
-    void syncActiveChatCI();
-  });
+  // The one-second check lets a chat switch, a source leaving backoff or a backend
+  // retry time start the next refresh promptly; syncActiveChatCI keeps the 30 s cadence.
+  poller.register("chat-ci", { every: 1000, run: syncActiveChatCI });
 }

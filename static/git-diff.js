@@ -285,7 +285,7 @@ function agentGitSection(record) {
   const key = `${record.id}\0${directory}`;
   let view = gitDiffViews.get(key);
   if (!view) {
-    view = { data: null, error: "", at: 0, pending: false };
+    view = { data: null, error: "" };
     gitDiffViews.set(key, view);
     if (gitDiffViews.size > 20) {
       gitDiffViews.delete(gitDiffViews.keys().next().value);
@@ -293,10 +293,8 @@ function agentGitSection(record) {
   }
   view.record = record;
   view.directory = directory;
-  if (activeGitDiffKey !== key) {
-    activeGitDiffKey = key;
-    view.at = 0;
-  }
+  const switched = activeGitDiffKey !== key;
+  activeGitDiffKey = key;
   const section = el("section", "agent-git-section"),
     head = el("div", "section-heading");
   head.append(el("h3", "", "Git diff"));
@@ -339,21 +337,12 @@ function agentGitSection(record) {
       count.textContent = view.data.files.length;
     }
   };
-  result.refreshGitDiff = () => {
-    if (
-      source !== "agents" ||
-      agentSidebarCollapsed ||
-      terminalFocus ||
-      body.hidden ||
-      document.hidden ||
-      view.pending ||
-      Date.now() - view.at < 10000
-    ) {
+  result.refreshGitDiff = async () => {
+    if (body.hidden) {
       return;
     }
-    view.pending = true;
     let changed = false;
-    void api("/api/session/git-diff", { id: record.id, cwd: directory })
+    await api("/api/session/git-diff", { id: record.id, cwd: directory })
       .then((data) => {
         changed =
           Boolean(view.error) ||
@@ -369,21 +358,22 @@ function agentGitSection(record) {
             : error.message;
       })
       .finally(() => {
-        view.pending = false;
-        view.at = Date.now();
         if (changed) {
           view.paint();
         }
       });
   };
-  head.addEventListener("click", () =>
-    queueMicrotask(() => result.refreshGitDiff()),
-  );
-  queueMicrotask(() => result.refreshGitDiff());
+  head.addEventListener("click", () => poller.kick("git-diff"));
+  if (switched) {
+    poller.kick("git-diff");
+  }
   return result;
 }
-setInterval(() => {
-  document
-    .querySelector("#agent-workspace .agent-git-section")
-    ?.refreshGitDiff();
-}, 1000);
+poller.register("git-diff", {
+  every: 10000,
+  when: () => source === "agents" && !agentSidebarCollapsed && !terminalFocus,
+  run: () =>
+    document
+      .querySelector("#agent-workspace .agent-git-section")
+      ?.refreshGitDiff(),
+});

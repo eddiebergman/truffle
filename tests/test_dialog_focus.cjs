@@ -270,8 +270,7 @@ function fixture() {
     Set,
     JSON,
     requestAnimationFrame() {},
-    queueMicrotask() {},
-    setInterval() {},
+    poller: { register() {}, kick() {} },
     visibleAgentCandidates: () => [],
     liveCandidates: () => [],
     candidateKey: () => "",
@@ -334,7 +333,7 @@ function fixture() {
   c.render = () => c.renderAgentWorkspace();
   evaluate(
     c,
-    "gitDiffViews.set('chat\\0/repo',{data:{files:[{path:'file.py',additions:1,deletions:0}],root:'/repo',baseRef:'main'},at:0,pending:false});",
+    "gitDiffViews.set('chat\\0/repo',{data:{files:[{path:'file.py',additions:1,deletions:0}],root:'/repo',baseRef:'main'},error:''});",
   );
   c.render();
   return {

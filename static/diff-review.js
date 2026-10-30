@@ -111,45 +111,43 @@ async function cachedReviewFile(record, path, directory) {
     throw error;
   }
 }
-let reviewRefreshAt = 0,
-  reviewRefreshPending = false,
-  reviewFreshnessAt = 0;
+let reviewFreshnessAt = 0,
+  warmDiffKey = "";
 function syncActiveDiff() {
   const record = source === "agents" ? selectedChat().record : null;
   const directory = record && selectedGitDirectory(record),
     key = record ? `${record.id}\0${directory}` : "";
   if (activeDiffCache.key !== key) {
     activateDiffCache(key);
-    reviewRefreshAt = 0;
     reviewFreshnessAt = 0;
     if (reviewState && reviewState.record.id !== record?.id) {
       $("#diff-review-dialog").close();
     }
     if (record) {
-      void warmActiveDiff(record, directory, key);
+      warmDiffKey = key;
+      poller.kick("active-review");
     }
   }
-  if (
-    record &&
-    !document.hidden &&
-    !reviewRefreshPending &&
-    Date.now() - reviewRefreshAt > 5000
-  ) {
-    reviewRefreshPending = true;
-    const draft = sharedReviewDrafts.get(record.id),
-      check =
-        Date.now() - reviewFreshnessAt > 30000 &&
-        (draft?.run || draft?.comments?.length);
-    if (check) {
-      reviewFreshnessAt = Date.now();
-    }
-    void reviewAction(record.id, check ? "check" : "read")
-      .catch(() => {})
-      .finally(() => {
-        reviewRefreshPending = false;
-        reviewRefreshAt = Date.now();
-      });
+}
+async function refreshActiveReview() {
+  const record = source === "agents" ? selectedChat().record : null;
+  if (!record) {
+    return;
   }
+  const directory = selectedGitDirectory(record),
+    key = `${record.id}\0${directory}`;
+  if (warmDiffKey === key) {
+    warmDiffKey = "";
+    void warmActiveDiff(record, directory, key);
+  }
+  const draft = sharedReviewDrafts.get(record.id),
+    check =
+      Date.now() - reviewFreshnessAt > 30000 &&
+      (draft?.run || draft?.comments?.length);
+  if (check) {
+    reviewFreshnessAt = Date.now();
+  }
+  await reviewAction(record.id, check ? "check" : "read").catch(() => {});
 }
 async function warmActiveDiff(record, directory, key) {
   try {
@@ -173,7 +171,7 @@ async function warmActiveDiff(record, directory, key) {
     // Prefetching is optional; the review loads files on demand.
   }
 }
-setInterval(syncActiveDiff, 1000);
+poller.register("active-review", { every: 5000, run: refreshActiveReview });
 function reviewRunLabel(draft) {
   const run = draft?.run;
   if (!run || run.state === "cancelled") {
@@ -335,28 +333,20 @@ async function sendReviewFeedback() {
     }
   }
 }
-let reviewBackgroundPoll = false;
-setInterval(() => {
-  if (document.hidden || reviewBackgroundPoll) {
-    return;
-  }
-  const ids = [...sharedReviewDrafts]
-    .filter(
-      ([id, draft]) =>
-        id !== activeDiffCache.key.split("\0")[0] &&
-        ["requested", "reviewing"].includes(draft.run?.state),
-    )
-    .slice(0, 4)
-    .map(([id]) => id);
-  if (ids.length) {
-    reviewBackgroundPoll = true;
-    void Promise.all(
-      ids.map((id) => reviewAction(id, "read").catch(() => {})),
-    ).finally(() => {
-      reviewBackgroundPoll = false;
-    });
-  }
-}, 5000);
+poller.register("background-reviews", {
+  every: 5000,
+  run: () =>
+    Promise.all(
+      [...sharedReviewDrafts]
+        .filter(
+          ([id, draft]) =>
+            id !== activeDiffCache.key.split("\0")[0] &&
+            ["requested", "reviewing"].includes(draft.run?.state),
+        )
+        .slice(0, 4)
+        .map(([id]) => reviewAction(id, "read").catch(() => {})),
+    ),
+});
 function reviewEntryPending(draft, entry) {
   return (
     !entry.reviewedAt &&

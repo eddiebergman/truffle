@@ -197,7 +197,7 @@ $("#activity-open").onclick = () =>
   navigate(activityView, { savedView: "keep" });
 function renderSharedUX() {
   syncActiveDiff();
-  void syncActiveChatCI();
+  poller.kick("chat-ci");
   document.body.classList.toggle(
     "left-sidebar-collapsed",
     leftSidebarCollapsed,
