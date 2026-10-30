@@ -566,25 +566,9 @@ body {
   color: var(--text);
 }
 
-button,
-a,
-input,
-select,
-textarea {
-  -webkit-tap-highlight-color: transparent;
-  accent-color: var(--iris);
-}
-
 .context-work-meta a {
   color: color-mix(in srgb, var(--bg) 30%, var(--text));
   text-decoration: none;
-}
-
-input,
-textarea {
-  background: var(--panel);
-  color: var(--text);
-  border-color: var(--line);
 }
 
 .performance-panel {
@@ -673,15 +657,6 @@ textarea {
   border: 1px solid color-mix(in srgb, var(--bg) 85%, var(--text));
   border-radius: 7px;
   padding: 4px;
-  background: var(--panel);
-  color: var(--text);
-  border-color: var(--line);
-}
-
-select {
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 11px;
   background: var(--panel);
   color: var(--text);
   border-color: var(--line);
