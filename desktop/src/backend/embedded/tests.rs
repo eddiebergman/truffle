@@ -30,8 +30,8 @@ fn companion_shell_action_preserves_whitespace_input_and_validates_payloads() {
     })
     .unwrap();
     // No interactive shell, login scripts, model, or persistent daemon.
-    let mut command = CommandBuilder::new("/bin/cat");
-    command.cwd(root.path());
+    let mut command = Command::new("/bin/cat");
+    command.current_dir(root.path());
     let super::super::terminal_daemon::Host::Local(host) = repo.shells.host() else {
         panic!("Demo repository must use an isolated in-memory terminal host");
     };
@@ -108,18 +108,25 @@ fn companion_shell_action_preserves_whitespace_input_and_validates_payloads() {
 
 #[test]
 fn interactive_environment_restores_color_without_changing_agent_security() {
-    let mut command = CommandBuilder::new("/bin/sh");
+    let mut command = Command::new("/bin/sh");
     command.env("NO_COLOR", "1");
     command.env("CI", "1");
     command.env("CODEX_SANDBOX", "test-marker");
     command.env("HOME", "/preserved-home");
     terminal_environment(&mut command);
-    assert!(command.get_env("NO_COLOR").is_none());
-    assert!(command.get_env("CI").is_none());
-    assert_eq!(command.get_env("FORCE_COLOR").unwrap(), "3");
-    assert_eq!(command.get_env("TERM").unwrap(), "xterm-256color");
-    assert_eq!(command.get_env("HOME").unwrap(), "/preserved-home");
-    assert_eq!(command.get_env("CODEX_SANDBOX").unwrap(), "test-marker");
+    let env = |key: &str| {
+        command
+            .get_envs()
+            .find(|(name, _)| *name == key)
+            .and_then(|(_, value)| value)
+            .and_then(std::ffi::OsStr::to_str)
+    };
+    assert!(env("NO_COLOR").is_none());
+    assert!(env("CI").is_none());
+    assert_eq!(env("FORCE_COLOR").unwrap(), "3");
+    assert_eq!(env("TERM").unwrap(), "xterm-256color");
+    assert_eq!(env("HOME").unwrap(), "/preserved-home");
+    assert_eq!(env("CODEX_SANDBOX").unwrap(), "test-marker");
 }
 #[test]
 fn storage_probe_leaves_no_files_and_rejects_unavailable_paths() {
@@ -133,7 +140,7 @@ fn exited_pty_replays_all_buffered_chunks() {
     let host = EmbeddedHost::default();
     let id = uuid();
     let record = json!({"id":id});
-    let mut command = CommandBuilder::new("/bin/sh");
+    let mut command = Command::new("/bin/sh");
     command.args(["-c", "head -c 100000 /dev/zero; printf END"]);
     host.spawn(&record, command).unwrap();
     for _ in 0..100 {
@@ -168,7 +175,7 @@ fn pty_streams_input_and_resize_and_reaps_exit() {
     let id = uuid();
     let record =
         json!({"id":id,"agent":"claude","title":"PTY test","sessionId":uuid(),"cwd":"/tmp"});
-    let mut command = CommandBuilder::new("/bin/sh");
+    let mut command = Command::new("/bin/sh");
     command.args(["-c", "read line; stty size; printf 'PTY:%s\\n' \"$line\""]);
     host.spawn(&record, command).unwrap();
     host.resize(&id, 93, 27).unwrap();

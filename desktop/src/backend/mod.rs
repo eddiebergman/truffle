@@ -43,6 +43,7 @@ pub mod github;
 pub mod http;
 pub mod projects;
 pub mod providers;
+mod pty;
 pub mod repository;
 pub mod resources;
 pub mod reviews;

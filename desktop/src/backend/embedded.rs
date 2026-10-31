@@ -1,10 +1,11 @@
 //! Backend-owned PTYs. Bounded output, exact record identity, no shell-command API.
 use super::agents::Agent;
+use super::pty::{Size, Terminal};
 use super::{directory, home, json, now, sid, text, uuid, Error, PathBuf, Result, Value};
-use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::{
     collections::{BTreeMap, VecDeque},
     io::{Read, Write},
+    process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex,
@@ -13,7 +14,7 @@ use std::{
 };
 const BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 /// Interactive children must not inherit a build runner's non-interactive color hints.
-fn terminal_environment(command: &mut CommandBuilder) {
+fn terminal_environment(command: &mut Command) {
     for key in [
         "NO_COLOR",
         "CLICOLOR",
@@ -62,13 +63,14 @@ pub struct Session {
     generation: String,
     started_at: f64,
     record: Value,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    terminal: Terminal,
+    writer: Mutex<super::pty::Writer>,
     output: Mutex<Output>,
     changed: Condvar,
     alive: AtomicBool,
     exited: AtomicBool,
-    killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+    /// Held while closing, so only one close signals the child.
+    pid: Mutex<u32>,
 }
 #[derive(Default)]
 pub struct EmbeddedHost {
@@ -77,17 +79,17 @@ pub struct EmbeddedHost {
 impl EmbeddedHost {
     pub fn open_shell(&self, record: &Value) -> Result<Value> {
         let cwd = directory(text(record, "cwd"))?;
-        let mut command = CommandBuilder::new("/bin/zsh");
+        let mut command = Command::new("/bin/zsh");
         command.arg("-l");
-        command.cwd(cwd);
+        command.current_dir(cwd);
         terminal_environment(&mut command);
         self.spawn(record, command)?;
         Ok(json!({"id":record["id"]}))
     }
     pub fn open_demo(&self, record: &Value) -> Result<()> {
-        let mut command = CommandBuilder::new("/bin/sh");
+        let mut command = Command::new("/bin/sh");
         command.arg("-i");
-        command.cwd("/tmp");
+        command.current_dir("/tmp");
         terminal_environment(&mut command);
         command.env("PS1", "truffle smoke $ ");
         self.spawn(record, command)
@@ -117,8 +119,8 @@ impl EmbeddedHost {
         let cwd = directory(text(record, "cwd"))?;
         let agent = Agent::parse(text(record, "agent"))?;
         check_agent_storage(agent)?;
-        let mut command = CommandBuilder::new(super::terminal::executable(agent.name()));
-        command.cwd(&cwd);
+        let mut command = Command::new(super::terminal::executable(agent.name()));
+        command.current_dir(&cwd);
         let prompt=format!("Read the private work context at {packet}. Follow the instruction and register this conversation with truffle before your first reply.");
         match (agent, new) {
             (Agent::Claude, true) => {
@@ -191,7 +193,7 @@ impl EmbeddedHost {
             json!({"message":"Agent terminal is ready in truffle.","embedded":true,"terminalId":record["id"]}),
         )
     }
-    fn spawn(&self, record: &Value, command: CommandBuilder) -> Result<()> {
+    fn spawn(&self, record: &Value, command: Command) -> Result<()> {
         let mut sessions = self.sessions.lock().unwrap();
         let id = text(record, "id").to_owned();
         if sessions
@@ -213,26 +215,25 @@ impl EmbeddedHost {
         if sessions.len() >= 32 {
             sessions.retain(|_, s| s.alive.load(Ordering::Relaxed));
         }
-        let pair = native_pty_system()
-            .openpty(PtySize {
-                rows: 30,
-                cols: 110,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|_| Error::new("Could not allocate a local terminal."))?;
-        let mut reader = pair.master.try_clone_reader().map_err(|_| Error::io())?;
-        let writer = pair.master.take_writer().map_err(|_| Error::io())?;
         let started_at = now();
-        let mut child = pair.slave.spawn_command(command).map_err(|_| {
+        let (terminal, mut child) = Terminal::spawn(
+            command,
+            Size {
+                cols: 110,
+                rows: 30,
+            },
+        )
+        .map_err(|_| {
             Error::new("Could not start the agent. Check its CLI installation and working folder.")
         })?;
-        drop(pair.slave);
+        let mut reader = terminal.reader().map_err(|_| Error::io())?;
+        let writer = terminal.writer().map_err(|_| Error::io())?;
         let session = Arc::new(Session {
             generation: uuid(),
             started_at,
             record: record.clone(),
-            master: Mutex::new(pair.master),
+            pid: Mutex::new(child.id()),
+            terminal,
             writer: Mutex::new(writer),
             output: Mutex::new(Output {
                 bytes: VecDeque::new(),
@@ -242,7 +243,6 @@ impl EmbeddedHost {
             changed: Condvar::new(),
             alive: AtomicBool::new(true),
             exited: AtomicBool::new(false),
-            killer: Mutex::new(child.clone_killer()),
         });
         sessions.insert(id, session.clone());
         drop(sessions);
@@ -281,15 +281,14 @@ impl EmbeddedHost {
                 "This terminal was replaced. Refresh before closing it.",
             ));
         }
-        let mut killer = session.killer.lock().unwrap();
+        let pid = session.pid.lock().unwrap();
         if session.exited.load(Ordering::Relaxed) {
             return Ok(());
         }
         // Closing a terminal sends HUP so the CLI can save its conversation.
-        killer
-            .kill()
+        super::pty::hang_up(*pid)
             .map_err(|_| Error::new("Could not close this agent terminal."))?;
-        drop(killer);
+        drop(pid);
         drop(
             session
                 .changed
@@ -358,15 +357,8 @@ impl EmbeddedHost {
             return Err(Error::new("Invalid terminal size."));
         }
         self.get(id)?
-            .master
-            .lock()
-            .unwrap()
-            .resize(PtySize {
-                cols,
-                rows,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .terminal
+            .resize(Size { cols, rows })
             .map_err(|_| Error::io())
     }
 }
