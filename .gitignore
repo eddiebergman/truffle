@@ -9,6 +9,5 @@ __pycache__/
 
 .local-backups/
 desktop/target/
-desktop/node_modules/
 desktop/gen/
-node_modules/
+node_modules
