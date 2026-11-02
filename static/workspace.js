@@ -950,8 +950,10 @@ function renderLiveBar() {
   badge.textContent = unread.total;
 }
 function rememberClosedTab(id) {
-  closedAgentTabs.push(id);
-  closedAgentTabs = closedAgentTabs.slice(-20);
+  closedAgentTabs = [
+    ...closedAgentTabs.filter((each) => each !== id),
+    id,
+  ].slice(-20);
 }
 async function runTabCommand(command) {
   if (document.querySelector("dialog[open]")) {
@@ -1051,6 +1053,7 @@ async function closeAgentTab(candidate, button) {
       id: candidate.recordId,
       generation: candidate.generation,
     });
+    savedSessionOpens.delete(candidate.recordId);
     inventory = {
       ...inventory,
       candidates: inventory.candidates.filter(

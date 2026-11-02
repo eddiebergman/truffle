@@ -910,3 +910,39 @@ test("existing observed terminal recovery uses exact generation and never posts 
     observedGeneration,
   );
 });
+test("reopening a chat after its opened terminal closed sends a new open request", async () => {
+  let current = live("a");
+  const f = fixture({ agentsRead: async () => current });
+  assert.equal((await f.open("a")).presentation, "ready");
+  current = { candidates: [] };
+  f.c.inventory = current;
+  await f.open("a");
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/commands/invoke").length,
+    2,
+  );
+});
+test("closing a tab clears its unresolved open so the next reopen sends a new request", async () => {
+  let current = { candidates: [] };
+  const f = fixture({ agentsRead: async () => current });
+  assert.equal((await f.open("a")).presentation, "pending");
+  current = live("a");
+  f.c.inventory = current;
+  f.c.persist = () => {};
+  f.c.render = () => {};
+  await f.c.closeAgentTab(current.candidates[0], new f.Node("button"));
+  current = { candidates: [] };
+  await f.open("a");
+  assert.equal(
+    f.calls.filter((call) => call.path === "/api/commands/invoke").length,
+    2,
+  );
+});
+test("closing the same chat twice keeps one entry in the reopen stack", () => {
+  const f = fixture();
+  f.c.closedAgentTabs = [];
+  f.c.rememberClosedTab("a");
+  f.c.rememberClosedTab("b");
+  f.c.rememberClosedTab("a");
+  assert.deepEqual([...f.c.closedAgentTabs], ["b", "a"]);
+});

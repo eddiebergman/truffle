@@ -1118,6 +1118,18 @@ async function openSavedSession(
   const id = session.id;
   let outcome,
     entry = savedSessionOpens.get(id);
+  // A resolved embedded open whose terminal is gone is finished, so the chat
+  // can open again. Desktop opens cannot be observed, so they stay blocked.
+  if (
+    entry?.resolved &&
+    entry.receipt?.target === "embedded" &&
+    !inventory?.candidates?.some(
+      (each) => each.recordId === id && each.host === "embedded" && each.live,
+    )
+  ) {
+    savedSessionOpens.delete(id);
+    entry = undefined;
+  }
   if (entry?.pending || entry?.checking) {
     return { status: "pending", presentation: "pending" };
   }
