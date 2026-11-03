@@ -125,7 +125,7 @@ function updateQuickAgent() {
   $("#new-note").setAttribute("aria-label", `Start ${agent} session`);
   $("#new-note").title = `Start ${agent} in truffle`;
   $("#summarize-work").title =
-    `Summarize all work with ${agent} in cmux. Checks live sources and suggests actions.`;
+    `Summarize all work with ${agent} in truffle. Checks live sources and suggests actions.`;
 }
 $("#quick-agent").onchange = () => {
   updateQuickAgent();

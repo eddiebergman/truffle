@@ -112,7 +112,7 @@ Use [the performance skill](.agents/skills/truffle-performance/SKILL.md) for mea
 
 Embedded agents inherit the service’s operating-system restrictions. Deploy the service from a regular user Terminal, never a sandboxed coding-tool process. Before launch, truffle checks that agent storage is writable; it does not alter sandbox or agent permissions. Interactive PTYs set true color and remove inherited NO_COLOR/CI hints.
 
-The compact UI uses Rosé Pine main, including the terminal ANSI palette. The global + starts an agent immediately; its arrow holds remembered agent and folder choices. Work links and results attach inline. The terminal’s expand button hides the surrounding panels and leaves Exit focus visible. Cmd+Shift+Enter (Ctrl+Shift+Enter on other platforms) toggles focus; Escape remains available to the agent CLI.
+The compact UI uses Rosé Pine main by default, including the terminal ANSI palette; Settings offers 28 themes. The global + starts an agent immediately; its arrow holds remembered agent and folder choices. Work links and results attach inline. The terminal’s expand button hides the surrounding panels and leaves Exit focus visible. Cmd+Shift+Enter (Ctrl+Shift+Enter on other platforms) toggles focus; Escape remains available to the agent CLI.
 
 Agents report worktrees through registration. The service records Git branch, main repo, checkout path and linked work; `truffle-desktop worktree --record … --path … --url … [--primary]` links additional checkouts without changing the resume directory unless requested. Git metadata is read on explicit registration only. See the global truffle skill for the reporting protocol.
 
@@ -123,10 +123,15 @@ Sentry, and Projects, `/` focuses fuzzy search. Type to filter the complete cach
 ↑/↓ selects a row, O opens its source, and Enter opens details. Escape or Enter
 leaves the search field on the highlighted row. Ordinary typing stays in inputs.
 
-Sidebar keys follow the view nouns: ⌘G GitHub, ⌘P Projects, ⌘L Linear,
-⌘S Sentry, ⌘⇧A Agents, ⌘I All Items, ⌘⇧S Skills, ⌘⇧H History,
-⌘⇧C Changes, and ⌘⇧L Logs. Shift resolves collisions while keeping standard
-Select All, Copy, and Hide shortcuts available.
+Sidebar keys follow the view nouns: ⌘G GitHub, ⌘⇧P Projects, ⌘⇧L Linear,
+⌘S Sentry, ⌘⇧A Agents, ⌘I All Items, ⌘⇧S Skills, ⌘⇧H History, and
+⌘⇧C Changes. Shift resolves collisions while keeping standard Select All,
+Copy, and Hide shortcuts available.
+
+Other default keys, from `static/config/commands.json` (rebind them in
+Settings): ⌘K command palette, ⌘P find work items and chats, ⌘J chat shell,
+⌘F or `/` page search, ⌘H and ⌘L left and right sidebars, ⌘, settings,
+⌘= and ⌘- interface scale.
 
 The agent heading includes a Zed button. It opens the registered working directory
 (including its worktree) in Zed. Missing directories show an error rather than
@@ -142,7 +147,6 @@ The code icon beside terminal controls opens the current working folder in Zed.
 Browser-style tab keys: ⌘T opens the new-agent folder picker, ⌘W closes the
 selected agent terminal, and ⌘⇧T resumes the last closed conversation. The
 recently closed list survives app restarts and retains up to 20 entries.
-All Items uses ⌘I (items).
 
 GitHub expands into Mine (authored PRs) and To Review (PRs requesting your review).
 Click GitHub to return to all tracked GitHub work. Linear expands into its project
