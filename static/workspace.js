@@ -1590,7 +1590,7 @@ function renderAgentWorkspace() {
         "span",
         "",
         candidate
-          ? "This conversation is running in cmux."
+          ? "This conversation is running outside truffle."
           : "Saved conversation · no terminal in memory",
       ),
     );
